@@ -1,0 +1,64 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+env:
+  # Use docker.io for Docker Hub if empty
+  REGISTRY: ghcr.io
+  # github.repository as <account>/<repo>
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      # checkout
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/test
+        with:
+          os: ${{ matrix.os }}
+  build-artifacts:
+    runs-on: macos-13
+    needs: test
+    permissions:
+      contents: write
+      packages: write
+      issues: write
+    steps:
+      # dependencies
+      - uses: mlugg/setup-zig@v1
+      # Include go and NodeJS
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.0
+
+      # Include latest bun
+      - uses: oven-sh/setup-bun@v2
+
+      # checkout
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # git status
+      - name: Git status
+        run: git status
+
+      # build
+      - name: Release
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

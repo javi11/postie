@@ -1,0 +1,57 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug postie",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main.go",
+            "args": [
+                "-config",
+                "${workspaceFolder}/config.json",
+                "-dir",
+                "${workspaceFolder}/test_files"
+            ],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "GO111MODULE": "on"
+            },
+            "showLog": true,
+            "trace": "verbose"
+        },
+        {
+            "name": "Debug postie (with custom paths)",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main.go",
+            "args": [
+                "-config",
+                "${input:configPath}",
+                "-dir",
+                "${input:dirPath}"
+            ],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "GO111MODULE": "on"
+            },
+            "showLog": true,
+            "trace": "verbose"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "configPath",
+            "type": "promptString",
+            "description": "Path to config file",
+            "default": "${workspaceFolder}/config.json"
+        },
+        {
+            "id": "dirPath",
+            "type": "promptString",
+            "description": "Directory containing files to upload",
+            "default": "${workspaceFolder}/test_files"
+        }
+    ]
+} 

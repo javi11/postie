@@ -1,0 +1,23 @@
+name: test
+description: Run tests
+inputs:
+  os:
+    description: 'OS to run the tests on'
+    required: true
+    default: 'ubuntu-latest'
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v5
+      with:
+        go-version: '1.24.0' # Pinned version
+    - name: Go info
+      shell: bash
+      run: |
+        go version
+        go env
+      # test
+    - name: Tests
+      shell: bash
+      run: |
+        make test
