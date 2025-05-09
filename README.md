@@ -27,46 +27,25 @@ Create a configuration file (e.g., `config.yaml`) based on the example in `confi
 
 ```yaml
 servers:
-  - host: news.example.com
-    port: 119
-    username: user
-    password: pass
+  - host: news.server.com
+    port: 1199
+    username: ""
+    password: ""
     ssl: false
-    max_connections: 10
-  - host: ssl.example.com
-    port: 563
-    username: user
-    password: pass
-    ssl: true
-    max_connections: 10
+    max_connections: 50
 
 posting:
   max_retries: 3
   retry_delay: 5s
-  check_interval: 1m
-  max_check_retries: 3
-  article_size_in_bytes: 750000
+  max_check_retries: 5
+  segment_size: 750000
   groups:
     - alt.binaries.example
-  throttle_rate: 1048576 # 1MB/s
-  message_id_format: random # or "ngx"
-  obfuscation_policy: full # or "partial", "none"
-  group_policy: each_file # or "all"
-  post_headers:
-    add_ngx_header: true
-    default_from: ""
-    custom_headers: []
-
-post_check:
-  enabled: true
-  delay: 10s
-  max_retries: 3
-  max_reposts: 1
 
 par2:
-  par2_path: ./par2cmd
-  redundancy: 10 # 10%
-  volume_size: 153600000 # 150MB
+  par2_path: ./parpar
+  redundancy: 10
+  volume_size: 153600000
 ```
 
 ### Configuration Options
@@ -86,7 +65,6 @@ par2:
 - `posting`: Main posting configuration
   - `max_retries`: Maximum number of retry attempts for posting
   - `retry_delay`: Delay between retry attempts
-  - `check_interval`: Interval between post checks
   - `max_check_retries`: Maximum number of post check attempts
   - `article_size_in_bytes`: Size of each article in bytes
   - `groups`: List of newsgroups to post to
