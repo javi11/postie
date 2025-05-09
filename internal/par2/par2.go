@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -16,25 +16,21 @@ import (
 	"sync"
 	"time"
 
+	"github.com/javi11/postie/internal/config"
+	"github.com/javi11/postie/pkg/fileinfo"
 	"github.com/schollz/progressbar/v3"
+)
+
+type parExeType string
+
+const (
+	par2   parExeType = "par2"
+	parpar parExeType = "parpar"
 )
 
 var (
 	execCommand = exec.CommandContext
 	parregexp   = regexp.MustCompile(`(?i)(\.vol\d+\+(\d+))?\.par2$`)
-
-	// par2 exit codes
-	par2ExitCodes = map[int]string{
-		0: "Success",
-		1: "Repair possible",
-		2: "Repair not possible",
-		3: "Invalid command line arguments",
-		4: "Insufficient critical data to verify",
-		5: "Repair failed",
-		6: "FileIO Error",
-		7: "Logic Error",
-		8: "Out of memory",
-	}
 )
 
 // Par2Executor defines the interface for executing par2 commands.
@@ -44,44 +40,58 @@ type Par2Executor interface {
 
 // Par2CmdExecutor implements Par2Executor using the command line.
 type Par2CmdExecutor struct {
-	ExePath     string
-	articleSize int64
+	articleSize uint64
+	cfg         *config.Par2Config
+	parExeType  parExeType
 }
 
-func New(ctx context.Context, par2ExePath string, articleSize int64) *Par2CmdExecutor {
+func New(ctx context.Context, articleSize uint64, cfg *config.Par2Config) *Par2CmdExecutor {
+	// detect par executable
+	parExe := filepath.Base(cfg.Par2Path)
+	parExeFileName := strings.ToLower(parExe[:len(parExe)-len(filepath.Ext(parExe))])
+
 	return &Par2CmdExecutor{
-		ExePath:     par2ExePath,
 		articleSize: articleSize,
+		cfg:         cfg,
+		parExeType:  parExeType(parExeFileName),
 	}
 }
 
 // Repair executes the par2 command to repair files in the target folder.
-func (p *Par2CmdExecutor) Create(ctx context.Context, files []string) ([]string, error) {
+func (p *Par2CmdExecutor) Create(ctx context.Context, files []fileinfo.FileInfo) ([]string, error) {
 	slog.InfoContext(ctx, "Starting par2 creation process", "executor", "Par2CmdExecutor")
 
-	par2Exe := p.ExePath
-	if par2Exe == "" {
-		par2Exe = "par2" // Default if path is empty
-		slog.WarnContext(ctx, "Par2 executable path is empty, defaulting to 'par2'")
-	}
-
-	var createdPar2Paths []string
+	var (
+		createdPar2Paths []string
+		parameters       []string
+	)
 	for _, file := range files {
-		par2FileName := filepath.Base(file) + ".par2"
-		dirPath := filepath.Dir(file)
+		if filepath.Ext(file.Path) == ".par2" {
+			continue
+		}
+
+		parBlockSize := calculateParBlockSize(file.Size, p.articleSize)
+		par2FileName := filepath.Base(file.Path) + ".par2"
+		dirPath := filepath.Dir(file.Path)
 		par2Path := filepath.Join(dirPath, par2FileName)
 
 		// set parameters
-		parameters := append(
-			[]string{},
-			"create",
-			// blocksize equals to article size
-			"-s"+strconv.FormatInt(p.articleSize, 10),
-			// 10% recovery data
-			"-r10",
-			par2Path,
-			file,
-		)
+		switch p.parExeType {
+		case par2:
+			parameters = append(parameters, "create", "-l")
+			parameters = append(parameters, fmt.Sprintf("-s%v", parBlockSize))
+			parameters = append(parameters, fmt.Sprintf("-r%v", p.cfg.Redundancy))
+			parameters = append(parameters, fmt.Sprintf("%v", par2Path))
+			parameters = append(parameters, file.Path)
+		case parpar:
+			parameters = append(parameters, fmt.Sprintf("-p%vB", p.cfg.VolumeSize))
+			parameters = append(parameters, fmt.Sprintf("-s%vB", parBlockSize))
+			parameters = append(parameters, fmt.Sprintf("-r%v%%", p.cfg.Redundancy))
+			parameters = append(parameters, fmt.Sprintf("-o%v", par2Path))
+			parameters = append(parameters, file.Path)
+		default:
+			return nil, fmt.Errorf("unknown par executable: %s", p.cfg.Par2Path)
+		}
 
 		// Use the package-level variable instead of calling exec.CommandContext directly
 		dir, err := os.Getwd()
@@ -89,54 +99,38 @@ func (p *Par2CmdExecutor) Create(ctx context.Context, files []string) ([]string,
 			return nil, fmt.Errorf("failed to get current working directory: %w", err)
 		}
 
-		cmd := execCommand(ctx, par2Exe, parameters...)
+		slog.DebugContext(ctx, fmt.Sprintf("Par command: %s in dir %s with parameters %v", p.cfg.Par2Path, dir, parameters))
+
+		cmd := execCommand(ctx, p.cfg.Par2Path, parameters...)
 		cmd.Dir = dir
 		slog.DebugContext(ctx, fmt.Sprintf("Par command: %s in dir %s", cmd.String(), cmd.Dir))
 
-		cmdErr, err := cmd.StderrPipe()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get stderr pipe for par2: %w", err)
-		}
+		var cmdReader io.ReadCloser
 
-		// create a pipe for the output of the program
-		cmdReader, err := cmd.StdoutPipe()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get stdout pipe for par2: %w", err)
+		switch p.parExeType {
+		case par2:
+			if cmdReader, err = cmd.StdoutPipe(); err != nil {
+				return nil, fmt.Errorf("failed to get stdout pipe for par2: %w", err)
+			}
+		case parpar:
+			if cmdReader, err = cmd.StderrPipe(); err != nil {
+				return nil, fmt.Errorf("failed to get stderr pipe for parpar: %w", err)
+			}
 		}
 
 		scanner := bufio.NewScanner(cmdReader)
 		scanner.Split(scanLines)
 
-		errScanner := bufio.NewScanner(cmdErr)
-		errScanner.Split(scanLines)
-
-		var stderrOutput strings.Builder
-
-		mu := sync.Mutex{}
-
 		wg := sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for errScanner.Scan() {
-				line := strings.TrimSpace(errScanner.Text())
-				if line != "" {
-					slog.DebugContext(ctx, "PAR2 STDERR:", "line", line)
-					mu.Lock()
-					stderrOutput.WriteString(line + "\n")
-					mu.Unlock()
-				}
-			}
-		}()
-
 		var parProgressBar *progressbar.ProgressBar
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			processing := false
 			// Ensure parProgressBar is initialized before use
 			parProgressBar = progressbar.NewOptions(100, // Use 100 as max for percentage
-				progressbar.OptionSetDescription(fmt.Sprintf("Creating par2 files for %s...", file)),
+				progressbar.OptionSetDescription(fmt.Sprintf("Creating par2 files for %s...", file.Path)),
 				progressbar.OptionSetRenderBlankState(true),
 				progressbar.OptionThrottle(time.Millisecond*100),
 				progressbar.OptionShowElapsedTimeOnFinish(),
@@ -147,7 +141,9 @@ func (p *Par2CmdExecutor) Create(ctx context.Context, files []string) ([]string,
 				}),
 			)
 			defer func() {
-				_ = parProgressBar.Close() // Close the progress bar when done
+				_ = parProgressBar.Finish() // Ensure finish is called on success
+				_ = parProgressBar.Close()  // Close the progress bar when done
+				fmt.Println()
 			}()
 
 			for scanner.Scan() {
@@ -158,11 +154,35 @@ func (p *Par2CmdExecutor) Create(ctx context.Context, files []string) ([]string,
 
 				exp := regexp.MustCompile(`(\d+)\.?\d*%`)
 				if output != "" && exp.MatchString(output) {
+					if !processing && strings.Contains(output, "Processing:") {
+						processing = true
+						if parProgressBar != nil {
+							_ = parProgressBar.Finish() // Close the progress bar when done
+							_ = parProgressBar.Close()
+							parProgressBar = nil
+						}
+
+						parProgressBar = progressbar.NewOptions(100, // Use 100 as max for percentage
+							progressbar.OptionSetDescription(fmt.Sprintf("Processing par2 files for %s...", file.Path)),
+							progressbar.OptionSetRenderBlankState(true),
+							progressbar.OptionThrottle(time.Millisecond*100),
+							progressbar.OptionShowElapsedTimeOnFinish(),
+							progressbar.OptionClearOnFinish(),
+							progressbar.OptionOnCompletion(func() {
+								// new line after progress bar
+								fmt.Println()
+							}),
+						)
+					}
+
 					percentStr := exp.FindStringSubmatch(output)
 					if len(percentStr) > 1 {
 						percentInt, err := strconv.Atoi(percentStr[1])
 						if err == nil {
-							_ = parProgressBar.Set(percentInt)
+							err = parProgressBar.Set(percentInt)
+							if err != nil {
+								slog.ErrorContext(ctx, "Error setting progress bar", "error", err)
+							}
 						}
 					}
 				}
@@ -171,34 +191,7 @@ func (p *Par2CmdExecutor) Create(ctx context.Context, files []string) ([]string,
 		}()
 
 		if err = cmd.Run(); err != nil {
-			mu.Lock()
-			output := stderrOutput.String()
-			mu.Unlock()
-
-			if exitError, ok := err.(*exec.ExitError); ok {
-				if parProgressBar != nil {
-					_ = parProgressBar.Close() // Attempt to close/clear on error too
-				}
-
-				if errMsg, ok := par2ExitCodes[exitError.ExitCode()]; ok {
-					// Specific known error codes from par2
-					fullErrMsg := fmt.Sprintf("par2 exited with code %d: %s. Stderr: %s", exitError.ExitCode(), errMsg, output)
-					slog.ErrorContext(ctx, fullErrMsg)
-					// Treat specific codes as potentially non-fatal or requiring different handling
-					// For now, return all as errors, but could customize (e.g., ignore exit code 1 if repair was possible)
-					return nil, errors.New(fullErrMsg)
-				}
-				// Unknown exit code
-				unknownErrMsg := fmt.Sprintf("par2 exited with unknown code %d. Stderr: %s", exitError.ExitCode(), output)
-				slog.ErrorContext(ctx, unknownErrMsg)
-				return nil, errors.New(unknownErrMsg)
-			}
-			// Error not related to exit code (e.g., command not found)
-			return nil, fmt.Errorf("failed to run par2 command '%s': %w. Stderr: %s", cmd.String(), err, output)
-		}
-
-		if parProgressBar != nil {
-			_ = parProgressBar.Finish() // Ensure finish is called on success
+			return nil, fmt.Errorf("failed to run par2 command '%s': %w", cmd.String(), err)
 		}
 
 		wg.Wait()
@@ -206,7 +199,7 @@ func (p *Par2CmdExecutor) Create(ctx context.Context, files []string) ([]string,
 		slog.InfoContext(ctx, "Par2 creation completed successfully")
 
 		// After successful creation, collect all par2 volume files
-		baseName := filepath.Base(file)
+		baseName := filepath.Base(file.Path)
 
 		// Add the main par2 file
 		createdPar2Paths = append(createdPar2Paths, par2Path)
@@ -231,6 +224,10 @@ func (p *Par2CmdExecutor) Create(ctx context.Context, files []string) ([]string,
 	}
 
 	return createdPar2Paths, nil
+}
+
+func IsPar2File(path string) bool {
+	return parregexp.MatchString(path)
 }
 
 // scanLines is a helper for bufio.Scanner to split lines correctly
@@ -260,4 +257,19 @@ func scanLines(data []byte, atEOF bool) (advance int, token []byte, err error) {
 
 	// Request more data.
 	return 0, nil, nil
+}
+
+func calculateParBlockSize(fileSize uint64, articleSize uint64) uint64 {
+	maxParBlocks := uint64(32768)
+
+	if fileSize/articleSize < maxParBlocks {
+		return articleSize
+	} else {
+		minParBlockSize := (fileSize / maxParBlocks) + 1
+		multiplier := minParBlockSize / articleSize
+		if minParBlockSize%articleSize != 0 {
+			multiplier++
+		}
+		return multiplier * articleSize
+	}
 }

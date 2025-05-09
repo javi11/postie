@@ -15,6 +15,7 @@ import (
 	"github.com/javi11/postie/internal/article"
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/nzb"
+	"github.com/javi11/postie/internal/par2"
 	"github.com/mnightingale/rapidyenc"
 	"github.com/sourcegraph/conc/pool"
 )
@@ -61,7 +62,8 @@ type Stats struct {
 
 // Poster handles posting articles to Usenet
 type poster struct {
-	cfg        *config.Config
+	cfg        config.PostingConfig
+	checkCfg   config.PostCheck
 	pool       nntppool.UsenetConnectionPool
 	yenc       *rapidyenc.Encoder
 	stats      *Stats
@@ -74,7 +76,7 @@ type poster struct {
 }
 
 // New creates a new poster
-func New(ctx context.Context, cfg *config.Config) (Poster, error) {
+func New(ctx context.Context, cfg config.Config) (Poster, error) {
 	pool, err := cfg.GetNNTPPool()
 	if err != nil {
 		return nil, fmt.Errorf("error getting NNTP pool: %w", err)
@@ -87,17 +89,18 @@ func New(ctx context.Context, cfg *config.Config) (Poster, error) {
 	}
 
 	throttle := &Throttle{
-		rate:     cfg.Posting.ThrottleRate,
+		rate:     cfg.GetPostingConfig().ThrottleRate,
 		interval: time.Second,
 	}
 
 	p := &poster{
-		cfg:        cfg,
+		cfg:        cfg.GetPostingConfig(),
+		checkCfg:   cfg.GetPostCheckConfig(),
 		pool:       pool,
 		yenc:       yenc,
 		stats:      stats,
 		throttle:   throttle,
-		nzbGen:     nzb.NewGenerator(cfg.Posting.ArticleSizeInBytes),
+		nzbGen:     nzb.NewGenerator(cfg.GetPostingConfig().ArticleSizeInBytes),
 		postQueue:  make(chan *Post, 100),
 		checkQueue: make(chan *Post, 100),
 		statusChan: make(chan *Post, 100),
@@ -164,21 +167,23 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int) error 
 
 	fileInfo, err := file.Stat()
 	if err != nil {
-		file.Close()
+		_ = file.Close()
 		return fmt.Errorf("error getting file info: %w", err)
 	}
 
 	// Calculate number of segments
-	segmentSize := p.cfg.Posting.ArticleSizeInBytes
-	numSegments := int((fileInfo.Size() + segmentSize - 1) / segmentSize)
+	segmentSize := p.cfg.ArticleSizeInBytes
+	numSegments := int((fileInfo.Size() + int64(segmentSize) - 1) / int64(segmentSize))
 	nxgHeader := nxg.GenerateNXGHeader(int64(numSegments), 0)
 
 	groups := make([]string, 0)
-	if p.cfg.Posting.GroupPolicy == config.GroupPolicyEachFile {
-		randomGroup := p.cfg.Posting.Groups[rand.Intn(len(p.cfg.Posting.Groups))]
+
+	switch p.cfg.GroupPolicy {
+	case config.GroupPolicyEachFile:
+		randomGroup := p.cfg.Groups[rand.Intn(len(p.cfg.Groups))]
 		groups = append(groups, randomGroup)
-	} else if p.cfg.Posting.GroupPolicy == config.GroupPolicyAll {
-		groups = p.cfg.Posting.Groups
+	case config.GroupPolicyAll:
+		groups = p.cfg.Groups
 	}
 
 	from, err := article.GenerateFrom()
@@ -187,17 +192,22 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int) error 
 	}
 
 	customHeaders := make(map[string]string)
-	if len(p.cfg.Posting.PostHeaders.CustomHeaders) > 0 {
-		for _, v := range p.cfg.Posting.PostHeaders.CustomHeaders {
+	if len(p.cfg.PostHeaders.CustomHeaders) > 0 {
+		for _, v := range p.cfg.PostHeaders.CustomHeaders {
 			customHeaders[v.Name] = v.Value
 		}
+	}
+
+	partType := nxg.PartTypeData
+	if par2.IsPar2File(filePath) {
+		partType = nxg.PartTypePar2
 	}
 
 	// Create articles for each segment
 	articles := make([]article.Article, 0, numSegments)
 	for i := 0; i < numSegments; i++ {
-		offset := int64(i) * segmentSize
-		size := segmentSize
+		offset := int64(i) * int64(segmentSize)
+		size := int64(segmentSize)
 		if offset+size > fileInfo.Size() {
 			size = fileInfo.Size() - offset
 		}
@@ -205,7 +215,7 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int) error 
 		partNumber := i + 1
 
 		messageID := ""
-		if p.cfg.Posting.MessageIDFormat == config.MessageIDFormatRandom {
+		if p.cfg.MessageIDFormat == config.MessageIDFormatRandom {
 			msgID, err := article.GenerateMessageID()
 			if err != nil {
 				return fmt.Errorf("error generating message ID: %w", err)
@@ -213,7 +223,7 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int) error 
 
 			messageID = msgID
 		} else {
-			msgID, err := nxgHeader.GenerateSegmentID(nxg.PartTypeData, int64(partNumber))
+			msgID, err := nxgHeader.GenerateSegmentID(partType, int64(partNumber))
 			if err != nil {
 				return fmt.Errorf("error generating message ID: %w", err)
 			}
@@ -227,32 +237,33 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int) error 
 
 		var fName string
 
-		if p.cfg.Posting.ObfuscationPolicy == config.ObfuscationPolicyNone {
+		switch p.cfg.ObfuscationPolicy {
+		case config.ObfuscationPolicyNone:
 			fName = fileName
-		} else if p.cfg.Posting.ObfuscationPolicy == config.ObfuscationPolicyFull {
+		case config.ObfuscationPolicyFull:
 			fName = article.GenerateRandomFilename()
 			subject = article.GenerateRandomSubject()
-		} else {
+		default:
 			hasher := md5.New()
-			hasher.Write([]byte(fmt.Sprintf("%s%d", fileName, partNumber)))
+			_, _ = fmt.Fprintf(hasher, "%s%d", fileName, partNumber)
 			fName = fmt.Sprintf("%x", hasher.Sum(nil))
 
-			if p.cfg.Posting.MessageIDFormat == config.MessageIDFormatRandom {
+			if p.cfg.MessageIDFormat == config.MessageIDFormatRandom {
 				hasher := md5.New()
-				hasher.Write([]byte(subject))
+				_, _ = hasher.Write([]byte(subject))
 				subject = fmt.Sprintf("%x", hasher.Sum(nil))
 			} else {
-				subject, err = nxgHeader.GetObfuscatedSubject(nxg.PartTypeData, int64(partNumber))
+				subject, err = nxgHeader.GetObfuscatedSubject(partType, int64(partNumber))
 				if err != nil {
 					return fmt.Errorf("error generating obfuscated subject: %w", err)
 				}
 			}
 		}
 
-		defaultFrom := p.cfg.Posting.PostHeaders.DefaultFrom
+		defaultFrom := p.cfg.PostHeaders.DefaultFrom
 		if defaultFrom != "" {
 			from = defaultFrom
-		} else if p.cfg.Posting.ObfuscationPolicy == config.ObfuscationPolicyFull {
+		} else if p.cfg.ObfuscationPolicy == config.ObfuscationPolicyFull {
 			from, err = article.GenerateFrom()
 			if err != nil {
 				return fmt.Errorf("error generating from header: %w", err)
@@ -260,14 +271,14 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int) error 
 		}
 
 		var xNxgHeader string
-		if p.cfg.Posting.PostHeaders.AddNGXHeader &&
-			p.cfg.Posting.ObfuscationPolicy != config.ObfuscationPolicyFull &&
-			p.cfg.Posting.MessageIDFormat != config.MessageIDFormatNGX {
+		if p.cfg.PostHeaders.AddNGXHeader &&
+			p.cfg.ObfuscationPolicy != config.ObfuscationPolicyFull &&
+			p.cfg.MessageIDFormat != config.MessageIDFormatNGX {
 			xNxgHeader, err = nxgHeader.GetXNxgHeader(
 				int64(fileNumber),
 				int64(totalFiles),
 				fileName,
-				nxg.PartTypeData,
+				partType,
 				fileInfo.Size(),
 			)
 			if err != nil {
@@ -276,7 +287,7 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int) error 
 		}
 
 		var date *time.Time
-		if p.cfg.Posting.ObfuscationPolicy == config.ObfuscationPolicyFull {
+		if p.cfg.ObfuscationPolicy == config.ObfuscationPolicyFull {
 			rd := article.GetRandomDateWithinLast6Hours()
 			date = &rd
 		}
@@ -304,7 +315,7 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int) error 
 		}
 
 		art.SetOffset(offset)
-		art.SetSize(int(size))
+		art.SetSize(uint64(size))
 
 		articles = append(articles, art)
 	}
@@ -325,7 +336,7 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int) error 
 func (p *poster) postLoop(ctx context.Context) {
 	for post := range p.postQueue {
 		// Create a pool with error handling
-		pool := pool.New().WithContext(ctx).WithMaxGoroutines(p.cfg.Posting.MaxWorkers)
+		pool := pool.New().WithContext(ctx).WithMaxGoroutines(p.cfg.MaxWorkers)
 		var bytesPosted int64
 		articlesProcessed := 0
 		articleErrors := 0
@@ -367,7 +378,7 @@ func (p *poster) postLoop(ctx context.Context) {
 			post.mu.Unlock()
 
 			// If we haven't exceeded max retries, add back to queue
-			if post.Retries < p.cfg.Posting.MaxRetries {
+			if post.Retries < p.cfg.MaxRetries {
 				p.postQueue <- post
 				continue
 			}
@@ -387,7 +398,7 @@ func (p *poster) postLoop(ctx context.Context) {
 func (p *poster) checkLoop(ctx context.Context) {
 	for post := range p.checkQueue {
 		// Create a pool with error handling
-		pool := pool.New().WithContext(ctx).WithMaxGoroutines(p.cfg.Posting.MaxWorkers)
+		pool := pool.New().WithContext(ctx).WithMaxGoroutines(p.cfg.MaxWorkers)
 		articlesChecked := 0
 		articleErrors := 0
 
@@ -423,7 +434,7 @@ func (p *poster) checkLoop(ctx context.Context) {
 			post.mu.Unlock()
 
 			// If we haven't exceeded max retries, add back to queue
-			if post.Retries < p.cfg.Posting.MaxCheckRetries {
+			if post.Retries < int(p.checkCfg.MaxRetries) {
 				p.checkQueue <- post
 				continue
 			}
@@ -439,7 +450,7 @@ func (p *poster) checkLoop(ctx context.Context) {
 
 		// Close file
 		if post.file != nil {
-			post.file.Close()
+			_ = post.file.Close()
 		}
 
 		p.statusChan <- post

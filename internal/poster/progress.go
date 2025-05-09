@@ -28,7 +28,7 @@ func NewFileProgress(
 		progressbar.OptionThrottle(100*time.Millisecond),
 		progressbar.OptionShowCount(),
 		progressbar.OptionOnCompletion(func() {
-			fmt.Fprint(os.Stdout, "\n")
+			_, _ = fmt.Fprint(os.Stdout, "\n")
 		}),
 		progressbar.OptionSpinnerType(14),
 		progressbar.OptionFullWidth(),
@@ -51,15 +51,15 @@ func NewFileProgress(
 
 // UpdateFileProgress updates the progress bar for a file
 func (pm *ProgressManager) UpdateFileProgress(bytesProcessed int64, articlesProcessed int64, articleErrors int64) {
-	pm.bar.AddDetail(fmt.Sprintf("Articles: %d/%d | Errors: %d",
+	_ = pm.bar.AddDetail(fmt.Sprintf("Articles: %d/%d | Errors: %d",
 		articlesProcessed,
 		pm.articlesTotal,
 		articleErrors,
 	))
-	pm.bar.Set64(bytesProcessed)
+	_ = pm.bar.Set64(bytesProcessed)
 }
 
 // FinishFileProgress completes the progress bar for a file
 func (pm *ProgressManager) FinishFileProgress() {
-	pm.bar.Finish()
+	_ = pm.bar.Finish()
 }

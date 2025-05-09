@@ -1,12 +1,22 @@
 package config
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
+	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/javi11/nntppool"
+	"github.com/javi11/postie/pkg/parpardownloader"
+	"gopkg.in/yaml.v3"
+)
+
+const (
+	defaultPar2Path   = "./par2cmd"
+	defaultVolumeSize = 153600000 // 150MB
+	defaultRedundancy = 10        //10%
 )
 
 type GroupPolicy string
@@ -49,80 +59,92 @@ const (
 	ObfuscationPolicyNone ObfuscationPolicy = "none"
 )
 
+type Config interface {
+	GetNNTPPool() (nntppool.UsenetConnectionPool, error)
+	GetPostingConfig() PostingConfig
+	GetPostCheckConfig() PostCheck
+	GetPar2Config(ctx context.Context) (*Par2Config, error)
+}
+
 // Config represents the application configuration
-type Config struct {
-	Servers []ServerConfig `json:"servers"`
-	Posting PostingConfig  `json:"posting"`
+type config struct {
+	Servers []ServerConfig `yaml:"servers"`
+	Posting PostingConfig  `yaml:"posting"`
 	// Check uploaded article configuration. used to check if an article was successfully uploaded and propagated.
-	PostCheck PostCheck `json:"post_check"`
-	// Path to the par2 executable. If not provided, the default cmdline par2 executable will be downloaded.
-	Par2Exe string `json:"par2_exe"`
+	PostCheck PostCheck  `yaml:"post_check"`
+	Par2      Par2Config `yaml:"par2"`
+}
+
+type Par2Config struct {
+	Par2Path   string `yaml:"par2_path"`
+	Redundancy int    `yaml:"redundancy"`
+	VolumeSize int    `yaml:"volume_size"`
+	once       sync.Once
 }
 
 // ServerConfig represents a Usenet server configuration
 type ServerConfig struct {
-	Host           string `json:"host"`
-	Port           int    `json:"port"`
-	Username       string `json:"username"`
-	Password       string `json:"password"`
-	SSL            bool   `json:"ssl"`
-	MaxConnections int    `json:"max_connections"`
+	Host           string `yaml:"host"`
+	Port           int    `yaml:"port"`
+	Username       string `yaml:"username"`
+	Password       string `yaml:"password"`
+	SSL            bool   `yaml:"ssl"`
+	MaxConnections int    `yaml:"max_connections"`
 }
 
 type PostHeaders struct {
 	// Whether to add the X-NXG header to the uploaded articles (You will still see this header in the generated NZB). Default value is `true`.
 	// If obfuscation policy is `FULL` this header will not be added.
 	// If message_id_format is not `ngx` this header will not be added.
-	AddNGXHeader bool `json:"add_ngx_header"`
+	AddNGXHeader bool `yaml:"add_ngx_header"`
 	// The default from header for the uploaded articles. By default a random poster will be used for each article. This will override GenerateFromByArticle
-	DefaultFrom string `json:"default_from"`
+	DefaultFrom string `yaml:"default_from"`
 	// Add custom headers to the uploaded articles. Subject, From, Newsgroups, Message-ID and Date can not be override.
-	CustomHeaders []CustomHeader `json:"custom_headers"`
+	CustomHeaders []CustomHeader `yaml:"custom_headers"`
 }
 
 type CustomHeader struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
+	Name  string `yaml:"name"`
+	Value string `yaml:"value"`
 }
 
 type PostCheck struct {
 	// If enabled articles will be checked after being posted. Default value is `true`.
-	Enabled bool `json:"enabled"`
+	Enabled bool `yaml:"enabled"`
 	// Delay between retries. Default value is `10s`.
-	RetryDelay time.Duration `json:"delay"`
+	RetryDelay time.Duration `yaml:"delay"`
 	// The maximum number of retries to check an article.
-	MaxRetries uint `json:"max_retries"`
+	MaxRetries uint `yaml:"max_retries"`
 	// The maximum number of re-posts if article check fails. Default value is `1`.
-	MaxRePost uint `json:"max_reposts"`
+	MaxRePost uint `yaml:"max_reposts"`
 }
 
 // PostingConfig represents posting configuration
 type PostingConfig struct {
-	MaxRetries         int             `json:"max_retries"`
-	RetryDelay         time.Duration   `json:"retry_delay"`
-	CheckInterval      time.Duration   `json:"check_interval"`
-	MaxCheckRetries    int             `json:"max_check_retries"`
-	ArticleSizeInBytes int64           `json:"article_size_in_bytes"`
-	Groups             []string        `json:"groups"`
-	ThrottleRate       int64           `json:"throttle_rate"` // bytes per second
-	MaxWorkers         int             `json:"max_workers"`
-	MessageIDFormat    MessageIDFormat `json:"message_id_format"`
-	PostHeaders        PostHeaders     `json:"post_headers"`
+	MaxRetries         int             `yaml:"max_retries"`
+	RetryDelay         time.Duration   `yaml:"retry_delay"`
+	MaxCheckRetries    int             `yaml:"max_check_retries"`
+	ArticleSizeInBytes uint64          `yaml:"article_size_in_bytes"`
+	Groups             []string        `yaml:"groups"`
+	ThrottleRate       int64           `yaml:"throttle_rate"` // bytes per second
+	MaxWorkers         int             `yaml:"max_workers"`
+	MessageIDFormat    MessageIDFormat `yaml:"message_id_format"`
+	PostHeaders        PostHeaders     `yaml:"post_headers"`
 	// If true the uploaded subject and filename will be obfuscated. Default value is `true`.
-	ObfuscationPolicy ObfuscationPolicy `json:"obfuscation_policy"`
+	ObfuscationPolicy ObfuscationPolicy `yaml:"obfuscation_policy"`
 	//  If you give several Groups you've 3 policy when posting
-	GroupPolicy GroupPolicy `json:"group_policy"`
+	GroupPolicy GroupPolicy `yaml:"group_policy"`
 }
 
 // Load loads configuration from a file
-func Load(path string) (*Config, error) {
+func Load(path string) (Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("error reading config file: %w", err)
 	}
 
-	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
+	var cfg config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("error parsing config file: %w", err)
 	}
 
@@ -132,9 +154,6 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Posting.RetryDelay <= 0 {
 		cfg.Posting.RetryDelay = 5 * time.Second
-	}
-	if cfg.Posting.CheckInterval <= 0 {
-		cfg.Posting.CheckInterval = 1 * time.Minute
 	}
 	if cfg.Posting.MaxCheckRetries <= 0 {
 		cfg.Posting.MaxCheckRetries = 3
@@ -168,11 +187,23 @@ func Load(path string) (*Config, error) {
 
 	cfg.Posting.MaxWorkers = maxWorkers
 
+	if cfg.Par2.Par2Path == "" {
+		cfg.Par2.Par2Path = defaultPar2Path
+	}
+
+	if cfg.Par2.VolumeSize <= 0 {
+		cfg.Par2.VolumeSize = defaultVolumeSize
+	}
+
+	if cfg.Par2.Redundancy <= 0 {
+		cfg.Par2.Redundancy = defaultRedundancy
+	}
+
 	return &cfg, nil
 }
 
 // validate validates the configuration
-func (c *Config) validate() error {
+func (c *config) validate() error {
 	if len(c.Servers) == 0 {
 		return fmt.Errorf("no servers configured")
 	}
@@ -199,7 +230,7 @@ func (c *Config) validate() error {
 }
 
 // GetNNTPPool returns the NNTP connection pool
-func (c *Config) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
+func (c *config) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
 	providers := make([]nntppool.UsenetProviderConfig, len(c.Servers))
 	for i, s := range c.Servers {
 		maxConnections := s.MaxConnections
@@ -233,4 +264,56 @@ func (c *Config) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
 	}
 
 	return pool, nil
+}
+
+func (c *config) GetPar2Config(ctx context.Context) (*Par2Config, error) {
+	var errDownload error
+	c.Par2.once.Do(func() {
+		par2ExePath, err := ensurePar2Executable(ctx, c.Par2.Par2Path)
+		if err != nil {
+			slog.ErrorContext(ctx, "Error ensuring par2 executable", "error", err)
+			errDownload = fmt.Errorf("error ensuring par2 executable: %w", err)
+
+			return
+		}
+
+		c.Par2.Par2Path = par2ExePath
+	})
+
+	if errDownload != nil {
+		return nil, errDownload
+	}
+
+	return &c.Par2, nil
+}
+
+func (c *config) GetPostingConfig() PostingConfig {
+	return c.Posting
+}
+
+func (c *config) GetPostCheckConfig() PostCheck {
+	return c.PostCheck
+}
+
+// ensurePar2Executable checks if a par2 executable is configured, downloads one if necessary,
+// and returns the final path to the executable.
+func ensurePar2Executable(ctx context.Context, par2Path string) (string, error) {
+	slog.DebugContext(ctx, "Using configured Par2 executable", "path", par2Path)
+	// Verify it exists?
+	if _, err := os.Stat(par2Path); err == nil {
+		return par2Path, nil
+	}
+
+	slog.WarnContext(ctx, "Configured Par2 executable not found, proceeding to download", "path", par2Path)
+
+	// Download if not configured and not found in default path
+	slog.InfoContext(ctx, "No par2 executable configured or found, downloading parpar...")
+	execPath, err := parpardownloader.DownloadParParCmd(par2Path)
+	if err != nil {
+		return "", fmt.Errorf("failed to download parpar: %w", err)
+	}
+
+	slog.InfoContext(ctx, "Downloaded Par2 executable", "path", execPath)
+
+	return execPath, nil
 }

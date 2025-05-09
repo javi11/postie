@@ -28,10 +28,10 @@ type Article interface {
 	GetFileName() string
 	GetDate() time.Time
 	GetOffset() int64
-	GetSize() int
+	GetSize() uint64
 	GetOriginalName() string
 	SetOffset(offset int64)
-	SetSize(size int)
+	SetSize(size uint64)
 	GetFileNumber() int
 	SetDate(date time.Time)
 	SetXNxgHeader(xNxgHeader string)
@@ -59,7 +59,7 @@ type article struct {
 	date            time.Time
 	fileNumber      int
 	offset          int64
-	size            int
+	size            uint64
 	originalName    string
 	customHeaders   map[string]string
 	XNxgHeader      string
@@ -156,7 +156,7 @@ func (a *article) GetOffset() int64 {
 }
 
 // GetSize returns the article size
-func (a *article) GetSize() int {
+func (a *article) GetSize() uint64 {
 	return a.size
 }
 
@@ -166,7 +166,7 @@ func (a *article) SetOffset(offset int64) {
 }
 
 // SetSize sets the article size
-func (a *article) SetSize(size int) {
+func (a *article) SetSize(size uint64) {
 	a.size = size
 }
 

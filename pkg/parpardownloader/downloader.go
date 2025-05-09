@@ -1,7 +1,6 @@
-package par2cmdlinedownloader
+package parpardownloader
 
 import (
-	"archive/zip"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -11,6 +10,8 @@ import (
 	"os"
 	"runtime"
 	"strings"
+
+	"github.com/mholt/archiver"
 )
 
 // Release represents the structure of the GitHub release JSON response
@@ -22,7 +23,7 @@ type Release struct {
 	} `json:"assets"`
 }
 
-// DownloadPar2Cmd downloads the latest par2cmd executable from GitHub releases
+// DownloadParParCmd downloads the latest parpar executable from GitHub releases
 // for the current operating system and architecture.
 //
 // It performs the following steps:
@@ -32,10 +33,9 @@ type Release struct {
 // 4. Downloads the executable file
 //
 // Returns:
-//   - string: The name of the downloaded executable ("par2cmd")
+//   - string: The name of the downloaded executable ("parpar")
 //   - error: Any error encountered during the download process
-func DownloadPar2Cmd() (string, error) {
-	executable := "./par2cmd"
+func DownloadParParCmd(executablePath string) (string, error) {
 
 	// Fetch the latest release information from GitHub API
 	release, err := fetchLatestRelease()
@@ -58,7 +58,7 @@ func DownloadPar2Cmd() (string, error) {
 	}
 
 	// Download the asset
-	err = downloadFile("par2cmd", asset.BrowserDownloadURL)
+	err = downloadFile(executablePath, asset.BrowserDownloadURL)
 	if err != nil {
 		slog.With("err", err).Error("Error downloading file")
 
@@ -67,12 +67,12 @@ func DownloadPar2Cmd() (string, error) {
 
 	slog.Info(fmt.Sprintf("Downloaded %s successfully.\n", asset.Name))
 
-	return executable, nil
+	return executablePath, nil
 }
 
 // fetchLatestRelease retrieves the latest release information from GitHub
 func fetchLatestRelease() (*Release, error) {
-	url := "https://api.github.com/repos/Parchive/par2cmdline/releases/latest"
+	url := "https://api.github.com/repos/animetosho/ParPar/releases/latest"
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
@@ -104,27 +104,27 @@ func findAssetForSystem(release *Release, goos, goarch string) (*struct {
 	case "linux":
 		switch goarch {
 		case "amd64":
-			assetName = "linux-amd64.zip"
+			assetName = "linux-static-amd64.xz"
 		case "arm64":
-			assetName = "linux-arm64.zip"
+			assetName = "linux-static-aarch64.xz"
 		default:
 			return nil, fmt.Errorf("unsupported architecture: %s", goarch)
 		}
 	case "darwin":
 		switch goarch {
 		case "amd64":
-			assetName = "macos-amd64.zip"
+			assetName = "macos-x64.xz"
 		case "arm64":
-			assetName = "macos-arm64.zip"
+			assetName = "macos-x64.xz"
 		default:
 			return nil, fmt.Errorf("unsupported architecture: %s", goarch)
 		}
 	case "windows":
 		switch goarch {
 		case "amd64":
-			assetName = "win-x64.zip"
+			assetName = "win64.7z"
 		case "arm64":
-			assetName = "win-arm64.zip"
+			assetName = "win64.7z"
 		default:
 			return nil, fmt.Errorf("unsupported architecture: %s", goarch)
 		}
@@ -157,30 +157,14 @@ func downloadFile(filename, url string) error {
 	}
 
 	// Read the entire response into a buffer
-	buf := new(bytes.Buffer)
+	buf := bytes.NewBuffer(nil)
 	_, err = io.Copy(buf, resp.Body)
 	if err != nil {
 		return fmt.Errorf("error reading response: %w", err)
 	}
 
-	// Create a zip reader from the buffer
-	zipReader, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
-	if err != nil {
-		return fmt.Errorf("error creating zip reader: %w", err)
-	}
-
-	// Find the par2cmd executable in the zip file
-	var executableFile *zip.File
-	for _, file := range zipReader.File {
-		if strings.HasSuffix(file.Name, "par2") || strings.HasSuffix(file.Name, "par2.exe") {
-			executableFile = file
-			break
-		}
-	}
-
-	if executableFile == nil {
-		return fmt.Errorf("no par2cmd executable found in zip file")
-	}
+	// Create a xz reader from the buffer
+	xzReader := archiver.NewXz()
 
 	// Create the output file
 	out, err := os.Create(filename)
@@ -191,15 +175,8 @@ func downloadFile(filename, url string) error {
 		_ = out.Close()
 	}()
 
-	// Open the file in the zip
-	rc, err := executableFile.Open()
-	if err != nil {
-		return fmt.Errorf("error opening file in zip: %w", err)
-	}
-	defer rc.Close()
-
 	// Copy the executable to the output file
-	_, err = io.Copy(out, rc)
+	err = xzReader.Decompress(buf, out)
 	if err != nil {
 		return err
 	}

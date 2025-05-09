@@ -22,13 +22,12 @@ type NZBGenerator interface {
 // Generator creates NZB files
 type Generator struct {
 	articles    map[string][]article.Article // filename -> articles
-	segmentSize int64                        // size of each segment in bytes
+	segmentSize uint64                       // size of each segment in bytes
 	fileSize    int64                        // size of the file in bytes
-	nxgHeader   string                       // nxg header
 }
 
 // NewGenerator creates a new NZB generator
-func NewGenerator(segmentSize int64) NZBGenerator {
+func NewGenerator(segmentSize uint64) NZBGenerator {
 	return &Generator{
 		articles:    make(map[string][]article.Article),
 		segmentSize: segmentSize,
@@ -83,7 +82,7 @@ func (g *Generator) Generate(filename string, outputPath string) error {
 			// Use configured segment size for all segments except the last one
 			segmentSize := g.segmentSize
 			if i == len(articles)-1 {
-				segmentSize = int64(a.GetSize())
+				segmentSize = a.GetSize()
 			}
 
 			segment := nzbparser.NzbSegment{

@@ -8,9 +8,10 @@
             "mode": "auto",
             "program": "${workspaceFolder}/main.go",
             "args": [
-                "-config",
-                "${workspaceFolder}/config.json",
-                "-dir",
+                "-v",
+                "-c",
+                "${workspaceFolder}/config.yaml",
+                "-d",
                 "${workspaceFolder}/test_files"
             ],
             "cwd": "${workspaceFolder}",
@@ -27,9 +28,9 @@
             "mode": "auto",
             "program": "${workspaceFolder}/main.go",
             "args": [
-                "-config",
+                "-c",
                 "${input:configPath}",
-                "-dir",
+                "-d",
                 "${input:dirPath}"
             ],
             "cwd": "${workspaceFolder}",
@@ -45,7 +46,7 @@
             "id": "configPath",
             "type": "promptString",
             "description": "Path to config file",
-            "default": "${workspaceFolder}/config.json"
+            "default": "${workspaceFolder}/config.yaml"
         },
         {
             "id": "dirPath",
