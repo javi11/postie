@@ -4,10 +4,12 @@ go 1.24.0
 
 require (
 	github.com/Tensai75/nzbparser v0.1.0
-	github.com/javi11/nntppool v0.2.1
+	github.com/javi11/nntppool v0.3.0
 	github.com/javi11/nxg v0.1.0
+	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/mholt/archiver v3.1.1+incompatible
 	github.com/mnightingale/rapidyenc v0.0.0-20240809192858-2494683cdd67
+	github.com/opencontainers/selinux v1.12.0
 	github.com/schollz/progressbar/v3 v3.18.0
 	github.com/sourcegraph/conc v0.3.0
 	github.com/spf13/cobra v1.9.1
@@ -107,7 +109,7 @@ require (
 	github.com/hexops/gotextdiff v1.0.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
-	github.com/javi11/nntpcli v0.5.0 // indirect
+	github.com/javi11/nntpcli v0.6.0 // indirect
 	github.com/jgautheron/goconst v1.8.1 // indirect
 	github.com/jingyugao/rowserrcheck v1.1.1 // indirect
 	github.com/jjti/go-spancheck v0.6.4 // indirect

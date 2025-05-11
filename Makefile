@@ -53,3 +53,22 @@ check: generate go-mod-tidy golangci-lint test-race
 git-hooks:
 	@echo '#!/bin/sh\nmake' > .git/hooks/pre-commit
 	@chmod +x .git/hooks/pre-commit
+
+.PHONY: release
+release:
+	goreleaser --skip-validate --skip-publish --rm-dist
+
+.PHONY: snapshot
+snapshot:
+	goreleaser --skip-docker --snapshot --skip-publish --rm-dist 
+
+.PHONY: publish
+publish:
+	goreleaser --rm-dist
+
+.PHONY: docker
+docker: snapshot
+	mkdir -p ./example/watch
+	mkdir -p ./example/config
+	mkdir -p ./example/output
+	docker-compose up

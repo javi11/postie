@@ -234,10 +234,10 @@ github.com/jackc/puddle/v2 v2.2.2 h1:PR8nw+E/1w0GLuRFSmiioY6UooMp6KJv0/61nB7icHo
 github.com/jackc/puddle/v2 v2.2.2/go.mod h1:vriiEXHvEE654aYKXXjOvZM39qJ0q+azkZFrfEOc3H4=
 github.com/javi11/nntp-server-mock v0.0.1 h1:05KbUlFSnzk82CG/sHWLp9s6Vg8exL3wvdAetX8Bwhc=
 github.com/javi11/nntp-server-mock v0.0.1/go.mod h1:+QBpPor0q44ttab8kWo08+/t5C26IHhUpBTC1lZqujA=
-github.com/javi11/nntpcli v0.5.0 h1:AS5p/at3i21H7ULsxRMBDSjzgUoID4U6jZJ8yMtZSt8=
-github.com/javi11/nntpcli v0.5.0/go.mod h1:dMqGOavcFyeGKQZei+6QYUfn2BF29S1t36B0dA7vnFA=
-github.com/javi11/nntppool v0.2.1 h1:cPSgjbK7bCEpoH+nyPFMNcVslxN/SyfOEoEs6ss3qZc=
-github.com/javi11/nntppool v0.2.1/go.mod h1:MQUzmyt//R7jK8uc4Ga7puO4N/E1udXefurM7y1e7lE=
+github.com/javi11/nntpcli v0.6.0 h1:IUXL2qDXbg54Cp6SB0OGuDcOhXk8hr0+rI6ioGxBhbA=
+github.com/javi11/nntpcli v0.6.0/go.mod h1:dMqGOavcFyeGKQZei+6QYUfn2BF29S1t36B0dA7vnFA=
+github.com/javi11/nntppool v0.3.0 h1:HhRsYV/v3IaXFz62grcC2R7PXxGBmtfmHs4m2mHa6sw=
+github.com/javi11/nntppool v0.3.0/go.mod h1:iOvWwN1pNUUQC5ROKOAlACpKcyyD72KrMhhsLODM/KM=
 github.com/javi11/nxg v0.1.0 h1:CTThldYlaVIPIhpkrMw0HcTD0NLrW1uYMoDILjjEOtM=
 github.com/javi11/nxg v0.1.0/go.mod h1:+GvYpp+y1oq+qBOWxFMvfTjtin/0zCeomWfjiPkiu8A=
 github.com/jgautheron/goconst v1.8.1 h1:PPqCYp3K/xlOj5JmIe6O1Mj6r1DbkdbLtR3AJuZo414=
@@ -303,6 +303,8 @@ github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D
 github.com/mattn/go-runewidth v0.0.9/go.mod h1:H031xJmbD/WCDINGzjvQ9THkh0rPKHF+m2gUSrubnMI=
 github.com/mattn/go-runewidth v0.0.16 h1:E5ScNMtiwvlvB5paMFdw9p4kSQzbXFikJ5SQO6TULQc=
 github.com/mattn/go-runewidth v0.0.16/go.mod h1:Jdepj2loyihRzMpdS35Xk/zdY8IAYHsh153qUoGf23w=
+github.com/mattn/go-sqlite3 v1.14.28 h1:ThEiQrnbtumT+QMknw63Befp/ce/nUPgBPMlRFEum7A=
+github.com/mattn/go-sqlite3 v1.14.28/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
 github.com/mgechev/revive v1.9.0 h1:8LaA62XIKrb8lM6VsBSQ92slt/o92z5+hTw3CmrvSrM=
 github.com/mgechev/revive v1.9.0/go.mod h1:LAPq3+MgOf7GcL5PlWIkHb0PT7XH4NuC2LdWymhb9Mo=
 github.com/mholt/archiver v3.1.1+incompatible h1:1dCVxuqs0dJseYEhi5pl7MYPH9zDa1wBi7mF09cbNkU=
@@ -335,6 +337,8 @@ github.com/onsi/ginkgo/v2 v2.23.3 h1:edHxnszytJ4lD9D5Jjc4tiDkPBZ3siDeJJkUZJJVkp0
 github.com/onsi/ginkgo/v2 v2.23.3/go.mod h1:zXTP6xIp3U8aVuXN8ENK9IXRaTjFnpVB9mGmaSRvxnM=
 github.com/onsi/gomega v1.36.3 h1:hID7cr8t3Wp26+cYnfcjR6HpJ00fdogN6dqZ1t6IylU=
 github.com/onsi/gomega v1.36.3/go.mod h1:8D9+Txp43QWKhM24yyOBEdpkzN8FvJyAwecBgsU4KU0=
+github.com/opencontainers/selinux v1.12.0 h1:6n5JV4Cf+4y0KNXW48TLj5DwfXpvWlxXplUkdTrmPb8=
+github.com/opencontainers/selinux v1.12.0/go.mod h1:BTPX+bjVbWGXw7ZZWUbdENt8w0htPSrlgOOysQaU62U=
 github.com/otiai10/copy v1.2.0/go.mod h1:rrF5dJ5F0t/EWSYODDu4j9/vEeYHMkc8jt0zJChqQWw=
 github.com/otiai10/copy v1.14.0 h1:dCI/t1iTdYGtkvCuBG2BgR6KZa83PTclw4U5n2wAllU=
 github.com/otiai10/copy v1.14.0/go.mod h1:ECfuL02W+/FkTWZWgQqXPWZgW9oeKCSQ5qVfSc4qc4w=

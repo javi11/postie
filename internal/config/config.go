@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -14,9 +15,10 @@ import (
 )
 
 const (
-	defaultPar2Path   = "./par2cmd"
-	defaultVolumeSize = 153600000 // 150MB
-	defaultRedundancy = 10        //10%
+	defaultPar2Path       = "./parpar"
+	defaultVolumeSize     = 153600000 // 150MB
+	defaultRedundancy     = "1n*1.2"  //10%
+	defaultMaxInputSlices = 4000
 )
 
 type GroupPolicy string
@@ -64,32 +66,47 @@ type Config interface {
 	GetPostingConfig() PostingConfig
 	GetPostCheckConfig() PostCheck
 	GetPar2Config(ctx context.Context) (*Par2Config, error)
+	GetWatcherConfig() WatcherConfig
+}
+
+type ConnectionPoolConfig struct {
+	MinConnections                      int           `yaml:"min_connections"`
+	HealthCheckInterval                 time.Duration `yaml:"health_check_interval"`
+	SkipProvidersVerificationOnCreation bool          `yaml:"skip_providers_verification_on_creation"`
 }
 
 // Config represents the application configuration
 type config struct {
-	Servers []ServerConfig `yaml:"servers"`
-	Posting PostingConfig  `yaml:"posting"`
+	Servers        []ServerConfig       `yaml:"servers"`
+	ConnectionPool ConnectionPoolConfig `yaml:"connection_pool"`
+	Posting        PostingConfig        `yaml:"posting"`
 	// Check uploaded article configuration. used to check if an article was successfully uploaded and propagated.
-	PostCheck PostCheck  `yaml:"post_check"`
-	Par2      Par2Config `yaml:"par2"`
+	PostCheck PostCheck     `yaml:"post_check"`
+	Par2      Par2Config    `yaml:"par2"`
+	Watcher   WatcherConfig `yaml:"watcher"`
 }
 
 type Par2Config struct {
-	Par2Path   string `yaml:"par2_path"`
-	Redundancy int    `yaml:"redundancy"`
-	VolumeSize int    `yaml:"volume_size"`
-	once       sync.Once
+	Par2Path         string   `yaml:"par2_path"`
+	Redundancy       string   `yaml:"redundancy"`
+	VolumeSize       int      `yaml:"volume_size"`
+	MaxInputSlices   int      `yaml:"max_input_slices"`
+	RecoverySlices   string   `yaml:"recovery_slices"`
+	ExtraPar2Options []string `yaml:"extra_par2_options"`
+	once             sync.Once
 }
 
 // ServerConfig represents a Usenet server configuration
 type ServerConfig struct {
-	Host           string `yaml:"host"`
-	Port           int    `yaml:"port"`
-	Username       string `yaml:"username"`
-	Password       string `yaml:"password"`
-	SSL            bool   `yaml:"ssl"`
-	MaxConnections int    `yaml:"max_connections"`
+	Host                           string `yaml:"host"`
+	Port                           int    `yaml:"port"`
+	Username                       string `yaml:"username"`
+	Password                       string `yaml:"password"`
+	SSL                            bool   `yaml:"ssl"`
+	MaxConnections                 int    `yaml:"max_connections"`
+	MaxConnectionIdleTimeInSeconds int    `yaml:"max_connection_idle_time_in_seconds"`
+	MaxConnectionTTLInSeconds      int    `yaml:"max_connection_ttl_in_seconds"`
+	InsecureSSL                    bool   `yaml:"insecure_ssl"`
 }
 
 type PostHeaders struct {
@@ -113,8 +130,6 @@ type PostCheck struct {
 	Enabled bool `yaml:"enabled"`
 	// Delay between retries. Default value is `10s`.
 	RetryDelay time.Duration `yaml:"delay"`
-	// The maximum number of retries to check an article.
-	MaxRetries uint `yaml:"max_retries"`
 	// The maximum number of re-posts if article check fails. Default value is `1`.
 	MaxRePost uint `yaml:"max_reposts"`
 }
@@ -134,6 +149,19 @@ type PostingConfig struct {
 	ObfuscationPolicy ObfuscationPolicy `yaml:"obfuscation_policy"`
 	//  If you give several Groups you've 3 policy when posting
 	GroupPolicy GroupPolicy `yaml:"group_policy"`
+}
+
+type WatcherConfig struct {
+	SizeThreshold  int64          `yaml:"size_threshold"`
+	Schedule       ScheduleConfig `yaml:"schedule"`
+	IgnorePatterns []string       `yaml:"ignore_patterns"`
+	MinFileSize    int64          `yaml:"min_file_size"`
+	CheckInterval  time.Duration  `yaml:"check_interval"`
+}
+
+type ScheduleConfig struct {
+	StartTime string `yaml:"start_time"`
+	EndTime   string `yaml:"end_time"`
 }
 
 // Load loads configuration from a file
@@ -174,6 +202,22 @@ func Load(path string) (Config, error) {
 		cfg.Posting.ObfuscationPolicy = ObfuscationPolicyFull
 	}
 
+	if cfg.Par2.Par2Path == "" {
+		cfg.Par2.Par2Path = filepath.Join(filepath.Dir(path), "./parpar")
+	}
+
+	if cfg.Par2.VolumeSize <= 0 {
+		cfg.Par2.VolumeSize = defaultVolumeSize
+	}
+
+	if cfg.Par2.Redundancy == "" {
+		cfg.Par2.Redundancy = defaultRedundancy
+	}
+
+	if cfg.Par2.MaxInputSlices <= 0 {
+		cfg.Par2.MaxInputSlices = defaultMaxInputSlices
+	}
+
 	// Validate configuration
 	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
@@ -186,18 +230,6 @@ func Load(path string) (Config, error) {
 	}
 
 	cfg.Posting.MaxWorkers = maxWorkers
-
-	if cfg.Par2.Par2Path == "" {
-		cfg.Par2.Par2Path = defaultPar2Path
-	}
-
-	if cfg.Par2.VolumeSize <= 0 {
-		cfg.Par2.VolumeSize = defaultVolumeSize
-	}
-
-	if cfg.Par2.Redundancy <= 0 {
-		cfg.Par2.Redundancy = defaultRedundancy
-	}
 
 	return &cfg, nil
 }
@@ -237,6 +269,15 @@ func (c *config) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
 		if maxConnections <= 0 {
 			maxConnections = 10 // default value if not specified
 		}
+
+		if s.MaxConnectionIdleTimeInSeconds <= 0 {
+			s.MaxConnectionIdleTimeInSeconds = 300
+		}
+
+		if s.MaxConnectionTTLInSeconds <= 0 {
+			s.MaxConnectionTTLInSeconds = 3600
+		}
+
 		providers[i] = nntppool.UsenetProviderConfig{
 			Host:                           s.Host,
 			Port:                           s.Port,
@@ -244,18 +285,27 @@ func (c *config) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
 			Password:                       s.Password,
 			TLS:                            s.SSL,
 			MaxConnections:                 maxConnections,
-			MaxConnectionIdleTimeInSeconds: 300,
-			MaxConnectionTTLInSeconds:      3600,
-			InsecureSSL:                    true,
+			MaxConnectionIdleTimeInSeconds: s.MaxConnectionIdleTimeInSeconds,
+			MaxConnectionTTLInSeconds:      s.MaxConnectionTTLInSeconds,
+			InsecureSSL:                    s.InsecureSSL,
 		}
+	}
+
+	if c.ConnectionPool.HealthCheckInterval <= 0 {
+		c.ConnectionPool.HealthCheckInterval = time.Minute
+	}
+
+	if c.ConnectionPool.MinConnections <= 0 {
+		c.ConnectionPool.MinConnections = 5
 	}
 
 	config := nntppool.Config{
 		Providers:                           providers,
-		HealthCheckInterval:                 time.Minute,
-		MinConnections:                      5,
-		MaxRetries:                          3,
-		SkipProvidersVerificationOnCreation: true,
+		HealthCheckInterval:                 c.ConnectionPool.HealthCheckInterval,
+		MinConnections:                      c.ConnectionPool.MinConnections,
+		MaxRetries:                          uint(c.Posting.MaxRetries),
+		DelayType:                           nntppool.DelayTypeExponential,
+		SkipProvidersVerificationOnCreation: c.ConnectionPool.SkipProvidersVerificationOnCreation,
 	}
 
 	pool, err := nntppool.NewConnectionPool(config)
@@ -316,4 +366,8 @@ func ensurePar2Executable(ctx context.Context, par2Path string) (string, error) 
 	slog.InfoContext(ctx, "Downloaded Par2 executable", "path", execPath)
 
 	return execPath, nil
+}
+
+func (c *config) GetWatcherConfig() WatcherConfig {
+	return c.Watcher
 }

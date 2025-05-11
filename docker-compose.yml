@@ -1,0 +1,15 @@
+services:
+  postie:
+    container_name: postie
+    platform: linux/amd64
+    build:
+      context: ./dist/postie_linux_amd64_v1
+      dockerfile: ../../docker/Dockerfile
+    volumes:
+      - ./example/config:/config
+      - ./example/watch:/watch
+      - ./example/output:/output
+    environment:
+      - PUID=1000
+      - PGID=1000
+    restart: unless-stopped

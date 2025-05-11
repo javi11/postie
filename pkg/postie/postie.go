@@ -45,7 +45,7 @@ func New(
 	return &Postie{cfg: cfg, par2runner: par2runner, poster: p}, nil
 }
 
-func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo) error {
+func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, outputDir string) error {
 	if len(files) == 0 {
 		return fmt.Errorf("no files to post")
 	}
@@ -53,32 +53,41 @@ func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo) error {
 	// Start posting
 	startTime := time.Now()
 
-	createdPar2Paths, err := p.par2runner.Create(ctx, files)
-	if err != nil {
-		slog.ErrorContext(ctx, "Error during par2 creation", "error", err)
+	for _, f := range files {
+		slog.InfoContext(ctx, "Posting file", "file", f.Path)
 
-		return err
-	}
-	defer func() {
+		createdPar2Paths, err := p.par2runner.Create(ctx, []fileinfo.FileInfo{f})
+		if err != nil {
+			slog.ErrorContext(ctx, "Error during par2 creation", "error", err)
+
+			return err
+		}
+
+		var filesPath []string
+
+		for _, f := range files {
+			filesPath = append(filesPath, f.Path)
+		}
+
+		filesPath = append(filesPath, createdPar2Paths...)
+
+		if err := p.poster.Post(ctx, filesPath, outputDir); err != nil {
+			slog.ErrorContext(ctx, fmt.Sprintf("Error during upload: %s", filesPath), "error", err)
+
+			for _, p := range createdPar2Paths {
+				if err := os.Remove(p); err != nil {
+					slog.ErrorContext(ctx, "Error during par2 cleanup", "error", err)
+				}
+			}
+
+			return err
+		}
+
 		for _, p := range createdPar2Paths {
 			if err := os.Remove(p); err != nil {
 				slog.ErrorContext(ctx, "Error during par2 cleanup", "error", err)
 			}
 		}
-	}()
-
-	var filesPath []string
-
-	for _, f := range files {
-		filesPath = append(filesPath, f.Path)
-	}
-
-	filesPath = append(filesPath, createdPar2Paths...)
-
-	if err := p.poster.Post(ctx, filesPath); err != nil {
-		slog.ErrorContext(ctx, "Error during upload", "error", err)
-
-		return err
 	}
 
 	// Print final statistics

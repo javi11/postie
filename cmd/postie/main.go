@@ -15,6 +15,7 @@ var (
 	configPath string
 	dirPath    string
 	verbose    bool
+	outputDir  string
 )
 
 var rootCmd = &cobra.Command{
@@ -63,7 +64,7 @@ It supports configuration via a JSON file and can process multiple files in a di
 			return err
 		}
 
-		return poster.Post(ctx, files)
+		return poster.Post(ctx, files, outputDir)
 	},
 }
 
@@ -71,6 +72,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", "config.json", "Path to configuration file")
 	rootCmd.PersistentFlags().StringVarP(&dirPath, "dir", "d", ".", "Directory containing files to upload")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose logging")
+	rootCmd.PersistentFlags().StringVarP(&outputDir, "output-dir", "o", ".", "Directory to output files to")
 }
 
 func Execute() {

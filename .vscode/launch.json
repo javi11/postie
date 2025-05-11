@@ -22,6 +22,29 @@
             "trace": "verbose"
         },
         {
+            "name": "Debug postie (with watcher)",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main.go",
+            "args": [
+                "watch",
+                "-v",
+                "-c",
+                "${workspaceFolder}/config.yaml",
+                "-w",
+                "${workspaceFolder}/test_files",
+                "-o",
+                "${workspaceFolder}/output_files"
+            ],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "GO111MODULE": "on"
+            },
+            "showLog": true,
+            "trace": "verbose"
+        },
+        {
             "name": "Debug postie (with custom paths)",
             "type": "go",
             "request": "launch",
