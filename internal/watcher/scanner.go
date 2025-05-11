@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -93,7 +94,11 @@ func (w *Watcher) getNextBatch(ctx context.Context) ([]QueueItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			slog.ErrorContext(ctx, "Error closing rows", "error", err)
+		}
+	}()
 
 	for rows.Next() {
 		var item QueueItem
@@ -160,7 +165,11 @@ func (w *Watcher) handleFailedItems(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			slog.ErrorContext(ctx, "Error closing rows", "error", err)
+		}
+	}()
 
 	// Collect items to delete
 	type failedItem struct {

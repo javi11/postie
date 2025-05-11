@@ -49,7 +49,11 @@ The watch command will monitor the configured directory and upload files accordi
 			slog.ErrorContext(ctx, "Error creating watcher", "error", err)
 			return err
 		}
-		defer w.Close()
+		defer func() {
+			if err := w.Close(); err != nil {
+				slog.ErrorContext(ctx, "Error closing watcher", "error", err)
+			}
+		}()
 
 		// Handle shutdown signals
 		sigChan := make(chan os.Signal, 1)
