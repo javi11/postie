@@ -146,7 +146,8 @@ type PostingConfig struct {
 	MessageIDFormat    MessageIDFormat `yaml:"message_id_format"`
 	PostHeaders        PostHeaders     `yaml:"post_headers"`
 	// If true the uploaded subject and filename will be obfuscated. Default value is `true`.
-	ObfuscationPolicy ObfuscationPolicy `yaml:"obfuscation_policy"`
+	ObfuscationPolicy     ObfuscationPolicy `yaml:"obfuscation_policy"`
+	Par2ObfuscationPolicy ObfuscationPolicy `yaml:"par2_obfuscation_policy"`
 	//  If you give several Groups you've 3 policy when posting
 	GroupPolicy GroupPolicy `yaml:"group_policy"`
 }

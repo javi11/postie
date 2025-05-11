@@ -28,6 +28,7 @@ posting:
   max_workers: 10 # This is automatically set based on server connections
   message_id_format: random # Options: random, ngx
   obfuscation_policy: full # Options: full, partial, none
+  par2_obfuscation_policy: full # Options: full, partial, none
   group_policy: each_file # Options: all, each_file
   post_headers:
     add_ngx_header: true
