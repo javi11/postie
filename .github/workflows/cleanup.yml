@@ -1,0 +1,42 @@
+name: Docker Cleanup
+
+on: delete
+
+env:
+  # Use docker.io for Docker Hub if empty
+  REGISTRY: ghcr.io
+  # github.repository as <account>/<repo>
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  cleanup_branch:
+    if: startsWith(github.event.ref_type, 'branch') == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      issues: write
+    steps:
+      - name: Docker login
+        if: github.event.pull_request.head.repo.fork == false
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine Branch
+        id: branch
+        uses: transferwise/sanitize-branch-name@v1
+
+      - uses: castlabs/get-package-version-id-action@v2.0
+        id: version
+        with:
+          version: "pr-${{ steps.branch.outputs.sanitized-branch-name }}-amd64"
+
+      - uses: actions/delete-package-versions@v5
+        if: ${{ steps.version.outputs.ids != '' }}
+        with:
+          package-version-ids: "${{ steps.versions.outputs.ids }}"
+          package-name: postie
+          package-type: container

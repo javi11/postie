@@ -1,0 +1,44 @@
+# Use Ubuntu as a parent image
+FROM ghcr.io/linuxserver/baseimage-ubuntu:arm64v8-jammy
+
+# Arguments for non-interactive builds
+ARG DEBIAN_FRONTEND="noninteractive"
+ARG BUILD_DATE
+ARG VERSION
+
+# Set up environment variables for PUID and PGID
+ENV PUID=1000
+ENV PGID=1000
+
+# Set the working directory inside the container
+WORKDIR /app
+
+# Update mime types
+RUN apt-get update -y && apt-get install --reinstall mime-support -y
+
+# Create the entrypoint script
+RUN echo '#!/bin/bash\n\
+    PUID=${PUID:-1000}\n\
+    PGID=${PGID:-1000}\n\
+    groupmod -o -g "$PGID" abc\n\
+    usermod -o -u "$PUID" abc\n\
+    chown -R abc:abc /app /config /watch /output\n\
+    exec s6-setuidgid abc /app/postie watch --config /config/config.yaml --watch-folder /watch --output-folder /output\n\
+    ' > /entrypoint.sh && chmod +x /entrypoint.sh
+
+# Copy the binary to the app directory
+COPY postie /app/postie
+
+# Set volumes for configuration and nzbs
+VOLUME ["/config", "/watch", "/output"]
+
+# Add root files
+CMD ["/app/postie" , "watch" , "--config", "/config/config.yaml" , "--watch-folder" , "/watch" , "--output-folder" , "/output"]
+
+# Set the entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
+
+# Add metadata labels
+LABEL org.opencontainers.image.source="https://github.com/javi11/postie"
+LABEL build_version="version: Build-date:- ${VERSION} ${BUILD_DATE}"
+LABEL maintainer="javi11"

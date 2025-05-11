@@ -23,7 +23,7 @@ import (
 // Poster defines the interface for posting articles to Usenet
 type Poster interface {
 	// Post posts files from a directory to Usenet
-	Post(ctx context.Context, files []string) error
+	Post(ctx context.Context, files []string, outputDir string) error
 	// GetStats returns posting statistics
 	GetStats() Stats
 }
@@ -48,6 +48,8 @@ type Post struct {
 	file     *os.File
 	mu       sync.Mutex
 	filesize int64
+	wg       *sync.WaitGroup
+	failed   *int
 }
 
 // Stats tracks posting statistics
@@ -62,17 +64,13 @@ type Stats struct {
 
 // Poster handles posting articles to Usenet
 type poster struct {
-	cfg        config.PostingConfig
-	checkCfg   config.PostCheck
-	pool       nntppool.UsenetConnectionPool
-	yenc       *rapidyenc.Encoder
-	stats      *Stats
-	throttle   *Throttle
-	nzbGen     nzb.NZBGenerator
-	postQueue  chan *Post
-	checkQueue chan *Post
-	statusChan chan *Post // channel to track final post status
-	done       chan struct{}
+	cfg      config.PostingConfig
+	checkCfg config.PostCheck
+	pool     nntppool.UsenetConnectionPool
+	yenc     *rapidyenc.Encoder
+	stats    *Stats
+	throttle *Throttle
+	nzbGen   nzb.NZBGenerator
 }
 
 // New creates a new poster
@@ -94,72 +92,220 @@ func New(ctx context.Context, cfg config.Config) (Poster, error) {
 	}
 
 	p := &poster{
-		cfg:        cfg.GetPostingConfig(),
-		checkCfg:   cfg.GetPostCheckConfig(),
-		pool:       pool,
-		yenc:       yenc,
-		stats:      stats,
-		throttle:   throttle,
-		nzbGen:     nzb.NewGenerator(cfg.GetPostingConfig().ArticleSizeInBytes),
-		postQueue:  make(chan *Post, 100),
-		checkQueue: make(chan *Post, 100),
-		statusChan: make(chan *Post, 100),
-		done:       make(chan struct{}),
+		cfg:      cfg.GetPostingConfig(),
+		checkCfg: cfg.GetPostCheckConfig(),
+		pool:     pool,
+		yenc:     yenc,
+		stats:    stats,
+		throttle: throttle,
+		nzbGen:   nzb.NewGenerator(cfg.GetPostingConfig().ArticleSizeInBytes),
 	}
-
-	// Start worker goroutines
-	go p.postLoop(ctx)
-	go p.checkLoop(ctx)
 
 	return p, nil
 }
 
 // Post posts files from a directory to Usenet
-func (p *poster) Post(ctx context.Context, files []string) error {
-	postCount := len(files)
+func (p *poster) Post(ctx context.Context, files []string, outputDir string) error {
+	wg := sync.WaitGroup{}
+	var failedPosts int
+
+	// Create a context that can be canceled
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Create error channel to collect errors
+	errChan := make(chan error, 1)
+
+	// Create channels for post and check queues
+	postQueue := make(chan *Post, 100)
+	checkQueue := make(chan *Post, 100)
+
+	// Start a goroutine to process posts
+	go p.postLoop(ctx, postQueue, checkQueue, errChan)
+
+	// Start a goroutine to process checks
+	go p.checkLoop(ctx, checkQueue, postQueue, errChan)
 
 	for i, file := range files {
-		if err := p.addPost(file, i+1, len(files)); err != nil {
+		wg.Add(1)
+		if err := p.addPost(file, i+1, len(files), &wg, &failedPosts, postQueue); err != nil {
 			return fmt.Errorf("error adding file %s to posting queue: %w", file, err)
 		}
 	}
 
-	wg := sync.WaitGroup{}
-
-	failedPosts := 0
-
-	// Wait for all posts to complete
-	wg.Add(postCount)
+	// Wait for all posts to complete or an error to occur
+	done := make(chan struct{})
 	go func() {
-		for post := range p.statusChan {
-			if post.Status == PostStatusFailed {
-				failedPosts++
-			}
-			wg.Done()
-		}
+		wg.Wait()
+		close(done)
 	}()
 
-	// Wait for all posts to complete
-	wg.Wait()
+	select {
+	case err := <-errChan:
+		cancel() // Cancel the context to stop all operations
+		return err
+	case <-done:
+		if failedPosts > 0 {
+			return fmt.Errorf("failed to post %d files", failedPosts)
+		}
 
-	if failedPosts > 0 {
-		return fmt.Errorf("failed to post %d files", failedPosts)
+		// Generate single NZB file for all files
+		firstFile := files[0]
+		dirPath := filepath.Dir(firstFile)
+
+		nzbPath := filepath.Join(outputDir, dirPath, filepath.Base(firstFile)+".nzb")
+		if err := p.nzbGen.Generate("", nzbPath); err != nil {
+			return fmt.Errorf("error generating NZB file: %w", err)
+		}
+
+		return nil
 	}
+}
 
-	// Generate single NZB file for all files
-	firstFile := files[0]
-	dirPath := filepath.Dir(firstFile)
+// postLoop processes posts from the queue
+func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue chan *Post, errChan chan<- error) {
+	defer close(postQueue)
+	defer close(checkQueue)
 
-	nzbPath := filepath.Join(dirPath, filepath.Base(firstFile)+".nzb")
-	if err := p.nzbGen.Generate("", nzbPath); err != nil {
-		return fmt.Errorf("error generating NZB file: %w", err)
+	for post := range postQueue {
+		select {
+		case <-ctx.Done():
+			errChan <- ctx.Err()
+			return
+		default:
+			// Create a pool with error handling
+			pool := pool.New().WithContext(ctx).WithMaxGoroutines(p.cfg.MaxWorkers).WithCancelOnError().WithFirstError()
+			var bytesPosted int64
+			articlesProcessed := 0
+			articleErrors := 0
+
+			// Create progress bar for this file
+			progress := NewFileProgress(fmt.Sprintf("Uploading %s...", post.FilePath), post.filesize, int64(len(post.Articles)))
+
+			// Submit all articles to the pool
+			for _, art := range post.Articles {
+				art := art // Create new variable for goroutine
+				pool.Go(func(ctx context.Context) error {
+					if err := p.postArticle(ctx, art, post.file); err != nil {
+						return err
+					}
+
+					// Update progress
+					post.mu.Lock()
+					bytesPosted += int64(art.GetSize())
+					articlesProcessed++
+
+					progress.UpdateFileProgress(bytesPosted, int64(articlesProcessed), int64(articleErrors))
+
+					// Add article to NZB generator
+					p.nzbGen.AddArticle(art)
+					post.mu.Unlock()
+
+					return nil
+				})
+			}
+
+			// Wait for all workers to complete and collect errors
+			errors := pool.Wait()
+
+			if errors != nil {
+				post.mu.Lock()
+				post.Status = PostStatusFailed
+				post.Error = fmt.Errorf("failed to post articles: %v", errors)
+				post.mu.Unlock()
+
+				errChan <- fmt.Errorf("failed to post file %s after %d retries: %v", post.FilePath, post.Retries, errors)
+				return
+			}
+
+			// Move to check queue
+			post.mu.Lock()
+			post.Status = PostStatusPosted
+			progress.FinishFileProgress()
+			post.mu.Unlock()
+			checkQueue <- post
+		}
 	}
+}
 
-	return nil
+// checkLoop processes posts from the check queue
+func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue chan *Post, errChan chan<- error) {
+	for post := range checkQueue {
+		select {
+		case <-ctx.Done():
+			errChan <- ctx.Err()
+			return
+		default:
+			// Create a pool with error handling
+			pool := pool.New().WithContext(ctx).WithMaxGoroutines(p.cfg.MaxWorkers).WithCancelOnError().WithFirstError()
+			articlesChecked := 0
+			articleErrors := 0
+
+			// Create progress bar for this file
+			progress := NewFileProgress(fmt.Sprintf("Verifying %s...", post.FilePath), post.filesize, int64(len(post.Articles)))
+
+			// Submit all articles to the pool
+			for _, art := range post.Articles {
+				art := art // Create new variable for goroutine
+				pool.Go(func(ctx context.Context) error {
+					if err := p.checkArticle(ctx, art); err != nil {
+						return err
+					}
+
+					// Update progress
+					post.mu.Lock()
+					articlesChecked++
+					post.mu.Unlock()
+
+					progress.UpdateFileProgress(0, int64(articlesChecked), int64(articleErrors))
+					return nil
+				})
+			}
+
+			// Wait for all workers to complete and collect errors
+			errors := pool.Wait()
+
+			if errors != nil {
+				post.mu.Lock()
+				post.Status = PostStatusFailed
+				post.Error = fmt.Errorf("failed to verify articles: %v", errors)
+				post.Retries++
+				post.mu.Unlock()
+
+				// If we haven't exceeded max retries, add back to queue
+				if post.Retries < int(p.checkCfg.MaxRePost) {
+					postQueue <- post
+					continue
+				}
+
+				// Increment failed posts counter
+				if post.failed != nil {
+					*post.failed++
+				}
+
+				errChan <- fmt.Errorf("failed to verify file %s after %d retries: %v", post.FilePath, post.Retries, errors)
+				return
+			}
+
+			// Mark as verified
+			post.mu.Lock()
+			post.Status = PostStatusVerified
+			post.mu.Unlock()
+
+			progress.FinishFileProgress()
+
+			// Close file
+			if post.file != nil {
+				_ = post.file.Close()
+			}
+
+			post.wg.Done()
+		}
+	}
 }
 
 // addPost adds a file to the posting queue
-func (p *poster) addPost(filePath string, fileNumber int, totalFiles int) error {
+func (p *poster) addPost(filePath string, fileNumber int, totalFiles int, wg *sync.WaitGroup, failedPosts *int, postQueue chan<- *Post) error {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("error opening file: %w", err)
@@ -326,135 +472,12 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int) error 
 		Status:   PostStatusPending,
 		file:     file,
 		filesize: fileInfo.Size(),
+		wg:       wg,
+		failed:   failedPosts,
 	}
 
-	p.postQueue <- post
+	postQueue <- post
 	return nil
-}
-
-// postLoop processes posts from the queue
-func (p *poster) postLoop(ctx context.Context) {
-	for post := range p.postQueue {
-		// Create a pool with error handling
-		pool := pool.New().WithContext(ctx).WithMaxGoroutines(p.cfg.MaxWorkers)
-		var bytesPosted int64
-		articlesProcessed := 0
-		articleErrors := 0
-
-		// Create progress bar for this file
-		progress := NewFileProgress(fmt.Sprintf("Uploading %s...", post.FilePath), post.filesize, int64(len(post.Articles)))
-
-		// Submit all articles to the pool
-		for _, art := range post.Articles {
-			art := art // Create new variable for goroutine
-			pool.Go(func(ctx context.Context) error {
-				if err := p.postArticle(ctx, art, post.file); err != nil {
-					return err
-				}
-
-				// Update progress
-				post.mu.Lock()
-				bytesPosted += int64(art.GetSize())
-				articlesProcessed++
-
-				progress.UpdateFileProgress(bytesPosted, int64(articlesProcessed), int64(articleErrors))
-
-				// Add article to NZB generator
-				p.nzbGen.AddArticle(art)
-				post.mu.Unlock()
-
-				return nil
-			})
-		}
-
-		// Wait for all workers to complete and collect errors
-		errors := pool.Wait()
-
-		if errors != nil {
-			post.mu.Lock()
-			post.Status = PostStatusFailed
-			post.Error = fmt.Errorf("failed to post articles: %v", errors)
-			post.Retries++
-			post.mu.Unlock()
-
-			// If we haven't exceeded max retries, add back to queue
-			if post.Retries < p.cfg.MaxRetries {
-				p.postQueue <- post
-				continue
-			}
-			continue
-		}
-
-		// Move to check queue
-		post.mu.Lock()
-		post.Status = PostStatusPosted
-		progress.FinishFileProgress()
-		post.mu.Unlock()
-		p.checkQueue <- post
-	}
-}
-
-// checkLoop processes posts from the check queue
-func (p *poster) checkLoop(ctx context.Context) {
-	for post := range p.checkQueue {
-		// Create a pool with error handling
-		pool := pool.New().WithContext(ctx).WithMaxGoroutines(p.cfg.MaxWorkers)
-		articlesChecked := 0
-		articleErrors := 0
-
-		// Create progress bar for this file
-		progress := NewFileProgress(fmt.Sprintf("Verifying %s...", post.FilePath), post.filesize, int64(len(post.Articles)))
-
-		// Submit all articles to the pool
-		for _, art := range post.Articles {
-			art := art // Create new variable for goroutine
-			pool.Go(func(ctx context.Context) error {
-				if err := p.checkArticle(ctx, art); err != nil {
-					return err
-				}
-
-				// Update progress
-				post.mu.Lock()
-				articlesChecked++
-				post.mu.Unlock()
-
-				progress.UpdateFileProgress(0, int64(articlesChecked), int64(articleErrors))
-				return nil
-			})
-		}
-
-		// Wait for all workers to complete and collect errors
-		errors := pool.Wait()
-
-		if errors != nil {
-			post.mu.Lock()
-			post.Status = PostStatusFailed
-			post.Error = fmt.Errorf("failed to verify articles: %v", errors)
-			post.Retries++
-			post.mu.Unlock()
-
-			// If we haven't exceeded max retries, add back to queue
-			if post.Retries < int(p.checkCfg.MaxRetries) {
-				p.checkQueue <- post
-				continue
-			}
-			continue
-		}
-
-		// Mark as verified
-		post.mu.Lock()
-		post.Status = PostStatusVerified
-		post.mu.Unlock()
-
-		progress.FinishFileProgress()
-
-		// Close file
-		if post.file != nil {
-			_ = post.file.Close()
-		}
-
-		p.statusChan <- post
-	}
 }
 
 // postArticle posts an article to Usenet

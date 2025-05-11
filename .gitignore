@@ -2,3 +2,5 @@ par2cmd
 config.yaml
 test_files/
 parpar
+.postie_queue.db
+dist/
