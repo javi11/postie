@@ -164,7 +164,7 @@ watcher:
 ## Usage
 
 ```bash
-postie -config config.yaml
+postie -config config.yaml -d ./upload -o ./output
 ```
 
 The tool will post all files in the current directory to the specified newsgroups.
@@ -175,6 +175,66 @@ The tool will post all files in the current directory to the specified newsgroup
 git clone https://github.com/javi11/postie.git
 cd postie
 go build
+```
+
+## Docker Usage
+
+You can run Postie using Docker Compose. Here's an example configuration:
+
+```yaml
+services:
+  postie:
+    container_name: postie
+    platform: linux/amd64
+    image: ghcr.io/javi11/postie:latest
+    volumes:
+      - ./config:/config
+      - ./watch:/watch
+      - ./output:/output
+    environment:
+      - PUID=1000
+      - PGID=1000
+    restart: unless-stopped
+```
+
+Make sure to create the following directories:
+
+- `config`: Contains your configuration file
+- `watch`: Directory to watch for new files
+- `output`: Directory for output files
+
+## Obfuscation Policies
+
+Postie supports different levels of obfuscation for your posts. You can configure this using the `obfuscation_policy` and `par2_obfuscation_policy` settings in your configuration file.
+
+### Available Policies
+
+1. **Full Obfuscation** (`full`):
+
+   - Subject: Obfuscated
+   - Filename: Obfuscated
+   - Yenc header filename: Randomized for every article
+   - Date: Randomized within last 6 hours
+   - NGX-header: Not added
+   - Poster: Random for each article
+
+2. **Partial Obfuscation** (`partial`):
+
+   - Subject: Obfuscated
+   - Filename: Obfuscated
+   - Yenc header filename: Same for all articles
+   - Date: Real posted date
+   - Poster: Same for all articles
+
+3. **No Obfuscation** (`none`):
+   - No obfuscation applied to any fields
+
+You can configure these policies separately for regular posts and PAR2 files:
+
+```yaml
+posting:
+  obfuscation_policy: full # For regular posts
+  par2_obfuscation_policy: full # For PAR2 files
 ```
 
 ## License

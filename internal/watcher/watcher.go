@@ -172,7 +172,7 @@ func (w *Watcher) processItem(ctx context.Context, item QueueItem) error {
 	}
 
 	// Post the file
-	if err := w.postie.Post(ctx, []fileinfo.FileInfo{fileInfo}, w.outputFolder); err != nil {
+	if err := w.postie.Post(ctx, []fileinfo.FileInfo{fileInfo}, w.watchFolder, w.outputFolder); err != nil {
 		return err
 	}
 

@@ -45,7 +45,7 @@ func New(
 	return &Postie{cfg: cfg, par2runner: par2runner, poster: p}, nil
 }
 
-func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, outputDir string) error {
+func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir string, outputDir string) error {
 	if len(files) == 0 {
 		return fmt.Errorf("no files to post")
 	}
@@ -71,7 +71,7 @@ func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, outputDir 
 
 		filesPath = append(filesPath, createdPar2Paths...)
 
-		if err := p.poster.Post(ctx, filesPath, outputDir); err != nil {
+		if err := p.poster.Post(ctx, filesPath, rootDir, outputDir); err != nil {
 			slog.ErrorContext(ctx, fmt.Sprintf("Error during upload: %s", filesPath), "error", err)
 
 			for _, p := range createdPar2Paths {

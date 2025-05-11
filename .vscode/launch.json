@@ -12,7 +12,9 @@
                 "-c",
                 "${workspaceFolder}/config.yaml",
                 "-d",
-                "${workspaceFolder}/test_files"
+                "${workspaceFolder}/test_files",
+                "-o",
+                "${workspaceFolder}/output"
             ],
             "cwd": "${workspaceFolder}",
             "env": {

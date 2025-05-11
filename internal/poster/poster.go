@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,7 +24,7 @@ import (
 // Poster defines the interface for posting articles to Usenet
 type Poster interface {
 	// Post posts files from a directory to Usenet
-	Post(ctx context.Context, files []string, outputDir string) error
+	Post(ctx context.Context, files []string, rootDir string, outputDir string) error
 	// GetStats returns posting statistics
 	GetStats() Stats
 }
@@ -105,7 +106,7 @@ func New(ctx context.Context, cfg config.Config) (Poster, error) {
 }
 
 // Post posts files from a directory to Usenet
-func (p *poster) Post(ctx context.Context, files []string, outputDir string) error {
+func (p *poster) Post(ctx context.Context, files []string, rootDir string, outputDir string) error {
 	wg := sync.WaitGroup{}
 	var failedPosts int
 
@@ -152,6 +153,7 @@ func (p *poster) Post(ctx context.Context, files []string, outputDir string) err
 		// Generate single NZB file for all files
 		firstFile := files[0]
 		dirPath := filepath.Dir(firstFile)
+		dirPath = strings.TrimPrefix(dirPath, rootDir)
 
 		nzbPath := filepath.Join(outputDir, dirPath, filepath.Base(firstFile)+".nzb")
 		if err := p.nzbGen.Generate("", nzbPath); err != nil {

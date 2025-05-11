@@ -4,3 +4,7 @@ test_files/
 parpar
 .postie_queue.db
 dist/
+
+colima-Darwin-x86_64
+install.log
+qemu.rb

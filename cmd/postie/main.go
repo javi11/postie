@@ -64,7 +64,7 @@ It supports configuration via a JSON file and can process multiple files in a di
 			return err
 		}
 
-		return poster.Post(ctx, files, outputDir)
+		return poster.Post(ctx, files, dirPath, outputDir)
 	},
 }
 
