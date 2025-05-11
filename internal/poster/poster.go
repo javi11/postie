@@ -383,7 +383,12 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int, wg *sy
 
 		var fName string
 
-		switch p.cfg.ObfuscationPolicy {
+		obfuscationPolicy := p.cfg.ObfuscationPolicy
+		if par2.IsPar2File(filePath) {
+			obfuscationPolicy = p.cfg.Par2ObfuscationPolicy
+		}
+
+		switch obfuscationPolicy {
 		case config.ObfuscationPolicyNone:
 			fName = fileName
 		case config.ObfuscationPolicyFull:

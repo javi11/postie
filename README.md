@@ -54,6 +54,7 @@ posting:
   throttle_rate: 1048576
   message_id_format: random
   obfuscation_policy: full
+  par2_obfuscation_policy: full
   group_policy: each_file
   post_headers:
     add_ngx_header: true
@@ -123,6 +124,7 @@ watcher:
   - `max_workers`: Maximum number of concurrent workers (auto-set based on server connections)
   - `message_id_format`: Format of message IDs ("random" or "ngx")
   - `obfuscation_policy`: Level of obfuscation ("full", "partial", or "none")
+  - `par2_obfuscation_policy`: Level of obfuscation for par2 files ("full", "partial", or "none")
   - `group_policy`: How to distribute posts across groups ("all" or "each_file")
   - `post_headers`: Additional headers configuration
     - `add_ngx_header`: Whether to add X-NXG header
