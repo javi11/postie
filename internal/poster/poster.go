@@ -127,8 +127,8 @@ func (p *poster) Post(ctx context.Context, files []string, rootDir string, outpu
 	// Start a goroutine to process checks
 	go p.checkLoop(ctx, checkQueue, postQueue, errChan)
 
+	wg.Add(len(files))
 	for i, file := range files {
-		wg.Add(1)
 		if err := p.addPost(file, i+1, len(files), &wg, &failedPosts, postQueue); err != nil {
 			return fmt.Errorf("error adding file %s to posting queue: %w", file, err)
 		}
@@ -216,7 +216,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 				post.Error = fmt.Errorf("failed to post articles: %v", errors)
 				post.mu.Unlock()
 
-				errChan <- fmt.Errorf("failed to post file %s after %d retries: %v", post.FilePath, post.Retries, errors)
+				errChan <- fmt.Errorf("failed to post file %s after %d retries: %v", post.FilePath, p.cfg.MaxRetries, errors)
 				return
 			}
 
@@ -225,7 +225,19 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			post.Status = PostStatusPosted
 			progress.FinishFileProgress()
 			post.mu.Unlock()
-			checkQueue <- post
+
+			if p.checkCfg.Enabled {
+				checkQueue <- post
+
+				continue
+			}
+
+			// Close file
+			if post.file != nil {
+				_ = post.file.Close()
+			}
+
+			post.wg.Done()
 		}
 	}
 }
@@ -285,7 +297,7 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 					*post.failed++
 				}
 
-				errChan <- fmt.Errorf("failed to verify file %s after %d retries: %v", post.FilePath, post.Retries, errors)
+				errChan <- fmt.Errorf("failed to verify file %s after %d retries: %v", post.FilePath, p.cfg.MaxRetries, errors)
 				return
 			}
 
@@ -453,6 +465,7 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int, wg *sy
 			groups,
 			partNumber,
 			numSegments,
+			fileInfo.Size(),
 			fName,
 			fileNumber,
 			fileName,
@@ -517,13 +530,9 @@ func (p *poster) postArticle(ctx context.Context, article article.Article, file 
 
 // checkArticle checks if an article exists
 func (p *poster) checkArticle(ctx context.Context, art article.Article) error {
-	exists, err := p.pool.Stat(ctx, art.GetMessageID(), art.GetGroups())
+	_, err := p.pool.Stat(ctx, art.GetMessageID(), art.GetGroups())
 	if err != nil {
-		return fmt.Errorf("error checking article: %w", err)
-	}
-
-	if exists == 0 {
-		return fmt.Errorf("article not found")
+		return fmt.Errorf("article not found: %w", err)
 	}
 
 	// Update stats

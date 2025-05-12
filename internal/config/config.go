@@ -91,7 +91,6 @@ type Par2Config struct {
 	Redundancy       string   `yaml:"redundancy"`
 	VolumeSize       int      `yaml:"volume_size"`
 	MaxInputSlices   int      `yaml:"max_input_slices"`
-	RecoverySlices   string   `yaml:"recovery_slices"`
 	ExtraPar2Options []string `yaml:"extra_par2_options"`
 	once             sync.Once
 }
@@ -138,7 +137,6 @@ type PostCheck struct {
 type PostingConfig struct {
 	MaxRetries         int             `yaml:"max_retries"`
 	RetryDelay         time.Duration   `yaml:"retry_delay"`
-	MaxCheckRetries    int             `yaml:"max_check_retries"`
 	ArticleSizeInBytes uint64          `yaml:"article_size_in_bytes"`
 	Groups             []string        `yaml:"groups"`
 	ThrottleRate       int64           `yaml:"throttle_rate"` // bytes per second
@@ -181,24 +179,27 @@ func Load(path string) (Config, error) {
 	if cfg.Posting.MaxRetries <= 0 {
 		cfg.Posting.MaxRetries = 3
 	}
+
 	if cfg.Posting.RetryDelay <= 0 {
 		cfg.Posting.RetryDelay = 5 * time.Second
 	}
-	if cfg.Posting.MaxCheckRetries <= 0 {
-		cfg.Posting.MaxCheckRetries = 3
-	}
+
 	if cfg.Posting.ArticleSizeInBytes <= 0 {
 		cfg.Posting.ArticleSizeInBytes = 750000 // Default to 750KB
 	}
+
 	if cfg.Posting.ThrottleRate <= 0 {
 		cfg.Posting.ThrottleRate = 1024 * 1024 // Default to 1MB/s
 	}
+
 	if cfg.Posting.GroupPolicy == "" {
 		cfg.Posting.GroupPolicy = GroupPolicyEachFile
 	}
+
 	if cfg.Posting.MessageIDFormat == "" {
 		cfg.Posting.MessageIDFormat = MessageIDFormatRandom
 	}
+
 	if cfg.Posting.ObfuscationPolicy == "" {
 		cfg.Posting.ObfuscationPolicy = ObfuscationPolicyFull
 	}
@@ -306,6 +307,7 @@ func (c *config) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
 		MinConnections:                      c.ConnectionPool.MinConnections,
 		MaxRetries:                          uint(c.Posting.MaxRetries),
 		DelayType:                           nntppool.DelayTypeExponential,
+		RetryDelay:                          c.Posting.RetryDelay,
 		SkipProvidersVerificationOnCreation: c.ConnectionPool.SkipProvidersVerificationOnCreation,
 	}
 
