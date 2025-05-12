@@ -1,7 +1,6 @@
 package poster
 
 import (
-	"bytes"
 	"fmt"
 	"time"
 )
@@ -12,7 +11,6 @@ type Article struct {
 	From       string
 	Date       time.Time
 	Body       []byte
-	Lines      int
 	Bytes      int
 	Group      string
 	PartNumber int
@@ -27,7 +25,6 @@ func NewArticle(messageID string, subject string, from string, body []byte, grou
 		From:       from,
 		Date:       time.Now(),
 		Body:       body,
-		Lines:      bytes.Count(body, []byte{'\n'}) + 1,
 		Bytes:      len(body),
 		Group:      group,
 		PartNumber: partNumber,
@@ -42,14 +39,10 @@ func (a *Article) Header() string {
 		"Newsgroups: %s\r\n"+
 		"Message-ID: %s\r\n"+
 		"Date: %s\r\n"+
-		"Lines: %d\r\n"+
-		"Bytes: %d\r\n\r\n",
 		a.From,
 		a.Subject,
 		a.Group,
 		a.MessageID,
 		a.Date.Format(time.RFC1123Z),
-		a.Lines,
-		a.Bytes,
 	)
 }

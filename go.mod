@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/Tensai75/nzbparser v0.1.0
-	github.com/javi11/nntppool v0.3.0
+	github.com/javi11/nntppool v0.3.4
 	github.com/javi11/nxg v0.1.0
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/mholt/archiver v3.1.1+incompatible

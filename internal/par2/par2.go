@@ -87,7 +87,7 @@ func (p *Par2CmdExecutor) Create(ctx context.Context, files []fileinfo.FileInfo)
 		case parpar:
 			parameters = append(parameters, fmt.Sprintf("-p%vB", p.cfg.VolumeSize))
 			parameters = append(parameters, fmt.Sprintf("-s%vB", parBlockSize))
-			parameters = append(parameters, fmt.Sprintf("-r%v%%", p.cfg.Redundancy))
+			parameters = append(parameters, fmt.Sprintf("-r%v", p.cfg.Redundancy))
 			parameters = append(parameters, fmt.Sprintf("-o%v", par2Path))
 			parameters = append(parameters, "--overwrite")
 			parameters = append(parameters, fmt.Sprintf("--slice-size-multiple=%vB", parBlockSize))

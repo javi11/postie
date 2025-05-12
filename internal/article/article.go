@@ -60,6 +60,7 @@ type article struct {
 	fileNumber      int
 	offset          int64
 	size            uint64
+	fileSize        int64
 	originalName    string
 	customHeaders   map[string]string
 	XNxgHeader      string
@@ -74,6 +75,7 @@ func New(
 	groups []string,
 	partNumber,
 	totalParts int,
+	fileSize int64,
 	fileName string,
 	fileNumber int,
 	originalName string,
@@ -87,12 +89,70 @@ func New(
 		groups:          groups,
 		partNumber:      partNumber,
 		totalParts:      totalParts,
+		fileSize:        fileSize,
 		fileName:        fileName,
 		fileNumber:      fileNumber,
 		originalName:    originalName,
 		date:            time.Now(),
 		customHeaders:   customHeaders,
 	}
+}
+
+func (a *article) EncodeBytes(encoder Encoder, body []byte) (io.Reader, error) {
+	headers := make(map[string]string)
+
+	if a.customHeaders != nil {
+		for k, v := range a.customHeaders {
+			headers[k] = v
+		}
+	}
+
+	headers["Subject"] = a.subject
+	headers["From"] = a.from
+	headers["Newsgroups"] = strings.Join(a.groups, ",")
+	headers["Message-ID"] = fmt.Sprintf("<%s>", a.messageID)
+	headers["Date"] = a.date.UTC().Format(time.RFC1123)
+
+	if a.XNxgHeader != "" {
+		headers["X-Nxg"] = a.XNxgHeader
+	}
+
+	header := ""
+	for k, v := range headers {
+		header += fmt.Sprintf("%s: %s\r\n", k, v)
+	}
+
+	header += fmt.Sprintf("\r\n=ybegin part=%d total=%d line=128 size=%d name=%s\r\n=ypart begin=%d end=%d\r\n",
+		a.partNumber, a.totalParts, a.fileSize, a.fileName, a.offset+1, a.offset+int64(a.size))
+
+	// Encoded data
+	encoded := encoder.Encode(body)
+
+	// yEnc end line
+	h := crc32.NewIEEE()
+	_, err := h.Write(body)
+	if err != nil {
+		return nil, err
+	}
+	footer := fmt.Sprintf("\r\n=yend size=%d part=%d pcrc32=%08X\r\n", a.size, a.partNumber, h.Sum32())
+
+	size := len(header) + len(encoded) + len(footer)
+	buf := bytes.NewBuffer(make([]byte, 0, size))
+
+	_, err = buf.WriteString(header)
+	if err != nil {
+		return nil, err
+	}
+	_, err = buf.Write(encoded)
+	if err != nil {
+		return nil, err
+	}
+	_, err = buf.WriteString(footer)
+	if err != nil {
+		return nil, err
+	}
+
+	return buf, nil
 }
 
 // GetFileNumber returns the file number
@@ -258,61 +318,4 @@ func GenerateRandomFilename() string {
 	}
 
 	return rand32
-}
-
-func (a *article) EncodeBytes(encoder Encoder, body []byte) (io.Reader, error) {
-	headers := make(map[string]string)
-
-	if a.customHeaders != nil {
-		for k, v := range a.customHeaders {
-			headers[k] = v
-		}
-	}
-
-	headers["Subject"] = a.subject
-	headers["From"] = a.from
-	headers["Newsgroups"] = strings.Join(a.groups, ",")
-	headers["Message-ID"] = fmt.Sprintf("<%s>", a.messageID)
-	headers["Date"] = a.date.UTC().Format(time.RFC1123)
-
-	if a.XNxgHeader != "" {
-		headers["X-Nxg"] = a.XNxgHeader
-	}
-
-	header := ""
-	for k, v := range headers {
-		header += fmt.Sprintf("%s: %s\r\n", k, v)
-	}
-
-	header += fmt.Sprintf("\r\n=ybegin part=%d total=%d line=128 size=%d name=%s\r\n=ypart begin=%d end=%d\r\n",
-		a.partNumber, a.totalParts, a.size, a.fileName, a.offset+1, a.offset+int64(a.size))
-
-	// Encoded data
-	encoded := encoder.Encode(body)
-
-	// yEnc end line
-	h := crc32.NewIEEE()
-	_, err := h.Write(body)
-	if err != nil {
-		return nil, err
-	}
-	footer := fmt.Sprintf("\r\n=yend size=%d part=%d pcrc32=%08X\r\n", a.size, a.partNumber, h.Sum32())
-
-	size := len(header) + len(encoded) + len(footer)
-	buf := bytes.NewBuffer(make([]byte, 0, size))
-
-	_, err = buf.WriteString(header)
-	if err != nil {
-		return nil, err
-	}
-	_, err = buf.Write(encoded)
-	if err != nil {
-		return nil, err
-	}
-	_, err = buf.WriteString(footer)
-	if err != nil {
-		return nil, err
-	}
-
-	return buf, nil
 }
