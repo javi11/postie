@@ -40,7 +40,7 @@ post_check:
 
 # Par2 configuration
 par2:
-  redundancy: '1n*1.2' # 10% redundancy
+  redundancy: '1n*1.2' # https://github.com/animetosho/ParPar/blob/6feee4dd94bb18480f0bf08cd9d17ffc7e671b69/help-full.txt#L75
   volume_size: 153600000 # 150MB
   max_input_slices: 4000
   extra_par2_options: []

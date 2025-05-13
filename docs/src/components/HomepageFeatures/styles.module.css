@@ -1,0 +1,21 @@
+.features {
+  display: flex;
+  align-items: center;
+  padding: 2rem 0;
+  width: 100%;
+}
+
+.featureSvg {
+  height: 200px;
+  width: 200px;
+}
+
+/* Default for light theme */
+.featureSvg path {
+  fill: var(--ifm-color-primary-darkest);
+}
+
+/* Override for dark theme */
+[data-theme='dark'] .featureSvg path {
+  fill: white;
+}

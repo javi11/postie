@@ -34,7 +34,7 @@
                 "-v",
                 "-c",
                 "${workspaceFolder}/config.yaml",
-                "-w",
+                "-d",
                 "${workspaceFolder}/test_files",
                 "-o",
                 "${workspaceFolder}/output_files"

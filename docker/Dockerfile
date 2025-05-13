@@ -23,7 +23,7 @@ RUN mkdir -p /etc/services.d/postie && \
     groupmod -o -g "$PGID" abc\n\
     usermod -o -u "$PUID" abc\n\
     chown -R abc:abc /app /config\n\
-    exec s6-setuidgid abc /app/postie watch --config /config/config.yaml --watch-folder /watch --output-folder /output\n\
+    exec s6-setuidgid abc /app/postie watch --config /config/config.yaml --dir /watch --output-folder /output\n\
     ' > /etc/services.d/postie/run && \
     chmod +x /etc/services.d/postie/run
 
@@ -34,7 +34,7 @@ COPY postie /app/postie
 VOLUME ["/config", "/watch", "/output"]
 
 # Add root files
-CMD ["/app/postie" , "watch" , "--config", "/config/config.yaml" , "--watch-folder" , "/watch" , "--output-folder" , "/output"]
+CMD ["/app/postie" , "watch" , "--config", "/config/config.yaml" , "--dir" , "/watch" , "--output-folder" , "/output"]
 
 LABEL org.opencontainers.image.source="https://github.com/javi11/usenet-drive"
 LABEL build_version="version: Build-date:- ${VERSION}  ${BUILD_DATE}"

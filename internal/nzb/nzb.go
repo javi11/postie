@@ -16,7 +16,7 @@ type NZBGenerator interface {
 	// AddArticle adds an article to the generator
 	AddArticle(article article.Article)
 	// Generate creates an NZB file
-	Generate(filename string, outputPath string) error
+	Generate(outputPath string) error
 }
 
 // Generator creates NZB files
@@ -40,7 +40,7 @@ func (g *Generator) AddArticle(art article.Article) {
 }
 
 // Generate creates an NZB file for all files
-func (g *Generator) Generate(filename string, outputPath string) error {
+func (g *Generator) Generate(outputPath string) error {
 	if len(g.articles) == 0 {
 		return fmt.Errorf("no articles found")
 	}

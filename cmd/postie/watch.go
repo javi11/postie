@@ -13,11 +13,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	watchFolder  string
-	outputFolder string
-)
-
 var watchCmd = &cobra.Command{
 	Use:   "watch",
 	Short: "Watch a directory for new files and upload them",
@@ -44,7 +39,7 @@ The watch command will monitor the configured directory and upload files accordi
 		}
 
 		// Create watcher
-		w, err := watcher.New(ctx, cfg.GetWatcherConfig(), configPath, p, watchFolder, outputFolder)
+		w, err := watcher.New(ctx, cfg.GetWatcherConfig(), configPath, p, dirPath, outputDir)
 		if err != nil {
 			slog.ErrorContext(ctx, "Error creating watcher", "error", err)
 			return err
@@ -78,6 +73,4 @@ The watch command will monitor the configured directory and upload files accordi
 
 func init() {
 	rootCmd.AddCommand(watchCmd)
-	watchCmd.Flags().StringVar(&watchFolder, "watch-folder", "", "Directory to watch for new files")
-	watchCmd.Flags().StringVar(&outputFolder, "output-folder", "", "Directory where processed files will be moved")
 }

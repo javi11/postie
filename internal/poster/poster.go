@@ -71,7 +71,6 @@ type poster struct {
 	yenc     *rapidyenc.Encoder
 	stats    *Stats
 	throttle *Throttle
-	nzbGen   nzb.NZBGenerator
 }
 
 // New creates a new poster
@@ -99,7 +98,6 @@ func New(ctx context.Context, cfg config.Config) (Poster, error) {
 		yenc:     yenc,
 		stats:    stats,
 		throttle: throttle,
-		nzbGen:   nzb.NewGenerator(cfg.GetPostingConfig().ArticleSizeInBytes),
 	}
 
 	return p, nil
@@ -121,11 +119,14 @@ func (p *poster) Post(ctx context.Context, files []string, rootDir string, outpu
 	postQueue := make(chan *Post, 100)
 	checkQueue := make(chan *Post, 100)
 
+	// Create NZB generator for this post operation
+	nzbGen := nzb.NewGenerator(p.cfg.ArticleSizeInBytes)
+
 	// Start a goroutine to process posts
-	go p.postLoop(ctx, postQueue, checkQueue, errChan)
+	go p.postLoop(ctx, postQueue, checkQueue, errChan, nzbGen)
 
 	// Start a goroutine to process checks
-	go p.checkLoop(ctx, checkQueue, postQueue, errChan)
+	go p.checkLoop(ctx, checkQueue, postQueue, errChan, nzbGen)
 
 	wg.Add(len(files))
 	for i, file := range files {
@@ -156,7 +157,7 @@ func (p *poster) Post(ctx context.Context, files []string, rootDir string, outpu
 		dirPath = strings.TrimPrefix(dirPath, rootDir)
 
 		nzbPath := filepath.Join(outputDir, dirPath, filepath.Base(firstFile)+".nzb")
-		if err := p.nzbGen.Generate("", nzbPath); err != nil {
+		if err := nzbGen.Generate(nzbPath); err != nil {
 			return fmt.Errorf("error generating NZB file: %w", err)
 		}
 
@@ -165,7 +166,7 @@ func (p *poster) Post(ctx context.Context, files []string, rootDir string, outpu
 }
 
 // postLoop processes posts from the queue
-func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue chan *Post, errChan chan<- error) {
+func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue chan *Post, errChan chan<- error, nzbGen nzb.NZBGenerator) {
 	defer close(postQueue)
 	defer close(checkQueue)
 
@@ -200,7 +201,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 					progress.UpdateFileProgress(bytesPosted, int64(articlesProcessed), int64(articleErrors))
 
 					// Add article to NZB generator
-					p.nzbGen.AddArticle(art)
+					nzbGen.AddArticle(art)
 					post.mu.Unlock()
 
 					return nil
@@ -243,7 +244,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 }
 
 // checkLoop processes posts from the check queue
-func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue chan *Post, errChan chan<- error) {
+func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue chan *Post, errChan chan<- error, nzbGen nzb.NZBGenerator) {
 	for post := range checkQueue {
 		select {
 		case <-ctx.Done():
