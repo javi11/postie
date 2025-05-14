@@ -21,7 +21,7 @@ A high-performance Usenet binary poster written in Go, inspired by Nyuu-Obfuscat
 
 ## Documentation
 
-For detailed documentation, installation instructions, configuration options, and usage examples, please visit the [Postie Documentation Site](https://javi11.github.io/postie/).
+For detailed documentation, installation instructions, configuration options, and usage examples, please visit the [Postie Documentation Site](https://postie.nzbtools.top).
 
 ## Quick Links
 
