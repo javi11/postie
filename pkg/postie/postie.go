@@ -63,12 +63,7 @@ func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir st
 			return err
 		}
 
-		var filesPath []string
-
-		for _, f := range files {
-			filesPath = append(filesPath, f.Path)
-		}
-
+		filesPath := []string{f.Path}
 		filesPath = append(filesPath, createdPar2Paths...)
 
 		if err := p.poster.Post(ctx, filesPath, rootDir, outputDir); err != nil {

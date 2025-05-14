@@ -17,7 +17,7 @@ import (
 const (
 	defaultPar2Path       = "./parpar"
 	defaultVolumeSize     = 153600000 // 150MB
-	defaultRedundancy     = "1n*1.2"  //10%
+	defaultRedundancy     = "1n*1.2"  //https://github.com/animetosho/ParPar/blob/6feee4dd94bb18480f0bf08cd9d17ffc7e671b69/help-full.txt#L75
 	defaultMaxInputSlices = 4000
 )
 

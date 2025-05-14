@@ -36,6 +36,8 @@ type Article interface {
 	SetDate(date time.Time)
 	SetXNxgHeader(xNxgHeader string)
 	EncodeBytes(encoder Encoder, body []byte) (io.Reader, error)
+	GetHash() string
+	SetHash(hash string)
 }
 
 func (a *article) SetXNxgHeader(xNxgHeader string) {
@@ -64,6 +66,7 @@ type article struct {
 	originalName    string
 	customHeaders   map[string]string
 	XNxgHeader      string
+	hash            string
 }
 
 // New creates a new Article
@@ -230,6 +233,16 @@ func (a *article) SetSize(size uint64) {
 	a.size = size
 }
 
+// GetHash returns the article hash
+func (a *article) GetHash() string {
+	return a.hash
+}
+
+// SetHash sets the article hash
+func (a *article) SetHash(hash string) {
+	a.hash = hash
+}
+
 // generateRandomString generates a random string of specified length
 func generateRandomString(length int) (string, error) {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -287,8 +300,8 @@ func GenerateFrom() (string, error) {
 }
 
 // GenerateSubject generates a subject following the obfuscation pattern
-func GenerateSubject(fileNumber int, totalFiles int, fileName string, fileSize int, partNumber int, numSegments int) string {
-	return fmt.Sprintf("[%v/%v] \"%v\" - %v - yEnc (%v/%v)", fileNumber, totalFiles, fileName, fileSize, partNumber, numSegments)
+func GenerateSubject(fileNumber int, totalFiles int, fileName string, partNumber int, numSegments int) string {
+	return fmt.Sprintf("[%v/%v] \"%v\" - yEnc (%v/%v)", fileNumber, totalFiles, fileName, partNumber, numSegments)
 }
 
 func GenerateRandomSubject() string {

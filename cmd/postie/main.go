@@ -14,6 +14,7 @@ import (
 var (
 	configPath string
 	dirPath    string
+	inputFile  string
 	verbose    bool
 	outputDir  string
 )
@@ -46,22 +47,34 @@ It supports configuration via a JSON file and can process multiple files in a di
 
 		// Walk directory
 		files := make([]fileinfo.FileInfo, 0)
-		err = filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+
+		if inputFile != "" {
+			info, err := os.Stat(inputFile)
 			if err != nil {
+				slog.ErrorContext(ctx, "Error getting file info", "error", err)
 				return err
 			}
 
-			// Skip directories
-			if info.IsDir() {
-				return nil
-			}
+			files = append(files, fileinfo.FileInfo{Path: inputFile, Size: uint64(info.Size())})
+			dirPath = filepath.Dir(inputFile)
+		} else {
+			err = filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					return err
+				}
 
-			files = append(files, fileinfo.FileInfo{Path: path, Size: uint64(info.Size())})
-			return nil
-		})
-		if err != nil {
-			slog.ErrorContext(ctx, "Error during directory walk", "error", err)
-			return err
+				// Skip directories
+				if info.IsDir() {
+					return nil
+				}
+
+				files = append(files, fileinfo.FileInfo{Path: path, Size: uint64(info.Size())})
+				return nil
+			})
+			if err != nil {
+				slog.ErrorContext(ctx, "Error during directory walk", "error", err)
+				return err
+			}
 		}
 
 		return poster.Post(ctx, files, dirPath, outputDir)
@@ -73,6 +86,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&dirPath, "dir", "d", ".", "Directory containing files to upload")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose logging")
 	rootCmd.PersistentFlags().StringVarP(&outputDir, "output-dir", "o", ".", "Directory to output files to")
+
+	rootCmd.LocalFlags().StringVarP(&inputFile, "input-file", "i", "", "File to upload. If provided, the directory will be ignored.")
 }
 
 func Execute() {
