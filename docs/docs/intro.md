@@ -29,6 +29,7 @@ Postie is designed to efficiently upload binary files to Usenet with a focus on:
 - Configurable group posting policies
 - File watching and automatic posting
 - Configurable posting schedules
+- Robust file hashing for integrity verification
 
 ## Why Use Postie?
 
@@ -44,3 +45,5 @@ Postie provides a robust solution for uploading content to Usenet with features 
 To get started with Postie, check out the [Installation Guide](./installation) and [Quick Start](./quick-start) sections.
 
 For detailed configuration options, see the [Configuration Guide](./configuration).
+
+For information about file hashing and verification, see the [File Hash and Verification](./file-hash) guide.

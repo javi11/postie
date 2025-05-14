@@ -3,7 +3,10 @@ package poster
 import (
 	"context"
 	"crypto/md5"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -130,7 +133,7 @@ func (p *poster) Post(ctx context.Context, files []string, rootDir string, outpu
 
 	wg.Add(len(files))
 	for i, file := range files {
-		if err := p.addPost(file, i+1, len(files), &wg, &failedPosts, postQueue); err != nil {
+		if err := p.addPost(file, i+1, len(files), &wg, &failedPosts, postQueue, nzbGen); err != nil {
 			return fmt.Errorf("error adding file %s to posting queue: %w", file, err)
 		}
 	}
@@ -183,11 +186,18 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			articleErrors := 0
 
 			// Create progress bar for this file
-			progress := NewFileProgress(fmt.Sprintf("Uploading %s...", post.FilePath), post.filesize, int64(len(post.Articles)))
+			progressText := "Uploading %s..."
+			if post.Retries > 0 {
+				progressText = "Retrying %s (attempt %d)..."
+			}
+			progress := NewFileProgress(fmt.Sprintf(progressText, post.FilePath, post.Retries+1), post.filesize, int64(len(post.Articles)))
+
+			var combinedHash string
 
 			// Submit all articles to the pool
 			for _, art := range post.Articles {
-				art := art // Create new variable for goroutine
+				combinedHash += art.GetHash()
+
 				pool.Go(func(ctx context.Context) error {
 					if err := p.postArticle(ctx, art, post.file); err != nil {
 						return err
@@ -221,11 +231,15 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 				return
 			}
 
-			// Move to check queue
+			// Calculate file hash by merging all article hashes
 			post.mu.Lock()
 			post.Status = PostStatusPosted
 			progress.FinishFileProgress()
 			post.mu.Unlock()
+
+			// Add file hash to NZB generator
+			fileHash := CalculateHash([]byte(combinedHash))
+			nzbGen.AddFileHash(post.Articles[0].GetOriginalName(), fileHash)
 
 			if p.checkCfg.Enabled {
 				checkQueue <- post
@@ -255,22 +269,28 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 			pool := pool.New().WithContext(ctx).WithMaxGoroutines(p.cfg.MaxWorkers).WithCancelOnError().WithFirstError()
 			articlesChecked := 0
 			articleErrors := 0
+			var failedArticles []article.Article
+			var mu sync.Mutex
 
 			// Create progress bar for this file
 			progress := NewFileProgress(fmt.Sprintf("Verifying %s...", post.FilePath), post.filesize, int64(len(post.Articles)))
 
 			// Submit all articles to the pool
 			for _, art := range post.Articles {
-				art := art // Create new variable for goroutine
 				pool.Go(func(ctx context.Context) error {
 					if err := p.checkArticle(ctx, art); err != nil {
+						// Track failed article
+						mu.Lock()
+						failedArticles = append(failedArticles, art)
+						articleErrors++
+						mu.Unlock()
 						return err
 					}
 
 					// Update progress
-					post.mu.Lock()
+					mu.Lock()
 					articlesChecked++
-					post.mu.Unlock()
+					mu.Unlock()
 
 					progress.UpdateFileProgress(0, int64(articlesChecked), int64(articleErrors))
 					return nil
@@ -280,25 +300,62 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 			// Wait for all workers to complete and collect errors
 			errors := pool.Wait()
 
-			if errors != nil {
+			// If we have failed articles, handle them
+			if len(failedArticles) > 0 {
 				post.mu.Lock()
-				post.Status = PostStatusFailed
-				post.Error = fmt.Errorf("failed to verify articles: %v", errors)
 				post.Retries++
 				post.mu.Unlock()
 
-				// If we haven't exceeded max retries, add back to queue
+				// If we haven't exceeded max retries, add only failed articles back to queue
 				if post.Retries < int(p.checkCfg.MaxRePost) {
-					postQueue <- post
+					// Create a new post with only the failed articles
+					failedPost := &Post{
+						FilePath: post.FilePath,
+						Articles: failedArticles,
+						Status:   PostStatusPending,
+						file:     post.file,
+						filesize: post.filesize,
+						wg:       post.wg,
+						failed:   post.failed,
+						Retries:  post.Retries,
+					}
+
+					progress.FinishFileProgress()
+					slog.InfoContext(ctx,
+						"Retrying failed articles",
+						"file", post.FilePath,
+						"attempt", post.Retries,
+						"max_retries", p.checkCfg.MaxRePost,
+					)
+
+					postQueue <- failedPost
 					continue
 				}
 
-				// Increment failed posts counter
+				// Increment failed posts counter if we've exceeded max retries
+				post.mu.Lock()
+				post.Status = PostStatusFailed
+				post.Error = fmt.Errorf("failed to verify articles after %d retries", p.checkCfg.MaxRePost)
+				post.mu.Unlock()
+
 				if post.failed != nil {
 					*post.failed++
 				}
 
-				errChan <- fmt.Errorf("failed to verify file %s after %d retries: %v", post.FilePath, p.cfg.MaxRetries, errors)
+				errChan <- fmt.Errorf("failed to verify file %s after %d retries", post.FilePath, p.checkCfg.MaxRePost)
+				return
+			} else if errors != nil {
+				// This is a safety check - if we have errors but no failed articles, something went wrong
+				post.mu.Lock()
+				post.Status = PostStatusFailed
+				post.Error = fmt.Errorf("verification failed but no articles were marked as failed: %v", errors)
+				post.mu.Unlock()
+
+				if post.failed != nil {
+					*post.failed++
+				}
+
+				errChan <- fmt.Errorf("unexpected error verifying file %s: %v", post.FilePath, errors)
 				return
 			}
 
@@ -320,7 +377,7 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 }
 
 // addPost adds a file to the posting queue
-func (p *poster) addPost(filePath string, fileNumber int, totalFiles int, wg *sync.WaitGroup, failedPosts *int, postQueue chan<- *Post) error {
+func (p *poster) addPost(filePath string, fileNumber int, totalFiles int, wg *sync.WaitGroup, failedPosts *int, postQueue chan<- *Post, nzbGen nzb.NZBGenerator) error {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("error opening file: %w", err)
@@ -393,7 +450,7 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int, wg *sy
 		}
 
 		fileName := filepath.Base(filePath)
-		subject := article.GenerateSubject(fileNumber, totalFiles, fileName, int(fileInfo.Size()), partNumber, numSegments)
+		subject := article.GenerateSubject(fileNumber, totalFiles, fileName, partNumber, numSegments)
 		originalSubject := subject
 
 		var fName string
@@ -509,6 +566,10 @@ func (p *poster) postArticle(ctx context.Context, article article.Article, file 
 		return fmt.Errorf("error reading article body: %w", err)
 	}
 
+	// Calculate and set hash for the article
+	articleHash := CalculateHash(body)
+	article.SetHash(articleHash)
+
 	// Create article
 	art, err := article.EncodeBytes(p.yenc, body)
 	if err != nil {
@@ -556,4 +617,12 @@ func (p *poster) GetStats() Stats {
 		ArticleErrors:   p.stats.ArticleErrors,
 		StartTime:       p.stats.StartTime,
 	}
+}
+
+func CalculateHash(buff []byte) string {
+	hash := sha256.New()
+	hash.Write(buff[:])
+	hashInBytes := hash.Sum(nil)
+
+	return hex.EncodeToString(hashInBytes)
 }

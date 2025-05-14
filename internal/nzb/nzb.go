@@ -7,7 +7,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/Tensai75/nzbparser"
+	"github.com/javi11/nzbparser"
 	"github.com/javi11/postie/internal/article"
 )
 
@@ -15,6 +15,8 @@ import (
 type NZBGenerator interface {
 	// AddArticle adds an article to the generator
 	AddArticle(article article.Article)
+	// AddFileHash adds a hash for a file
+	AddFileHash(filename string, hash string)
 	// Generate creates an NZB file
 	Generate(outputPath string) error
 }
@@ -22,21 +24,34 @@ type NZBGenerator interface {
 // Generator creates NZB files
 type Generator struct {
 	articles    map[string][]article.Article // filename -> articles
+	filesHash   map[string]string            // filename -> checksums
 	segmentSize uint64                       // size of each segment in bytes
-	fileSize    int64                        // size of the file in bytes
 }
 
 // NewGenerator creates a new NZB generator
 func NewGenerator(segmentSize uint64) NZBGenerator {
 	return &Generator{
 		articles:    make(map[string][]article.Article),
+		filesHash:   make(map[string]string),
 		segmentSize: segmentSize,
 	}
 }
 
 // AddArticle adds an article to the generator
 func (g *Generator) AddArticle(art article.Article) {
-	g.articles[art.GetOriginalName()] = append(g.articles[art.GetOriginalName()], art)
+	filename := art.GetOriginalName()
+
+	// Check if we already have this article (by message ID)
+	for i, existingArt := range g.articles[filename] {
+		if existingArt.GetMessageID() == art.GetMessageID() {
+			// Replace the existing article
+			g.articles[filename][i] = art
+			return
+		}
+	}
+
+	// If we didn't find an existing article with the same message ID, append it
+	g.articles[filename] = append(g.articles[filename], art)
 }
 
 // Generate creates an NZB file for all files
@@ -55,7 +70,7 @@ func (g *Generator) Generate(outputPath string) error {
 
 	// Add all files to NZB
 	fileNumber := 0
-	for _, articles := range g.articles {
+	for filename, articles := range g.articles {
 		if len(articles) == 0 {
 			continue
 		}
@@ -65,16 +80,27 @@ func (g *Generator) Generate(outputPath string) error {
 			return articles[i].GetPartNumber() < articles[j].GetPartNumber()
 		})
 
+		// Calculate file size from all segments
+		var fileSize int64
+		for _, a := range articles {
+			fileSize += int64(a.GetSize())
+		}
+
 		// Create file entry
 		file := nzbparser.NzbFile{
 			Subject:       articles[0].GetOriginalSubject(),
 			Groups:        articles[0].GetGroups(),
 			Poster:        articles[0].GetFrom(),
 			Date:          int(time.Now().Unix()),
-			Bytes:         int64(g.fileSize),
+			Bytes:         fileSize,
 			Number:        articles[0].GetFileNumber(),
 			TotalSegments: len(articles),
 			Filename:      articles[0].GetOriginalName(),
+		}
+
+		// Add checksum if available
+		if hash, ok := g.filesHash[filename]; ok {
+			file.FileHash = hash
 		}
 
 		// Add segments
@@ -88,7 +114,7 @@ func (g *Generator) Generate(outputPath string) error {
 			segment := nzbparser.NzbSegment{
 				Bytes:  int(segmentSize),
 				Number: a.GetPartNumber(),
-				Id:     a.GetMessageID(),
+				ID:     a.GetMessageID(),
 			}
 			file.Segments = append(file.Segments, segment)
 		}
@@ -119,6 +145,11 @@ func (g *Generator) Generate(outputPath string) error {
 	}
 
 	return nil
+}
+
+// AddFileHash adds a hash for a file
+func (g *Generator) AddFileHash(filename string, hash string) {
+	g.filesHash[filename] = hash
 }
 
 // Parse reads an NZB file

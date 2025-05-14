@@ -23,23 +23,19 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Configuration',
-      items: ['configuration', 'obfuscation', 'watcher'],
+      items: ['configuration', 'watcher'],
     },
-    // Add more categories as needed
-  ],
-
-  // But you can create a sidebar manually
-  /*
-  tutorialSidebar: [
-    'intro',
-    'hello',
     {
       type: 'category',
-      label: 'Tutorial',
-      items: ['tutorial-basics/create-a-document'],
+      label: 'Obfuscation',
+      items: ['obfuscation'],
+    },
+    {
+      type: 'category',
+      label: 'File Hash',
+      items: ['file-hash'],
     },
   ],
-   */
 };
 
 export default sidebars;

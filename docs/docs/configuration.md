@@ -167,17 +167,19 @@ Configure automatic file watching and posting:
 
 ```yaml
 watcher:
-  size_threshold: 1048576000 # Minimum folder size for to start the upload (100GB)
-  schedule: # Posting schedule
+  size_threshold: 104857600 # 100MB
+  schedule:
     start_time: "00:00" # When to start posting (24h format)
     end_time: "23:59" # When to stop posting (24h format)
-  ignore_patterns: # File patterns to ignore
+  ignore_patterns:
     - "*.tmp"
     - "*.part"
     - "*.!ut"
-  min_file_size: 1048576 # Minimum file size to process (1MB)
+  min_file_size: 1048576 # 1MB
   check_interval: 5m # How often to check for new files
 ```
+
+> **Note:** For information about file hashing and verification, please see the [File Hash and Verification](file-hash.md) documentation.
 
 ## Command Line Parameters
 
