@@ -28,6 +28,10 @@ connection_pool:
   skip_providers_verification_on_creation: false
 
 posting:
+  # Wait for par2 generation before uploading the file.
+  # Setting this to false could improve the posting speed but you risk into posting
+  # a something without par2 if this fails, also it will increase the resource usage
+  wait_for_par2: true
   max_retries: 3
   retry_delay: 5s
   article_size_in_bytes: 750000
@@ -48,6 +52,7 @@ post_check:
   max_reposts: 1
 
 par2:
+  enabled: true
   par2_path: ./parpar
   redundancy: "1n*1.2" # [redundancy](https://github.com/animetosho/ParPar/blob/6feee4dd94bb18480f0bf08cd9d17ffc7e671b69/help-full.txt#L75)
   volume_size: 153600000 # 150MB
@@ -154,6 +159,7 @@ Configure PAR2 recovery file generation:
 
 ```yaml
 par2:
+  enabled: true
   par2_path: ./parpar # Path to PAR2 executable
   redundancy: "1n*1.2" # [Redundancy level](https://github.com/animetosho/ParPar/blob/6feee4dd94bb18480f0bf08cd9d17ffc7e671b69/help-full.txt#L75)
   volume_size: 153600000 # Size of each volume (150MB)
