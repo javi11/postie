@@ -10,7 +10,6 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -27,7 +26,7 @@ import (
 // Poster defines the interface for posting articles to Usenet
 type Poster interface {
 	// Post posts files from a directory to Usenet
-	Post(ctx context.Context, files []string, rootDir string, outputDir string) error
+	Post(ctx context.Context, files []string, rootDir string, nzbGen nzb.NZBGenerator) error
 	// GetStats returns posting statistics
 	GetStats() Stats
 }
@@ -107,7 +106,12 @@ func New(ctx context.Context, cfg config.Config) (Poster, error) {
 }
 
 // Post posts files from a directory to Usenet
-func (p *poster) Post(ctx context.Context, files []string, rootDir string, outputDir string) error {
+func (p *poster) Post(
+	ctx context.Context,
+	files []string,
+	rootDir string,
+	nzbGen nzb.NZBGenerator,
+) error {
 	wg := sync.WaitGroup{}
 	var failedPosts int
 
@@ -121,9 +125,6 @@ func (p *poster) Post(ctx context.Context, files []string, rootDir string, outpu
 	// Create channels for post and check queues
 	postQueue := make(chan *Post, 100)
 	checkQueue := make(chan *Post, 100)
-
-	// Create NZB generator for this post operation
-	nzbGen := nzb.NewGenerator(p.cfg.ArticleSizeInBytes)
 
 	// Start a goroutine to process posts
 	go p.postLoop(ctx, postQueue, checkQueue, errChan, nzbGen)
@@ -152,16 +153,6 @@ func (p *poster) Post(ctx context.Context, files []string, rootDir string, outpu
 	case <-done:
 		if failedPosts > 0 {
 			return fmt.Errorf("failed to post %d files", failedPosts)
-		}
-
-		// Generate single NZB file for all files
-		firstFile := files[0]
-		dirPath := filepath.Dir(firstFile)
-		dirPath = strings.TrimPrefix(dirPath, rootDir)
-
-		nzbPath := filepath.Join(outputDir, dirPath, filepath.Base(firstFile)+".nzb")
-		if err := nzbGen.Generate(nzbPath); err != nil {
-			return fmt.Errorf("error generating NZB file: %w", err)
 		}
 
 		return nil
@@ -241,7 +232,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			fileHash := CalculateHash([]byte(combinedHash))
 			nzbGen.AddFileHash(post.Articles[0].GetOriginalName(), fileHash)
 
-			if p.checkCfg.Enabled {
+			if *p.checkCfg.Enabled {
 				checkQueue <- post
 
 				continue

@@ -87,6 +87,7 @@ type config struct {
 }
 
 type Par2Config struct {
+	Enabled          *bool    `yaml:"enabled"`
 	Par2Path         string   `yaml:"par2_path"`
 	Redundancy       string   `yaml:"redundancy"`
 	VolumeSize       int      `yaml:"volume_size"`
@@ -126,7 +127,7 @@ type CustomHeader struct {
 
 type PostCheck struct {
 	// If enabled articles will be checked after being posted. Default value is `true`.
-	Enabled bool `yaml:"enabled"`
+	Enabled *bool `yaml:"enabled"`
 	// Delay between retries. Default value is `10s`.
 	RetryDelay time.Duration `yaml:"delay"`
 	// The maximum number of re-posts if article check fails. Default value is `1`.
@@ -135,6 +136,7 @@ type PostCheck struct {
 
 // PostingConfig represents posting configuration
 type PostingConfig struct {
+	WaitForPar2        *bool           `yaml:"wait_for_par2"`
 	MaxRetries         int             `yaml:"max_retries"`
 	RetryDelay         time.Duration   `yaml:"retry_delay"`
 	ArticleSizeInBytes uint64          `yaml:"article_size_in_bytes"`
@@ -165,6 +167,8 @@ type ScheduleConfig struct {
 
 // Load loads configuration from a file
 func Load(path string) (Config, error) {
+	enabled := true
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("error reading config file: %w", err)
@@ -202,6 +206,26 @@ func Load(path string) (Config, error) {
 
 	if cfg.Posting.ObfuscationPolicy == "" {
 		cfg.Posting.ObfuscationPolicy = ObfuscationPolicyFull
+	}
+
+	if cfg.Par2.Enabled == nil {
+		cfg.Par2.Enabled = &enabled
+	}
+
+	if cfg.Posting.WaitForPar2 == nil {
+		cfg.Posting.WaitForPar2 = &enabled
+	} else if *cfg.Posting.WaitForPar2 {
+		if !*cfg.Par2.Enabled {
+			cfg.Posting.WaitForPar2 = &enabled
+			slog.Warn("Par2 is disabled, but WaitForPar2 is enabled. This will not work. Please enable Par2 to enable WaitForPar2.")
+		} else {
+			slog.Warn("Use it at your own risk. Par2 files will be created and uploaded in parallel with the original file, " +
+				"if par2 creation fails or posting fails, you will end up uploading something that is trash.")
+		}
+	}
+
+	if cfg.PostCheck.Enabled == nil {
+		cfg.PostCheck.Enabled = &enabled
 	}
 
 	if cfg.Par2.Par2Path == "" {
