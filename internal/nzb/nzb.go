@@ -7,8 +7,11 @@ import (
 	"sort"
 	"time"
 
+	"github.com/andybalholm/brotli"
 	"github.com/javi11/nzbparser"
 	"github.com/javi11/postie/internal/article"
+	"github.com/javi11/postie/internal/config"
+	"github.com/klauspost/compress/zstd"
 )
 
 // NZBGenerator defines the interface for generating NZB files
@@ -23,17 +26,19 @@ type NZBGenerator interface {
 
 // Generator creates NZB files
 type Generator struct {
-	articles    map[string][]article.Article // filename -> articles
-	filesHash   map[string]string            // filename -> checksums
-	segmentSize uint64                       // size of each segment in bytes
+	articles          map[string][]article.Article // filename -> articles
+	filesHash         map[string]string            // filename -> checksums
+	segmentSize       uint64                       // size of each segment in bytes
+	compressionConfig config.NzbCompressionConfig  // compression configuration
 }
 
 // NewGenerator creates a new NZB generator
-func NewGenerator(segmentSize uint64) NZBGenerator {
+func NewGenerator(segmentSize uint64, compressionConfig config.NzbCompressionConfig) NZBGenerator {
 	return &Generator{
-		articles:    make(map[string][]article.Article),
-		filesHash:   make(map[string]string),
-		segmentSize: segmentSize,
+		articles:          make(map[string][]article.Article),
+		filesHash:         make(map[string]string),
+		segmentSize:       segmentSize,
+		compressionConfig: compressionConfig,
 	}
 }
 
@@ -140,8 +145,77 @@ func (g *Generator) Generate(outputPath string) error {
 		return fmt.Errorf("error writing NZB file: %w", err)
 	}
 
-	if err := os.WriteFile(outputPath, data, 0644); err != nil {
-		return fmt.Errorf("error writing NZB file: %w", err)
+	// Apply compression if enabled
+	finalPath := outputPath
+	if g.compressionConfig.Enabled {
+		switch g.compressionConfig.Type {
+		case config.CompressionTypeZstd:
+			finalPath = outputPath + ".zst"
+			if err := g.compressWithZstd(data, finalPath); err != nil {
+				return fmt.Errorf("error compressing NZB file with zstd: %w", err)
+			}
+		case config.CompressionTypeBrotli:
+			finalPath = outputPath + ".br"
+			if err := g.compressWithBrotli(data, finalPath); err != nil {
+				return fmt.Errorf("error compressing NZB file with brotli: %w", err)
+			}
+		default:
+			// No compression or unknown type, write the file as is
+			if err := os.WriteFile(outputPath, data, 0644); err != nil {
+				return fmt.Errorf("error writing NZB file: %w", err)
+			}
+		}
+	} else {
+		// No compression, write the file as is
+		if err := os.WriteFile(outputPath, data, 0644); err != nil {
+			return fmt.Errorf("error writing NZB file: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// compressWithZstd compresses data with zstd and writes it to the given path
+func (g *Generator) compressWithZstd(data []byte, outputPath string) error {
+	// Create the file
+	f, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("error creating compressed file: %w", err)
+	}
+	defer f.Close()
+
+	// Create zstd encoder with the configured level
+	level := zstd.EncoderLevel(g.compressionConfig.Level)
+	enc, err := zstd.NewWriter(f, zstd.WithEncoderLevel(level))
+	if err != nil {
+		return fmt.Errorf("error creating zstd encoder: %w", err)
+	}
+	defer enc.Close()
+
+	// Write compressed data
+	if _, err := enc.Write(data); err != nil {
+		return fmt.Errorf("error writing compressed data: %w", err)
+	}
+
+	return nil
+}
+
+// compressWithBrotli compresses data with brotli and writes it to the given path
+func (g *Generator) compressWithBrotli(data []byte, outputPath string) error {
+	// Create the file
+	f, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("error creating compressed file: %w", err)
+	}
+	defer f.Close()
+
+	// Create brotli writer with the configured level
+	w := brotli.NewWriterLevel(f, g.compressionConfig.Level)
+	defer w.Close()
+
+	// Write compressed data
+	if _, err := w.Write(data); err != nil {
+		return fmt.Errorf("error writing compressed data: %w", err)
 	}
 
 	return nil

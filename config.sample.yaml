@@ -45,6 +45,12 @@ par2:
   max_input_slices: 4000
   extra_par2_options: []
 
+# NZB compression configuration
+nzb_compression:
+  enabled: false # Whether to enable compression of the output NZB file
+  type: zstd # Options: none, zstd, brotli
+  level: 5 # Compression level (zstd: 0-5, brotli: 0-11)
+
 # Watcher configuration
 watcher:
   size_threshold: 104857600 # 100MB

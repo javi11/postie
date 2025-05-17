@@ -21,6 +21,17 @@ const (
 	defaultMaxInputSlices = 4000
 )
 
+type CompressionType string
+
+const (
+	// No compression
+	CompressionTypeNone CompressionType = "none"
+	// Zstandard compression
+	CompressionTypeZstd CompressionType = "zstd"
+	// Brotli compression
+	CompressionTypeBrotli CompressionType = "brotli"
+)
+
 type GroupPolicy string
 
 const (
@@ -67,6 +78,7 @@ type Config interface {
 	GetPostCheckConfig() PostCheck
 	GetPar2Config(ctx context.Context) (*Par2Config, error)
 	GetWatcherConfig() WatcherConfig
+	GetNzbCompressionConfig() NzbCompressionConfig
 }
 
 type ConnectionPoolConfig struct {
@@ -81,9 +93,10 @@ type config struct {
 	ConnectionPool ConnectionPoolConfig `yaml:"connection_pool"`
 	Posting        PostingConfig        `yaml:"posting"`
 	// Check uploaded article configuration. used to check if an article was successfully uploaded and propagated.
-	PostCheck PostCheck     `yaml:"post_check"`
-	Par2      Par2Config    `yaml:"par2"`
-	Watcher   WatcherConfig `yaml:"watcher"`
+	PostCheck      PostCheck            `yaml:"post_check"`
+	Par2           Par2Config           `yaml:"par2"`
+	Watcher        WatcherConfig        `yaml:"watcher"`
+	NzbCompression NzbCompressionConfig `yaml:"nzb_compression"`
 }
 
 type Par2Config struct {
@@ -165,6 +178,16 @@ type ScheduleConfig struct {
 	EndTime   string `yaml:"end_time"`
 }
 
+// NzbCompressionConfig represents the NZB compression configuration
+type NzbCompressionConfig struct {
+	// Whether to enable compression. Default is false.
+	Enabled bool `yaml:"enabled"`
+	// Compression type to use. Default is "none".
+	Type CompressionType `yaml:"type"`
+	// Compression level to use. Default depends on the compression type.
+	Level int `yaml:"level"`
+}
+
 // Load loads configuration from a file
 func Load(path string) (Config, error) {
 	enabled := true
@@ -244,6 +267,21 @@ func Load(path string) (Config, error) {
 		cfg.Par2.MaxInputSlices = defaultMaxInputSlices
 	}
 
+	// Set default values for NZB compression
+	if cfg.NzbCompression.Type == "" {
+		cfg.NzbCompression.Type = CompressionTypeNone
+	}
+
+	// Set default compression level based on type
+	if cfg.NzbCompression.Level == 0 {
+		switch cfg.NzbCompression.Type {
+		case CompressionTypeZstd:
+			cfg.NzbCompression.Level = 3 // Default zstd level
+		case CompressionTypeBrotli:
+			cfg.NzbCompression.Level = 4 // Default brotli level
+		}
+	}
+
 	// Validate configuration
 	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
@@ -282,6 +320,26 @@ func (c *config) validate() error {
 
 	if len(c.Posting.Groups) == 0 {
 		return fmt.Errorf("posting groups are required")
+	}
+
+	// Validate compression configuration
+	if c.NzbCompression.Enabled {
+		switch c.NzbCompression.Type {
+		case CompressionTypeZstd:
+			// zstd levels are between 1-22
+			if c.NzbCompression.Level < 1 || c.NzbCompression.Level > 22 {
+				return fmt.Errorf("invalid zstd compression level: %d (must be between 1-22)", c.NzbCompression.Level)
+			}
+		case CompressionTypeBrotli:
+			// brotli levels are between 0-11
+			if c.NzbCompression.Level < 0 || c.NzbCompression.Level > 11 {
+				return fmt.Errorf("invalid brotli compression level: %d (must be between 0-11)", c.NzbCompression.Level)
+			}
+		case CompressionTypeNone:
+			// Do nothing
+		default:
+			return fmt.Errorf("invalid compression type: %s", c.NzbCompression.Type)
+		}
 	}
 
 	return nil
@@ -397,4 +455,8 @@ func ensurePar2Executable(ctx context.Context, par2Path string) (string, error) 
 
 func (c *config) GetWatcherConfig() WatcherConfig {
 	return c.Watcher
+}
+
+func (c *config) GetNzbCompressionConfig() NzbCompressionConfig {
+	return c.NzbCompression
 }
