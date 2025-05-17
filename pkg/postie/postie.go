@@ -18,10 +18,11 @@ import (
 )
 
 type Postie struct {
-	par2Cfg    *config.Par2Config
-	postingCfg config.PostingConfig
-	par2runner *par2.Par2CmdExecutor
-	poster     poster.Poster
+	par2Cfg        *config.Par2Config
+	postingCfg     config.PostingConfig
+	par2runner     *par2.Par2CmdExecutor
+	poster         poster.Poster
+	compressionCfg config.NzbCompressionConfig
 }
 
 func New(
@@ -35,6 +36,7 @@ func New(
 	}
 
 	postingConfig := cfg.GetPostingConfig()
+	compressionConfig := cfg.GetNzbCompressionConfig()
 
 	// Create par2 runner
 	par2runner := par2.New(ctx, postingConfig.ArticleSizeInBytes, par2Cfg)
@@ -47,7 +49,13 @@ func New(
 		return nil, err
 	}
 
-	return &Postie{par2Cfg: par2Cfg, par2runner: par2runner, poster: p, postingCfg: postingConfig}, nil
+	return &Postie{
+		par2Cfg:        par2Cfg,
+		par2runner:     par2runner,
+		poster:         p,
+		postingCfg:     postingConfig,
+		compressionCfg: compressionConfig,
+	}, nil
 }
 
 func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir string, outputDir string) error {
@@ -103,7 +111,8 @@ func (p *Postie) postInParallel(
 		}
 	}()
 
-	nzbGen := nzb.NewGenerator(p.postingCfg.ArticleSizeInBytes)
+	nzbGen := nzb.NewGenerator(p.postingCfg.ArticleSizeInBytes, p.compressionCfg)
+
 	errg := errgroup.Group{}
 
 	errg.Go(func() error {
@@ -169,7 +178,7 @@ func (p *Postie) post(
 	}()
 
 	filesPath := []string{f.Path}
-	nzbGen := nzb.NewGenerator(p.postingCfg.ArticleSizeInBytes)
+	nzbGen := nzb.NewGenerator(p.postingCfg.ArticleSizeInBytes, p.compressionCfg)
 
 	if *p.par2Cfg.Enabled {
 		createdPar2Paths, err = p.par2runner.Create(ctx, []fileinfo.FileInfo{f})

@@ -59,6 +59,11 @@ par2:
   max_input_slices: 4000
   extra_par2_options: []
 
+nzb_compression:
+  enabled: false # Whether to enable compression of the output NZB file
+  type: zstd # Options: none, zstd, brotli
+  level: 3 # Compression level (zstd: 1-22, brotli: 0-11)
+
 watcher:
   size_threshold: 104857600 # 100MB
   schedule:
@@ -166,6 +171,30 @@ par2:
   max_input_slices: 4000 # Maximum number of input slices
   extra_par2_options: [] # Additional PAR2 command line options
 ```
+
+### NZB Compression
+
+Configure NZB file compression:
+
+```yaml
+nzb_compression:
+  enabled: false # Whether to enable compression of the output NZB file
+  type: zstd # Compression algorithm to use (options: none, zstd, brotli)
+  level: 3 # Compression level (zstd: 0-5, brotli: 0-11)
+```
+
+When compression is enabled, the generated NZB files will be compressed using the specified algorithm and will have the appropriate file extension added (`.nzb.zst` for zstd or `.nzb.br` for brotli). This can significantly reduce the size of NZB files, especially for large uploads with many segments.
+
+#### Compression Types
+
+- **none**: No compression (default)
+- **zstd**: [Zstandard compression](https://github.com/facebook/zstd) - fast compression with good ratios
+- **brotli**: [Brotli compression](https://github.com/google/brotli) - higher compression ratios but slower
+
+#### Compression Levels
+
+- **zstd**: 0-5 (higher = better compression but slower, default: 3)
+- **brotli**: 0-11 (higher = better compression but slower, default: 4)
 
 ### File Watcher
 
