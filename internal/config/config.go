@@ -237,10 +237,9 @@ func Load(path string) (Config, error) {
 
 	if cfg.Posting.WaitForPar2 == nil {
 		cfg.Posting.WaitForPar2 = &enabled
-	} else if *cfg.Posting.WaitForPar2 {
+	} else if !*cfg.Posting.WaitForPar2 {
 		if !*cfg.Par2.Enabled {
 			cfg.Posting.WaitForPar2 = &enabled
-			slog.Warn("Par2 is disabled, but WaitForPar2 is enabled. This will not work. Please enable Par2 to enable WaitForPar2.")
 		} else {
 			slog.Warn("Use it at your own risk. Par2 files will be created and uploaded in parallel with the original file, " +
 				"if par2 creation fails or posting fails, you will end up uploading something that is trash.")
