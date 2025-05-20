@@ -3,9 +3,11 @@ module github.com/javi11/postie
 go 1.24.0
 
 require (
+	github.com/andybalholm/brotli v1.1.1
 	github.com/javi11/nntppool v0.3.4
 	github.com/javi11/nxg v0.1.0
 	github.com/javi11/nzbparser v0.2.1
+	github.com/klauspost/compress v1.18.0
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/mholt/archiver v3.1.1+incompatible
 	github.com/mnightingale/rapidyenc v0.0.0-20240809192858-2494683cdd67
@@ -37,7 +39,6 @@ require (
 	github.com/alexkohler/prealloc v1.0.0 // indirect
 	github.com/alingse/asasalint v0.0.11 // indirect
 	github.com/alingse/nilnesserr v0.2.0 // indirect
-	github.com/andybalholm/brotli v1.1.1 // indirect
 	github.com/ashanbrown/forbidigo v1.6.0 // indirect
 	github.com/ashanbrown/makezero v1.2.0 // indirect
 	github.com/avast/retry-go v3.0.0+incompatible // indirect
@@ -120,7 +121,6 @@ require (
 	github.com/karamaru-alpha/copyloopvar v1.2.1 // indirect
 	github.com/kisielk/errcheck v1.9.0 // indirect
 	github.com/kkHAIKE/contextcheck v1.1.6 // indirect
-	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/kulti/thelper v0.6.3 // indirect
 	github.com/kunwardeep/paralleltest v1.0.14 // indirect
 	github.com/lasiar/canonicalheader v1.1.2 // indirect

@@ -27,8 +27,8 @@ import (
 type Poster interface {
 	// Post posts files from a directory to Usenet
 	Post(ctx context.Context, files []string, rootDir string, nzbGen nzb.NZBGenerator) error
-	// GetStats returns posting statistics
-	GetStats() Stats
+	// Stats returns posting statistics
+	Stats() Stats
 }
 
 // PostStatus represents the status of a post
@@ -44,7 +44,7 @@ const (
 // Post represents a file to be posted
 type Post struct {
 	FilePath string
-	Articles []article.Article
+	Articles []*article.Article
 	Status   PostStatus
 	Error    error
 	Retries  int
@@ -187,7 +187,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 
 			// Submit all articles to the pool
 			for _, art := range post.Articles {
-				combinedHash += art.GetHash()
+				combinedHash += art.Hash
 
 				pool.Go(func(ctx context.Context) error {
 					if err := p.postArticle(ctx, art, post.file); err != nil {
@@ -196,7 +196,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 
 					// Update progress
 					post.mu.Lock()
-					bytesPosted += int64(art.GetSize())
+					bytesPosted += int64(art.Size)
 					articlesProcessed++
 
 					progress.UpdateFileProgress(bytesPosted, int64(articlesProcessed), int64(articleErrors))
@@ -230,7 +230,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 
 			// Add file hash to NZB generator
 			fileHash := CalculateHash([]byte(combinedHash))
-			nzbGen.AddFileHash(post.Articles[0].GetOriginalName(), fileHash)
+			nzbGen.AddFileHash(post.Articles[0].OriginalName, fileHash)
 
 			if *p.checkCfg.Enabled {
 				checkQueue <- post
@@ -260,7 +260,7 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 			pool := pool.New().WithContext(ctx).WithMaxGoroutines(p.cfg.MaxWorkers).WithCancelOnError().WithFirstError()
 			articlesChecked := 0
 			articleErrors := 0
-			var failedArticles []article.Article
+			var failedArticles []*article.Article
 			var mu sync.Mutex
 
 			// Create progress bar for this file
@@ -413,7 +413,7 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int, wg *sy
 	}
 
 	// Create articles for each segment
-	articles := make([]article.Article, 0, numSegments)
+	articles := make([]*article.Article, 0, numSegments)
 	for i := 0; i < numSegments; i++ {
 		offset := int64(i) * int64(segmentSize)
 		size := int64(segmentSize)
@@ -502,7 +502,7 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int, wg *sy
 
 		var date *time.Time
 		if p.cfg.ObfuscationPolicy == config.ObfuscationPolicyFull {
-			rd := article.GetRandomDateWithinLast6Hours()
+			rd := article.RandomDateWithinLast6Hours()
 			date = &rd
 		}
 
@@ -522,15 +522,15 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int, wg *sy
 		)
 
 		if date != nil {
-			art.SetDate(*date)
+			art.Date = *date
 		}
 
 		if xNxgHeader != "" {
-			art.SetXNxgHeader(xNxgHeader)
+			art.XNxgHeader = xNxgHeader
 		}
 
-		art.SetOffset(offset)
-		art.SetSize(uint64(size))
+		art.Offset = offset
+		art.Size = uint64(size)
 
 		articles = append(articles, art)
 	}
@@ -550,16 +550,16 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int, wg *sy
 }
 
 // postArticle posts an article to Usenet
-func (p *poster) postArticle(ctx context.Context, article article.Article, file *os.File) error {
+func (p *poster) postArticle(ctx context.Context, article *article.Article, file *os.File) error {
 	// Read article body
-	body := make([]byte, article.GetSize())
-	if _, err := file.ReadAt(body, article.GetOffset()); err != nil {
+	body := make([]byte, article.Size)
+	if _, err := file.ReadAt(body, article.Offset); err != nil {
 		return fmt.Errorf("error reading article body: %w", err)
 	}
 
 	// Calculate and set hash for the article
 	articleHash := CalculateHash(body)
-	article.SetHash(articleHash)
+	article.Hash = articleHash
 
 	// Create article
 	art, err := article.EncodeBytes(p.yenc, body)
@@ -575,15 +575,15 @@ func (p *poster) postArticle(ctx context.Context, article article.Article, file 
 	// Update stats
 	p.stats.mu.Lock()
 	p.stats.ArticlesPosted++
-	p.stats.BytesPosted += int64(article.GetSize())
+	p.stats.BytesPosted += int64(article.Size)
 	p.stats.mu.Unlock()
 
 	return nil
 }
 
 // checkArticle checks if an article exists
-func (p *poster) checkArticle(ctx context.Context, art article.Article) error {
-	_, err := p.pool.Stat(ctx, art.GetMessageID(), art.GetGroups())
+func (p *poster) checkArticle(ctx context.Context, art *article.Article) error {
+	_, err := p.pool.Stat(ctx, art.MessageID, art.Groups)
 	if err != nil {
 		return fmt.Errorf("article not found: %w", err)
 	}
@@ -596,8 +596,8 @@ func (p *poster) checkArticle(ctx context.Context, art article.Article) error {
 	return nil
 }
 
-// GetStats returns posting statistics
-func (p *poster) GetStats() Stats {
+// Stats returns posting statistics
+func (p *poster) Stats() Stats {
 	p.stats.mu.Lock()
 	defer p.stats.mu.Unlock()
 

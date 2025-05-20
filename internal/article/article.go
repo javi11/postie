@@ -17,56 +17,24 @@ type Encoder interface {
 }
 
 // Article represents a Usenet article
-type Article interface {
-	GetMessageID() string
-	GetOriginalSubject() string
-	GetSubject() string
-	GetFrom() string
-	GetGroups() []string
-	GetPartNumber() int
-	GetTotalParts() int
-	GetFileName() string
-	GetDate() time.Time
-	GetOffset() int64
-	GetSize() uint64
-	GetOriginalName() string
-	SetOffset(offset int64)
-	SetSize(size uint64)
-	GetFileNumber() int
-	SetDate(date time.Time)
-	SetXNxgHeader(xNxgHeader string)
-	EncodeBytes(encoder Encoder, body []byte) (io.Reader, error)
-	GetHash() string
-	SetHash(hash string)
-}
-
-func (a *article) SetXNxgHeader(xNxgHeader string) {
-	a.XNxgHeader = xNxgHeader
-}
-
-func (a *article) SetDate(date time.Time) {
-	a.date = date
-}
-
-// Article represents an NNTP article
-type article struct {
-	messageID       string
-	subject         string
-	originalSubject string
-	from            string
-	groups          []string
-	partNumber      int
-	totalParts      int
-	fileName        string
-	date            time.Time
-	fileNumber      int
-	offset          int64
-	size            uint64
-	fileSize        int64
-	originalName    string
-	customHeaders   map[string]string
+type Article struct {
+	MessageID       string
+	Subject         string
+	OriginalSubject string
+	From            string
+	Groups          []string
+	PartNumber      int
+	TotalParts      int
+	FileName        string
+	Date            time.Time
+	FileNumber      int
+	Offset          int64
+	Size            uint64
+	FileSize        int64
+	OriginalName    string
+	CustomHeaders   map[string]string
 	XNxgHeader      string
-	hash            string
+	Hash            string
 }
 
 // New creates a new Article
@@ -83,38 +51,39 @@ func New(
 	fileNumber int,
 	originalName string,
 	customHeaders map[string]string,
-) Article {
-	return &article{
-		messageID:       messageID,
-		subject:         subject,
-		originalSubject: originalSubject,
-		from:            from,
-		groups:          groups,
-		partNumber:      partNumber,
-		totalParts:      totalParts,
-		fileSize:        fileSize,
-		fileName:        fileName,
-		fileNumber:      fileNumber,
-		originalName:    originalName,
-		date:            time.Now(),
-		customHeaders:   customHeaders,
+) *Article {
+	return &Article{
+		MessageID:       messageID,
+		Subject:         subject,
+		OriginalSubject: originalSubject,
+		From:            from,
+		Groups:          groups,
+		PartNumber:      partNumber,
+		TotalParts:      totalParts,
+		FileSize:        fileSize,
+		FileName:        fileName,
+		FileNumber:      fileNumber,
+		OriginalName:    originalName,
+		Date:            time.Now(),
+		CustomHeaders:   customHeaders,
 	}
 }
 
-func (a *article) EncodeBytes(encoder Encoder, body []byte) (io.Reader, error) {
+// EncodeBytes encodes the article body using the provided encoder
+func (a *Article) EncodeBytes(encoder Encoder, body []byte) (io.Reader, error) {
 	headers := make(map[string]string)
 
-	if a.customHeaders != nil {
-		for k, v := range a.customHeaders {
+	if a.CustomHeaders != nil {
+		for k, v := range a.CustomHeaders {
 			headers[k] = v
 		}
 	}
 
-	headers["Subject"] = a.subject
-	headers["From"] = a.from
-	headers["Newsgroups"] = strings.Join(a.groups, ",")
-	headers["Message-ID"] = fmt.Sprintf("<%s>", a.messageID)
-	headers["Date"] = a.date.UTC().Format(time.RFC1123)
+	headers["Subject"] = a.Subject
+	headers["From"] = a.From
+	headers["Newsgroups"] = strings.Join(a.Groups, ",")
+	headers["Message-ID"] = fmt.Sprintf("<%s>", a.MessageID)
+	headers["Date"] = a.Date.UTC().Format(time.RFC1123)
 
 	if a.XNxgHeader != "" {
 		headers["X-Nxg"] = a.XNxgHeader
@@ -126,7 +95,7 @@ func (a *article) EncodeBytes(encoder Encoder, body []byte) (io.Reader, error) {
 	}
 
 	header += fmt.Sprintf("\r\n=ybegin part=%d total=%d line=128 size=%d name=%s\r\n=ypart begin=%d end=%d\r\n",
-		a.partNumber, a.totalParts, a.fileSize, a.fileName, a.offset+1, a.offset+int64(a.size))
+		a.PartNumber, a.TotalParts, a.FileSize, a.FileName, a.Offset+1, a.Offset+int64(a.Size))
 
 	// Encoded data
 	encoded := encoder.Encode(body)
@@ -137,7 +106,7 @@ func (a *article) EncodeBytes(encoder Encoder, body []byte) (io.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	footer := fmt.Sprintf("\r\n=yend size=%d part=%d pcrc32=%08X\r\n", a.size, a.partNumber, h.Sum32())
+	footer := fmt.Sprintf("\r\n=yend size=%d part=%d pcrc32=%08X\r\n", a.Size, a.PartNumber, h.Sum32())
 
 	size := len(header) + len(encoded) + len(footer)
 	buf := bytes.NewBuffer(make([]byte, 0, size))
@@ -156,91 +125,6 @@ func (a *article) EncodeBytes(encoder Encoder, body []byte) (io.Reader, error) {
 	}
 
 	return buf, nil
-}
-
-// GetFileNumber returns the file number
-func (a *article) GetFileNumber() int {
-	return a.fileNumber
-}
-
-// GetOriginalName returns the original filename
-func (a *article) GetOriginalName() string {
-	return a.originalName
-}
-
-// GetOriginalSubject returns the original subject
-func (a *article) GetOriginalSubject() string {
-	return a.originalSubject
-}
-
-// GetMessageID returns the message ID
-func (a *article) GetMessageID() string {
-	return a.messageID
-}
-
-// GetSubject returns the subject
-func (a *article) GetSubject() string {
-	return a.subject
-}
-
-// GetFrom returns the from header
-func (a *article) GetFrom() string {
-	return a.from
-}
-
-// GetGroup returns the newsgroup
-func (a *article) GetGroups() []string {
-	return a.groups
-}
-
-// GetPartNumber returns the part number
-func (a *article) GetPartNumber() int {
-	return a.partNumber
-}
-
-// GetTotalParts returns the total number of parts
-func (a *article) GetTotalParts() int {
-	return a.totalParts
-}
-
-// GetFileName returns the original filename
-func (a *article) GetFileName() string {
-	return a.fileName
-}
-
-// GetDate returns the article date
-func (a *article) GetDate() time.Time {
-	return a.date
-}
-
-// GetOffset returns the file offset
-func (a *article) GetOffset() int64 {
-	return a.offset
-}
-
-// GetSize returns the article size
-func (a *article) GetSize() uint64 {
-	return a.size
-}
-
-// SetOffset sets the file offset
-func (a *article) SetOffset(offset int64) {
-	a.offset = offset
-}
-
-// SetSize sets the article size
-func (a *article) SetSize(size uint64) {
-	a.size = size
-}
-
-// GetHash returns the article hash
-func (a *article) GetHash() string {
-	return a.hash
-}
-
-// SetHash sets the article hash
-func (a *article) SetHash(hash string) {
-	a.hash = hash
 }
 
 // generateRandomString generates a random string of specified length
@@ -313,7 +197,7 @@ func GenerateRandomSubject() string {
 	return rand32
 }
 
-func GetRandomDateWithinLast6Hours() time.Time {
+func RandomDateWithinLast6Hours() time.Time {
 	now := time.Now()
 	millisecondsIn6Hours := 6 * 60 * 60 * 1000
 	randomMilliseconds := mrand.Intn(millisecondsIn6Hours)

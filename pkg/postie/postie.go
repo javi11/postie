@@ -81,7 +81,7 @@ func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir st
 	}
 
 	// Print final statistics
-	stats := p.poster.GetStats()
+	stats := p.poster.Stats()
 	elapsed := time.Since(startTime)
 
 	slog.InfoContext(ctx, "Upload completed in", "elapsed", elapsed.Round(time.Second))
