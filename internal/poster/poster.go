@@ -70,7 +70,7 @@ type poster struct {
 	cfg      config.PostingConfig
 	checkCfg config.PostCheck
 	pool     nntppool.UsenetConnectionPool
-	yenc     *rapidyenc.Encoder
+	encoder  *rapidyenc.Encoder
 	stats    *Stats
 	throttle *Throttle
 }
@@ -97,7 +97,7 @@ func New(ctx context.Context, cfg config.Config) (Poster, error) {
 		cfg:      cfg.GetPostingConfig(),
 		checkCfg: cfg.GetPostCheckConfig(),
 		pool:     pool,
-		yenc:     yenc,
+		encoder:  yenc,
 		stats:    stats,
 		throttle: throttle,
 	}
@@ -562,7 +562,7 @@ func (p *poster) postArticle(ctx context.Context, article *article.Article, file
 	article.Hash = articleHash
 
 	// Create article
-	art, err := article.EncodeBytes(p.yenc, body)
+	art, err := article.EncodeBytes(p.encoder, body)
 	if err != nil {
 		return fmt.Errorf("error encoding article: %w", err)
 	}
