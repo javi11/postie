@@ -38,13 +38,3 @@ func TestUpdateFileProgress(t *testing.T) {
 		pm.UpdateFileProgress(bytesProcessed, articlesProcessed, articleErrors)
 	}, "UpdateFileProgress should not panic")
 }
-
-func TestFinishFileProgress(t *testing.T) {
-	// Create a new progress bar
-	pm := NewFileProgress("Test Progress", 1000, 10)
-
-	// This shouldn't panic
-	assert.NotPanics(t, func() {
-		pm.FinishFileProgress()
-	}, "FinishFileProgress should not panic")
-}

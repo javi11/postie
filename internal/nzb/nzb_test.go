@@ -173,7 +173,10 @@ func TestGenerate(t *testing.T) {
 		// Create a temporary directory for the NZB file
 		tempDir, err := os.MkdirTemp("", "nzb-test")
 		require.NoError(t, err, "Failed to create temp directory")
-		defer os.RemoveAll(tempDir)
+		defer func() {
+			err := os.RemoveAll(tempDir)
+			assert.NoError(t, err, "Failed to remove temp directory")
+		}()
 
 		outputPath := filepath.Join(tempDir, "test.nzb")
 
@@ -228,7 +231,10 @@ func TestGenerate(t *testing.T) {
 		// Create a temporary directory for the NZB file
 		tempDir, err := os.MkdirTemp("", "nzb-test")
 		require.NoError(t, err, "Failed to create temp directory")
-		defer os.RemoveAll(tempDir)
+		defer func() {
+			err := os.RemoveAll(tempDir)
+			assert.NoError(t, err, "Failed to remove temp directory")
+		}()
 
 		outputPath := filepath.Join(tempDir, "test.nzb")
 
@@ -269,7 +275,10 @@ func TestGenerate(t *testing.T) {
 		// Create a temporary directory for the NZB file
 		tempDir, err := os.MkdirTemp("", "nzb-test")
 		require.NoError(t, err, "Failed to create temp directory")
-		defer os.RemoveAll(tempDir)
+		defer func() {
+			err := os.RemoveAll(tempDir)
+			assert.NoError(t, err, "Failed to remove temp directory")
+		}()
 
 		outputPath := filepath.Join(tempDir, "test.nzb")
 
@@ -295,7 +304,10 @@ func TestGenerate(t *testing.T) {
 		// Create a temporary directory for the NZB file
 		tempDir, err := os.MkdirTemp("", "nzb-test")
 		require.NoError(t, err, "Failed to create temp directory")
-		defer os.RemoveAll(tempDir)
+		defer func() {
+			err := os.RemoveAll(tempDir)
+			assert.NoError(t, err, "Failed to remove temp directory")
+		}()
 
 		outputPath := filepath.Join(tempDir, "test.nzb")
 
@@ -329,7 +341,10 @@ func TestParse(t *testing.T) {
 	// Create a temporary file
 	tempFile, err := os.CreateTemp("", "test-*.nzb")
 	require.NoError(t, err, "Failed to create temp file")
-	defer os.Remove(tempFile.Name())
+	defer func() {
+		err := os.Remove(tempFile.Name())
+		assert.NoError(t, err, "Failed to remove temp file")
+	}()
 
 	// Write the NZB content to the temp file
 	_, err = tempFile.WriteString(nzbContent)
@@ -378,7 +393,10 @@ func TestValidate(t *testing.T) {
 		// Create a temporary file
 		tempFile, err := os.CreateTemp("", "test-valid-*.nzb")
 		require.NoError(t, err, "Failed to create temp file")
-		defer os.Remove(tempFile.Name())
+		defer func() {
+			err := os.Remove(tempFile.Name())
+			assert.NoError(t, err, "Failed to remove temp file")
+		}()
 
 		// Write the NZB content to the temp file
 		_, err = tempFile.WriteString(nzbContent)
@@ -405,7 +423,10 @@ func TestValidate(t *testing.T) {
 		// Create a temporary file
 		tempFile, err := os.CreateTemp("", "test-no-files-*.nzb")
 		require.NoError(t, err, "Failed to create temp file")
-		defer os.Remove(tempFile.Name())
+		defer func() {
+			err := os.Remove(tempFile.Name())
+			assert.NoError(t, err, "Failed to remove temp file")
+		}()
 
 		// Write the NZB content to the temp file
 		_, err = tempFile.WriteString(nzbContent)
@@ -440,7 +461,10 @@ func TestValidate(t *testing.T) {
 		// Create a temporary file
 		tempFile, err := os.CreateTemp("", "test-no-segments-*.nzb")
 		require.NoError(t, err, "Failed to create temp file")
-		defer os.Remove(tempFile.Name())
+		defer func() {
+			err := os.Remove(tempFile.Name())
+			assert.NoError(t, err, "Failed to remove temp file")
+		}()
 
 		// Write the NZB content to the temp file
 		_, err = tempFile.WriteString(nzbContent)
@@ -477,8 +501,12 @@ func TestCompressWithZstd(t *testing.T) {
 	// Create a temporary file for the compressed output
 	tempFile, err := os.CreateTemp("", "test-zstd-*.zst")
 	require.NoError(t, err, "Failed to create temp file")
-	tempFile.Close()
-	defer os.Remove(tempFile.Name())
+	defer func() {
+		err := tempFile.Close()
+		assert.NoError(t, err, "Failed to close temp file")
+		err = os.Remove(tempFile.Name())
+		assert.NoError(t, err, "Failed to remove temp file")
+	}()
 
 	// Compress the data
 	err = generator.compressWithZstd(testData, tempFile.Name())
@@ -506,8 +534,12 @@ func TestCompressWithBrotli(t *testing.T) {
 	// Create a temporary file for the compressed output
 	tempFile, err := os.CreateTemp("", "test-brotli-*.br")
 	require.NoError(t, err, "Failed to create temp file")
-	tempFile.Close()
-	defer os.Remove(tempFile.Name())
+	defer func() {
+		err := tempFile.Close()
+		assert.NoError(t, err, "Failed to close temp file")
+		err = os.Remove(tempFile.Name())
+		assert.NoError(t, err, "Failed to remove temp file")
+	}()
 
 	// Compress the data
 	err = generator.compressWithBrotli(testData, tempFile.Name())

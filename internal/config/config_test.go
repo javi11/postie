@@ -404,12 +404,12 @@ func TestEnsurePar2Executable(t *testing.T) {
 func TestValidate(t *testing.T) {
 	testCases := []struct {
 		name        string
-		config      config
+		config      *config
 		expectedErr string
 	}{
 		{
 			name: "valid configuration",
-			config: config{
+			config: &config{
 				Servers: []ServerConfig{
 					{
 						Host:           "news.example.com",
@@ -425,7 +425,7 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "no servers",
-			config: config{
+			config: &config{
 				Posting: PostingConfig{
 					Groups: []string{"alt.bin.test"},
 				},
@@ -434,7 +434,7 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "server without host",
-			config: config{
+			config: &config{
 				Servers: []ServerConfig{
 					{
 						Port:           119,
@@ -449,7 +449,7 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "server with invalid port",
-			config: config{
+			config: &config{
 				Servers: []ServerConfig{
 					{
 						Host:           "news.example.com",
@@ -465,7 +465,7 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "server with invalid max connections",
-			config: config{
+			config: &config{
 				Servers: []ServerConfig{
 					{
 						Host: "news.example.com",
@@ -480,7 +480,7 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "no posting groups",
-			config: config{
+			config: &config{
 				Servers: []ServerConfig{
 					{
 						Host:           "news.example.com",
@@ -496,7 +496,7 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "invalid compression type",
-			config: config{
+			config: &config{
 				Servers: []ServerConfig{
 					{
 						Host:           "news.example.com",
@@ -516,7 +516,7 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "invalid zstd compression level",
-			config: config{
+			config: &config{
 				Servers: []ServerConfig{
 					{
 						Host:           "news.example.com",
@@ -537,7 +537,7 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "invalid brotli compression level",
-			config: config{
+			config: &config{
 				Servers: []ServerConfig{
 					{
 						Host:           "news.example.com",

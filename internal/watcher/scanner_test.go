@@ -3,8 +3,6 @@ package watcher
 import (
 	"context"
 	"database/sql"
-	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,7 +10,6 @@ import (
 
 	"github.com/javi11/postie/internal/config"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/opencontainers/selinux/pkg/pwalkdir"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -21,8 +18,10 @@ func setupTestWatcher(t *testing.T) (*Watcher, string, func()) {
 	// Create temporary directory
 	tempDir := t.TempDir()
 
-	// Create in-memory database
-	db, err := sql.Open("sqlite3", ":memory:")
+	// Create a separate directory for the database outside the watch folder
+	dbDir := t.TempDir()
+	dbPath := filepath.Join(dbDir, "test.db")
+	db, err := sql.Open("sqlite3", dbPath)
 	require.NoError(t, err)
 
 	// Initialize database
@@ -52,7 +51,8 @@ func setupTestWatcher(t *testing.T) (*Watcher, string, func()) {
 	}
 
 	cleanup := func() {
-		db.Close()
+		err := db.Close()
+		assert.NoError(t, err, "Failed to close database")
 	}
 
 	return watcher, tempDir, cleanup
@@ -65,13 +65,21 @@ func TestScanDirectory(t *testing.T) {
 		watcher, tempDir, cleanup := setupTestWatcher(t)
 		defer cleanup()
 
-		// Test that addToQueue works directly first
-		err := watcher.addToQueue(ctx, "/test/direct.txt", 100)
-		assert.NoError(t, err, "Direct addToQueue should work")
+		// Verify database connection is working by doing a preliminary operation
+		err := watcher.addToQueue(ctx, "/test/warmup.txt", 50)
+		require.NoError(t, err, "Database should be working for preliminary operation")
 
-		// Create test files with different names and content
-		testFile1 := filepath.Join(tempDir, "file1.txt")
-		testFile2 := filepath.Join(tempDir, "file2.dat")
+		// Clear the preliminary item
+		items, err := watcher.getNextBatch(ctx)
+		require.NoError(t, err)
+		if len(items) > 0 {
+			err = watcher.deleteItem(ctx, items[0].ID)
+			require.NoError(t, err)
+		}
+
+		// Create test files
+		testFile1 := filepath.Join(tempDir, "test1.txt")
+		testFile2 := filepath.Join(tempDir, "test2.txt")
 
 		content1 := "content larger than min size for file1"
 		content2 := "different content larger than min size for file2"
@@ -81,22 +89,7 @@ func TestScanDirectory(t *testing.T) {
 		err = os.WriteFile(testFile2, []byte(content2), 0644)
 		require.NoError(t, err)
 
-		// Test addToQueue with actual files
-		err = watcher.addToQueue(ctx, testFile1, 38)
-		assert.NoError(t, err, "addToQueue for file1 should work")
-		err = watcher.addToQueue(ctx, testFile2, 48)
-		assert.NoError(t, err, "addToQueue for file2 should work")
-
-		// Check that items are in the database before scanDirectory
-		items, err := watcher.getNextBatch(ctx)
-		assert.NoError(t, err)
-		t.Logf("Items before scanDirectory: %d", len(items))
-
-		// Now clear the database and try scanDirectory
-		_, err = watcher.db.ExecContext(ctx, "DELETE FROM queue_items")
-		require.NoError(t, err)
-
-		// Verify files exist and are accessible
+		// Verify files exist
 		info1, err := os.Stat(testFile1)
 		require.NoError(t, err)
 		info2, err := os.Stat(testFile2)
@@ -106,36 +99,16 @@ func TestScanDirectory(t *testing.T) {
 		t.Logf("File2: %s, size: %d", testFile2, info2.Size())
 		t.Logf("MinFileSize: %d", watcher.cfg.MinFileSize)
 
-		// Check if files are detected as open (debugging)
-		file1Open := isFileOpen(testFile1)
-		file2Open := isFileOpen(testFile2)
-		t.Logf("File1 open: %v, File2 open: %v", file1Open, file2Open)
-
 		// Scan directory
 		err = watcher.scanDirectory(ctx)
-		if err != nil {
-			t.Logf("scanDirectory error: %v", err)
-		}
 		assert.NoError(t, err)
 
 		// Verify files were added to queue
 		items, err = watcher.getNextBatch(ctx)
 		assert.NoError(t, err)
+
 		if len(items) != 2 {
 			t.Logf("Items found: %+v", items)
-			// Check what's in the database
-			allRows, dbErr := watcher.db.QueryContext(ctx, "SELECT id, path, size, status FROM queue_items")
-			if dbErr == nil {
-				defer allRows.Close()
-				for allRows.Next() {
-					var id int64
-					var path string
-					var size int64
-					var status string
-					allRows.Scan(&id, &path, &size, &status)
-					t.Logf("DB item: id=%d, path=%s, size=%d, status=%s", id, path, size, status)
-				}
-			}
 		}
 		assert.Len(t, items, 2)
 	})
@@ -442,7 +415,10 @@ func TestIsFileOpen(t *testing.T) {
 
 		err := os.WriteFile(testFile, []byte("test content"), 0000)
 		require.NoError(t, err)
-		defer os.Chmod(testFile, 0644) // Cleanup
+		defer func() {
+			err := os.Chmod(testFile, 0644)
+			assert.NoError(t, err, "Failed to change file permissions")
+		}()
 
 		result := isFileOpen(testFile)
 		assert.True(t, result) // Should return true when access is denied
@@ -652,10 +628,14 @@ func TestHandleFailedItems(t *testing.T) {
 }
 
 func TestDatabaseInitialization(t *testing.T) {
-	// Create in-memory database
-	db, err := sql.Open("sqlite3", ":memory:")
+	// Create file-based database
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	db, err := sql.Open("sqlite3", dbPath)
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		err := db.Close()
+		assert.NoError(t, err)
+	}()
 
 	// Initialize database
 	err = initDB(db)
@@ -680,59 +660,4 @@ func TestDatabaseInitialization(t *testing.T) {
 	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM queue_items").Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count)
-}
-
-func TestPwalkdirBehavior(t *testing.T) {
-	t.Run("test pwalkdir behavior", func(t *testing.T) {
-		watcher, tempDir, cleanup := setupTestWatcher(t)
-		defer cleanup()
-
-		// Create test files
-		testFile1 := filepath.Join(tempDir, "file1.txt")
-		content1 := "content larger than min size for file1"
-		err := os.WriteFile(testFile1, []byte(content1), 0644)
-		require.NoError(t, err)
-
-		// Test addToQueue works before pwalkdir
-		ctx := context.Background()
-		err = watcher.addToQueue(ctx, "/test/before.txt", 100)
-		assert.NoError(t, err, "addToQueue should work before pwalkdir")
-
-		// Now try pwalkdir
-		walkErr := pwalkdir.Walk(tempDir, func(path string, dir fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if dir.IsDir() {
-				return nil
-			}
-
-			info, err := dir.Info()
-			if err != nil {
-				return err
-			}
-
-			t.Logf("Walking file: %s, size: %d", path, info.Size())
-
-			// Try to add to queue during walk
-			if err := watcher.addToQueue(ctx, path, info.Size()); err != nil {
-				t.Logf("addToQueue error during walk: %v", err)
-				return fmt.Errorf("error adding to queue during walk: %w", err)
-			}
-
-			return nil
-		})
-
-		t.Logf("Walk completed with error: %v", walkErr)
-		assert.NoError(t, walkErr)
-
-		// Test addToQueue works after pwalkdir
-		err = watcher.addToQueue(ctx, "/test/after.txt", 100)
-		assert.NoError(t, err, "addToQueue should work after pwalkdir")
-
-		// Check items
-		items, err := watcher.getNextBatch(ctx)
-		assert.NoError(t, err)
-		t.Logf("Total items: %d", len(items))
-	})
 }

@@ -257,6 +257,8 @@ func TestGenerateRandomString(t *testing.T) {
 	// Testing three different lengths
 	testLengths := []int{5, 10, 32}
 
+	rexp := regexp.MustCompile(`^[a-zA-Z0-9]+$`)
+
 	for _, length := range testLengths {
 		// We have to call generateRandomString directly
 		// This is a bit of a hack since we're testing an unexported function
@@ -270,8 +272,7 @@ func TestGenerateRandomString(t *testing.T) {
 		}
 
 		// Should only contain alphanumeric characters
-		pattern := `^[a-zA-Z0-9]+$`
-		match, err := regexp.MatchString(pattern, result)
+		match := rexp.MatchString(result)
 		if err != nil {
 			t.Fatalf("Regex match failed: %v", err)
 		}

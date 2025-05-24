@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -63,7 +64,10 @@ func TestPost(t *testing.T) {
 		ctx := context.Background()
 		content := strings.Repeat("test data ", 100) // Create content larger than segment size
 		testFile := createTestFile(t, content)
-		defer os.Remove(testFile)
+		defer func() {
+			err := os.Remove(testFile)
+			assert.NoError(t, err, "Failed to remove test file")
+		}()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -110,8 +114,14 @@ func TestPost(t *testing.T) {
 		// Create test files
 		testFile1 := createTestFile(t, "test content 1")
 		testFile2 := createTestFile(t, "test content 2")
-		defer os.Remove(testFile1)
-		defer os.Remove(testFile2)
+		defer func() {
+			err := os.Remove(testFile1)
+			assert.NoError(t, err, "Failed to remove test file")
+		}()
+		defer func() {
+			err := os.Remove(testFile2)
+			assert.NoError(t, err, "Failed to remove test file")
+		}()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -151,7 +161,10 @@ func TestPost(t *testing.T) {
 	t.Run("posting failure", func(t *testing.T) {
 		ctx := context.Background()
 		testFile := createTestFile(t, "test content")
-		defer os.Remove(testFile)
+		defer func() {
+			err := os.Remove(testFile)
+			assert.NoError(t, err, "Failed to remove test file")
+		}()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -186,7 +199,10 @@ func TestPost(t *testing.T) {
 	t.Run("check enabled success", func(t *testing.T) {
 		ctx := context.Background()
 		testFile := createTestFile(t, "test content")
-		defer os.Remove(testFile)
+		defer func() {
+			err := os.Remove(testFile)
+			assert.NoError(t, err, "Failed to remove test file")
+		}()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -222,7 +238,10 @@ func TestPost(t *testing.T) {
 	t.Run("check enabled failure", func(t *testing.T) {
 		ctx := context.Background()
 		testFile := createTestFile(t, "test content")
-		defer os.Remove(testFile)
+		defer func() {
+			err := os.Remove(testFile)
+			assert.NoError(t, err, "Failed to remove test file")
+		}()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -329,11 +348,18 @@ func TestPost(t *testing.T) {
 		ctx := context.Background()
 		content := "test article content"
 		testFile := createTestFile(t, content)
-		defer os.Remove(testFile)
+		defer func() {
+			err := os.Remove(testFile)
+			assert.NoError(t, err, "Failed to remove test file")
+		}()
 
 		file, err := os.Open(testFile)
 		require.NoError(t, err)
-		defer file.Close()
+		defer func() {
+			if err := file.Close(); err != nil && !strings.Contains(err.Error(), "file already closed") {
+				assert.NoError(t, err, "Failed to close test file")
+			}
+		}()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -466,12 +492,19 @@ func TestPostArticle(t *testing.T) {
 		ctx := context.Background()
 		content := "test article content"
 		testFile := createTestFile(t, content)
-		defer os.Remove(testFile)
+		defer func() {
+			err := os.Remove(testFile)
+			assert.NoError(t, err, "Failed to remove test file")
+		}()
 
 		// Open the file
 		file, err := os.Open(testFile)
 		require.NoError(t, err)
-		defer file.Close()
+		defer func() {
+			if err := file.Close(); err != nil && !strings.Contains(err.Error(), "file already closed") {
+				assert.NoError(t, err, "Failed to close test file")
+			}
+		}()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -511,11 +544,14 @@ func TestPostArticle(t *testing.T) {
 
 		// Create a file and then close it to simulate read error
 		testFile := createTestFile(t, "test content")
-		defer os.Remove(testFile)
+		defer func() {
+			err := os.Remove(testFile)
+			assert.NoError(t, err, "Failed to remove test file")
+		}()
 
 		file, err := os.Open(testFile)
 		require.NoError(t, err)
-		file.Close() // Close the file to cause read error
+		_ = file.Close() // Close the file to cause read error
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -543,11 +579,18 @@ func TestPostArticle(t *testing.T) {
 		ctx := context.Background()
 		content := "test content"
 		testFile := createTestFile(t, content)
-		defer os.Remove(testFile)
+		defer func() {
+			err := os.Remove(testFile)
+			assert.NoError(t, err, "Failed to remove test file")
+		}()
 
 		file, err := os.Open(testFile)
 		require.NoError(t, err)
-		defer file.Close()
+		defer func() {
+			if err := file.Close(); err != nil && !strings.Contains(err.Error(), "file already closed") {
+				assert.NoError(t, err, "Failed to close test file")
+			}
+		}()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -637,7 +680,10 @@ func TestAddPost(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		content := strings.Repeat("test data ", 200) // Make it large enough to create multiple segments
 		testFile := createTestFile(t, content)
-		defer os.Remove(testFile)
+		defer func() {
+			err := os.Remove(testFile)
+			assert.NoError(t, err, "Failed to remove test file")
+		}()
 
 		cfg := createTestConfig()
 		cfg.ArticleSizeInBytes = 100 // Small segment size to force multiple segments
@@ -666,7 +712,9 @@ func TestAddPost(t *testing.T) {
 			assert.Equal(t, int64(len(content)), post.filesize)
 
 			// Clean up
-			post.file.Close()
+			if err := post.file.Close(); err != nil && !strings.Contains(err.Error(), "file already closed") {
+				assert.NoError(t, err, "Failed to close test file")
+			}
 		default:
 			t.Fatal("Expected post to be added to queue")
 		}
@@ -783,7 +831,7 @@ func TestPosterInterface(t *testing.T) {
 
 	// Test that all interface methods are available
 	stats := p.Stats()
-	assert.NotNil(t, stats)
+	assert.NotNil(t, &stats)
 }
 
 // Integration test with real files
@@ -988,7 +1036,10 @@ func TestPostLoop(t *testing.T) {
 
 		content := "test content for post loop"
 		testFile := createTestFile(t, content)
-		defer os.Remove(testFile)
+		defer func() {
+			err := os.Remove(testFile)
+			assert.NoError(t, err, "Failed to remove test file")
+		}()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -1022,7 +1073,11 @@ func TestPostLoop(t *testing.T) {
 		// Create a post
 		file, err := os.Open(testFile)
 		require.NoError(t, err)
-		defer file.Close()
+		defer func() {
+			if err := file.Close(); err != nil && !strings.Contains(err.Error(), "file already closed") {
+				assert.NoError(t, err, "Failed to close test file")
+			}
+		}()
 
 		fileInfo, err := file.Stat()
 		require.NoError(t, err)
@@ -1101,7 +1156,10 @@ func TestPostLoop(t *testing.T) {
 
 		content := "test content"
 		testFile := createTestFile(t, content)
-		defer os.Remove(testFile)
+		defer func() {
+			err := os.Remove(testFile)
+			assert.NoError(t, err, "Failed to remove test file")
+		}()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -1126,7 +1184,11 @@ func TestPostLoop(t *testing.T) {
 
 		file, err := os.Open(testFile)
 		require.NoError(t, err)
-		defer file.Close()
+		defer func() {
+			if err := file.Close(); err != nil && !strings.Contains(err.Error(), "file already closed") {
+				assert.NoError(t, err, "Failed to close test file")
+			}
+		}()
 
 		fileInfo, err := file.Stat()
 		require.NoError(t, err)
@@ -1190,7 +1252,10 @@ func TestCheckLoop(t *testing.T) {
 
 		content := "test content for check loop"
 		testFile := createTestFile(t, content)
-		defer os.Remove(testFile)
+		defer func() {
+			err := os.Remove(testFile)
+			assert.NoError(t, err, "Failed to remove test file")
+		}()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -1215,7 +1280,11 @@ func TestCheckLoop(t *testing.T) {
 
 		file, err := os.Open(testFile)
 		require.NoError(t, err)
-		defer file.Close()
+		defer func() {
+			if err := file.Close(); err != nil && !strings.Contains(err.Error(), "file already closed") {
+				assert.NoError(t, err, "Failed to close test file")
+			}
+		}()
 
 		fileInfo, err := file.Stat()
 		require.NoError(t, err)
@@ -1284,7 +1353,10 @@ func TestCheckLoop(t *testing.T) {
 
 		content := "test content"
 		testFile := createTestFile(t, content)
-		defer os.Remove(testFile)
+		defer func() {
+			err := os.Remove(testFile)
+			assert.NoError(t, err, "Failed to remove test file")
+		}()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -1313,7 +1385,11 @@ func TestCheckLoop(t *testing.T) {
 
 		file, err := os.Open(testFile)
 		require.NoError(t, err)
-		defer file.Close()
+		defer func() {
+			if err := file.Close(); err != nil && !strings.Contains(err.Error(), "file already closed") {
+				assert.NoError(t, err, "Failed to close test file")
+			}
+		}()
 
 		fileInfo, err := file.Stat()
 		require.NoError(t, err)
@@ -1371,7 +1447,10 @@ func TestCheckLoop(t *testing.T) {
 
 		content := "test content"
 		testFile := createTestFile(t, content)
-		defer os.Remove(testFile)
+		defer func() {
+			err := os.Remove(testFile)
+			assert.NoError(t, err, "Failed to remove test file")
+		}()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -1401,7 +1480,11 @@ func TestCheckLoop(t *testing.T) {
 
 		file, err := os.Open(testFile)
 		require.NoError(t, err)
-		defer file.Close()
+		defer func() {
+			if err := file.Close(); err != nil && !strings.Contains(err.Error(), "file already closed") {
+				assert.NoError(t, err, "Failed to close test file")
+			}
+		}()
 
 		fileInfo, err := file.Stat()
 		require.NoError(t, err)
@@ -1461,8 +1544,12 @@ func TestCheckLoop(t *testing.T) {
 
 		case <-time.After(2 * time.Second):
 			// If timeout, check if the post was at least processed (retries incremented)
-			if post.Retries > 0 {
-				t.Logf("Post retry count was incremented to %d, indicating retry logic was triggered", post.Retries)
+			// Use mutex to avoid race condition
+			post.mu.Lock()
+			retries := post.Retries
+			post.mu.Unlock()
+			if retries > 0 {
+				t.Logf("Post retry count was incremented to %d, indicating retry logic was triggered", retries)
 			} else {
 				t.Fatal("Expected retry post or retry behavior but got none")
 			}
@@ -1477,28 +1564,31 @@ func TestPostAndCheckLoopIntegration(t *testing.T) {
 
 		content := "test content for integration"
 		testFile := createTestFile(t, content)
-		defer os.Remove(testFile)
+		defer func() {
+			err := os.Remove(testFile)
+			assert.NoError(t, err, "Failed to remove test file")
+		}()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
 		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
 
-		// Track calls to verify retry behavior
-		var postCalls, statCalls int
+		// Track calls to verify retry behavior using atomic operations
+		var postCalls, statCalls int64
 
 		// Post should be called at least once, possibly twice (initial + retry)
 		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).DoAndReturn(
 			func(ctx context.Context, article io.Reader) error {
-				postCalls++
+				atomic.AddInt64(&postCalls, 1)
 				return nil
 			}).MinTimes(1).MaxTimes(3)
 
 		// Stat calls - allow flexibility for retry scenarios
 		mockPool.EXPECT().Stat(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 			func(ctx context.Context, msgID string, groups []string) (int, error) {
-				statCalls++
-				if statCalls == 1 {
+				currentCalls := atomic.AddInt64(&statCalls, 1)
+				if currentCalls == 1 {
 					return 0, errors.New("article not found")
 				}
 				return 200, nil
@@ -1556,7 +1646,11 @@ func TestPostAndCheckLoopIntegration(t *testing.T) {
 		// Create initial post
 		file, err := os.Open(testFile)
 		require.NoError(t, err)
-		defer file.Close()
+		defer func() {
+			if err := file.Close(); err != nil && !strings.Contains(err.Error(), "file already closed") {
+				assert.NoError(t, err, "Failed to close test file")
+			}
+		}()
 
 		fileInfo, err := file.Stat()
 		require.NoError(t, err)
@@ -1606,9 +1700,11 @@ func TestPostAndCheckLoopIntegration(t *testing.T) {
 			}
 		case <-done:
 			// Verify that some retry activity occurred
-			t.Logf("Integration test completed. Post calls: %d, Stat calls: %d", postCalls, statCalls)
-			assert.GreaterOrEqual(t, postCalls, 1, "Should have at least one post call")
-			assert.GreaterOrEqual(t, statCalls, 1, "Should have at least one stat call")
+			postCallsCount := atomic.LoadInt64(&postCalls)
+			statCallsCount := atomic.LoadInt64(&statCalls)
+			t.Logf("Integration test completed. Post calls: %d, Stat calls: %d", postCallsCount, statCallsCount)
+			assert.GreaterOrEqual(t, postCallsCount, int64(1), "Should have at least one post call")
+			assert.GreaterOrEqual(t, statCallsCount, int64(1), "Should have at least one stat call")
 
 			stats := p.Stats()
 			assert.GreaterOrEqual(t, stats.ArticlesPosted, int64(1))
@@ -1617,8 +1713,14 @@ func TestPostAndCheckLoopIntegration(t *testing.T) {
 			nzbGen.AssertExpectations(t)
 		case <-time.After(3 * time.Second):
 			// Log what we observed even if timeout
-			t.Logf("Integration test timed out. Post calls: %d, Stat calls: %d, Post status: %v", postCalls, statCalls, post.Status)
-			if postCalls > 0 || statCalls > 0 {
+			postCallsCount := atomic.LoadInt64(&postCalls)
+			statCallsCount := atomic.LoadInt64(&statCalls)
+			// Use mutex to safely read post status
+			post.mu.Lock()
+			postStatus := post.Status
+			post.mu.Unlock()
+			t.Logf("Integration test timed out. Post calls: %d, Stat calls: %d, Post status: %v", postCallsCount, statCallsCount, postStatus)
+			if postCallsCount > 0 || statCallsCount > 0 {
 				t.Logf("Some activity occurred, which indicates the loops are working")
 			} else {
 				t.Fatal("Integration test did not complete and no activity was observed")

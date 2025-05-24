@@ -346,7 +346,6 @@ type MockCmd struct {
 	args        []string
 	stdout      io.ReadCloser
 	stderr      io.ReadCloser
-	dir         string
 	returnError error
 }
 

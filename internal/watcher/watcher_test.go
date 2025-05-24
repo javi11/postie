@@ -50,7 +50,8 @@ func TestNew(t *testing.T) {
 		assert.False(t, watcher.isRunning)
 
 		// Cleanup
-		watcher.Close()
+		err = watcher.Close()
+		assert.NoError(t, err)
 	})
 
 	t.Run("database initialization failure", func(t *testing.T) {
@@ -74,7 +75,9 @@ func TestInitDB(t *testing.T) {
 	t.Run("successful initialization", func(t *testing.T) {
 		db, err := sql.Open("sqlite3", ":memory:")
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() {
+			_ = db.Close()
+		}()
 
 		err = initDB(db)
 		assert.NoError(t, err)
@@ -98,7 +101,8 @@ func TestInitDB(t *testing.T) {
 		// Use a mock database that will fail
 		db, err := sql.Open("sqlite3", ":memory:")
 		require.NoError(t, err)
-		db.Close() // Close it to make operations fail
+		err = db.Close()
+		assert.NoError(t, err) // Close it to make operations fail
 
 		err = initDB(db)
 		assert.Error(t, err)
@@ -149,9 +153,10 @@ func TestResetRunningItems(t *testing.T) {
 		defer cleanup()
 
 		// Close database to cause error
-		watcher.db.Close()
+		err := watcher.db.Close()
+		assert.NoError(t, err)
 
-		err := watcher.resetRunningItems(ctx)
+		err = watcher.resetRunningItems(ctx)
 		assert.Error(t, err)
 	})
 }
@@ -177,7 +182,10 @@ func TestStart(t *testing.T) {
 		// Use a nil postie since we'll cancel before it's used
 		watcher, err := New(ctx, cfg, configPath, nil, tempDir, tempDir)
 		require.NoError(t, err)
-		defer watcher.Close()
+		defer func() {
+			err := watcher.Close()
+			assert.NoError(t, err, "Failed to close watcher")
+		}()
 
 		// Start the watcher in a goroutine
 		errChan := make(chan error, 1)
@@ -328,9 +336,10 @@ func TestProcessQueue(t *testing.T) {
 		defer cleanup()
 
 		// Close database to cause error during scan
-		watcher.db.Close()
+		err := watcher.db.Close()
+		assert.NoError(t, err)
 
-		err := watcher.processQueue(ctx)
+		err = watcher.processQueue(ctx)
 		assert.Error(t, err)
 		// The error could be from scanDirectory or getNextBatch depending on timing
 		assert.True(t,
@@ -386,9 +395,10 @@ func TestProcessItem(t *testing.T) {
 		}
 
 		// Close database to cause error
-		watcher.db.Close()
+		err := watcher.db.Close()
+		assert.NoError(t, err)
 
-		err := watcher.processItem(ctx, item)
+		err = watcher.processItem(ctx, item)
 		assert.Error(t, err)
 	})
 
@@ -442,7 +452,10 @@ func TestProcessItem(t *testing.T) {
 		// Make directory read-only after creating file
 		err = os.Chmod(readOnlyDir, 0555)
 		require.NoError(t, err)
-		defer os.Chmod(readOnlyDir, 0755) // Cleanup
+		defer func() {
+			err := os.Chmod(readOnlyDir, 0755)
+			assert.NoError(t, err, "Failed to change file permissions")
+		}()
 
 		// Add item to database first to allow status update
 		result, err := watcher.db.ExecContext(ctx,
@@ -484,10 +497,11 @@ func TestClose(t *testing.T) {
 		defer cleanup()
 
 		// Close database first
-		watcher.db.Close()
+		err := watcher.db.Close()
+		assert.NoError(t, err)
 
 		// Second close should not panic but might return error
-		err := watcher.Close()
+		err = watcher.Close()
 		// SQLite returns nil error on multiple closes, so we just verify no panic
 		_ = err
 	})
@@ -637,8 +651,10 @@ func setupTestWatcherWithMock(t *testing.T) (*TestWatcher, string, func()) {
 	require.NoError(t, err)
 
 	cleanup := func() {
-		db.Close()
-		os.RemoveAll(tempDir)
+		err := db.Close()
+		assert.NoError(t, err)
+		err = os.RemoveAll(tempDir)
+		assert.NoError(t, err)
 	}
 
 	return watcher, tempDir, cleanup
@@ -654,13 +670,18 @@ func (w *TestWatcher) resetRunningItems(ctx context.Context) error {
 }
 
 func (w *TestWatcher) processQueue(ctx context.Context) error {
-	if !w.isWithinSchedule() || w.isRunning {
+	if !w.isWithinSchedule() {
 		slog.InfoContext(ctx, "Not within schedule or already running")
 		return nil
 	}
 
 	w.runningMux.Lock()
 	defer w.runningMux.Unlock()
+
+	if w.isRunning {
+		slog.InfoContext(ctx, "Not within schedule or already running")
+		return nil
+	}
 
 	w.isRunning = true
 	defer func() {
