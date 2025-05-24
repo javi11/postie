@@ -2,6 +2,7 @@ package nzb
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -17,7 +18,7 @@ import (
 // NZBGenerator defines the interface for generating NZB files
 type NZBGenerator interface {
 	// AddArticle adds an article to the generator
-	AddArticle(article article.Article)
+	AddArticle(article *article.Article)
 	// AddFileHash adds a hash for a file
 	AddFileHash(filename string, hash string)
 	// Generate creates an NZB file
@@ -26,16 +27,16 @@ type NZBGenerator interface {
 
 // Generator creates NZB files
 type Generator struct {
-	articles          map[string][]article.Article // filename -> articles
-	filesHash         map[string]string            // filename -> checksums
-	segmentSize       uint64                       // size of each segment in bytes
-	compressionConfig config.NzbCompressionConfig  // compression configuration
+	articles          map[string][]*article.Article // filename -> articles
+	filesHash         map[string]string             // filename -> checksums
+	segmentSize       uint64                        // size of each segment in bytes
+	compressionConfig config.NzbCompressionConfig   // compression configuration
 }
 
 // NewGenerator creates a new NZB generator
 func NewGenerator(segmentSize uint64, compressionConfig config.NzbCompressionConfig) NZBGenerator {
 	return &Generator{
-		articles:          make(map[string][]article.Article),
+		articles:          make(map[string][]*article.Article),
 		filesHash:         make(map[string]string),
 		segmentSize:       segmentSize,
 		compressionConfig: compressionConfig,
@@ -43,12 +44,12 @@ func NewGenerator(segmentSize uint64, compressionConfig config.NzbCompressionCon
 }
 
 // AddArticle adds an article to the generator
-func (g *Generator) AddArticle(art article.Article) {
-	filename := art.GetOriginalName()
+func (g *Generator) AddArticle(art *article.Article) {
+	filename := art.OriginalName
 
 	// Check if we already have this article (by message ID)
 	for i, existingArt := range g.articles[filename] {
-		if existingArt.GetMessageID() == art.GetMessageID() {
+		if existingArt.MessageID == art.MessageID {
 			// Replace the existing article
 			g.articles[filename][i] = art
 			return
@@ -82,25 +83,25 @@ func (g *Generator) Generate(outputPath string) error {
 
 		// Sort articles by part number
 		sort.Slice(articles, func(i, j int) bool {
-			return articles[i].GetPartNumber() < articles[j].GetPartNumber()
+			return articles[i].PartNumber < articles[j].PartNumber
 		})
 
 		// Calculate file size from all segments
 		var fileSize int64
 		for _, a := range articles {
-			fileSize += int64(a.GetSize())
+			fileSize += int64(a.Size)
 		}
 
 		// Create file entry
 		file := nzbparser.NzbFile{
-			Subject:       articles[0].GetOriginalSubject(),
-			Groups:        articles[0].GetGroups(),
-			Poster:        articles[0].GetFrom(),
+			Subject:       articles[0].OriginalSubject,
+			Groups:        articles[0].Groups,
+			Poster:        articles[0].From,
 			Date:          int(time.Now().Unix()),
 			Bytes:         fileSize,
-			Number:        articles[0].GetFileNumber(),
+			Number:        articles[0].FileNumber,
 			TotalSegments: len(articles),
-			Filename:      articles[0].GetOriginalName(),
+			Filename:      articles[0].OriginalName,
 		}
 
 		// Add checksum if available
@@ -113,13 +114,13 @@ func (g *Generator) Generate(outputPath string) error {
 			// Use configured segment size for all segments except the last one
 			segmentSize := g.segmentSize
 			if i == len(articles)-1 {
-				segmentSize = a.GetSize()
+				segmentSize = a.Size
 			}
 
 			segment := nzbparser.NzbSegment{
 				Bytes:  int(segmentSize),
-				Number: a.GetPartNumber(),
-				ID:     a.GetMessageID(),
+				Number: a.PartNumber,
+				ID:     a.MessageID,
 			}
 			file.Segments = append(file.Segments, segment)
 		}
@@ -146,7 +147,7 @@ func (g *Generator) Generate(outputPath string) error {
 	}
 
 	// Apply compression if enabled
-	finalPath := outputPath
+	var finalPath string
 	if g.compressionConfig.Enabled {
 		switch g.compressionConfig.Type {
 		case config.CompressionTypeZstd:
@@ -182,7 +183,11 @@ func (g *Generator) compressWithZstd(data []byte, outputPath string) error {
 	if err != nil {
 		return fmt.Errorf("error creating compressed file: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			slog.Error("error closing file", "error", err)
+		}
+	}()
 
 	// Create zstd encoder with the configured level
 	level := zstd.EncoderLevel(g.compressionConfig.Level)
@@ -190,7 +195,11 @@ func (g *Generator) compressWithZstd(data []byte, outputPath string) error {
 	if err != nil {
 		return fmt.Errorf("error creating zstd encoder: %w", err)
 	}
-	defer enc.Close()
+	defer func() {
+		if err := enc.Close(); err != nil {
+			slog.Error("error closing zstd encoder", "error", err)
+		}
+	}()
 
 	// Write compressed data
 	if _, err := enc.Write(data); err != nil {
@@ -207,11 +216,19 @@ func (g *Generator) compressWithBrotli(data []byte, outputPath string) error {
 	if err != nil {
 		return fmt.Errorf("error creating compressed file: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			slog.Error("error closing file", "error", err)
+		}
+	}()
 
 	// Create brotli writer with the configured level
 	w := brotli.NewWriterLevel(f, g.compressionConfig.Level)
-	defer w.Close()
+	defer func() {
+		if err := w.Close(); err != nil {
+			slog.Error("error closing brotli writer", "error", err)
+		}
+	}()
 
 	// Write compressed data
 	if _, err := w.Write(data); err != nil {

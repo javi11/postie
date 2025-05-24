@@ -36,6 +36,6 @@ VOLUME ["/config", "/watch", "/output"]
 # Add root files
 CMD ["/app/postie" , "watch" , "--config", "/config/config.yaml" , "--dir" , "/watch" , "--output-folder" , "/output"]
 
-LABEL org.opencontainers.image.source="https://github.com/javi11/usenet-drive"
+LABEL org.opencontainers.image.source="https://github.com/javi11/postie"
 LABEL build_version="version: Build-date:- ${VERSION}  ${BUILD_DATE}"
 LABEL maintainer="javi11"

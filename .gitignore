@@ -5,6 +5,11 @@ parpar
 .postie_queue.db
 dist/
 
+# Coverage files
+coverage.out
+coverage.html
+test-results/
+
 colima-Darwin-x86_64
 install.log
 qemu.rb

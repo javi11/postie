@@ -1,5 +1,11 @@
 # Postie
 
+[![Build](https://github.com/javi11/postie/actions/workflows/pull-request.yml/badge.svg)](https://github.com/javi11/postie/actions/workflows/pull-request.yml)
+[![Coverage](https://github.com/javi11/postie/actions/workflows/coverage.yml/badge.svg)](https://github.com/javi11/postie/actions/workflows/coverage.yml)
+[![codecov](https://codecov.io/gh/javi11/postie/graph/badge.svg?token=YOUR_CODECOV_TOKEN)](https://codecov.io/gh/javi11/postie)
+[![Go Report Card](https://goreportcard.com/badge/github.com/javi11/postie)](https://goreportcard.com/report/github.com/javi11/postie)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 <a href="https://www.buymeacoffee.com/qbt52hh7sjd"><img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=☕&slug=qbt52hh7sjd&button_colour=FFDD00&font_colour=000000&font_family=Comic&outline_colour=000000&coffee_colour=ffffff" /></a>
 
 ![logo](./docs/static/img/full_logo.jpeg)
