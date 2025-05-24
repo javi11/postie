@@ -37,6 +37,14 @@ coverage-html: coverage
 coverage-func: coverage
 	$(GO) tool cover -func=coverage.out
 
+.PHONY: coverage-ci
+coverage-ci:
+	$(GO) test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+.PHONY: coverage-total
+coverage-total: coverage
+	@$(GO) tool cover -func=coverage.out | grep total | awk '{print $$3}' | sed 's/%//'
+
 .PHONY: lint
 lint: go-mod-tidy golangci-lint
 

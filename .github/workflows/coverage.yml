@@ -1,0 +1,59 @@
+name: Coverage
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  GO_VERSION: "1.24.0"
+
+jobs:
+  coverage:
+    if: ${{ !contains(github.event.head_commit.message, 'docs:') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Go info
+        run: |
+          go version
+          go env
+
+      - name: Run tests with coverage
+        run: |
+          make coverage-ci
+
+      - name: Generate coverage report
+        run: |
+          go tool cover -func=coverage.out
+
+      - name: Display coverage percentage
+        run: |
+          make coverage-total
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage.out
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+      - name: Upload coverage to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.out
