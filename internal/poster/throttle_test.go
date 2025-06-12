@@ -8,29 +8,29 @@ import (
 )
 
 func TestNewThrottle(t *testing.T) {
-	// Create a basic throttle constructor if it doesn't exist
 	rate := int64(1000)
 	interval := time.Second
 
-	// Manually create the throttle to test initialization values
-	throttle := &Throttle{
-		rate:     rate,
-		interval: interval,
-		lastTime: time.Now(),
-	}
+	// Test with normal rate
+	throttle := NewThrottle(rate, interval)
 
 	assert.Equal(t, rate, throttle.rate, "Rate should be initialized correctly")
 	assert.Equal(t, interval, throttle.interval, "Interval should be initialized correctly")
 	assert.False(t, throttle.lastTime.IsZero(), "LastTime should be initialized")
+	assert.False(t, throttle.disabled, "Throttle should not be disabled with positive rate")
+
+	// Test with rate 0 (disabled)
+	throttleDisabled := NewThrottle(0, interval)
+	assert.True(t, throttleDisabled.disabled, "Throttle should be disabled when rate is 0")
+
+	// Test with negative rate (disabled)
+	throttleNegative := NewThrottle(-100, interval)
+	assert.True(t, throttleNegative.disabled, "Throttle should be disabled when rate is negative")
 }
 
 func TestThrottleWait(t *testing.T) {
 	// Create a new throttle with a rate of 1000 bytes per second
-	throttle := &Throttle{
-		rate:     1000,
-		interval: time.Second,
-		lastTime: time.Now(),
-	}
+	throttle := NewThrottle(1000, time.Second)
 
 	// Test case 1: Wait for less bytes than the rate
 	// This should not cause any significant delay
@@ -55,11 +55,7 @@ func TestThrottleWait(t *testing.T) {
 
 	// Test case 3: Test with a fresh throttle and more controlled setup
 	// Reset with new throttle
-	throttle = &Throttle{
-		rate:     1000,
-		interval: time.Second,
-		lastTime: time.Now(),
-	}
+	throttle = NewThrottle(1000, time.Second)
 
 	// This test is more focused on behavior than exact timing
 	// First wait
@@ -81,4 +77,24 @@ func TestThrottleWait(t *testing.T) {
 
 	// Being more generous with timing expectations
 	assert.Greater(t, elapsed.Milliseconds(), int64(300), "Wait should delay when rate is exceeded")
+}
+
+func TestThrottleDisabled(t *testing.T) {
+	// Test throttle with rate 0 (disabled)
+	throttle := NewThrottle(0, time.Second)
+
+	// All waits should be immediate when throttling is disabled
+	start := time.Now()
+	throttle.Wait(1000000) // Large number should not cause delay
+	elapsed := time.Since(start)
+
+	assert.Less(t, elapsed.Milliseconds(), int64(50), "Disabled throttle should not cause any delay")
+
+	// Test multiple rapid calls
+	for i := 0; i < 10; i++ {
+		start = time.Now()
+		throttle.Wait(10000)
+		elapsed = time.Since(start)
+		assert.Less(t, elapsed.Milliseconds(), int64(50), "Disabled throttle should not delay multiple calls")
+	}
 }

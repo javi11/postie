@@ -1,0 +1,86 @@
+# Example configuration for nzb-upload with queue settings
+servers:
+  - host: 'news.example.com'
+    port: 563
+    username: 'your_username'
+    password: 'your_password'
+    ssl: true
+    max_connections: 10
+    insecure_ssl: false
+
+connection_pool:
+  min_connections: 5
+  health_check_interval: 60s
+  skip_providers_verification_on_creation: false
+
+posting:
+  wait_for_par2: true
+  max_retries: 3
+  retry_delay: 5s
+  article_size_in_bytes: 750000
+  groups:
+    - 'alt.binaries.test'
+  throttle_rate: 1048576
+  message_id_format: 'random'
+  obfuscation_policy: 'full'
+  par2_obfuscation_policy: 'full'
+  group_policy: 'each_file'
+  post_headers:
+    add_ngx_header: false
+    default_from: ''
+    custom_headers: []
+
+post_check:
+  enabled: true
+  delay: 10s
+  max_reposts: 1
+
+par2:
+  enabled: true
+  par2_path: './parpar'
+  redundancy: '1n*1.2'
+  volume_size: 153600000
+  max_input_slices: 4000
+  extra_par2_options: []
+
+watcher:
+  enabled: false
+  size_threshold: 104857600
+  schedule:
+    start_time: '00:00'
+    end_time: '23:59'
+  ignore_patterns:
+    - '*.tmp'
+    - '*.part'
+    - '*.!ut'
+  min_file_size: 1048576
+  check_interval: 5m
+
+# Global output directory for processed files and NZB files
+output_dir: './output'
+
+nzb_compression:
+  enabled: false
+  type: 'none'
+  level: 0
+
+# Queue configuration for upload management
+queue:
+  # Database type: sqlite, postgres, mysql (only sqlite implemented currently)
+  database_type: 'sqlite'
+  # Database file path (for SQLite) or connection string (for other DBs)
+  database_path: './postie_queue.db'
+  # Maximum number of items to process in each batch
+  batch_size: 10
+  # Maximum number of retry attempts for failed uploads
+  max_retries: 3
+  # Delay between retry attempts
+  retry_delay: 5m
+  # Maximum number of items to keep in queue (0 = unlimited)
+  max_queue_size: 1000
+  # Auto-cleanup completed items after this duration (0 = keep forever)
+  cleanup_after: 24h
+  # Enable priority-based processing (larger files first)
+  priority_processing: false
+  # Maximum concurrent uploads from queue
+  max_concurrent_uploads: 1

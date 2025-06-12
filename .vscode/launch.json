@@ -64,7 +64,36 @@
             },
             "showLog": true,
             "trace": "verbose"
-        }
+        },
+        {
+            "name": "Debug postie GUI (Wails Dev)",
+            "type": "node",
+            "request": "launch",
+            "runtimeExecutable": "wails",
+            "runtimeArgs": ["dev"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "env": {
+                "NODE_ENV": "development"
+            }
+        },
+        {
+            "name": "Debug Wails Backend + Frontend",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "GO111MODULE": "on",
+                "CGO_ENABLED": "1"
+            },
+            "showLog": true,
+            "trace": "verbose",
+            "buildFlags": "-tags dev",
+            "preLaunchTask": "wails:dev:frontend"
+        },
     ],
     "inputs": [
         {

@@ -37,7 +37,7 @@ posting:
   article_size_in_bytes: 750000
   groups:
     - alt.bin.test
-  throttle_rate: 1048576 # 1MB/s
+  throttle_rate: 0 # unlimited
   message_id_format: random # Options: random, ngx
   obfuscation_policy: full # Options: full, partial, none
   par2_obfuscation_policy: full # Options: full, partial, none

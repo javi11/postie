@@ -33,9 +33,13 @@ var (
 	parregexp   = regexp.MustCompile(`(?i)(\.vol\d+\+(\d+))?\.par2$`)
 )
 
+// ProgressCallback defines the interface for PAR2 progress notifications
+type ProgressCallback func(stage string, current, total int64, details string, speed float64, secondsLeft float64, elapsedTime float64)
+
 // Par2Executor defines the interface for executing par2 commands.
 type Par2Executor interface {
 	Create(ctx context.Context, tmpPath string) ([]string, error)
+	SetProgressCallback(callback ProgressCallback)
 }
 
 // Par2CmdExecutor implements Par2Executor using the command line.
@@ -43,6 +47,7 @@ type Par2CmdExecutor struct {
 	articleSize uint64
 	cfg         *config.Par2Config
 	parExeType  parExeType
+	callback    ProgressCallback
 }
 
 func New(ctx context.Context, articleSize uint64, cfg *config.Par2Config) *Par2CmdExecutor {
@@ -55,6 +60,11 @@ func New(ctx context.Context, articleSize uint64, cfg *config.Par2Config) *Par2C
 		cfg:         cfg,
 		parExeType:  parExeType(parExeFileName),
 	}
+}
+
+// SetProgressCallback sets the progress callback function
+func (p *Par2CmdExecutor) SetProgressCallback(callback ProgressCallback) {
+	p.callback = callback
 }
 
 // Repair executes the par2 command to repair files in the target folder.
@@ -151,6 +161,11 @@ func (p *Par2CmdExecutor) Create(ctx context.Context, files []fileinfo.FileInfo)
 				fmt.Println()
 			}()
 
+			// Notify callback about PAR2 start
+			if p.callback != nil {
+				p.callback("par2_creating", 0, 100, fmt.Sprintf("Creating PAR2 files for %s", filepath.Base(file.Path)), 0.0, 0.0, 0.0)
+			}
+
 			for scanner.Scan() {
 				output := strings.Trim(scanner.Text(), " \r\n")
 				if output != "" && !strings.Contains(output, "%") {
@@ -178,6 +193,11 @@ func (p *Par2CmdExecutor) Create(ctx context.Context, files []fileinfo.FileInfo)
 								fmt.Println()
 							}),
 						)
+
+						// Notify callback about processing start
+						if p.callback != nil {
+							p.callback("par2_processing", 0, 100, fmt.Sprintf("Processing PAR2 files for %s", filepath.Base(file.Path)), 0.0, 0.0, 0.0)
+						}
 					}
 
 					percentStr := exp.FindStringSubmatch(output)
@@ -188,6 +208,16 @@ func (p *Par2CmdExecutor) Create(ctx context.Context, files []fileinfo.FileInfo)
 							if err != nil {
 								slog.ErrorContext(ctx, "Error setting progress bar", "error", err)
 							}
+
+							// Notify callback with current progress
+							if p.callback != nil {
+								stage := "par2_creating"
+								if processing {
+									stage = "par2_processing"
+								}
+								details := fmt.Sprintf("PAR2 %s: %d%% complete", stage, percentInt)
+								p.callback(stage, int64(percentInt), 100, details, 0.0, 0.0, 0.0)
+							}
 						}
 					}
 				}
@@ -196,18 +226,32 @@ func (p *Par2CmdExecutor) Create(ctx context.Context, files []fileinfo.FileInfo)
 		}()
 
 		if err = cmd.Run(); err != nil {
+			if ctx.Err() == context.Canceled {
+				slog.InfoContext(ctx, "Par2 creation cancelled", "path", file.Path)
+				return nil, ctx.Err()
+			}
+
 			return nil, fmt.Errorf("failed to run par2 command '%s': %w", cmd.String(), err)
 		}
 
 		wg.Wait()
 
+		// Check if PAR2 creation was successful
+		if _, err := os.Stat(par2Path); os.IsNotExist(err) {
+			return nil, fmt.Errorf("par2 file was not created: %s", par2Path)
+		}
+
+		createdPar2Paths = append(createdPar2Paths, par2Path)
+
+		// Notify callback about PAR2 completion
+		if p.callback != nil {
+			p.callback("par2_completed", 100, 100, fmt.Sprintf("PAR2 creation completed for %s", filepath.Base(file.Path)), 0.0, 0.0, 0.0)
+		}
+
 		slog.InfoContext(ctx, "Par2 creation completed successfully")
 
 		// After successful creation, collect all par2 volume files
 		baseName := filepath.Base(file.Path)
-
-		// Add the main par2 file
-		createdPar2Paths = append(createdPar2Paths, par2Path)
 
 		// Find all volume files
 		entries, err := os.ReadDir(dirPath)

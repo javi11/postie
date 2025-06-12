@@ -58,6 +58,19 @@ func New(
 	}, nil
 }
 
+func (p *Postie) Close() {
+	p.poster.Close()
+}
+
+// SetProgressCallback sets the progress callback function for both poster and par2runner
+func (p *Postie) SetProgressCallback(callback poster.ProgressCallback) {
+	p.poster.SetProgressCallback(callback)
+
+	// Convert poster callback to par2 callback (they have the same signature)
+	par2Callback := par2.ProgressCallback(callback)
+	p.par2runner.SetProgressCallback(par2Callback)
+}
+
 func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir string, outputDir string) error {
 	if len(files) == 0 {
 		return fmt.Errorf("no files to post")
@@ -118,7 +131,9 @@ func (p *Postie) postInParallel(
 	errg.Go(func() error {
 		createdPar2Paths, err = p.par2runner.Create(ctx, []fileinfo.FileInfo{f})
 		if err != nil {
-			slog.ErrorContext(ctx, "Error during par2 creation. Upload will continue without par2.", "error", err)
+			if err != context.Canceled {
+				slog.ErrorContext(ctx, "Error during par2 creation. Upload will continue without par2.", "error", err)
+			}
 
 			return nil
 		}
@@ -183,7 +198,9 @@ func (p *Postie) post(
 	if *p.par2Cfg.Enabled {
 		createdPar2Paths, err = p.par2runner.Create(ctx, []fileinfo.FileInfo{f})
 		if err != nil {
-			slog.ErrorContext(ctx, "Error during par2 creation", "error", err)
+			if err != context.Canceled {
+				slog.ErrorContext(ctx, "Error during par2 creation. Upload will continue without par2.", "error", err)
+			}
 
 			return err
 		}
