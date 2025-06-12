@@ -1,0 +1,120 @@
+<script lang="ts">
+  import { createEventDispatcher } from "svelte";
+  import { Button, Heading, P, ButtonGroup } from "flowbite-svelte";
+  import {
+    FloppyDiskSolid,
+    FolderOpenSolid,
+    CogSolid,
+    CheckCircleSolid,
+    ExclamationCircleOutline,
+  } from "flowbite-svelte-icons";
+  import type { ConfigData } from "$lib/types";
+
+  export let needsConfiguration: boolean = false;
+  export let criticalConfigError: boolean = false;
+
+  const dispatch = createEventDispatcher<{
+    save: void;
+    selectFile: void;
+  }>();
+
+  function handleSave() {
+    dispatch("save");
+  }
+
+  function handleSelectFile() {
+    dispatch("selectFile");
+  }
+</script>
+
+<header
+  class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
+>
+  <div
+    class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4"
+  >
+    <div class="flex-1">
+      <div class="flex items-center gap-3 mb-2">
+        <CogSolid class="w-6 h-6 text-gray-600 dark:text-gray-400" />
+        <Heading
+          tag="h1"
+          class="text-2xl font-bold text-gray-900 dark:text-white"
+        >
+          Settings
+        </Heading>
+        {#if criticalConfigError}
+          <div
+            class="flex items-center gap-2 px-3 py-1 bg-red-100 dark:bg-red-900/30 rounded-full"
+          >
+            <ExclamationCircleOutline
+              class="w-4 h-4 text-red-600 dark:text-red-400"
+            />
+            <span class="text-sm font-medium text-red-800 dark:text-red-200"
+              >Configuration Error</span
+            >
+          </div>
+        {:else if needsConfiguration}
+          <div
+            class="flex items-center gap-2 px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 rounded-full"
+          >
+            <ExclamationCircleOutline
+              class="w-4 h-4 text-yellow-600 dark:text-yellow-400"
+            />
+            <span
+              class="text-sm font-medium text-yellow-800 dark:text-yellow-200"
+              >Configuration Required</span
+            >
+          </div>
+        {:else}
+          <div
+            class="flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/30 rounded-full"
+          >
+            <CheckCircleSolid
+              class="w-4 h-4 text-green-600 dark:text-green-400"
+            />
+            <span class="text-sm font-medium text-green-800 dark:text-green-200"
+              >Configured</span
+            >
+          </div>
+        {/if}
+      </div>
+
+      <P class="text-gray-600 dark:text-gray-400">
+        Configure your upload servers, posting settings, and PAR2 options.
+      </P>
+
+      {#if criticalConfigError}
+        <div
+          class="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
+        >
+          <P class="text-red-800 dark:text-red-200">
+            <strong>Configuration Error:</strong> There was an error with your server
+            configuration (e.g., invalid hostname like "Locahost", connection failure).
+            Please check and fix your server settings below, then click "Save Configuration".
+          </P>
+        </div>
+      {:else if needsConfiguration}
+        <div
+          class="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg"
+        >
+          <P class="text-yellow-800 dark:text-yellow-200">
+            <strong>Setup Required:</strong> Please configure at least one server
+            to start uploading files. All settings are saved automatically when you
+            click "Save Configuration".
+          </P>
+        </div>
+      {/if}
+    </div>
+
+    <div class="flex flex-col sm:flex-row gap-3">
+      <Button
+        color="primary"
+        onclick={handleSave}
+        class="cursor-pointer flex items-center gap-2"
+      >
+        <FloppyDiskSolid class="w-4 h-4" />
+        Save Configuration
+      </Button>
+    </div>
+  </div>
+</header>

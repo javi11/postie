@@ -29,6 +29,10 @@ type Poster interface {
 	Post(ctx context.Context, files []string, rootDir string, nzbGen nzb.NZBGenerator) error
 	// Stats returns posting statistics
 	Stats() Stats
+	// SetProgressCallback sets the progress callback function
+	SetProgressCallback(callback ProgressCallback)
+	// Close closes the poster
+	Close()
 }
 
 // PostStatus represents the status of a post
@@ -73,6 +77,7 @@ type poster struct {
 	encoder  *rapidyenc.Encoder
 	stats    *Stats
 	throttle *Throttle
+	callback ProgressCallback
 }
 
 // New creates a new poster
@@ -88,21 +93,26 @@ func New(ctx context.Context, cfg config.Config) (Poster, error) {
 		StartTime: time.Now(),
 	}
 
-	throttle := &Throttle{
-		rate:     cfg.GetPostingConfig().ThrottleRate,
-		interval: time.Second,
-	}
-
 	p := &poster{
 		cfg:      cfg.GetPostingConfig(),
 		checkCfg: cfg.GetPostCheckConfig(),
 		pool:     pool,
 		encoder:  yenc,
 		stats:    stats,
-		throttle: throttle,
+	}
+
+	throttleRate := cfg.GetPostingConfig().ThrottleRate
+	if throttleRate > 0 {
+		p.throttle = NewThrottle(throttleRate, time.Second)
 	}
 
 	return p, nil
+}
+
+func (p *poster) Close() {
+	if p.pool != nil {
+		p.pool.Quit()
+	}
 }
 
 // Post posts files from a directory to Usenet
@@ -181,7 +191,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			if post.Retries > 0 {
 				progressText = "Retrying %s (attempt %d)..."
 			}
-			progress := NewFileProgress(fmt.Sprintf(progressText, post.FilePath, post.Retries+1), post.filesize, int64(len(post.Articles)))
+			progress := NewFileProgressWithCallback(fmt.Sprintf(progressText, post.FilePath, post.Retries+1), post.filesize, int64(len(post.Articles)), p.callback)
 
 			var combinedHash string
 
@@ -264,7 +274,7 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 			var mu sync.Mutex
 
 			// Create progress bar for this file
-			progress := NewFileProgress(fmt.Sprintf("Verifying %s...", post.FilePath), post.filesize, int64(len(post.Articles)))
+			progress := NewFileProgressWithCallback(fmt.Sprintf("Verifying %s...", post.FilePath), post.filesize, int64(len(post.Articles)), p.callback)
 
 			// Submit all articles to the pool
 			for _, art := range post.Articles {
@@ -572,6 +582,11 @@ func (p *poster) postArticle(ctx context.Context, article *article.Article, file
 		return fmt.Errorf("error posting article: %w", err)
 	}
 
+	// Apply throttling after posting
+	if p.throttle != nil {
+		p.throttle.Wait(int64(article.Size))
+	}
+
 	// Update stats
 	p.stats.mu.Lock()
 	p.stats.ArticlesPosted++
@@ -608,6 +623,11 @@ func (p *poster) Stats() Stats {
 		ArticleErrors:   p.stats.ArticleErrors,
 		StartTime:       p.stats.StartTime,
 	}
+}
+
+// SetProgressCallback sets the progress callback function
+func (p *poster) SetProgressCallback(callback ProgressCallback) {
+	p.callback = callback
 }
 
 func CalculateHash(buff []byte) string {

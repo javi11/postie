@@ -1,0 +1,283 @@
+package backend
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"os"
+	"path/filepath"
+
+	"github.com/javi11/postie/internal/config"
+	"github.com/javi11/postie/pkg/parpardownloader"
+	"github.com/javi11/postie/pkg/postie"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+)
+
+// GetConfigPath returns the path to the configuration file
+func (a *App) GetConfigPath() string {
+	return a.configPath
+}
+
+// GetConfig returns the current configuration
+func (a *App) GetConfig() (*config.ConfigData, error) {
+	if a.configPath == "" {
+		return nil, fmt.Errorf("no config file specified")
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(a.configPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("config file not found")
+	}
+
+	// If we have a loaded config, get its data
+	if a.config != nil {
+		return a.config, nil
+	}
+
+	// Otherwise load it fresh
+	cfg, err := config.Load(a.configPath)
+	if err != nil {
+		return nil, fmt.Errorf("error loading config file: %w", err)
+	}
+
+	return cfg, nil
+}
+
+// SaveConfig saves the configuration
+func (a *App) SaveConfig(configData *config.ConfigData) error {
+	slog.Info("Saving config", "path", a.configPath, "configData", configData)
+
+	if err := config.SaveConfig(configData, a.configPath); err != nil {
+		return err
+	}
+
+	// Reload configuration
+	if err := a.loadConfig(); err != nil {
+		return err
+	}
+
+	// Emit a config update event to the frontend
+	runtime.EventsEmit(a.ctx, "config-updated", configData)
+
+	return nil
+}
+
+// SelectConfigFile allows user to select a config file
+func (a *App) SelectConfigFile() (string, error) {
+	file, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select config file",
+		Filters: []runtime.FileFilter{
+			{
+				DisplayName: "YAML files (*.yaml, *.yml)",
+				Pattern:     "*.yaml;*.yml",
+			},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	if file != "" {
+		a.configPath = file
+		if err := a.loadConfig(); err != nil {
+			return "", err
+		}
+	}
+
+	return file, nil
+}
+
+func (a *App) loadConfig() error {
+	if a.configPath == "" {
+		return fmt.Errorf("no config file specified")
+	}
+
+	cfg, err := config.Load(a.configPath)
+	if err != nil {
+		return err
+	}
+	a.config = cfg
+
+	// Check if we have any valid servers configured
+	validServers := 0
+	for _, server := range cfg.Servers {
+		if server.Host != "" {
+			validServers++
+		}
+	}
+
+	// Only create postie instance if we have valid servers
+	if validServers == 0 {
+		slog.Info("No valid servers configured, skipping postie instance creation")
+		a.postie = nil
+		return nil
+	}
+
+	if a.postie != nil {
+		a.postie.Close()
+		a.postie = nil
+	}
+
+	// Create postie instance
+	a.postie, err = postie.New(context.Background(), cfg)
+	if err != nil {
+		slog.Error("Failed to create postie instance", "error", err)
+		// Don't return error here - allow app to continue without postie
+		// The user can configure servers later and restart
+		a.postie = nil
+		return nil
+	}
+
+	slog.Info("Successfully created postie instance")
+
+	// Re-initialize queue and watcher with new config
+	if err := a.initializeQueue(); err != nil {
+		slog.Error("Failed to re-initialize queue after config change", "error", err)
+	}
+	if err := a.initializeProcessor(); err != nil {
+		slog.Error("Failed to re-initialize processor after config change", "error", err)
+	}
+	if err := a.initializeWatcher(); err != nil {
+		slog.Error("Failed to re-initialize watcher after config change", "error", err)
+	}
+
+	return nil
+}
+
+func (a *App) createDefaultConfig() error {
+	// Ensure the directory exists
+	configDir := filepath.Dir(a.configPath)
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	defaultConfig := config.GetDefaultConfig()
+
+	// Set the par2 path to the same location where we download it
+	exePath, err := os.Executable()
+	var par2Path string
+	if err != nil {
+		// Fallback to current directory if we can't get executable path
+		par2Path = "./parpar"
+	} else {
+		// Use the same directory as the executable
+		exeDir := filepath.Dir(exePath)
+		par2Path = filepath.Join(exeDir, "parpar")
+	}
+	defaultConfig.Par2.Par2Path = par2Path
+
+	if err := config.SaveConfig(&defaultConfig, a.configPath); err != nil {
+		return fmt.Errorf("failed to save default config: %w", err)
+	}
+
+	slog.Info("Default config file created", "path", a.configPath)
+	return nil
+}
+
+// ensurePar2Executable downloads par2 executable if it doesn't exist
+func (a *App) ensurePar2Executable(ctx context.Context) {
+	// Get the directory where the executable is located
+	exePath, err := os.Executable()
+	var par2Path string
+	if err != nil {
+		// Fallback to current directory if we can't get executable path
+		slog.Warn("Could not get executable path for par2, using current directory", "error", err)
+		par2Path = "./parpar"
+	} else {
+		// Use the same directory as the executable
+		exeDir := filepath.Dir(exePath)
+		par2Path = filepath.Join(exeDir, "parpar")
+	}
+
+	slog.Info("Checking for par2 executable", "path", par2Path)
+
+	// Check if par2 executable already exists
+	if _, err := os.Stat(par2Path); err == nil {
+		slog.Info("Par2 executable already exists", "path", par2Path)
+		return
+	}
+
+	slog.Info("Par2 executable not found, downloading...")
+
+	// Emit progress event to frontend
+	runtime.EventsEmit(a.ctx, "par2-download-status", map[string]interface{}{
+		"status":  "downloading",
+		"message": "Downloading par2 executable...",
+	})
+
+	// Download par2 executable
+	execPath, err := parpardownloader.DownloadParParCmd(par2Path)
+	if err != nil {
+		slog.Error("Failed to download par2 executable", "error", err)
+		runtime.EventsEmit(a.ctx, "par2-download-status", map[string]interface{}{
+			"status":  "error",
+			"message": fmt.Sprintf("Failed to download par2 executable: %v", err),
+		})
+		return
+	}
+
+	slog.Info("Par2 executable downloaded successfully", "path", execPath)
+	runtime.EventsEmit(a.ctx, "par2-download-status", map[string]interface{}{
+		"status":  "completed",
+		"message": "Par2 executable downloaded successfully",
+	})
+}
+
+// GetWatchDirectory returns the current watch directory
+func (a *App) GetWatchDirectory() string {
+	// Get the directory where the executable is located
+	exePath, err := os.Executable()
+	var watchDir string
+	if err != nil {
+		watchDir = "./watch"
+	} else {
+		exeDir := filepath.Dir(exePath)
+		watchDir = filepath.Join(exeDir, "watch")
+	}
+	return watchDir
+}
+
+// GetOutputDirectory returns the current output directory
+func (a *App) GetOutputDirectory() string {
+	if a.config == nil {
+		return "./output"
+	}
+
+	// Get output directory from configuration
+	outputDir := a.config.GetOutputDir()
+
+	// If output directory is relative, make it relative to executable
+	if !filepath.IsAbs(outputDir) {
+		exePath, err := os.Executable()
+		if err == nil {
+			exeDir := filepath.Dir(exePath)
+			outputDir = filepath.Join(exeDir, outputDir)
+		}
+	}
+
+	return outputDir
+}
+
+// SelectWatchDirectory allows user to select a watch directory
+func (a *App) SelectWatchDirectory() (string, error) {
+	dir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select watch directory",
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return dir, nil
+}
+
+// SelectOutputDirectory allows user to select an output directory
+func (a *App) SelectOutputDirectory() (string, error) {
+	dir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select output directory",
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return dir, nil
+}
