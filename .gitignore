@@ -13,3 +13,8 @@ test-results/
 colima-Darwin-x86_64
 install.log
 qemu.rb
+node_modules/
+git
+build/
+frontend/build
+.svelte-kit

@@ -12,10 +12,26 @@ type Throttle struct {
 	mu       sync.Mutex
 	lastTime time.Time
 	bytes    int64
+	disabled bool
+}
+
+// NewThrottle creates a new throttle with the given rate and interval
+func NewThrottle(rate int64, interval time.Duration) *Throttle {
+	return &Throttle{
+		rate:     rate,
+		interval: interval,
+		lastTime: time.Now(),
+		disabled: rate <= 0,
+	}
 }
 
 // Wait waits for bytes to be available
 func (t *Throttle) Wait(bytes int64) {
+	// If throttling is disabled, return immediately
+	if t.disabled {
+		return
+	}
+
 	t.mu.Lock()
 	defer t.mu.Unlock()
 

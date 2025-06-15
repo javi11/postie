@@ -80,3 +80,116 @@ docker: snapshot
 	mkdir -p ./example/config
 	mkdir -p ./example/output
 	docker-compose up
+
+# Build targets
+.PHONY: dev
+dev:
+	@echo "Starting development mode (GUI with hot reload)..."
+	wails dev
+
+.PHONY: build
+build: build-cli build-client
+	@echo "Build completed!"
+	@echo "CLI binary: ./postie-cli"
+	@echo "Client binary: ./postie-client"
+	@echo "GUI binary: ./build/bin/postie(.app on macOS)"
+
+.PHONY: build-debug
+build-debug: build-cli-debug build-client-debug build-gui-debug
+	@echo "Debug build completed!"
+	@echo "CLI binary: ./postie-cli-debug"
+	@echo "Client binary: ./postie-client-debug"
+	@echo "GUI binary: ./build/bin/postie(.app on macOS)"
+
+.PHONY: build-cli
+build-cli:
+	@echo "Building CLI..."
+	$(GO) build -o postie-cli .
+
+.PHONY: build-cli-debug
+build-cli-debug:
+	@echo "Building CLI (debug)..."
+	$(GO) build -tags debug -o postie-cli-debug .
+
+.PHONY: build-client
+build-client:
+	@echo "Building Client..."
+	$(GO) build -o postie-client ./cmd/main
+
+.PHONY: build-client-debug
+build-client-debug:
+	@echo "Building Client (debug)..."
+	$(GO) build -tags debug -o postie-client-debug ./cmd/main
+
+.PHONY: build-gui
+build-gui:
+	@echo "Building GUI..."
+	wails build
+
+.PHONY: build-gui-debug
+build-gui-debug:
+	@echo "Building GUI (debug)..."
+	wails build -debug
+
+.PHONY: run
+run: build-gui
+	@echo "Running GUI..."
+ifeq ($(shell uname),Darwin)
+	./build/bin/postie.app/Contents/MacOS/postie
+else
+	./build/bin/postie
+endif
+
+.PHONY: run-cli
+run-cli: build-cli
+	@echo "Running CLI..."
+	./postie-cli $(ARGS)
+
+.PHONY: run-client
+run-client: build-client
+	@echo "Running Client..."
+	./postie-client $(ARGS)
+
+.PHONY: clean-build
+clean-build:
+	@echo "Cleaning build artifacts..."
+	rm -rf build/
+	rm -f postie-cli postie-cli-debug postie-client postie-client-debug
+	rm -rf frontend/dist/
+	rm -rf frontend/node_modules/
+	@echo "Clean completed!"
+
+.PHONY: help
+help:
+	@echo "Postie Build Commands"
+	@echo ""
+	@echo "Development:"
+	@echo "  dev              - Start development mode with hot reload (GUI only)"
+	@echo ""
+	@echo "Building:"
+	@echo "  build            - Build production version (CLI + Client + GUI)"
+	@echo "  build-debug      - Build debug version (CLI + Client + GUI)"
+	@echo "  build-cli        - Build CLI only (uses root main)"
+	@echo "  build-client     - Build Client only (uses cmd/main)"
+	@echo "  build-gui        - Build GUI only"
+	@echo ""
+	@echo "Running:"
+	@echo "  run              - Build and run the GUI"
+	@echo "  run-cli ARGS=... - Build and run CLI"
+	@echo "  run-client ARGS=... - Build and run Client"
+	@echo ""
+	@echo "Maintenance:"
+	@echo "  clean-build      - Clean build artifacts"
+	@echo "  clean            - Clean all artifacts"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make dev                    # Start GUI development mode"
+	@echo "  make build                  # Build all components"
+	@echo "  make run-cli ARGS='--help'  # Show CLI help"
+	@echo "  make run-client ARGS='...'  # Run client with args"
+
+.PHONY: clean
+clean: clean-build
+	@echo "Cleaning all artifacts..."
+	rm -rf test-results/
+	rm -f coverage.out coverage.html

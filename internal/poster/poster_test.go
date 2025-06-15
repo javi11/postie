@@ -90,7 +90,7 @@ func TestPost(t *testing.T) {
 			pool:     mockPool,
 			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
-			throttle: &Throttle{rate: 1024 * 1024, interval: time.Second},
+			throttle: NewThrottle(1024*1024, time.Second),
 		}
 
 		err := p.Post(ctx, []string{testFile}, "", nzbGen)
@@ -144,7 +144,7 @@ func TestPost(t *testing.T) {
 			pool:     mockPool,
 			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
-			throttle: &Throttle{rate: 1024 * 1024, interval: time.Second},
+			throttle: NewThrottle(1024*1024, time.Second),
 		}
 
 		err := p.Post(ctx, []string{testFile1, testFile2}, "", nzbGen)
@@ -187,7 +187,7 @@ func TestPost(t *testing.T) {
 			pool:     mockPool,
 			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
-			throttle: &Throttle{rate: 1024 * 1024, interval: time.Second},
+			throttle: NewThrottle(1024*1024, time.Second),
 		}
 
 		err := p.Post(ctx, []string{testFile}, "", nzbGen)
@@ -225,7 +225,7 @@ func TestPost(t *testing.T) {
 			pool:     mockPool,
 			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
-			throttle: &Throttle{rate: 1024 * 1024, interval: time.Second},
+			throttle: NewThrottle(1024*1024, time.Second),
 		}
 
 		err := p.Post(ctx, []string{testFile}, "", nzbGen)
@@ -265,7 +265,7 @@ func TestPost(t *testing.T) {
 			pool:     mockPool,
 			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
-			throttle: &Throttle{rate: 1024 * 1024, interval: time.Second},
+			throttle: NewThrottle(1024*1024, time.Second),
 		}
 
 		err := p.Post(ctx, []string{testFile}, "", nzbGen)
@@ -374,9 +374,10 @@ func TestPost(t *testing.T) {
 		mockPool.EXPECT().Stat(gomock.Any(), gomock.Any(), gomock.Any()).Return(200, nil)
 
 		p := &poster{
-			pool:    mockPool,
-			encoder: rapidyenc.NewEncoder(),
-			stats:   &Stats{StartTime: time.Now()},
+			pool:     mockPool,
+			encoder:  rapidyenc.NewEncoder(),
+			stats:    &Stats{StartTime: time.Now()},
+			throttle: NewThrottle(1024*1024, time.Second),
 		}
 
 		art := &article.Article{
@@ -425,7 +426,7 @@ func TestPost(t *testing.T) {
 			pool:     mockPool,
 			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
-			throttle: &Throttle{rate: 1024 * 1024, interval: time.Second},
+			throttle: NewThrottle(1024*1024, time.Second),
 		}
 
 		err := p.Post(ctx, []string{"nonexistent.txt"}, "", nzbGen)
@@ -513,9 +514,10 @@ func TestPostArticle(t *testing.T) {
 		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(nil)
 
 		p := &poster{
-			pool:    mockPool,
-			encoder: rapidyenc.NewEncoder(),
-			stats:   &Stats{StartTime: time.Now()},
+			pool:     mockPool,
+			encoder:  rapidyenc.NewEncoder(),
+			stats:    &Stats{StartTime: time.Now()},
+			throttle: NewThrottle(1024*1024, time.Second),
 		}
 
 		art := &article.Article{
@@ -559,9 +561,10 @@ func TestPostArticle(t *testing.T) {
 		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
 
 		p := &poster{
-			pool:    mockPool,
-			encoder: rapidyenc.NewEncoder(),
-			stats:   &Stats{StartTime: time.Now()},
+			pool:     mockPool,
+			encoder:  rapidyenc.NewEncoder(),
+			stats:    &Stats{StartTime: time.Now()},
+			throttle: NewThrottle(1024*1024, time.Second),
 		}
 
 		art := &article.Article{
@@ -599,9 +602,10 @@ func TestPostArticle(t *testing.T) {
 		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(errors.New("post failed"))
 
 		p := &poster{
-			pool:    mockPool,
-			encoder: rapidyenc.NewEncoder(),
-			stats:   &Stats{StartTime: time.Now()},
+			pool:     mockPool,
+			encoder:  rapidyenc.NewEncoder(),
+			stats:    &Stats{StartTime: time.Now()},
+			throttle: NewThrottle(1024*1024, time.Second),
 		}
 
 		art := &article.Article{
@@ -874,7 +878,7 @@ func TestPostIntegration(t *testing.T) {
 			pool:     mockPool,
 			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
-			throttle: &Throttle{rate: 1024 * 1024, interval: time.Second},
+			throttle: NewThrottle(1024*1024, time.Second),
 		}
 
 		// Post the file
@@ -897,136 +901,6 @@ func TestPostIntegration(t *testing.T) {
 
 		nzbGen.AssertExpectations(t)
 	})
-}
-
-// Mock implementations
-
-// MockConfig mocks the config interface
-type MockConfig struct {
-	mock.Mock
-}
-
-func (m *MockConfig) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
-	args := m.Called()
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(nntppool.UsenetConnectionPool), args.Error(1)
-}
-
-func (m *MockConfig) GetPostingConfig() config.PostingConfig {
-	args := m.Called()
-	return args.Get(0).(config.PostingConfig)
-}
-
-func (m *MockConfig) GetPostCheckConfig() config.PostCheck {
-	args := m.Called()
-	return args.Get(0).(config.PostCheck)
-}
-
-func (m *MockConfig) GetPar2Config(ctx context.Context) (*config.Par2Config, error) {
-	args := m.Called(ctx)
-	return args.Get(0).(*config.Par2Config), args.Error(1)
-}
-
-func (m *MockConfig) GetWatcherConfig() config.WatcherConfig {
-	args := m.Called()
-	return args.Get(0).(config.WatcherConfig)
-}
-
-func (m *MockConfig) GetNzbCompressionConfig() config.NzbCompressionConfig {
-	args := m.Called()
-	return args.Get(0).(config.NzbCompressionConfig)
-}
-
-// MockNZBGenerator mocks the NZB generator interface
-type MockNZBGenerator struct {
-	mock.Mock
-	mu       sync.Mutex
-	articles []*article.Article
-	hashes   map[string]string
-}
-
-func NewMockNZBGenerator() *MockNZBGenerator {
-	return &MockNZBGenerator{
-		hashes: make(map[string]string),
-	}
-}
-
-func (m *MockNZBGenerator) AddArticle(article *article.Article) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.articles = append(m.articles, article)
-	m.Called(article)
-}
-
-func (m *MockNZBGenerator) AddFileHash(filename string, hash string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.hashes[filename] = hash
-	m.Called(filename, hash)
-}
-
-func (m *MockNZBGenerator) Generate(outputPath string) error {
-	args := m.Called(outputPath)
-	return args.Error(0)
-}
-
-func (m *MockNZBGenerator) GetArticles() []*article.Article {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.articles
-}
-
-func (m *MockNZBGenerator) GetHashes() map[string]string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.hashes
-}
-
-// Test helper functions
-
-func createTestConfig() config.PostingConfig {
-	enabled := true
-	return config.PostingConfig{
-		MaxRetries:         3,
-		RetryDelay:         time.Second,
-		ArticleSizeInBytes: 1000,
-		Groups:             []string{"alt.test"},
-		ThrottleRate:       1024 * 1024,
-		MaxWorkers:         2,
-		MessageIDFormat:    config.MessageIDFormatRandom,
-		PostHeaders: config.PostHeaders{
-			AddNGXHeader: false,
-			DefaultFrom:  "",
-		},
-		ObfuscationPolicy:     config.ObfuscationPolicyNone,
-		Par2ObfuscationPolicy: config.ObfuscationPolicyNone,
-		GroupPolicy:           config.GroupPolicyEachFile,
-		WaitForPar2:           &enabled,
-	}
-}
-
-func createTestPostCheckConfig() config.PostCheck {
-	enabled := true
-	return config.PostCheck{
-		Enabled:    &enabled,
-		RetryDelay: time.Second,
-		MaxRePost:  2,
-	}
-}
-
-func createTestFile(t *testing.T, content string) string {
-	tmpFile, err := os.CreateTemp("", "test_*.txt")
-	require.NoError(t, err)
-
-	_, err = tmpFile.WriteString(content)
-	require.NoError(t, err)
-
-	err = tmpFile.Close()
-	require.NoError(t, err)
-
-	return tmpFile.Name()
 }
 
 func TestPostLoop(t *testing.T) {
@@ -1062,7 +936,7 @@ func TestPostLoop(t *testing.T) {
 			pool:     mockPool,
 			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
-			throttle: &Throttle{rate: 1024 * 1024, interval: time.Second},
+			throttle: NewThrottle(1024*1024, time.Second),
 		}
 
 		// Create channels
@@ -1175,7 +1049,7 @@ func TestPostLoop(t *testing.T) {
 			pool:     mockPool,
 			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
-			throttle: &Throttle{rate: 1024 * 1024, interval: time.Second},
+			throttle: NewThrottle(1024*1024, time.Second),
 		}
 
 		postQueue := make(chan *Post, 10)
@@ -1271,7 +1145,7 @@ func TestCheckLoop(t *testing.T) {
 			pool:     mockPool,
 			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
-			throttle: &Throttle{rate: 1024 * 1024, interval: time.Second},
+			throttle: NewThrottle(1024*1024, time.Second),
 		}
 
 		postQueue := make(chan *Post, 10)
@@ -1376,7 +1250,7 @@ func TestCheckLoop(t *testing.T) {
 			pool:     mockPool,
 			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
-			throttle: &Throttle{rate: 1024 * 1024, interval: time.Second},
+			throttle: NewThrottle(1024*1024, time.Second),
 		}
 
 		postQueue := make(chan *Post, 10)
@@ -1471,7 +1345,7 @@ func TestCheckLoop(t *testing.T) {
 			pool:     mockPool,
 			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
-			throttle: &Throttle{rate: 1024 * 1024, interval: time.Second},
+			throttle: NewThrottle(1024*1024, time.Second),
 		}
 
 		postQueue := make(chan *Post, 10)
@@ -1609,7 +1483,7 @@ func TestPostAndCheckLoopIntegration(t *testing.T) {
 			pool:     mockPool,
 			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
-			throttle: &Throttle{rate: 1024 * 1024, interval: time.Second},
+			throttle: NewThrottle(1024*1024, time.Second),
 		}
 
 		postQueue := make(chan *Post, 10)
@@ -1727,4 +1601,139 @@ func TestPostAndCheckLoopIntegration(t *testing.T) {
 			}
 		}
 	})
+}
+
+// Mock implementations
+
+// MockConfig mocks the config interface
+type MockConfig struct {
+	mock.Mock
+}
+
+func (m *MockConfig) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(nntppool.UsenetConnectionPool), args.Error(1)
+}
+
+func (m *MockConfig) GetPostingConfig() config.PostingConfig {
+	args := m.Called()
+	return args.Get(0).(config.PostingConfig)
+}
+
+func (m *MockConfig) GetPostCheckConfig() config.PostCheck {
+	args := m.Called()
+	return args.Get(0).(config.PostCheck)
+}
+
+func (m *MockConfig) GetPar2Config(ctx context.Context) (*config.Par2Config, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(*config.Par2Config), args.Error(1)
+}
+
+func (m *MockConfig) GetWatcherConfig() config.WatcherConfig {
+	args := m.Called()
+	return args.Get(0).(config.WatcherConfig)
+}
+
+func (m *MockConfig) GetNzbCompressionConfig() config.NzbCompressionConfig {
+	args := m.Called()
+	return args.Get(0).(config.NzbCompressionConfig)
+}
+
+func (m *MockConfig) GetQueueConfig() config.QueueConfig {
+	args := m.Called()
+	return args.Get(0).(config.QueueConfig)
+}
+
+// MockNZBGenerator mocks the NZB generator interface
+type MockNZBGenerator struct {
+	mock.Mock
+	mu       sync.Mutex
+	articles []*article.Article
+	hashes   map[string]string
+}
+
+func NewMockNZBGenerator() *MockNZBGenerator {
+	return &MockNZBGenerator{
+		hashes: make(map[string]string),
+	}
+}
+
+func (m *MockNZBGenerator) AddArticle(article *article.Article) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.articles = append(m.articles, article)
+	m.Called(article)
+}
+
+func (m *MockNZBGenerator) AddFileHash(filename string, hash string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.hashes[filename] = hash
+	m.Called(filename, hash)
+}
+
+func (m *MockNZBGenerator) Generate(outputPath string) error {
+	args := m.Called(outputPath)
+	return args.Error(0)
+}
+
+func (m *MockNZBGenerator) GetArticles() []*article.Article {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.articles
+}
+
+func (m *MockNZBGenerator) GetHashes() map[string]string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.hashes
+}
+
+// Test helper functions
+
+func createTestConfig() config.PostingConfig {
+	enabled := true
+	return config.PostingConfig{
+		MaxRetries:         3,
+		RetryDelay:         time.Second,
+		ArticleSizeInBytes: 1000,
+		Groups:             []string{"alt.test"},
+		ThrottleRate:       1024 * 1024,
+		MaxWorkers:         2,
+		MessageIDFormat:    config.MessageIDFormatRandom,
+		PostHeaders: config.PostHeaders{
+			AddNGXHeader: false,
+			DefaultFrom:  "",
+		},
+		ObfuscationPolicy:     config.ObfuscationPolicyNone,
+		Par2ObfuscationPolicy: config.ObfuscationPolicyNone,
+		GroupPolicy:           config.GroupPolicyEachFile,
+		WaitForPar2:           &enabled,
+	}
+}
+
+func createTestPostCheckConfig() config.PostCheck {
+	enabled := true
+	return config.PostCheck{
+		Enabled:    &enabled,
+		RetryDelay: time.Second,
+		MaxRePost:  2,
+	}
+}
+
+func createTestFile(t *testing.T, content string) string {
+	tmpFile, err := os.CreateTemp("", "test_*.txt")
+	require.NoError(t, err)
+
+	_, err = tmpFile.WriteString(content)
+	require.NoError(t, err)
+
+	err = tmpFile.Close()
+	require.NoError(t, err)
+
+	return tmpFile.Name()
 }
