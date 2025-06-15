@@ -27,16 +27,18 @@ type Processor struct {
 	// Track running jobs and their contexts for cancellation
 	runningJobs map[string]context.CancelFunc
 	// Track detailed information about running jobs
-	runningJobDetails map[string]*RunningJobDetails
-	jobsMux           sync.RWMutex
+	runningJobDetails  map[string]*RunningJobDetails
+	jobsMux            sync.RWMutex
+	deleteOriginalFile bool
 }
 
 type ProcessorOptions struct {
-	Queue        *queue.Queue
-	Postie       *postie.Postie
-	Config       config.QueueConfig
-	OutputFolder string
-	EventEmitter func(eventName string, optionalData ...interface{})
+	Queue              *queue.Queue
+	Postie             *postie.Postie
+	Config             config.QueueConfig
+	OutputFolder       string
+	EventEmitter       func(eventName string, optionalData ...interface{})
+	DeleteOriginalFile bool
 }
 
 // RunningJobDetails stores detailed information about a running job
@@ -58,13 +60,14 @@ type RunningJobItem struct {
 
 func New(opts ProcessorOptions) *Processor {
 	return &Processor{
-		queue:             opts.Queue,
-		postie:            opts.Postie,
-		cfg:               opts.Config,
-		outputFolder:      opts.OutputFolder,
-		eventEmitter:      opts.EventEmitter,
-		runningJobs:       make(map[string]context.CancelFunc),
-		runningJobDetails: make(map[string]*RunningJobDetails),
+		queue:              opts.Queue,
+		postie:             opts.Postie,
+		cfg:                opts.Config,
+		outputFolder:       opts.OutputFolder,
+		eventEmitter:       opts.EventEmitter,
+		runningJobs:        make(map[string]context.CancelFunc),
+		runningJobDetails:  make(map[string]*RunningJobDetails),
+		deleteOriginalFile: opts.DeleteOriginalFile,
 	}
 }
 
@@ -326,9 +329,10 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 	}
 
 	// Delete the original file
-	if err := os.Remove(job.Path); err != nil {
-		slog.WarnContext(ctx, "Could not delete original file", "path", job.Path, "error", err)
-		// Don't return error as the processing was successful
+	if p.deleteOriginalFile {
+		if err := os.Remove(job.Path); err != nil {
+			slog.WarnContext(ctx, "Could not delete original file", "path", job.Path, "error", err)
+		}
 	}
 
 	return nil

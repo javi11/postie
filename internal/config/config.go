@@ -169,12 +169,13 @@ type PostingConfig struct {
 }
 
 type WatcherConfig struct {
-	Enabled        bool           `yaml:"enabled" json:"enabled"`
-	SizeThreshold  int64          `yaml:"size_threshold" json:"size_threshold"`
-	Schedule       ScheduleConfig `yaml:"schedule" json:"schedule"`
-	IgnorePatterns []string       `yaml:"ignore_patterns" json:"ignore_patterns"`
-	MinFileSize    int64          `yaml:"min_file_size" json:"min_file_size"`
-	CheckInterval  time.Duration  `yaml:"check_interval" json:"check_interval"`
+	Enabled            bool           `yaml:"enabled" json:"enabled"`
+	SizeThreshold      int64          `yaml:"size_threshold" json:"size_threshold"`
+	Schedule           ScheduleConfig `yaml:"schedule" json:"schedule"`
+	IgnorePatterns     []string       `yaml:"ignore_patterns" json:"ignore_patterns"`
+	MinFileSize        int64          `yaml:"min_file_size" json:"min_file_size"`
+	CheckInterval      time.Duration  `yaml:"check_interval" json:"check_interval"`
+	DeleteOriginalFile bool           `yaml:"delete_original_file" json:"delete_original_file"`
 }
 
 type ScheduleConfig struct {

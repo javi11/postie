@@ -1,71 +1,71 @@
 <script lang="ts">
-  import {
-    Card,
-    Heading,
-    Input,
-    Label,
-    Checkbox,
-    Select,
-    P,
-  } from "flowbite-svelte";
-  import { ArchiveBoxSolid } from "flowbite-svelte-icons";
-  import type { ConfigData } from "$lib/types";
+import type { ConfigData } from "$lib/types";
+import {
+	Card,
+	Checkbox,
+	Heading,
+	Input,
+	Label,
+	P,
+	Select,
+} from "flowbite-svelte";
+import { ArchiveBoxSolid } from "flowbite-svelte-icons";
 
-  export let config: ConfigData;
+export let config: ConfigData;
 
-  // Ensure nzb_compression exists with defaults
-  if (!config.nzb_compression) {
-    config.nzb_compression = {
-      enabled: false,
-      type: "none",
-      level: 0,
-    };
-  }
+// Ensure nzb_compression exists with defaults
+if (!config.nzb_compression) {
+	config.nzb_compression = {
+		enabled: false,
+		type: "none",
+		level: 0,
+	};
+}
 
-  const compressionTypes = [
-    { value: "none", name: "None - No compression" },
-    { value: "zstd", name: "Zstandard (zstd) - Fast compression" },
-    { value: "brotli", name: "Brotli - High compression ratio" },
-  ];
+const compressionTypes = [
+	{ value: "none", name: "None - No compression" },
+	{ value: "zstd", name: "Zstandard (zstd) - Fast compression" },
+	{ value: "brotli", name: "Brotli - High compression ratio" },
+];
 
-  // Get compression level limits based on type
-  $: compressionLimits = getCompressionLimits(config.nzb_compression.type);
-  $: defaultLevel = getDefaultLevel(config.nzb_compression.type);
+// Get compression level limits based on type
+$: compressionLimits = getCompressionLimits(config.nzb_compression.type);
+$: defaultLevel = getDefaultLevel(config.nzb_compression.type);
 
-  function getCompressionLimits(type: string) {
-    switch (type) {
-      case "zstd":
-        return { min: 1, max: 22 };
-      case "brotli":
-        return { min: 0, max: 11 };
-      default:
-        return { min: 0, max: 0 };
-    }
-  }
+function getCompressionLimits(type: string) {
+	switch (type) {
+		case "zstd":
+			return { min: 1, max: 22 };
+		case "brotli":
+			return { min: 0, max: 11 };
+		default:
+			return { min: 0, max: 0 };
+	}
+}
 
-  function getDefaultLevel(type: string) {
-    switch (type) {
-      case "zstd":
-        return 3;
-      case "brotli":
-        return 4;
-      default:
-        return 0;
-    }
-  }
+function getDefaultLevel(type: string) {
+	switch (type) {
+		case "zstd":
+			return 3;
+		case "brotli":
+			return 4;
+		default:
+			return 0;
+	}
+}
 
-  // Auto-set default level when compression type changes
-  $: if (
-    config.nzb_compression.type !== "none" &&
-    config.nzb_compression.level === 0
-  ) {
-    config.nzb_compression.level = defaultLevel;
-  }
+// Auto-set default level when compression type changes
+$: if (
+	config.nzb_compression.type !== "none" &&
+	config.nzb_compression.level === 0
+) {
+	config.nzb_compression.level = defaultLevel;
+}
 
-  // Reset level when compression is disabled
-  $: if (config.nzb_compression.type === "none") {
-    config.nzb_compression.level = 0;
-  }
+// Reset level when compression is disabled
+$: if (config.nzb_compression.type === "none") {
+	config.nzb_compression.level = 0;
+}
 </script>
 
 <Card class="max-w-full shadow-sm p-5">

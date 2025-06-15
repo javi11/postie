@@ -1,54 +1,54 @@
 <script lang="ts">
-  import { Button, Heading, P, Alert, Card } from "flowbite-svelte";
-  import {
-    UploadSolid,
-    CirclePlusSolid,
-    TrashBinSolid,
-    ExclamationCircleSolid,
-    CloseCircleSolid,
-  } from "flowbite-svelte-icons";
-  import { isUploading } from "$lib/stores/app";
-  import * as App from "$lib/wailsjs/go/main/App";
-  import { toastStore } from "$lib/stores/toast";
+import { isUploading } from "$lib/stores/app";
+import { toastStore } from "$lib/stores/toast";
+import * as App from "$lib/wailsjs/go/backend/App";
+import { Alert, Button, Card, Heading, P } from "flowbite-svelte";
+import {
+	CirclePlusSolid,
+	CloseCircleSolid,
+	ExclamationCircleSolid,
+	TrashBinSolid,
+	UploadSolid,
+} from "flowbite-svelte-icons";
 
-  export let needsConfiguration: boolean;
-  export let criticalConfigError: boolean;
-  export let handleUpload: () => Promise<void>;
+export let needsConfiguration: boolean;
+export let criticalConfigError: boolean;
+export let handleUpload: () => Promise<void>;
 
-  async function addFilesToQueue() {
-    try {
-      await App.AddFilesToQueue();
-      toastStore.success("Files added", "Files have been added to the queue");
-    } catch (error) {
-      console.error("Failed to add files to queue:", error);
-    }
-  }
+async function addFilesToQueue() {
+	try {
+		await App.AddFilesToQueue();
+		toastStore.success("Files added", "Files have been added to the queue");
+	} catch (error) {
+		console.error("Failed to add files to queue:", error);
+	}
+}
 
-  async function clearQueue() {
-    try {
-      await App.ClearQueue();
-      toastStore.success(
-        "Queue cleared",
-        "Completed and failed items have been removed"
-      );
-    } catch (error) {
-      console.error("Failed to clear queue:", error);
-      toastStore.error("Failed to clear queue", String(error));
-    }
-  }
+async function clearQueue() {
+	try {
+		await App.ClearQueue();
+		toastStore.success(
+			"Queue cleared",
+			"Completed and failed items have been removed",
+		);
+	} catch (error) {
+		console.error("Failed to clear queue:", error);
+		toastStore.error("Failed to clear queue", String(error));
+	}
+}
 
-  async function cancelUpload() {
-    try {
-      await App.CancelUpload();
-      toastStore.success(
-        "Upload cancelled",
-        "Upload has been cancelled successfully"
-      );
-    } catch (error) {
-      console.error("Failed to cancel upload:", error);
-      toastStore.error("Failed to cancel upload", String(error));
-    }
-  }
+async function cancelUpload() {
+	try {
+		await App.CancelUpload();
+		toastStore.success(
+			"Upload cancelled",
+			"Upload has been cancelled successfully",
+		);
+	} catch (error) {
+		console.error("Failed to cancel upload:", error);
+		toastStore.error("Failed to cancel upload", String(error));
+	}
+}
 </script>
 
 <Card
@@ -71,23 +71,13 @@
 
     <div class="flex flex-wrap gap-3">
       <Button
-        color="alternative"
+        color="primary"
         onclick={addFilesToQueue}
         disabled={needsConfiguration}
         class="cursor-pointer flex items-center gap-2 px-6 py-3 text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200 border-gray-300 dark:border-gray-600"
       >
         <CirclePlusSolid class="w-4 h-4" />
         Add Files
-      </Button>
-
-      <Button
-        color={"primary"}
-        onclick={handleUpload}
-        disabled={needsConfiguration || $isUploading}
-        class="cursor-pointer flex items-center gap-2 px-6 py-3 text-sm font-medium shadow-sm"
-      >
-        <UploadSolid class="w-4 h-4" />
-        Start Upload
       </Button>
 
       <Button

@@ -1,30 +1,30 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
-  import { Button, Heading, P, ButtonGroup } from "flowbite-svelte";
-  import {
-    FloppyDiskSolid,
-    FolderOpenSolid,
-    CogSolid,
-    CheckCircleSolid,
-    ExclamationCircleOutline,
-  } from "flowbite-svelte-icons";
-  import type { ConfigData } from "$lib/types";
+import type { ConfigData } from "$lib/types";
+import { Button, ButtonGroup, Heading, P } from "flowbite-svelte";
+import {
+	CheckCircleSolid,
+	CogSolid,
+	ExclamationCircleOutline,
+	FloppyDiskSolid,
+	FolderOpenSolid,
+} from "flowbite-svelte-icons";
+import { createEventDispatcher } from "svelte";
 
-  export let needsConfiguration: boolean = false;
-  export let criticalConfigError: boolean = false;
+export const needsConfiguration = false;
+export const criticalConfigError = false;
 
-  const dispatch = createEventDispatcher<{
-    save: void;
-    selectFile: void;
-  }>();
+const dispatch = createEventDispatcher<{
+	save: undefined;
+	selectFile: undefined;
+}>();
 
-  function handleSave() {
-    dispatch("save");
-  }
+function handleSave() {
+	dispatch("save");
+}
 
-  function handleSelectFile() {
-    dispatch("selectFile");
-  }
+function handleSelectFile() {
+	dispatch("selectFile");
+}
 </script>
 
 <header

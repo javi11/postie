@@ -1,43 +1,43 @@
 <script lang="ts">
-  import {
-    Card,
-    Heading,
-    Input,
-    Label,
-    Checkbox,
-    Button,
-    ButtonGroup,
-    P,
-  } from "flowbite-svelte";
-  import {
-    ServerSolid,
-    CirclePlusSolid,
-    TrashBinSolid,
-    ShieldCheckSolid,
-  } from "flowbite-svelte-icons";
-  import type { ConfigData, ServerConfig } from "$lib/types";
+import type { ConfigData, ServerConfig } from "$lib/types";
+import {
+	Button,
+	ButtonGroup,
+	Card,
+	Checkbox,
+	Heading,
+	Input,
+	Label,
+	P,
+} from "flowbite-svelte";
+import {
+	CirclePlusSolid,
+	ServerSolid,
+	ShieldCheckSolid,
+	TrashBinSolid,
+} from "flowbite-svelte-icons";
 
-  export let config: ConfigData;
+export let config: ConfigData;
 
-  function addServer() {
-    const newServer: ServerConfig = {
-      host: "",
-      port: 119,
-      username: "",
-      password: "",
-      ssl: false,
-      max_connections: 10,
-      max_connection_idle_time_in_seconds: 300,
-      max_connection_ttl_in_seconds: 3600,
-      insecure_ssl: false,
-    };
+function addServer() {
+	const newServer: ServerConfig = {
+		host: "",
+		port: 119,
+		username: "",
+		password: "",
+		ssl: false,
+		max_connections: 10,
+		max_connection_idle_time_in_seconds: 300,
+		max_connection_ttl_in_seconds: 3600,
+		insecure_ssl: false,
+	};
 
-    config.servers = [...config.servers, newServer];
-  }
+	config.servers = [...config.servers, newServer];
+}
 
-  function removeServer(index: number) {
-    config.servers = config.servers.filter((_, i) => i !== index);
-  }
+function removeServer(index: number) {
+	config.servers = config.servers.filter((_, i) => i !== index);
+}
 </script>
 
 <Card class="max-w-full shadow-sm p-5">

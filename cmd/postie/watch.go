@@ -84,11 +84,12 @@ The watch command will monitor the configured directory and upload files accordi
 
 		// Initialize processor
 		proc := processor.New(processor.ProcessorOptions{
-			Queue:        q,
-			Postie:       p,
-			Config:       queueCfg,
-			OutputFolder: outputFolder,
-			EventEmitter: noopEventEmitter,
+			Queue:              q,
+			Postie:             p,
+			Config:             queueCfg,
+			OutputFolder:       outputFolder,
+			EventEmitter:       noopEventEmitter,
+			DeleteOriginalFile: watcherCfg.DeleteOriginalFile,
 		})
 
 		// Start processor in background

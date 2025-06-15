@@ -1,41 +1,41 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { Card, Heading, Badge } from "flowbite-svelte";
-  import { EventsOn } from "$lib/wailsjs/runtime/runtime";
-  import * as App from "$lib/wailsjs/go/main/App";
-  import type { QueueStats } from "$lib/types";
+import type { QueueStats } from "$lib/types";
+import * as App from "$lib/wailsjs/go/backend/App";
+import { EventsOn } from "$lib/wailsjs/runtime/runtime";
+import { Badge, Card, Heading } from "flowbite-svelte";
+import { onMount } from "svelte";
 
-  let queueStats: QueueStats = {
-    total: 0,
-    pending: 0,
-    running: 0,
-    complete: 0,
-    error: 0,
-  };
+let queueStats: QueueStats = {
+	total: 0,
+	pending: 0,
+	running: 0,
+	complete: 0,
+	error: 0,
+};
 
-  onMount(() => {
-    // Listen for queue updates
-    EventsOn("queue-updated", () => {
-      loadQueueStats();
-    });
+onMount(() => {
+	// Listen for queue updates
+	EventsOn("queue-updated", () => {
+		loadQueueStats();
+	});
 
-    // Load initial stats
-    loadQueueStats();
+	// Load initial stats
+	loadQueueStats();
 
-    // Set up periodic refresh
-    const interval = setInterval(loadQueueStats, 5000);
+	// Set up periodic refresh
+	const interval = setInterval(loadQueueStats, 5000);
 
-    return () => clearInterval(interval);
-  });
+	return () => clearInterval(interval);
+});
 
-  async function loadQueueStats() {
-    try {
-      const stats = await App.GetQueueStats();
-      queueStats = stats as QueueStats;
-    } catch (error) {
-      console.error("Failed to load queue stats:", error);
-    }
-  }
+async function loadQueueStats() {
+	try {
+		const stats = await App.GetQueueStats();
+		queueStats = stats as QueueStats;
+	} catch (error) {
+		console.error("Failed to load queue stats:", error);
+	}
+}
 </script>
 
 <Card

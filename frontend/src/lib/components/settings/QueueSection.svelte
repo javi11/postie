@@ -1,38 +1,38 @@
 <script lang="ts">
-  import {
-    Card,
-    Heading,
-    Input,
-    Label,
-    Checkbox,
-    Select,
-    P,
-  } from "flowbite-svelte";
-  import { QueueListSolid } from "flowbite-svelte-icons";
-  import type { ConfigData } from "$lib/types";
+import type { ConfigData } from "$lib/types";
+import {
+	Card,
+	Checkbox,
+	Heading,
+	Input,
+	Label,
+	P,
+	Select,
+} from "flowbite-svelte";
+import { QueueListSolid } from "flowbite-svelte-icons";
 
-  export let config: ConfigData;
+export let config: ConfigData;
 
-  // Ensure queue exists with defaults
-  if (!config.queue) {
-    config.queue = {
-      database_type: "sqlite",
-      database_path: "./postie_queue.db",
-      batch_size: 10,
-      max_retries: 3,
-      retry_delay: "5m",
-      max_queue_size: 1000,
-      cleanup_after: "24h",
-      priority_processing: false,
-      max_concurrent_uploads: 3,
-    };
-  }
+// Ensure queue exists with defaults
+if (!config.queue) {
+	config.queue = {
+		database_type: "sqlite",
+		database_path: "./postie_queue.db",
+		batch_size: 10,
+		max_retries: 3,
+		retry_delay: "5m",
+		max_queue_size: 1000,
+		cleanup_after: "24h",
+		priority_processing: false,
+		max_concurrent_uploads: 3,
+	};
+}
 
-  const databaseTypes = [
-    { value: "sqlite", name: "SQLite - File-based database" },
-    { value: "postgres", name: "PostgreSQL - Network database" },
-    { value: "mysql", name: "MySQL - Network database" },
-  ];
+const databaseTypes = [
+	{ value: "sqlite", name: "SQLite - File-based database" },
+	{ value: "postgres", name: "PostgreSQL - Network database" },
+	{ value: "mysql", name: "MySQL - Network database" },
+];
 </script>
 
 <Card class="max-w-full shadow-sm p-5">

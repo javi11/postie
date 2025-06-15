@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { page } from "$app/stores";
-  import { Button, Heading, P } from "flowbite-svelte";
-  import {
-    ExclamationCircleSolid,
-    ArrowLeftOutline,
-  } from "flowbite-svelte-icons";
+import { page } from "$app/stores";
+import { Button, Heading, P } from "flowbite-svelte";
+import {
+	ArrowLeftOutline,
+	ExclamationCircleSolid,
+} from "flowbite-svelte-icons";
 </script>
 
 <svelte:head>

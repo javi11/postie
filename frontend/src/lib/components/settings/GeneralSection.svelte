@@ -1,44 +1,44 @@
 <script lang="ts">
-  import { Card, Heading, Input, Label, Button, P } from "flowbite-svelte";
-  import { CogSolid, FolderOpenSolid } from "flowbite-svelte-icons";
-  import type { ConfigData } from "$lib/types";
-  import * as App from "$lib/wailsjs/go/main/App";
-  import { onMount } from "svelte";
+import type { ConfigData } from "$lib/types";
+import * as App from "$lib/wailsjs/go/backend/App";
+import { Button, Card, Heading, Input, Label, P } from "flowbite-svelte";
+import { CogSolid, FolderOpenSolid } from "flowbite-svelte-icons";
+import { onMount } from "svelte";
 
-  export let config: ConfigData;
+export let config: ConfigData;
 
-  let outputDirectory = "";
+let outputDirectory = "";
 
-  // Initialize config defaults if they don't exist
-  if (!config.output_dir) {
-    config.output_dir = "./output";
-  }
+// Initialize config defaults if they don't exist
+if (!config.output_dir) {
+	config.output_dir = "./output";
+}
 
-  onMount(async () => {
-    try {
-      outputDirectory = await App.GetOutputDirectory();
-    } catch (error) {
-      console.error("Failed to get output directory:", error);
-      outputDirectory = config.output_dir || "./output";
-    }
-  });
+onMount(async () => {
+	try {
+		outputDirectory = await App.GetOutputDirectory();
+	} catch (error) {
+		console.error("Failed to get output directory:", error);
+		outputDirectory = config.output_dir || "./output";
+	}
+});
 
-  async function selectOutputDirectory() {
-    try {
-      const dir = await App.SelectOutputDirectory();
-      if (dir) {
-        config.output_dir = dir;
-        outputDirectory = dir;
-      }
-    } catch (error) {
-      console.error("Failed to select output directory:", error);
-    }
-  }
+async function selectOutputDirectory() {
+	try {
+		const dir = await App.SelectOutputDirectory();
+		if (dir) {
+			config.output_dir = dir;
+			outputDirectory = dir;
+		}
+	} catch (error) {
+		console.error("Failed to select output directory:", error);
+	}
+}
 
-  // Update display when config changes
-  $: if (config.output_dir) {
-    outputDirectory = config.output_dir;
-  }
+// Update display when config changes
+$: if (config.output_dir) {
+	outputDirectory = config.output_dir;
+}
 </script>
 
 <Card class="max-w-full shadow-sm p-5">

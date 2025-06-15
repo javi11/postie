@@ -1,68 +1,68 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { page } from "$app/stores";
-  import { goto } from "$app/navigation";
-  import { EventsOn } from "$lib/wailsjs/runtime/runtime";
-  import * as App from "$lib/wailsjs/go/main/App";
-  import {
-    Button,
-    Navbar,
-    NavBrand,
-    NavLi,
-    NavUl,
-    NavHamburger,
-    DarkMode,
-  } from "flowbite-svelte";
-  import { ChartPieSolid, CogSolid } from "flowbite-svelte-icons";
-  import logo from "$lib/assets/images/logo.png";
-  import ToastContainer from "$lib/components/ToastContainer.svelte";
-  import { toastStore } from "$lib/stores/toast";
-  import { appStatus } from "$lib/stores/app";
-  import "../style.css";
+import { goto } from "$app/navigation";
+import { page } from "$app/stores";
+import logo from "$lib/assets/images/logo.png";
+import ToastContainer from "$lib/components/ToastContainer.svelte";
+import { appStatus } from "$lib/stores/app";
+import { toastStore } from "$lib/stores/toast";
+import * as App from "$lib/wailsjs/go/backend/App";
+import { EventsOn } from "$lib/wailsjs/runtime/runtime";
+import {
+	Button,
+	DarkMode,
+	NavBrand,
+	NavHamburger,
+	NavLi,
+	NavUl,
+	Navbar,
+} from "flowbite-svelte";
+import { ChartPieSolid, CogSolid } from "flowbite-svelte-icons";
+import { onMount } from "svelte";
+import "../style.css";
 
-  let needsConfiguration = false;
-  let criticalConfigError = false;
+let needsConfiguration = false;
+let criticalConfigError = false;
 
-  onMount(async () => {
-    // Listen for config updates
-    EventsOn("config-updated", async () => {
-      await loadAppStatus();
-    });
+onMount(async () => {
+	// Listen for config updates
+	EventsOn("config-updated", async () => {
+		await loadAppStatus();
+	});
 
-    // Listen for par2 download events
-    EventsOn("par2-download-status", (data) => {
-      if (data.status === "downloading") {
-        toastStore.info("Downloading Dependencies", data.message);
-      } else if (data.status === "completed") {
-        toastStore.success("Dependencies Ready", data.message);
-      } else if (data.status === "error") {
-        toastStore.error("Download Failed", data.message);
-      }
-    });
+	// Listen for par2 download events
+	EventsOn("par2-download-status", (data) => {
+		if (data.status === "downloading") {
+			toastStore.info("Downloading Dependencies", data.message);
+		} else if (data.status === "completed") {
+			toastStore.success("Dependencies Ready", data.message);
+		} else if (data.status === "error") {
+			toastStore.error("Download Failed", data.message);
+		}
+	});
 
-    // Load initial app status
-    await loadAppStatus();
-  });
+	// Load initial app status
+	await loadAppStatus();
+});
 
-  async function loadAppStatus() {
-    try {
-      const status = await App.GetAppStatus();
-      appStatus.set(status);
-      needsConfiguration = status.needsConfiguration || false;
-      criticalConfigError = status.criticalConfigError || false;
+async function loadAppStatus() {
+	try {
+		const status = await App.GetAppStatus();
+		appStatus.set(status);
+		needsConfiguration = status.needsConfiguration || false;
+		criticalConfigError = status.criticalConfigError || false;
 
-      // Auto-redirect to settings if there's a critical configuration error
-      if (criticalConfigError && $page.route.id !== "/settings") {
-        toastStore.error(
-          "Configuration Error",
-          "There was an error with your server configuration. Please check your settings."
-        );
-        goto("/settings");
-      }
-    } catch (error) {
-      console.error("Failed to load app status:", error);
-    }
-  }
+		// Auto-redirect to settings if there's a critical configuration error
+		if (criticalConfigError && $page.route.id !== "/settings") {
+			toastStore.error(
+				"Configuration Error",
+				"There was an error with your server configuration. Please check your settings.",
+			);
+			goto("/settings");
+		}
+	} catch (error) {
+		console.error("Failed to load app status:", error);
+	}
+}
 </script>
 
 <div

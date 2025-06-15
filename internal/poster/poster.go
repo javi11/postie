@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/rand"
@@ -43,6 +44,7 @@ const (
 	PostStatusPosted
 	PostStatusVerified
 	PostStatusFailed
+	PostStatusCancelled
 )
 
 // Post represents a file to be posted
@@ -220,15 +222,20 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			}
 
 			// Wait for all workers to complete and collect errors
-			errors := pool.Wait()
+			errs := pool.Wait()
 
-			if errors != nil {
+			if errs != nil {
 				post.mu.Lock()
-				post.Status = PostStatusFailed
-				post.Error = fmt.Errorf("failed to post articles: %v", errors)
+				if errors.Is(errs, context.Canceled) {
+					post.Status = PostStatusCancelled
+					post.Error = fmt.Errorf("posting cancelled: %v", errs)
+				} else {
+					post.Status = PostStatusFailed
+					post.Error = fmt.Errorf("failed to post articles: %v", errs)
+				}
 				post.mu.Unlock()
 
-				errChan <- fmt.Errorf("failed to post file %s after %d retries: %v", post.FilePath, p.cfg.MaxRetries, errors)
+				errChan <- fmt.Errorf("failed to post file %s after %d retries: %v", post.FilePath, p.cfg.MaxRetries, errs)
 				return
 			}
 

@@ -1,18 +1,18 @@
 <script lang="ts">
-  import { Card, Heading, Input, Label, Checkbox, P } from "flowbite-svelte";
-  import { LinkSolid } from "flowbite-svelte-icons";
-  import type { ConfigData } from "$lib/types";
+import type { ConfigData } from "$lib/types";
+import { Card, Checkbox, Heading, Input, Label, P } from "flowbite-svelte";
+import { LinkSolid } from "flowbite-svelte-icons";
 
-  export let config: ConfigData;
+export let config: ConfigData;
 
-  // Ensure connection_pool exists with defaults
-  if (!config.connection_pool) {
-    config.connection_pool = {
-      min_connections: 5,
-      health_check_interval: "1m",
-      skip_providers_verification_on_creation: false,
-    };
-  }
+// Ensure connection_pool exists with defaults
+if (!config.connection_pool) {
+	config.connection_pool = {
+		min_connections: 5,
+		health_check_interval: "1m",
+		skip_providers_verification_on_creation: false,
+	};
+}
 </script>
 
 <Card class="max-w-full shadow-sm p-5">

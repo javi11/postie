@@ -1,56 +1,56 @@
 <script lang="ts">
-  import {
-    Card,
-    Heading,
-    Input,
-    Label,
-    Checkbox,
-    Button,
-    P,
-  } from "flowbite-svelte";
-  import {
-    ShieldCheckSolid,
-    InfoCircleSolid,
-    CirclePlusSolid,
-    TrashBinSolid,
-  } from "flowbite-svelte-icons";
-  import type { ConfigData } from "$lib/types";
+import type { ConfigData } from "$lib/types";
+import {
+	Button,
+	Card,
+	Checkbox,
+	Heading,
+	Input,
+	Label,
+	P,
+} from "flowbite-svelte";
+import {
+	CirclePlusSolid,
+	InfoCircleSolid,
+	ShieldCheckSolid,
+	TrashBinSolid,
+} from "flowbite-svelte-icons";
 
-  export let config: ConfigData;
+export let config: ConfigData;
 
-  // Ensure extra_par2_options exists
-  if (!config.par2.extra_par2_options) {
-    config.par2.extra_par2_options = [];
-  }
+// Ensure extra_par2_options exists
+if (!config.par2.extra_par2_options) {
+	config.par2.extra_par2_options = [];
+}
 
-  // Helper function to format bytes to MB for display
-  function bytesToMB(bytes: number): number {
-    return Math.round(bytes / 1024 / 1024);
-  }
+// Helper function to format bytes to MB for display
+function bytesToMB(bytes: number): number {
+	return Math.round(bytes / 1024 / 1024);
+}
 
-  // Helper function to convert MB back to bytes
-  function mbToBytes(mb: number): number {
-    return mb * 1024 * 1024;
-  }
+// Helper function to convert MB back to bytes
+function mbToBytes(mb: number): number {
+	return mb * 1024 * 1024;
+}
 
-  // Reactive variables for easier editing
-  $: volumeSizeMB = bytesToMB(config.par2.volume_size);
+// Reactive variables for easier editing
+$: volumeSizeMB = bytesToMB(config.par2.volume_size);
 
-  function updateVolumeSize(event: Event) {
-    const target = event.target as HTMLInputElement;
-    const mb = parseInt(target.value) || 200;
-    config.par2.volume_size = mbToBytes(mb);
-  }
+function updateVolumeSize(event: Event) {
+	const target = event.target as HTMLInputElement;
+	const mb = Number.parseInt(target.value) || 200;
+	config.par2.volume_size = mbToBytes(mb);
+}
 
-  function addExtraOption() {
-    config.par2.extra_par2_options = [...config.par2.extra_par2_options, ""];
-  }
+function addExtraOption() {
+	config.par2.extra_par2_options = [...config.par2.extra_par2_options, ""];
+}
 
-  function removeExtraOption(index: number) {
-    config.par2.extra_par2_options = config.par2.extra_par2_options.filter(
-      (_, i) => i !== index
-    );
-  }
+function removeExtraOption(index: number) {
+	config.par2.extra_par2_options = config.par2.extra_par2_options.filter(
+		(_, i) => i !== index,
+	);
+}
 </script>
 
 <Card class="max-w-full shadow-sm p-5">

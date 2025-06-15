@@ -1,111 +1,111 @@
 <script lang="ts">
-  import {
-    Card,
-    Heading,
-    Input,
-    Label,
-    Select,
-    Button,
-    Checkbox,
-    P,
-  } from "flowbite-svelte";
-  import {
-    CloudArrowUpSolid,
-    CirclePlusSolid,
-    TrashBinSolid,
-  } from "flowbite-svelte-icons";
-  import type { ConfigData } from "$lib/types";
+import type { ConfigData } from "$lib/types";
+import {
+	Button,
+	Card,
+	Checkbox,
+	Heading,
+	Input,
+	Label,
+	P,
+	Select,
+} from "flowbite-svelte";
+import {
+	CirclePlusSolid,
+	CloudArrowUpSolid,
+	TrashBinSolid,
+} from "flowbite-svelte-icons";
 
-  export let config: ConfigData;
+export let config: ConfigData;
 
-  // Ensure posting config has all required fields with defaults
-  if (!config.posting.wait_for_par2) {
-    config.posting.wait_for_par2 = true;
-  }
-  if (!config.posting.throttle_rate) {
-    config.posting.throttle_rate = 0; // unlimited
-  }
-  if (!config.posting.max_workers) {
-    config.posting.max_workers = 0;
-  }
-  if (!config.posting.message_id_format) {
-    config.posting.message_id_format = "random";
-  }
-  if (!config.posting.post_headers) {
-    config.posting.post_headers = {
-      add_ngx_header: false,
-      default_from: "",
-      custom_headers: [],
-    };
-  }
-  if (!config.posting.par2_obfuscation_policy) {
-    config.posting.par2_obfuscation_policy = "full";
-  }
-  if (!config.posting.group_policy) {
-    config.posting.group_policy = "each_file";
-  }
+// Ensure posting config has all required fields with defaults
+if (!config.posting.wait_for_par2) {
+	config.posting.wait_for_par2 = true;
+}
+if (!config.posting.throttle_rate) {
+	config.posting.throttle_rate = 0; // unlimited
+}
+if (!config.posting.max_workers) {
+	config.posting.max_workers = 0;
+}
+if (!config.posting.message_id_format) {
+	config.posting.message_id_format = "random";
+}
+if (!config.posting.post_headers) {
+	config.posting.post_headers = {
+		add_ngx_header: false,
+		default_from: "",
+		custom_headers: [],
+	};
+}
+if (!config.posting.par2_obfuscation_policy) {
+	config.posting.par2_obfuscation_policy = "full";
+}
+if (!config.posting.group_policy) {
+	config.posting.group_policy = "each_file";
+}
 
-  const obfuscationOptions = [
-    { value: "none", name: "None - No obfuscation" },
-    { value: "partial", name: "Partial - Basic obfuscation" },
-    { value: "full", name: "Full - Complete obfuscation" },
-  ];
+const obfuscationOptions = [
+	{ value: "none", name: "None - No obfuscation" },
+	{ value: "partial", name: "Partial - Basic obfuscation" },
+	{ value: "full", name: "Full - Complete obfuscation" },
+];
 
-  const messageIdOptions = [
-    { value: "random", name: "Random - Random message IDs" },
-    { value: "ngx", name: "NGX - NGX format message IDs" },
-  ];
+const messageIdOptions = [
+	{ value: "random", name: "Random - Random message IDs" },
+	{ value: "ngx", name: "NGX - NGX format message IDs" },
+];
 
-  const groupPolicyOptions = [
-    { value: "all", name: "All - Post to all groups" },
-    { value: "each_file", name: "Each File - Random group per file" },
-  ];
+const groupPolicyOptions = [
+	{ value: "all", name: "All - Post to all groups" },
+	{ value: "each_file", name: "Each File - Random group per file" },
+];
 
-  function addGroup() {
-    if (!config.posting.groups) {
-      config.posting.groups = [];
-    }
-    config.posting.groups = [...config.posting.groups, ""];
-  }
+function addGroup() {
+	if (!config.posting.groups) {
+		config.posting.groups = [];
+	}
+	config.posting.groups = [...config.posting.groups, ""];
+}
 
-  function removeGroup(index: number) {
-    config.posting.groups = config.posting.groups.filter((_, i) => i !== index);
-  }
+function removeGroup(index: number) {
+	config.posting.groups = config.posting.groups.filter((_, i) => i !== index);
+}
 
-  function addCustomHeader() {
-    if (!config.posting.post_headers.custom_headers) {
-      config.posting.post_headers.custom_headers = [];
-    }
-    config.posting.post_headers.custom_headers = [
-      ...config.posting.post_headers.custom_headers,
-      { name: "", value: "" },
-    ];
-  }
+function addCustomHeader() {
+	if (!config.posting.post_headers.custom_headers) {
+		config.posting.post_headers.custom_headers = [];
+	}
+	config.posting.post_headers.custom_headers = [
+		...config.posting.post_headers.custom_headers,
+		{ name: "", value: "" },
+	];
+}
 
-  function removeCustomHeader(index: number) {
-    config.posting.post_headers.custom_headers =
-      config.posting.post_headers.custom_headers.filter((_, i) => i !== index);
-  }
+function removeCustomHeader(index: number) {
+	config.posting.post_headers.custom_headers =
+		config.posting.post_headers.custom_headers.filter((_, i) => i !== index);
+}
 
-  // Ensure we have at least one group
-  $: if (config.posting.groups.length === 0) {
-    config.posting.groups = ["alt.binaries.test"];
-  }
+// Ensure we have at least one group
+$: if (config.posting.groups.length === 0) {
+	config.posting.groups = ["alt.binaries.test"];
+}
 
-  // Reactive variable for display (MB/s)
-  let throttleRateMB: number;
+// Reactive variable for display (MB/s)
+let throttleRateMB: number;
 
-  // Convert throttle rate for display (bytes to MB/s)
-  $: throttleRateMB = Math.round(config.posting.throttle_rate / 1048576);
+// Convert throttle rate for display (bytes to MB/s)
+$: throttleRateMB = Math.round(config.posting.throttle_rate / 1048576);
 
-  // Update throttle rate when MB value changes
-  $: if (
-    throttleRateMB !== undefined &&
-    !isNaN(throttleRateMB) &&
-    throttleRateMB * 1048576 !== config.posting.throttle_rate
-  ) {
-    config.posting.throttle_rate = throttleRateMB * 1048576;
-  }
+// Update throttle rate when MB value changes
+$: if (
+	throttleRateMB !== undefined &&
+	!Number.isNaN(throttleRateMB) &&
+	throttleRateMB * 1048576 !== config.posting.throttle_rate
+) {
+	config.posting.throttle_rate = throttleRateMB * 1048576;
+}
 </script>
 
 <Card class="max-w-full shadow-sm p-5">

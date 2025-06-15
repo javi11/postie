@@ -1,102 +1,110 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import {
-    Card,
-    Heading,
-    Table,
-    TableBody,
-    TableBodyCell,
-    TableBodyRow,
-    TableHead,
-    TableHeadCell,
-    Badge,
-    Button,
-    P,
-  } from "flowbite-svelte";
-  import {
-    TrashBinSolid,
-    DownloadSolid,
-    CheckCircleSolid,
-    ClockSolid,
-    PlaySolid,
-    ExclamationCircleSolid,
-    XSolid,
-  } from "flowbite-svelte-icons";
-  import { EventsOn } from "$lib/wailsjs/runtime/runtime";
-  import * as App from "$lib/wailsjs/go/main/App";
-  import type { QueueItem } from "$lib/types";
-  import { formatFileSize, formatDate, getStatusColor } from "$lib/utils";
-  import { toastStore } from "$lib/stores/toast";
+import { toastStore } from "$lib/stores/toast";
+import type { QueueItem } from "$lib/types";
+import { formatDate, formatFileSize, getStatusColor } from "$lib/utils";
+import * as App from "$lib/wailsjs/go/backend/App";
+import { EventsOn } from "$lib/wailsjs/runtime/runtime";
+import {
+	Badge,
+	Button,
+	Card,
+	Heading,
+	P,
+	Table,
+	TableBody,
+	TableBodyCell,
+	TableBodyRow,
+	TableHead,
+	TableHeadCell,
+} from "flowbite-svelte";
+import {
+	CheckCircleSolid,
+	ClockSolid,
+	DownloadSolid,
+	ExclamationCircleSolid,
+	PlaySolid,
+	TrashBinSolid,
+	XSolid,
+} from "flowbite-svelte-icons";
+import { onMount } from "svelte";
+import { SetQueueItemPriority } from "$lib/wailsjs/go/backend/App";
 
-  let queueItems: QueueItem[] = [];
+let queueItems: QueueItem[] = [];
 
-  onMount(() => {
-    // Listen for queue updates
-    EventsOn("queue-updated", () => {
-      loadQueue();
-    });
+onMount(() => {
+	// Listen for queue updates
+	EventsOn("queue-updated", () => {
+		loadQueue();
+	});
 
-    // Load initial queue
-    loadQueue();
+	// Load initial queue
+	loadQueue();
 
-    // Set up periodic refresh
-    const interval = setInterval(loadQueue, 2000);
+	// Set up periodic refresh
+	const interval = setInterval(loadQueue, 2000);
 
-    return () => clearInterval(interval);
-  });
+	return () => clearInterval(interval);
+});
 
-  async function loadQueue() {
-    try {
-      const items = await App.GetQueueItems();
-      queueItems = items || [];
-    } catch (error) {
-      console.error("Failed to load queue:", error);
-      toastStore.error("Failed to load queue", String(error));
-    }
-  }
+async function loadQueue() {
+	try {
+		const items = await App.GetQueueItems();
+		queueItems = items || [];
+	} catch (error) {
+		console.error("Failed to load queue:", error);
+		toastStore.error("Failed to load queue", String(error));
+	}
+}
 
-  async function removeFromQueue(id: string) {
-    try {
-      await App.RemoveFromQueue(id);
+async function removeFromQueue(id: string) {
+	try {
+		await App.RemoveFromQueue(id);
 
-      queueItems = queueItems.filter((item) => item.id !== id);
-      // Immediately refresh the queue to ensure UI updates
-      await loadQueue();
-      toastStore.success(
-        "Item removed",
-        "Item has been removed from the queue"
-      );
-    } catch (error) {
-      console.error("Failed to remove item from queue:", error);
-      toastStore.error("Failed to remove item", String(error));
-    }
-  }
+		queueItems = queueItems.filter((item) => item.id !== id);
+		// Immediately refresh the queue to ensure UI updates
+		await loadQueue();
+		toastStore.success("Item removed", "Item has been removed from the queue");
+	} catch (error) {
+		console.error("Failed to remove item from queue:", error);
+		toastStore.error("Failed to remove item", String(error));
+	}
+}
 
-  async function downloadNZB(id: string, fileName: string) {
-    try {
-      await App.DownloadNZB(id);
-      toastStore.success(
-        "NZB Downloaded",
-        `NZB file for ${fileName} has been saved`
-      );
-    } catch (error) {
-      console.error("Failed to download NZB:", error);
-      toastStore.error("Failed to download NZB", String(error));
-    }
-  }
+async function downloadNZB(id: string, fileName: string) {
+	try {
+		await App.DownloadNZB(id);
+		toastStore.success(
+			"NZB Downloaded",
+			`NZB file for ${fileName} has been saved`,
+		);
+	} catch (error) {
+		console.error("Failed to download NZB:", error);
+		toastStore.error("Failed to download NZB", String(error));
+	}
+}
 
-  function getStatusIcon(status: string) {
-    switch (status) {
-      case "pending":
-        return ClockSolid;
-      case "complete":
-        return CheckCircleSolid;
-      case "error":
-        return ExclamationCircleSolid;
-      default:
-        return ClockSolid;
-    }
-  }
+async function changePriority(id: string, newPriority: number) {
+	try {
+		await SetQueueItemPriority(id, newPriority);
+		await loadQueue();
+	} catch (error) {
+		console.error("Failed to update priority:", error);
+		toastStore.error("Failed to update priority", String(error));
+	}
+}
+
+function getStatusIcon(status: string) {
+	switch (status) {
+		case "pending":
+			return ClockSolid;
+		case "complete":
+			return CheckCircleSolid;
+		case "error":
+			return ExclamationCircleSolid;
+		default:
+			return ClockSolid;
+	}
+}
 </script>
 
 <Card
@@ -201,6 +209,22 @@
                         <Badge color="gray" border={true}>
                           Retry {item.retryCount}
                         </Badge>
+                      {/if}
+                      {#if item.status === "pending"}
+                        <div class="flex items-center gap-1 ml-2">
+                          <button
+                            class="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-xs"
+                            title="Increase priority"
+                            on:click={() => changePriority(item.id, item.priority + 1)}
+                          >▲</button>
+                          <span class="px-1 text-xs font-mono">{item.priority}</span>
+                          <button
+                            class="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-xs"
+                            title="Decrease priority"
+                            on:click={() => changePriority(item.id, item.priority - 1)}
+                            disabled={item.priority <= 0}
+                          >▼</button>
+                        </div>
                       {/if}
                     </div>
                     {#if item.errorMessage}

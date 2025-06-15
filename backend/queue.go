@@ -299,3 +299,15 @@ func (a *App) GetNZBContent(id string) (string, error) {
 
 	return string(nzbContent), nil
 }
+
+// SetQueueItemPriority updates the priority of a pending queue item by id
+func (a *App) SetQueueItemPriority(id string, priority int) error {
+	if a.queue == nil {
+		return fmt.Errorf("queue not initialized")
+	}
+	if err := a.queue.SetQueueItemPriority(id, priority); err != nil {
+		return err
+	}
+	runtime.EventsEmit(a.ctx, "queue-updated")
+	return nil
+}

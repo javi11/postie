@@ -252,7 +252,7 @@ func (q *Queue) GetQueueItems() ([]QueueItem, error) {
 		SELECT id, created, updated, body, timeout, received
 		FROM goqite 
 		WHERE queue = 'file_jobs'
-		ORDER BY created ASC
+		ORDER BY json_extract(body, '$.Priority') DESC, created ASC
 		LIMIT 100
 	`)
 	if err != nil {
@@ -586,4 +586,35 @@ func (q *Queue) ReaddJob(ctx context.Context, job *FileJob) error {
 	return q.queue.Send(ctx, goqite.Message{
 		Body: jobData,
 	})
+}
+
+// SetQueueItemPriority updates the priority of a pending queue item by id
+func (q *Queue) SetQueueItemPriority(id string, priority int) error {
+	// Get the job body for the given id
+	var body []byte
+	err := q.db.QueryRow("SELECT body FROM goqite WHERE id = ? AND queue = 'file_jobs'", id).Scan(&body)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("pending queue item not found: %s", id)
+		}
+		return fmt.Errorf("failed to get queue item: %w", err)
+	}
+
+	// Unmarshal, update priority, marshal
+	var job FileJob
+	if err := json.Unmarshal(body, &job); err != nil {
+		return fmt.Errorf("failed to unmarshal job: %w", err)
+	}
+	job.Priority = priority
+	newBody, err := json.Marshal(job)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated job: %w", err)
+	}
+
+	// Update the body in the database
+	_, err = q.db.Exec("UPDATE goqite SET body = ?, updated = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = ? AND queue = 'file_jobs'", newBody, id)
+	if err != nil {
+		return fmt.Errorf("failed to update queue item priority: %w", err)
+	}
+	return nil
 }

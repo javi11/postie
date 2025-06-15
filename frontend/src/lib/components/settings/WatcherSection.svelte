@@ -1,131 +1,133 @@
 <script lang="ts">
-  import {
-    Card,
-    Heading,
-    Input,
-    Label,
-    Checkbox,
-    Button,
-    P,
-    Textarea,
-  } from "flowbite-svelte";
-  import {
-    EyeSolid,
-    CirclePlusSolid,
-    TrashBinSolid,
-    FolderSolid,
-    FolderOpenSolid,
-  } from "flowbite-svelte-icons";
-  import type { ConfigData } from "$lib/types";
-  import * as App from "$lib/wailsjs/go/main/App";
-  import { onMount } from "svelte";
+import type { ConfigData } from "$lib/types";
+import * as App from "$lib/wailsjs/go/backend/App";
+import {
+	Button,
+	Card,
+	Checkbox,
+	Heading,
+	Input,
+	Label,
+	P,
+	Textarea,
+} from "flowbite-svelte";
+import {
+	CirclePlusSolid,
+	EyeSolid,
+	FolderOpenSolid,
+	FolderSolid,
+	TrashBinSolid,
+} from "flowbite-svelte-icons";
+import { onMount } from "svelte";
 
-  export let config: ConfigData;
+export let config: ConfigData;
 
-  let watchDirectory = "";
+let watchDirectory = "";
 
-  // Initialize watcher config if it doesn't exist
-  if (!config.watcher) {
-    config.watcher = {
-      enabled: false,
-      size_threshold: 104857600, // 100MB
-      schedule: {
-        start_time: "00:00",
-        end_time: "23:59",
-      },
-      ignore_patterns: ["*.tmp", "*.part", "*.!ut"],
-      min_file_size: 1048576, // 1MB
-      check_interval: 300000000000, // 5m in nanoseconds
-    };
-  }
+// Initialize watcher config if it doesn't exist
+if (!config.watcher) {
+	config.watcher = {
+		enabled: false,
+		size_threshold: 104857600, // 100MB
+		schedule: {
+			start_time: "00:00",
+			end_time: "23:59",
+		},
+		ignore_patterns: ["*.tmp", "*.part", "*.!ut"],
+		min_file_size: 1048576, // 1MB
+		check_interval: 300000000000, // 5m in nanoseconds
+	};
+}
 
-  // Convert nanoseconds to human readable format for display
-  function nanosToHumanReadable(nanos: number): string {
-    const seconds = nanos / 1000000000;
-    if (seconds < 60) return `${seconds}s`;
-    const minutes = seconds / 60;
-    if (minutes < 60) return `${Math.round(minutes)}m`;
-    const hours = minutes / 60;
-    return `${Math.round(hours)}h`;
-  }
+// Convert nanoseconds to human readable format for display
+function nanosToHumanReadable(nanos: number): string {
+	const seconds = nanos / 1000000000;
+	if (seconds < 60) return `${seconds}s`;
+	const minutes = seconds / 60;
+	if (minutes < 60) return `${Math.round(minutes)}m`;
+	const hours = minutes / 60;
+	return `${Math.round(hours)}h`;
+}
 
-  // Convert human readable format to nanoseconds
-  function humanReadableToNanos(str: string): number {
-    const num = parseFloat(str);
-    if (str.includes("h")) return num * 60 * 60 * 1000000000;
-    if (str.includes("m")) return num * 60 * 1000000000;
-    if (str.includes("s")) return num * 1000000000;
-    return num * 1000000000; // Default to seconds
-  }
+// Convert human readable format to nanoseconds
+function humanReadableToNanos(str: string): number {
+	const num = Number.parseFloat(str);
+	if (str.includes("h")) return num * 60 * 60 * 1000000000;
+	if (str.includes("m")) return num * 60 * 1000000000;
+	if (str.includes("s")) return num * 1000000000;
+	return num * 1000000000; // Default to seconds
+}
 
-  // Reactive variable for check interval display
-  $: checkIntervalDisplay =
-    typeof config.watcher.check_interval === "number"
-      ? nanosToHumanReadable(config.watcher.check_interval)
-      : config.watcher.check_interval || "5m";
+// Reactive variable for check interval display
+$: checkIntervalDisplay =
+	typeof config.watcher.check_interval === "number"
+		? nanosToHumanReadable(config.watcher.check_interval)
+		: config.watcher.check_interval || "5m";
 
-  function updateCheckInterval(event: Event) {
-    const target = event.target as HTMLInputElement;
-    const value = target.value;
-    config.watcher.check_interval = humanReadableToNanos(value);
-  }
+function updateCheckInterval(event: Event) {
+	const target = event.target as HTMLInputElement;
+	const value = target.value;
+	config.watcher.check_interval = humanReadableToNanos(value);
+}
 
-  onMount(async () => {
-    try {
-      watchDirectory = await App.GetWatchDirectory();
-    } catch (error) {
-      console.error("Failed to get watch directory:", error);
-    }
-  });
+onMount(async () => {
+	try {
+		watchDirectory = await App.GetWatchDirectory();
+	} catch (error) {
+		console.error("Failed to get watch directory:", error);
+	}
+});
 
-  async function selectWatchDirectory() {
-    try {
-      const dir = await App.SelectWatchDirectory();
-      if (dir) {
-        watchDirectory = dir;
-      }
-    } catch (error) {
-      console.error("Failed to select directory:", error);
-    }
-  }
+async function selectWatchDirectory() {
+	try {
+		const dir = await App.SelectWatchDirectory();
+		if (dir) {
+			watchDirectory = dir;
+		}
+	} catch (error) {
+		console.error("Failed to select directory:", error);
+	}
+}
 
-  function addIgnorePattern() {
-    if (!config.watcher.ignore_patterns) {
-      config.watcher.ignore_patterns = [];
-    }
-    config.watcher.ignore_patterns = [...config.watcher.ignore_patterns, ""];
-  }
+function addIgnorePattern() {
+	if (!config.watcher.ignore_patterns) {
+		config.watcher.ignore_patterns = [];
+	}
+	config.watcher.ignore_patterns = [...config.watcher.ignore_patterns, ""];
+}
 
-  function removeIgnorePattern(index: number) {
-    config.watcher.ignore_patterns = config.watcher.ignore_patterns.filter(
-      (_, i) => i !== index
-    );
-  }
+function removeIgnorePattern(index: number) {
+	config.watcher.ignore_patterns = config.watcher.ignore_patterns.filter(
+		(_, i) => i !== index,
+	);
+}
 
-  // Convert bytes to MB for display
-  function bytesToMB(bytes: number): number {
-    return Math.round(bytes / 1048576);
-  }
+// Convert bytes to MB for display
+function bytesToMB(bytes: number): number {
+	return Math.round(bytes / 1048576);
+}
 
-  // Convert MB to bytes for storage
-  function mbToBytes(mb: number): number {
-    return mb * 1048576;
-  }
+// Convert MB to bytes for storage
+function mbToBytes(mb: number): number {
+	return mb * 1048576;
+}
 
-  // Reactive variables for display
-  $: sizeThresholdMB = bytesToMB(config.watcher.size_threshold || 100);
-  $: minFileSizeMB = bytesToMB(config.watcher.min_file_size || 1);
+// Reactive variables for display
+$: sizeThresholdMB = bytesToMB(config.watcher.size_threshold || 100);
+$: minFileSizeMB = bytesToMB(config.watcher.min_file_size || 1);
 
-  // Update config when display values change
-  function updateSizeThreshold(event: Event) {
-    const target = event.target as HTMLInputElement;
-    config.watcher.size_threshold = mbToBytes(parseInt(target.value) || 100);
-  }
+// Update config when display values change
+function updateSizeThreshold(event: Event) {
+	const target = event.target as HTMLInputElement;
+	config.watcher.size_threshold = mbToBytes(
+		Number.parseInt(target.value) || 100,
+	);
+}
 
-  function updateMinFileSize(event: Event) {
-    const target = event.target as HTMLInputElement;
-    config.watcher.min_file_size = mbToBytes(parseInt(target.value) || 1);
-  }
+function updateMinFileSize(event: Event) {
+	const target = event.target as HTMLInputElement;
+	config.watcher.min_file_size = mbToBytes(Number.parseInt(target.value) || 1);
+}
 </script>
 
 <Card class="max-w-full shadow-sm p-5">

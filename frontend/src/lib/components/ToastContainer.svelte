@@ -1,58 +1,58 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { Toast } from "flowbite-svelte";
-  import { slide } from "svelte/transition";
-  import {
-    CheckCircleSolid,
-    ExclamationCircleSolid,
-    CloseCircleSolid,
-    InfoCircleSolid,
-  } from "flowbite-svelte-icons";
-  import { toastStore, type ToastMessage } from "../stores/toast";
+import { Toast } from "flowbite-svelte";
+import {
+	CheckCircleSolid,
+	CloseCircleSolid,
+	ExclamationCircleSolid,
+	InfoCircleSolid,
+} from "flowbite-svelte-icons";
+import { onMount } from "svelte";
+import { slide } from "svelte/transition";
+import { type ToastMessage, toastStore } from "../stores/toast";
 
-  let toasts: ToastMessage[] = [];
+let toasts: ToastMessage[] = [];
 
-  onMount(() => {
-    const unsubscribe = toastStore.subscribe((value) => {
-      toasts = value;
-    });
+onMount(() => {
+	const unsubscribe = toastStore.subscribe((value) => {
+		toasts = value;
+	});
 
-    return unsubscribe;
-  });
+	return unsubscribe;
+});
 
-  function getToastColor(type: ToastMessage["type"]) {
-    switch (type) {
-      case "success":
-        return "green";
-      case "error":
-        return "red";
-      case "warning":
-        return "yellow";
-      case "info":
-        return "blue";
-      default:
-        return "blue";
-    }
-  }
+function getToastColor(type: ToastMessage["type"]) {
+	switch (type) {
+		case "success":
+			return "green";
+		case "error":
+			return "red";
+		case "warning":
+			return "yellow";
+		case "info":
+			return "blue";
+		default:
+			return "blue";
+	}
+}
 
-  function getToastIcon(type: ToastMessage["type"]) {
-    switch (type) {
-      case "success":
-        return CheckCircleSolid;
-      case "error":
-        return CloseCircleSolid;
-      case "warning":
-        return ExclamationCircleSolid;
-      case "info":
-        return InfoCircleSolid;
-      default:
-        return InfoCircleSolid;
-    }
-  }
+function getToastIcon(type: ToastMessage["type"]) {
+	switch (type) {
+		case "success":
+			return CheckCircleSolid;
+		case "error":
+			return CloseCircleSolid;
+		case "warning":
+			return ExclamationCircleSolid;
+		case "info":
+			return InfoCircleSolid;
+		default:
+			return InfoCircleSolid;
+	}
+}
 
-  function dismissToast(id: string) {
-    toastStore.remove(id);
-  }
+function dismissToast(id: string) {
+	toastStore.remove(id);
+}
 </script>
 
 <!-- Toast Container positioned at top-right -->

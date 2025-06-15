@@ -1,18 +1,18 @@
 <script lang="ts">
-  import { Card, Heading, Input, Label, Checkbox, P } from "flowbite-svelte";
-  import { CheckCircleSolid } from "flowbite-svelte-icons";
-  import type { ConfigData } from "$lib/types";
+import type { ConfigData } from "$lib/types";
+import { Card, Checkbox, Heading, Input, Label, P } from "flowbite-svelte";
+import { CheckCircleSolid } from "flowbite-svelte-icons";
 
-  export let config: ConfigData;
+export let config: ConfigData;
 
-  // Ensure post_check exists with defaults
-  if (!config.post_check) {
-    config.post_check = {
-      enabled: true,
-      delay: "10s",
-      max_reposts: 1,
-    };
-  }
+// Ensure post_check exists with defaults
+if (!config.post_check) {
+	config.post_check = {
+		enabled: true,
+		delay: "10s",
+		max_reposts: 1,
+	};
+}
 </script>
 
 <Card class="max-w-full shadow-sm p-5">

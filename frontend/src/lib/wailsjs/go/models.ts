@@ -1,3 +1,105 @@
+export namespace backend {
+	
+	export class ProgressTracker {
+	    currentFile: string;
+	    totalFiles: number;
+	    completedFiles: number;
+	    stage: string;
+	    details: string;
+	    isRunning: boolean;
+	    lastUpdate: number;
+	    percentage: number;
+	    currentFileProgress: number;
+	    jobID: string;
+	    totalBytes: number;
+	    transferredBytes: number;
+	    currentFileBytes: number;
+	    speed: number;
+	    secondsLeft: number;
+	    elapsedTime: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProgressTracker(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.currentFile = source["currentFile"];
+	        this.totalFiles = source["totalFiles"];
+	        this.completedFiles = source["completedFiles"];
+	        this.stage = source["stage"];
+	        this.details = source["details"];
+	        this.isRunning = source["isRunning"];
+	        this.lastUpdate = source["lastUpdate"];
+	        this.percentage = source["percentage"];
+	        this.currentFileProgress = source["currentFileProgress"];
+	        this.jobID = source["jobID"];
+	        this.totalBytes = source["totalBytes"];
+	        this.transferredBytes = source["transferredBytes"];
+	        this.currentFileBytes = source["currentFileBytes"];
+	        this.speed = source["speed"];
+	        this.secondsLeft = source["secondsLeft"];
+	        this.elapsedTime = source["elapsedTime"];
+	    }
+	}
+	export class QueueItem {
+	    id: string;
+	    path: string;
+	    fileName: string;
+	    size: number;
+	    status: string;
+	    retryCount: number;
+	    priority: number;
+	    errorMessage?: string;
+	    // Go type: time
+	    createdAt: any;
+	    // Go type: time
+	    updatedAt: any;
+	    // Go type: time
+	    completedAt?: any;
+	    nzbPath?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new QueueItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.path = source["path"];
+	        this.fileName = source["fileName"];
+	        this.size = source["size"];
+	        this.status = source["status"];
+	        this.retryCount = source["retryCount"];
+	        this.priority = source["priority"];
+	        this.errorMessage = source["errorMessage"];
+	        this.createdAt = this.convertValues(source["createdAt"], null);
+	        this.updatedAt = this.convertValues(source["updatedAt"], null);
+	        this.completedAt = this.convertValues(source["completedAt"], null);
+	        this.nzbPath = source["nzbPath"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace config {
 	
 	export class QueueConfig {
@@ -336,108 +438,6 @@ export namespace config {
 	
 	
 	
-
-}
-
-export namespace main {
-	
-	export class ProgressTracker {
-	    currentFile: string;
-	    totalFiles: number;
-	    completedFiles: number;
-	    stage: string;
-	    details: string;
-	    isRunning: boolean;
-	    lastUpdate: number;
-	    percentage: number;
-	    currentFileProgress: number;
-	    jobID: string;
-	    totalBytes: number;
-	    transferredBytes: number;
-	    currentFileBytes: number;
-	    speed: number;
-	    secondsLeft: number;
-	    elapsedTime: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new ProgressTracker(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.currentFile = source["currentFile"];
-	        this.totalFiles = source["totalFiles"];
-	        this.completedFiles = source["completedFiles"];
-	        this.stage = source["stage"];
-	        this.details = source["details"];
-	        this.isRunning = source["isRunning"];
-	        this.lastUpdate = source["lastUpdate"];
-	        this.percentage = source["percentage"];
-	        this.currentFileProgress = source["currentFileProgress"];
-	        this.jobID = source["jobID"];
-	        this.totalBytes = source["totalBytes"];
-	        this.transferredBytes = source["transferredBytes"];
-	        this.currentFileBytes = source["currentFileBytes"];
-	        this.speed = source["speed"];
-	        this.secondsLeft = source["secondsLeft"];
-	        this.elapsedTime = source["elapsedTime"];
-	    }
-	}
-	export class QueueItem {
-	    id: string;
-	    path: string;
-	    fileName: string;
-	    size: number;
-	    status: string;
-	    retryCount: number;
-	    priority: number;
-	    errorMessage?: string;
-	    // Go type: time
-	    createdAt: any;
-	    // Go type: time
-	    updatedAt: any;
-	    // Go type: time
-	    completedAt?: any;
-	    nzbPath?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new QueueItem(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.path = source["path"];
-	        this.fileName = source["fileName"];
-	        this.size = source["size"];
-	        this.status = source["status"];
-	        this.retryCount = source["retryCount"];
-	        this.priority = source["priority"];
-	        this.errorMessage = source["errorMessage"];
-	        this.createdAt = this.convertValues(source["createdAt"], null);
-	        this.updatedAt = this.convertValues(source["updatedAt"], null);
-	        this.completedAt = this.convertValues(source["completedAt"], null);
-	        this.nzbPath = source["nzbPath"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
 
 }
 
