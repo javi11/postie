@@ -78,6 +78,8 @@ jobs:
       # Build Windows GUI using Wails config
       - name: Build Windows GUI
         run: wails build -platform windows/amd64
+        env:
+          CGO_ENABLED: 1
 
       # Upload Windows artifact
       - name: Upload Windows GUI artifact
@@ -116,6 +118,8 @@ jobs:
       # Build macOS GUI using Wails config (Universal Binary)
       - name: Build macOS GUI
         run: wails build -platform darwin/universal
+        env:
+          CGO_ENABLED: 1
 
       # Upload macOS artifact
       - name: Upload macOS GUI artifact
