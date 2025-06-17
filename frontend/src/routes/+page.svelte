@@ -8,6 +8,7 @@ import { toastStore } from "$lib/stores/toast";
 import { waitForWailsRuntime } from "$lib/utils";
 import * as App from "$lib/wailsjs/go/backend/App";
 import { EventsOn } from "$lib/wailsjs/runtime/runtime";
+import { goto } from "$app/navigation";
 import { onMount } from "svelte";
 
 let needsConfiguration = false;
@@ -35,6 +36,11 @@ onMount(async () => {
 	const unsubscribe = appStatus.subscribe((status) => {
 		needsConfiguration = status.needsConfiguration;
 		criticalConfigError = status.criticalConfigError;
+		
+		// Redirect to settings if configuration is needed or there's a critical error
+		if (needsConfiguration || criticalConfigError) {
+			goto("/settings");
+		}
 	});
 
 	return unsubscribe;

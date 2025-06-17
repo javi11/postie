@@ -359,10 +359,6 @@ func Load(path string) (*ConfigData, error) {
 
 // validate validates the configuration
 func (c *ConfigData) validate() error {
-	if len(c.Servers) == 0 {
-		return fmt.Errorf("no servers configured")
-	}
-
 	for i, s := range c.Servers {
 		if s.Host == "" {
 			return fmt.Errorf("server %d: host is required", i)

@@ -1,5 +1,5 @@
 <script lang="ts">
-import { Input, Label, P } from "flowbite-svelte";
+import { Button, Input, Label, P } from "flowbite-svelte";
 
 export let value: number = 750000;
 export let label: string = "";
@@ -49,13 +49,13 @@ function setPreset(presetValue: number) {
 	{#if presets.length > 0}
 		<div class="mt-2 flex flex-wrap gap-2">
 			{#each presets as preset}
-				<button
+				<Button
 					type="button"
-					class="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+					class="cursor-pointer px-2 py-1 text-xs"
 					onclick={() => setPreset(preset.value)}
 				>
 					{preset.label}
-				</button>
+				</Button>
 			{/each}
 		</div>
 	{/if}
