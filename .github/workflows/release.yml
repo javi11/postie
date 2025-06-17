@@ -126,7 +126,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: postie-gui-macos-universal
-          path: build/bin/postie
+          path: build/bin/postie.app
 
   build-server:
     runs-on: ubuntu-latest
