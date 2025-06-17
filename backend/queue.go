@@ -35,7 +35,7 @@ func (a *App) initializeQueue() error {
 
 	// Stop previous queue if running
 	if a.queue != nil {
-		a.queue.Close()
+		_ = a.queue.Close()
 		a.queue = nil
 	}
 

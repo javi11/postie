@@ -207,11 +207,29 @@ func TestCreatePar2WithPar2Command(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	// Mock the exec.CommandContext
+	// Mock the exec.CommandContext to create a script that creates the expected par2 file
 	execCommand = func(ctx context.Context, command string, args ...string) *exec.Cmd {
-		// Use a fake "echo" command instead that will just succeed
-		cs := []string{"-n", "Processing: 10%\nProcessing: 50%\nProcessing: 100%"}
-		cmd := exec.CommandContext(ctx, "echo", cs...)
+		// Find the output file from the args (the par2 file path for par2 command)
+		var outputFile string
+		if len(args) >= 4 {
+			// For par2 command, the output file is typically one of the later arguments
+			for _, arg := range args {
+				if strings.HasSuffix(arg, ".par2") {
+					outputFile = arg
+					break
+				}
+			}
+		}
+
+		// Create a shell script that creates the par2 file and outputs progress
+		script := fmt.Sprintf(`#!/bin/bash
+touch "%s"
+echo "Processing: 10%%"
+echo "Processing: 50%%"  
+echo "Processing: 100%%"
+`, outputFile)
+
+		cmd := exec.CommandContext(ctx, "sh", "-c", script)
 		return cmd
 	}
 
@@ -235,12 +253,32 @@ func TestCreatePar2WithPar2Command(t *testing.T) {
 		},
 	}
 
-	// Rather than trying to fully mock the command execution,
-	// we'll mock the function that's called so that it returns a simple
-	// successful command that outputs the expected format
-	_, err = par2Executor.Create(ctx, files)
+	createdFiles, err := par2Executor.Create(ctx, files)
 	if err != nil {
 		t.Fatalf("par2Executor.Create failed: %v", err)
+	}
+
+	// Verify that at least one par2 file was created
+	if len(createdFiles) == 0 {
+		t.Fatal("Expected at least one par2 file to be created")
+	}
+
+	// Verify the created file exists
+	expectedPar2File := testFile + ".par2"
+	if _, err := os.Stat(expectedPar2File); os.IsNotExist(err) {
+		t.Fatalf("Expected par2 file %s was not created", expectedPar2File)
+	}
+
+	// Verify the created file is in the returned list
+	found := false
+	for _, createdFile := range createdFiles {
+		if createdFile == expectedPar2File {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("Expected par2 file %s not found in created files list: %v", expectedPar2File, createdFiles)
 	}
 }
 
@@ -259,11 +297,26 @@ func TestCreatePar2WithParparCommand(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	// Mock the exec.CommandContext
+	// Mock the exec.CommandContext to create a script that creates the expected par2 file
 	execCommand = func(ctx context.Context, command string, args ...string) *exec.Cmd {
-		// Use a fake command that will succeed
-		cs := []string{"-n", "Processing: 10%\nProcessing: 50%\nProcessing: 100%"}
-		cmd := exec.CommandContext(ctx, "echo", cs...)
+		// Find the output file from the args (after -o flag for parpar)
+		var outputFile string
+		for _, arg := range args {
+			if strings.HasPrefix(arg, "-o") {
+				outputFile = strings.TrimPrefix(arg, "-o")
+				break
+			}
+		}
+
+		// Create a shell script that creates the par2 file and outputs progress
+		script := fmt.Sprintf(`#!/bin/bash
+touch "%s"
+echo "Processing: 10%%"
+echo "Processing: 50%%"  
+echo "Processing: 100%%"
+`, outputFile)
+
+		cmd := exec.CommandContext(ctx, "sh", "-c", script)
 		return cmd
 	}
 
@@ -287,9 +340,32 @@ func TestCreatePar2WithParparCommand(t *testing.T) {
 		},
 	}
 
-	_, err = par2Executor.Create(ctx, files)
+	createdFiles, err := par2Executor.Create(ctx, files)
 	if err != nil {
 		t.Fatalf("par2Executor.Create failed: %v", err)
+	}
+
+	// Verify that at least one par2 file was created
+	if len(createdFiles) == 0 {
+		t.Fatal("Expected at least one par2 file to be created")
+	}
+
+	// Verify the created file exists
+	expectedPar2File := testFile + ".par2"
+	if _, err := os.Stat(expectedPar2File); os.IsNotExist(err) {
+		t.Fatalf("Expected par2 file %s was not created", expectedPar2File)
+	}
+
+	// Verify the created file is in the returned list
+	found := false
+	for _, createdFile := range createdFiles {
+		if createdFile == expectedPar2File {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("Expected par2 file %s not found in created files list: %v", expectedPar2File, createdFiles)
 	}
 }
 

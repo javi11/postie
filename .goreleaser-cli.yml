@@ -1,0 +1,53 @@
+# https://goreleaser.com
+project_name: postie-cli
+
+builds:
+  - id: cli
+    binary: postie-cli
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    main: ./cmd/main.go
+    ldflags:
+      - -s -w
+      - -X "main.Version={{ .Version }}"
+      - -X "main.GitCommit={{ .ShortCommit }}"
+      - -X "main.Timestamp={{ .Timestamp }}"
+    ignore:
+      - goos: windows
+        goarch: arm64
+    flags:
+      - -trimpath
+    env:
+      - CGO_ENABLED=0
+
+universal_binaries:
+  - id: cli
+    ids:
+      - cli
+    replace: true
+
+archives:
+  - id: cli
+    builds:
+      - cli
+    format: tar.gz
+    name_template: '{{ .ProjectName }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: 'checksums-cli.txt'
+  algorithm: sha512
+
+changelog:
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^Merge branch' 

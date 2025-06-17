@@ -202,7 +202,7 @@ func (q *Queue) ReceiveFile(ctx context.Context) (*goqite.Message, *FileJob, err
 	var job FileJob
 	if err := json.Unmarshal(msg.Body, &job); err != nil {
 		// Delete the invalid message
-		q.queue.Delete(ctx, msg.ID)
+		_ = q.queue.Delete(ctx, msg.ID)
 		return nil, nil, fmt.Errorf("failed to unmarshal job: %w", err)
 	}
 
@@ -258,7 +258,11 @@ func (q *Queue) GetQueueItems() ([]QueueItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			slog.Error("Failed to close rows", "error", err)
+		}
+	}()
 
 	for rows.Next() {
 		var id, created, updated, timeout string
@@ -314,7 +318,11 @@ func (q *Queue) GetQueueItems() ([]QueueItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer completedRows.Close()
+	defer func() {
+		if err := completedRows.Close(); err != nil {
+			slog.Error("Failed to close completed rows", "error", err)
+		}
+	}()
 
 	for completedRows.Next() {
 		var id, path, nzbPath, createdAt, completedAt string
@@ -402,7 +410,11 @@ func (q *Queue) ClearQueue() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			slog.Error("Failed to close rows", "error", err)
+		}
+	}()
 
 	var nzbPaths []string
 	for rows.Next() {
@@ -438,7 +450,11 @@ func (q *Queue) ClearCompletedItems() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			slog.Error("Failed to close rows", "error", err)
+		}
+	}()
 
 	var nzbPaths []string
 	for rows.Next() {

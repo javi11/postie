@@ -22,38 +22,98 @@ jobs:
         with:
           fetch-depth: 0
       - uses: ./.github/actions/test
-  build-artifacts:
+  build-cli-test:
+    if: ${{ !contains(github.event.head_commit.message, 'docs:') }}
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.0
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine Branch
+        id: branch
+        uses: transferwise/sanitize-branch-name@v1
+
+      # build CLI snapshot
+      - name: Build CLI snapshot
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          version: latest
+          args: release --snapshot --clean --config .goreleaser-cli.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH_NAME: ${{ steps.branch.outputs.sanitized-branch-name }}
+
+      - name: Upload CLI artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-snapshot
+          path: dist/*
+
+  build-gui-test:
+    if: ${{ !contains(github.event.head_commit.message, 'docs:') }}
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Install Wails (version from wails.json)
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      # Install Bun
+      - name: Install Bun
+        run: npm install -g bun
+
+      # Test build GUI for Linux using Wails config (for CI testing)
+      - name: Build GUI test
+        run: wails build -platform linux/amd64
+
+      - name: Upload GUI test artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gui-test
+          path: build/bin/postie
+
+  build-server-test:
     if: ${{ !contains(github.event.head_commit.message, 'docs:') || github.event.pull_request.head.repo.fork == false }}
     runs-on: ubuntu-latest
     needs: test
     permissions:
       contents: write
       packages: write
-      issues: write
     steps:
-      # dependencies
-      # Include go
       - uses: actions/setup-go@v5
         with:
           go-version: 1.24.0
 
-      # checkout
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # git status
-      - name: Git status
-        run: git status
-
       - name: Determine Branch
         id: branch
         uses: transferwise/sanitize-branch-name@v1
 
-      # build
-      - name: build artifacts
-        id: build_artifacts
+      # build server snapshot (Linux only for testing)
+      - name: Build server snapshot
         uses: goreleaser/goreleaser-action@v5
         with:
           version: latest
@@ -62,9 +122,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH_NAME: ${{ steps.branch.outputs.sanitized-branch-name }}
 
-      # artifacts
-      - name: Push linux artifact
+      - name: Upload server artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: build_linux
+          name: server-snapshot
           path: dist/*linux*

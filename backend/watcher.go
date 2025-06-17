@@ -22,7 +22,7 @@ func (a *App) initializeWatcher() error {
 		a.watchCancel = nil
 	}
 	if a.watcher != nil {
-		a.watcher.Close()
+		_ = a.watcher.Close()
 		a.watcher = nil
 	}
 
