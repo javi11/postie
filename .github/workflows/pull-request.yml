@@ -81,15 +81,23 @@ jobs:
       - name: Install Bun
         run: npm install -g bun
 
-      # Test build GUI for Linux using Wails config (for CI testing)
-      - name: Build GUI test
-        run: wails build -platform linux/amd64
+      # Test build GUI for Windows
+      - name: Build GUI test - Windows
+        run: wails build -platform windows/amd64
 
-      - name: Upload GUI test artifact
+      # Test build GUI for macOS Intel
+      - name: Build GUI test - macOS Intel
+        run: wails build -platform darwin/amd64
+
+      # Test build GUI for macOS ARM64
+      - name: Build GUI test - macOS ARM64
+        run: wails build -platform darwin/arm64
+
+      - name: Upload GUI test artifacts
         uses: actions/upload-artifact@v4
         with:
           name: gui-test
-          path: build/bin/postie
+          path: build/bin/*
 
   build-server-test:
     if: ${{ !contains(github.event.head_commit.message, 'docs:') || github.event.pull_request.head.repo.fork == false }}
