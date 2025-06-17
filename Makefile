@@ -51,7 +51,7 @@ lint: go-mod-tidy golangci-lint
 .PHONY: test test-race
 test-race: ARGS=-race
 test-race: test
-test:
+test: build-gui
 	$(GO) test $(ARGS) ./...
 
 .PHONY: check
