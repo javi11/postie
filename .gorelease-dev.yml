@@ -6,7 +6,7 @@ builds:
       - linux
     goarch:
       - amd64
-    main: ./main.go
+    main: ./cmd/main.go
     ldflags:
       - -s -w
       - -X "main.Version={{ .Version }}"
