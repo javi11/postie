@@ -314,7 +314,7 @@ func Load(path string) (*ConfigData, error) {
 	}
 
 	if cfg.Queue.DatabasePath == "" {
-		cfg.Queue.DatabasePath = filepath.Join(filepath.Dir(path), "postie_queue.db")
+		cfg.Queue.DatabasePath = "./postie_queue.db"
 	}
 
 	if cfg.Queue.BatchSize <= 0 {

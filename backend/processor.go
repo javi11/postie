@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 
 	"github.com/javi11/postie/internal/processor"
@@ -49,11 +48,9 @@ func (a *App) initializeProcessor() error {
 	// Get output directory from configuration
 	outputDir := a.config.GetOutputDir()
 
-	// If output directory is relative, make it relative to executable
-	exePath, err := os.Executable()
-	if !filepath.IsAbs(outputDir) && err == nil {
-		exeDir := filepath.Dir(exePath)
-		outputDir = filepath.Join(exeDir, outputDir)
+	// If output directory is relative, make it relative to OS-specific data directory
+	if !filepath.IsAbs(outputDir) {
+		outputDir = filepath.Join(a.appPaths.Data, outputDir)
 	}
 
 	// Event emitter for progress updates

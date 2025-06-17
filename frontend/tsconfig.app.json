@@ -11,6 +11,6 @@
 		"moduleDetection": "force",
 		"skipLibCheck": true
 	},
-	"exclude": ["node_modules", "dist", "build"],
+	"exclude": ["node_modules", "dist", "build", ".svelte-kit"],
 	"include": ["src/**/*.ts", "src/**/*.js", "src/**/*.svelte"]
 }

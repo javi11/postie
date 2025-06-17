@@ -188,26 +188,14 @@ func (a *App) loadConfig() error {
 }
 
 func (a *App) createDefaultConfig() error {
-	// Ensure the directory exists
-	configDir := filepath.Dir(a.configPath)
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
-	}
-
+	// Directory creation is handled in GetAppPaths()
 	defaultConfig := config.GetDefaultConfig()
 
-	// Set the par2 path to the same location where we download it
-	exePath, err := os.Executable()
-	var par2Path string
-	if err != nil {
-		// Fallback to current directory if we can't get executable path
-		par2Path = "./parpar"
-	} else {
-		// Use the same directory as the executable
-		exeDir := filepath.Dir(exePath)
-		par2Path = filepath.Join(exeDir, "parpar")
-	}
-	defaultConfig.Par2.Par2Path = par2Path
+	// Set the par2 path to the OS-specific location
+	defaultConfig.Par2.Par2Path = a.appPaths.Par2
+
+	// Set the database path to the OS-specific location
+	defaultConfig.Queue.DatabasePath = a.appPaths.Database
 
 	if err := config.SaveConfig(&defaultConfig, a.configPath); err != nil {
 		return fmt.Errorf("failed to save default config: %w", err)
@@ -219,18 +207,8 @@ func (a *App) createDefaultConfig() error {
 
 // ensurePar2Executable downloads par2 executable if it doesn't exist
 func (a *App) ensurePar2Executable(ctx context.Context) {
-	// Get the directory where the executable is located
-	exePath, err := os.Executable()
-	var par2Path string
-	if err != nil {
-		// Fallback to current directory if we can't get executable path
-		slog.Warn("Could not get executable path for par2, using current directory", "error", err)
-		par2Path = "./parpar"
-	} else {
-		// Use the same directory as the executable
-		exeDir := filepath.Dir(exePath)
-		par2Path = filepath.Join(exeDir, "parpar")
-	}
+	// Use the OS-specific par2 path
+	par2Path := a.appPaths.Par2
 
 	slog.Info("Checking for par2 executable", "path", par2Path)
 
@@ -268,37 +246,25 @@ func (a *App) ensurePar2Executable(ctx context.Context) {
 
 // GetWatchDirectory returns the current watch directory
 func (a *App) GetWatchDirectory() string {
-	// Get the directory where the executable is located
-	exePath, err := os.Executable()
-	var watchDir string
-	if err != nil {
-		watchDir = "./watch"
-	} else {
-		exeDir := filepath.Dir(exePath)
-		watchDir = filepath.Join(exeDir, "watch")
-	}
+	// Use the OS-specific data directory for watch folder
+	watchDir := filepath.Join(a.appPaths.Data, "watch")
 	return watchDir
 }
 
 // GetOutputDirectory returns the current output directory
 func (a *App) GetOutputDirectory() string {
-	if a.config == nil {
-		return "./output"
-	}
-
-	// Get output directory from configuration
-	outputDir := a.config.GetOutputDir()
-
-	// If output directory is relative, make it relative to executable
-	if !filepath.IsAbs(outputDir) {
-		exePath, err := os.Executable()
-		if err == nil {
-			exeDir := filepath.Dir(exePath)
-			outputDir = filepath.Join(exeDir, outputDir)
+	if a.config != nil {
+		outputDir := a.config.GetOutputDir()
+		if outputDir != "" {
+			// If output directory is relative, make it relative to OS-specific data directory
+			if !filepath.IsAbs(outputDir) {
+				outputDir = filepath.Join(a.appPaths.Data, outputDir)
+			}
+			return outputDir
 		}
 	}
-
-	return outputDir
+	// Default fallback to OS-specific data directory
+	return filepath.Join(a.appPaths.Data, "output")
 }
 
 // SelectWatchDirectory allows user to select a watch directory

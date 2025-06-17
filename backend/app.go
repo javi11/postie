@@ -3,8 +3,6 @@ package backend
 import (
 	"context"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"sync"
 
 	"github.com/javi11/postie/internal/config"
@@ -20,6 +18,7 @@ type App struct {
 	ctx          context.Context
 	config       *config.ConfigData
 	configPath   string
+	appPaths     *AppPaths
 	postie       *postie.Postie
 	progress     *ProgressTracker
 	progressMux  sync.RWMutex
@@ -38,23 +37,28 @@ type App struct {
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	// Get the directory where the executable is located
-	exePath, err := os.Executable()
-	var configPath string
+	// Get OS-specific paths
+	appPaths, err := GetAppPaths()
 	if err != nil {
-		// Fallback to current directory if we can't get executable path
-		slog.Warn("Could not get executable path, using current directory", "error", err)
-		configPath = "./config.yaml"
-	} else {
-		// Use the same directory as the executable
-		exeDir := filepath.Dir(exePath)
-		configPath = filepath.Join(exeDir, "config.yaml")
+		// Fallback to current directory if we can't get OS-specific paths
+		slog.Warn("Could not get OS-specific paths, using current directory", "error", err)
+		appPaths = &AppPaths{
+			Config:   "./config.yaml",
+			Database: "./postie_queue.db",
+			Par2:     "./parpar",
+			Data:     ".",
+		}
 	}
 
-	slog.Info("Using config path", "path", configPath)
+	slog.Info("Using OS-specific paths",
+		"config", appPaths.Config,
+		"database", appPaths.Database,
+		"par2", appPaths.Par2,
+		"data", appPaths.Data)
 
 	return &App{
-		configPath: configPath,
+		configPath: appPaths.Config,
+		appPaths:   appPaths,
 		progress: &ProgressTracker{
 			Stage: "Ready",
 		},
@@ -66,11 +70,11 @@ func NewApp() *App {
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 
-	// Ensure the config directory exists
-	configDir := filepath.Dir(a.configPath)
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		slog.Error("Failed to create config directory", "dir", configDir, "error", err)
-	}
+	// Note: Directory creation is now handled in GetAppPaths()
+	slog.Info("Application starting with OS-specific paths",
+		"config", a.appPaths.Config,
+		"database", a.appPaths.Database,
+		"par2", a.appPaths.Par2)
 
 	// Load initial configuration
 	if err := a.loadConfig(); err != nil {
