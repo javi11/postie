@@ -129,7 +129,7 @@ build-gui:
 .PHONY: build-frontend
 build-frontend:
 	@echo "Building Frontend..."
-	cd frontend && bun run build
+	cd frontend && bun i && bun run build
 
 .PHONY: build-gui-debug
 build-gui-debug:
