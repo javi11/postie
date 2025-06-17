@@ -26,7 +26,7 @@ junit: | $(JUNIT)
 	mkdir -p ./test-results && $(GO) test -v 2>&1 ./... | go tool go-junit-report -set-exit-code > ./test-results/report.xml
 
 .PHONY: coverage
-coverage: build-gui
+coverage: build-frontend
 	$(GO) test -v -coverprofile=coverage.out ./...
 
 .PHONY: coverage-html
@@ -38,7 +38,7 @@ coverage-func: coverage
 	$(GO) tool cover -func=coverage.out
 
 .PHONY: coverage-ci
-coverage-ci: build-gui
+coverage-ci: build-frontend
 	$(GO) test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
 .PHONY: coverage-total
@@ -51,7 +51,7 @@ lint: go-mod-tidy golangci-lint
 .PHONY: test test-race
 test-race: ARGS=-race
 test-race: test
-test: build-gui
+test: build-frontend
 	$(GO) test $(ARGS) ./...
 
 .PHONY: check
@@ -125,6 +125,11 @@ build-client-debug:
 build-gui:
 	@echo "Building GUI..."
 	go tool wails build
+
+.PHONY: build-frontend
+build-frontend:
+	@echo "Building Frontend..."
+	cd frontend && bun run build
 
 .PHONY: build-gui-debug
 build-gui-debug:
