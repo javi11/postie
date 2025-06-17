@@ -1,13 +1,15 @@
 <script lang="ts">
 import type { ConfigData } from "$lib/types";
 import * as App from "$lib/wailsjs/go/backend/App";
+import { toastStore } from "$lib/stores/toast";
 import { Button, Card, Heading, Input, Label, P } from "flowbite-svelte";
-import { CogSolid, FolderOpenSolid } from "flowbite-svelte-icons";
+import { CogSolid, FolderOpenSolid, FloppyDiskSolid } from "flowbite-svelte-icons";
 import { onMount } from "svelte";
 
 export let config: ConfigData;
 
 let outputDirectory = "";
+let saving = false;
 
 // Initialize config defaults if they don't exist
 if (!config.output_dir) {
@@ -32,6 +34,30 @@ async function selectOutputDirectory() {
 		}
 	} catch (error) {
 		console.error("Failed to select output directory:", error);
+	}
+}
+
+async function saveGeneralSettings() {
+	try {
+		saving = true;
+		
+		// Get the current config from the server to avoid conflicts
+		const currentConfig = await App.GetConfig();
+		
+		// Only update the general settings fields
+		currentConfig.output_dir = config.output_dir || "./output";
+
+		await App.SaveConfig(currentConfig);
+		
+		toastStore.success(
+			"General settings saved",
+			"Your general configuration has been saved successfully!"
+		);
+	} catch (error) {
+		console.error("Failed to save general settings:", error);
+		toastStore.error("Save failed", String(error));
+	} finally {
+		saving = false;
 	}
 }
 
@@ -100,6 +126,19 @@ $: if (config.output_dir) {
           </P>
         </div>
       {/if}
+    </div>
+
+    <!-- Save Button -->
+    <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
+      <Button
+        color="green"
+        onclick={saveGeneralSettings}
+        disabled={saving}
+        class="cursor-pointer flex items-center gap-2"
+      >
+        <FloppyDiskSolid class="w-4 h-4" />
+        {saving ? "Saving..." : "Save General Settings"}
+      </Button>
     </div>
   </div>
 </Card>

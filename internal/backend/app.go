@@ -11,6 +11,7 @@ import (
 	"github.com/javi11/postie/internal/watcher"
 	"github.com/javi11/postie/pkg/postie"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App struct for the Wails application
@@ -197,4 +198,18 @@ func getKeys(m map[string]bool) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// NavigateToSettings emits an event to navigate to the settings page
+func (a *App) NavigateToSettings() {
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "navigate-to-settings")
+	}
+}
+
+// NavigateToDashboard emits an event to navigate to the dashboard page
+func (a *App) NavigateToDashboard() {
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "navigate-to-dashboard")
+	}
 }

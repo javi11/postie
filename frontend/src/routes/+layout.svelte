@@ -10,7 +10,6 @@ import * as App from "$lib/wailsjs/go/backend/App";
 import { EventsOn } from "$lib/wailsjs/runtime/runtime";
 import {
 	Button,
-	DarkMode,
 	NavBrand,
 	NavHamburger,
 	NavLi,
@@ -49,6 +48,15 @@ onMount(async () => {
 		} else if (data.status === "error") {
 			toastStore.error("Download Failed", data.message);
 		}
+	});
+
+	// Listen for menu navigation events
+	EventsOn("navigate-to-settings", () => {
+		goto("/settings");
+	});
+
+	EventsOn("navigate-to-dashboard", () => {
+		goto("/");
 	});
 
 	// Load initial app status
@@ -114,31 +122,13 @@ async function loadAppStatus() {
             Dashboard
           </Button>
           <Button
-            color={$page.route.id === "/settings" ? "primary" : "alternative"}
+            color={$page.route.id === "/settings" ? "secondary" : "gray"}
             onclick={() => goto("/settings")}
-            class="cursor-pointer flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all"
+            class="cursor-pointer flex items-center text-sm font-medium transition-all"
             aria-current={$page.route.id === "/settings" ? "page" : undefined}
           >
             <CogSolid class="w-4 h-4" />
-            Settings
           </Button>
-          
-          {#if $page.route.id === "/settings" && $settingsSaveFunction}
-            <Button
-              color="green"
-              onclick={handleSaveSettings}
-              class="cursor-pointer flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all ml-2"
-            >
-              <FloppyDiskSolid class="w-4 h-4" />
-              Save Configuration
-            </Button>
-          {/if}
-          
-          <div class="ml-4 pl-4 border-l border-gray-200 dark:border-gray-700">
-            <DarkMode
-              class="cursor-pointer text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-2.5 transition-all"
-            />
-          </div>
         </nav>
       </div>
     </div>

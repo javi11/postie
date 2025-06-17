@@ -1,5 +1,7 @@
 <script lang="ts">
 import type { ConfigData } from "$lib/types";
+import { toastStore } from "$lib/stores/toast";
+import * as App from "$lib/wailsjs/go/backend/App";
 import {
 	Button,
 	Card,
@@ -14,12 +16,15 @@ import {
 	CirclePlusSolid,
 	CloudArrowUpSolid,
 	TrashBinSolid,
+	FloppyDiskSolid,
 } from "flowbite-svelte-icons";
 import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 import ByteSizeInput from "$lib/components/inputs/ByteSizeInput.svelte";
 import ThrottleRateInput from "$lib/components/inputs/ThrottleRateInput.svelte";
 
 export let config: ConfigData;
+
+let saving = false;
 
 // Ensure posting config has all required fields with defaults
 if (!config.posting.wait_for_par2) {
@@ -130,6 +135,36 @@ $: if (
 	throttleRateMB * 1048576 !== config.posting.throttle_rate
 ) {
 	config.posting.throttle_rate = throttleRateMB * 1048576;
+}
+
+async function savePostingSettings() {
+	try {
+		saving = true;
+		
+		// Get the current config from the server to avoid conflicts
+		const currentConfig = await App.GetConfig();
+		
+		// Only update the posting fields with proper type conversion
+		currentConfig.posting = {
+			...config.posting,
+			max_retries: Number.parseInt(config.posting.max_retries) || 3,
+			article_size_in_bytes: Number.parseInt(config.posting.article_size_in_bytes) || 750000,
+			retry_delay: config.posting.retry_delay || "5s",
+			throttle_rate: config.posting.throttle_rate || 0,
+		};
+
+		await App.SaveConfig(currentConfig);
+		
+		toastStore.success(
+			"Posting settings saved",
+			"Your posting configuration has been saved successfully!"
+		);
+	} catch (error) {
+		console.error("Failed to save posting settings:", error);
+		toastStore.error("Save failed", String(error));
+	} finally {
+		saving = false;
+	}
 }
 </script>
 
@@ -408,6 +443,19 @@ $: if (
           alt.binaries.multimedia. Choose groups appropriate for your content type.
         </P>
       </div>
+    </div>
+
+    <!-- Save Button -->
+    <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
+      <Button
+        color="green"
+        onclick={savePostingSettings}
+        disabled={saving}
+        class="cursor-pointer flex items-center gap-2"
+      >
+        <FloppyDiskSolid class="w-4 h-4" />
+        {saving ? "Saving..." : "Save Posting Settings"}
+      </Button>
     </div>
   </div>
 </Card>

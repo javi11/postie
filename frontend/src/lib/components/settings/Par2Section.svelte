@@ -1,5 +1,7 @@
 <script lang="ts">
 import type { ConfigData } from "$lib/types";
+import { toastStore } from "$lib/stores/toast";
+import * as App from "$lib/wailsjs/go/backend/App";
 import {
 	Button,
 	Card,
@@ -15,11 +17,14 @@ import {
 	InfoCircleSolid,
 	ShieldCheckSolid,
 	TrashBinSolid,
+	FloppyDiskSolid,
 } from "flowbite-svelte-icons";
 import PercentageInput from "$lib/components/inputs/PercentageInput.svelte";
 import SizeInput from "$lib/components/inputs/SizeInput.svelte";
 
 export let config: ConfigData;
+
+let saving = false;
 
 // Ensure extra_par2_options exists
 if (!config.par2.extra_par2_options) {
@@ -112,6 +117,34 @@ function removeExtraOption(index: number) {
 	config.par2.extra_par2_options = config.par2.extra_par2_options.filter(
 		(_, i) => i !== index,
 	);
+}
+
+async function savePar2Settings() {
+	try {
+		saving = true;
+		
+		// Get the current config from the server to avoid conflicts
+		const currentConfig = await App.GetConfig();
+		
+		// Only update the par2 fields with proper type conversion
+		currentConfig.par2 = {
+			...config.par2,
+			volume_size: Number.parseInt(config.par2.volume_size) || 153600000,
+			max_input_slices: Number.parseInt(config.par2.max_input_slices) || 4000,
+		};
+
+		await App.SaveConfig(currentConfig);
+		
+		toastStore.success(
+			"PAR2 settings saved",
+			"Your PAR2 configuration has been saved successfully!"
+		);
+	} catch (error) {
+		console.error("Failed to save PAR2 settings:", error);
+		toastStore.error("Save failed", String(error));
+	} finally {
+		saving = false;
+	}
 }
 
 // Display values for status cards
@@ -340,6 +373,19 @@ $: volumeSizeDisplay = config.par2.volume_size
           </P>
         </div>
       {/if}
+    </div>
+
+    <!-- Save Button -->
+    <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
+      <Button
+        color="green"
+        onclick={savePar2Settings}
+        disabled={saving}
+        class="cursor-pointer flex items-center gap-2"
+      >
+        <FloppyDiskSolid class="w-4 h-4" />
+        {saving ? "Saving..." : "Save PAR2 Settings"}
+      </Button>
     </div>
   </div>
 </Card>

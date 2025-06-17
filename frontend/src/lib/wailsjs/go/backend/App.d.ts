@@ -42,6 +42,10 @@ export function GetWatchDirectory():Promise<string>;
 
 export function IsUploading():Promise<boolean>;
 
+export function NavigateToDashboard():Promise<void>;
+
+export function NavigateToSettings():Promise<void>;
+
 export function RemoveFromQueue(arg1:string):Promise<void>;
 
 export function SaveConfig(arg1:config.ConfigData):Promise<void>;

@@ -78,6 +78,14 @@ export function IsUploading() {
   return window['go']['backend']['App']['IsUploading']();
 }
 
+export function NavigateToDashboard() {
+  return window['go']['backend']['App']['NavigateToDashboard']();
+}
+
+export function NavigateToSettings() {
+  return window['go']['backend']['App']['NavigateToSettings']();
+}
+
 export function RemoveFromQueue(arg1) {
   return window['go']['backend']['App']['RemoveFromQueue'](arg1);
 }

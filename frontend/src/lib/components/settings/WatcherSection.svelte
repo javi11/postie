@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { ConfigData } from "$lib/types";
 import * as App from "$lib/wailsjs/go/backend/App";
+import { toastStore } from "$lib/stores/toast";
 import {
 	Button,
 	Card,
@@ -19,6 +20,7 @@ import {
 	FolderOpenSolid,
 	FolderSolid,
 	TrashBinSolid,
+	FloppyDiskSolid,
 } from "flowbite-svelte-icons";
 import { onMount } from "svelte";
 import DurationInput from "$lib/components/inputs/DurationInput.svelte";
@@ -27,6 +29,7 @@ import SizeInput from "$lib/components/inputs/SizeInput.svelte";
 export let config: ConfigData;
 
 let watchDirectory = "";
+let saving = false;
 
 // Initialize watcher config if it doesn't exist
 if (!config.watcher) {
@@ -121,6 +124,37 @@ function removeIgnorePattern(index: number) {
 	config.watcher.ignore_patterns = config.watcher.ignore_patterns.filter(
 		(_, i) => i !== index,
 	);
+}
+
+async function saveWatcherSettings() {
+	try {
+		saving = true;
+		
+		// Get the current config from the server to avoid conflicts
+		const currentConfig = await App.GetConfig();
+		
+		// Only update the watcher fields with proper type conversion
+		if (config.watcher) {
+			currentConfig.watcher = {
+				...config.watcher,
+				size_threshold: Number.parseInt(config.watcher.size_threshold) || 104857600,
+				min_file_size: Number.parseInt(config.watcher.min_file_size) || 1048576,
+				check_interval: config.watcher.check_interval || "5m",
+			};
+		}
+
+		await App.SaveConfig(currentConfig);
+		
+		toastStore.success(
+			"Watcher settings saved",
+			"Your file watcher configuration has been saved successfully!"
+		);
+	} catch (error) {
+		console.error("Failed to save watcher settings:", error);
+		toastStore.error("Save failed", String(error));
+	} finally {
+		saving = false;
+	}
 }
 </script>
 
@@ -385,6 +419,19 @@ function removeIgnorePattern(index: number) {
           </div>
         </div>
       {/if}
+    </div>
+
+    <!-- Save Button -->
+    <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
+      <Button
+        color="green"
+        onclick={saveWatcherSettings}
+        disabled={saving}
+        class="cursor-pointer flex items-center gap-2"
+      >
+        <FloppyDiskSolid class="w-4 h-4" />
+        {saving ? "Saving..." : "Save Watcher Settings"}
+      </Button>
     </div>
   </div>
 </Card>

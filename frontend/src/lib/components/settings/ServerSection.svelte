@@ -1,5 +1,7 @@
 <script lang="ts">
 import type { ConfigData, ServerConfig } from "$lib/types";
+import { toastStore } from "$lib/stores/toast";
+import * as App from "$lib/wailsjs/go/backend/App";
 import {
 	Button,
 	ButtonGroup,
@@ -16,10 +18,13 @@ import {
 	ServerSolid,
 	ShieldCheckSolid,
 	TrashBinSolid,
+	FloppyDiskSolid,
 } from "flowbite-svelte-icons";
 import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 
 export let config: ConfigData;
+
+let saving = false;
 
 const timeUnitOptions = [
 	{ value: "s", name: "Seconds" },
@@ -118,6 +123,57 @@ function updateIdleTime(serverIndex: number, duration: string) {
 
 function updateTTL(serverIndex: number, duration: string) {
 	config.servers[serverIndex].max_connection_ttl_in_seconds = durationToSeconds(duration);
+}
+
+async function saveServerSettings() {
+	try {
+		saving = true;
+		
+		// Validate that all servers have required fields
+		for (let i = 0; i < config.servers.length; i++) {
+			const server = config.servers[i];
+			if (!server.host || server.host.trim() === "") {
+				toastStore.error(
+					"Configuration Error",
+					`Server ${i + 1}: Host is required`
+				);
+				return;
+			}
+			if (!server.port || server.port <= 0 || server.port > 65535) {
+				toastStore.error(
+					"Configuration Error",
+					`Server ${i + 1}: Valid port number is required (1-65535)`
+				);
+				return;
+			}
+		}
+
+		// Get the current config from the server to avoid conflicts
+		const currentConfig = await App.GetConfig();
+		
+		// Only update the server fields with proper type conversion
+		currentConfig.servers = config.servers.map((server: ServerConfig) => ({
+			...server,
+			port: Number.parseInt(server.port) || 119,
+			max_connections: Number.parseInt(server.max_connections) || 10,
+			max_connection_idle_time_in_seconds:
+				Number.parseInt(server.max_connection_idle_time_in_seconds) || 300,
+			max_connection_ttl_in_seconds:
+				Number.parseInt(server.max_connection_ttl_in_seconds) || 3600,
+		}));
+
+		await App.SaveConfig(currentConfig);
+		
+		toastStore.success(
+			"Server settings saved",
+			"Your server configuration has been saved successfully!"
+		);
+	} catch (error) {
+		console.error("Failed to save server settings:", error);
+		toastStore.error("Save failed", String(error));
+	} finally {
+		saving = false;
+	}
 }
 </script>
 
@@ -297,7 +353,18 @@ function updateTTL(serverIndex: number, duration: string) {
       </div>
     {/if}
 
+    <!-- Save Button -->
     <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
+      <Button
+        color="green"
+        onclick={saveServerSettings}
+        disabled={saving}
+        class="cursor-pointer flex items-center gap-2 mb-4"
+      >
+        <FloppyDiskSolid class="w-4 h-4" />
+        {saving ? "Saving..." : "Save Server Settings"}
+      </Button>
+      
       <P class="text-sm text-gray-600 dark:text-gray-400">
         <strong>Tip:</strong> Configure multiple servers for better redundancy and
         upload speeds. The application will automatically distribute uploads across

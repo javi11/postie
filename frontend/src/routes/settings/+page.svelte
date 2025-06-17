@@ -13,7 +13,7 @@ import { parseDuration, waitForWailsRuntime } from "$lib/utils";
 import * as App from "$lib/wailsjs/go/backend/App";
 import { config } from "$lib/wailsjs/go/models";
 import { onMount, onDestroy } from "svelte";
-import { Button, Heading, P, Spinner } from "flowbite-svelte";
+import { Button, Heading, P, Spinner, DarkMode } from "flowbite-svelte";
 import {
 	CheckCircleSolid,
 	CogSolid,
@@ -218,6 +218,14 @@ onDestroy(() => {
         <P class="text-gray-600 dark:text-gray-400">
           Configure your upload servers, posting settings, and PAR2 options.
         </P>
+
+        <!-- Dark Mode Toggle -->
+        <div class="flex items-center gap-3 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Theme:</span>
+          <DarkMode
+            class="cursor-pointer text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-2.5 transition-all"
+          />
+        </div>
 
         {#if criticalConfigError}
           <div class="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
