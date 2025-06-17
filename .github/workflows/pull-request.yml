@@ -58,8 +58,10 @@ jobs:
 
   build-gui-test:
     if: ${{ !contains(github.event.head_commit.message, 'docs:') }}
-    runs-on: ubuntu-latest
+    runs-on: macos-13
     needs: test
+    permissions:
+      contents: write
     steps:
       - uses: actions/setup-go@v5
         with:
@@ -68,6 +70,7 @@ jobs:
         with:
           node-version: '20'
 
+      # checkout
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -81,14 +84,15 @@ jobs:
       - name: Install Bun
         run: npm install -g bun
 
-      # Test build GUI for macOS ARM64
-      - name: Build GUI test - macOS ARM64
-        run: wails build -platform darwin/arm64
+      # Build macOS GUI using Wails config (Universal Binary)
+      - name: Build macOS GUI
+        run: wails build -platform darwin/universal
         env:
           CGO_ENABLED: 1
 
-      - name: Upload GUI test artifacts
+      # Upload macOS artifact
+      - name: Upload macOS GUI artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gui-test
-          path: build/bin/*
+          name: postie-gui-macos-universal
+          path: build/bin/postie
