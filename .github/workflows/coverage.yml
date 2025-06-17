@@ -31,6 +31,10 @@ jobs:
           go version
           go env
 
+      # Install Bun
+      - name: Install Bun
+        run: npm install -g bun
+
       - name: Run tests with coverage
         run: |
           make coverage-ci

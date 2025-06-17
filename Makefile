@@ -26,7 +26,7 @@ junit: | $(JUNIT)
 	mkdir -p ./test-results && $(GO) test -v 2>&1 ./... | go tool go-junit-report -set-exit-code > ./test-results/report.xml
 
 .PHONY: coverage
-coverage:
+coverage: build-gui
 	$(GO) test -v -coverprofile=coverage.out ./...
 
 .PHONY: coverage-html
@@ -38,7 +38,7 @@ coverage-func: coverage
 	$(GO) tool cover -func=coverage.out
 
 .PHONY: coverage-ci
-coverage-ci:
+coverage-ci: build-gui
 	$(GO) test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
 .PHONY: coverage-total
@@ -85,7 +85,7 @@ docker: snapshot
 .PHONY: dev
 dev:
 	@echo "Starting development mode (GUI with hot reload)..."
-	wails dev
+	go tool wails dev
 
 .PHONY: build
 build: build-cli build-client
@@ -124,12 +124,12 @@ build-client-debug:
 .PHONY: build-gui
 build-gui:
 	@echo "Building GUI..."
-	wails build
+	go tool wails build
 
 .PHONY: build-gui-debug
 build-gui-debug:
 	@echo "Building GUI (debug)..."
-	wails build -debug
+	go tool wails build -debug
 
 .PHONY: run
 run: build-gui
