@@ -69,8 +69,8 @@
             "name": "Debug postie GUI (Wails Dev)",
             "type": "node",
             "request": "launch",
-            "runtimeExecutable": "wails",
-            "runtimeArgs": ["dev"],
+            "runtimeExecutable": "go",
+            "runtimeArgs": ["run","github.com/wailsapp/wails/v2/cmd/wails@latest","dev"],
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "env": {

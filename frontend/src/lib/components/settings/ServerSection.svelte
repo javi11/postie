@@ -9,6 +9,7 @@ import {
 	Input,
 	Label,
 	P,
+	Select,
 } from "flowbite-svelte";
 import {
 	CirclePlusSolid,
@@ -16,8 +17,48 @@ import {
 	ShieldCheckSolid,
 	TrashBinSolid,
 } from "flowbite-svelte-icons";
+import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 
 export let config: ConfigData;
+
+const timeUnitOptions = [
+	{ value: "s", name: "Seconds" },
+	{ value: "m", name: "Minutes" },
+	{ value: "h", name: "Hours" },
+];
+
+// Duration preset definitions
+const idleTimePresets = [
+	{ label: "2m", value: 2, unit: "m" },
+	{ label: "5m", value: 5, unit: "m" },
+	{ label: "15m", value: 15, unit: "m" },
+];
+
+const ttlPresets = [
+	{ label: "30m", value: 30, unit: "m" },
+	{ label: "1h", value: 1, unit: "h" },
+	{ label: "6h", value: 6, unit: "h" },
+];
+
+// Helper functions for time conversion
+function secondsToTimeUnit(seconds: number): { value: number; unit: string } {
+	if (seconds >= 3600 && seconds % 3600 === 0) {
+		return { value: seconds / 3600, unit: "h" };
+	}
+	if (seconds >= 60 && seconds % 60 === 0) {
+		return { value: seconds / 60, unit: "m" };
+	}
+	return { value: seconds, unit: "s" };
+}
+
+function timeUnitToSeconds(value: number, unit: string): number {
+	switch (unit) {
+		case "h": return value * 3600;
+		case "m": return value * 60;
+		case "s": return value;
+		default: return value;
+	}
+}
 
 function addServer() {
 	const newServer: ServerConfig = {
@@ -37,6 +78,46 @@ function addServer() {
 
 function removeServer(index: number) {
 	config.servers = config.servers.filter((_, i) => i !== index);
+}
+
+// Convert seconds to duration strings and back
+function secondsToDuration(seconds: number): string {
+	if (seconds >= 3600 && seconds % 3600 === 0) {
+		return `${seconds / 3600}h`;
+	}
+	if (seconds >= 60 && seconds % 60 === 0) {
+		return `${seconds / 60}m`;
+	}
+	return `${seconds}s`;
+}
+
+function durationToSeconds(duration: string): number {
+	const match = duration.match(/^(\d+)([smh])$/);
+	if (match) {
+		const value = parseInt(match[1]);
+		const unit = match[2];
+		switch (unit) {
+			case 'h': return value * 3600;
+			case 'm': return value * 60;
+			case 's': return value;
+			default: return value;
+		}
+	}
+	return 300; // fallback
+}
+
+// Reactive duration strings for each server
+$: serverDurations = config.servers.map(server => ({
+	idle: secondsToDuration(server.max_connection_idle_time_in_seconds || 300),
+	ttl: secondsToDuration(server.max_connection_ttl_in_seconds || 3600)
+}));
+
+function updateIdleTime(serverIndex: number, duration: string) {
+	config.servers[serverIndex].max_connection_idle_time_in_seconds = durationToSeconds(duration);
+}
+
+function updateTTL(serverIndex: number, duration: string) {
+	config.servers[serverIndex].max_connection_ttl_in_seconds = durationToSeconds(duration);
 }
 </script>
 
@@ -160,29 +241,23 @@ function removeServer(index: number) {
                 />
               </div>
 
-              <div>
-                <Label for="idle-time-{index}" class="mb-2"
-                  >Idle Time (seconds)</Label
-                >
-                <Input
-                  id="idle-time-{index}"
-                  type="number"
-                  bind:value={server.max_connection_idle_time_in_seconds}
-                  min="0"
-                />
-              </div>
+              <DurationInput
+                value={serverDurations[index]?.idle || "5m"}
+                label="Connection Idle Timeout"
+                description="How long connections can remain idle"
+                presets={idleTimePresets}
+                id="idle-time-{index}"
+                on:change={(e) => updateIdleTime(index, e.detail)}
+              />
 
-              <div>
-                <Label for="ttl-{index}" class="mb-2"
-                  >Connection TTL (seconds)</Label
-                >
-                <Input
-                  id="ttl-{index}"
-                  type="number"
-                  bind:value={server.max_connection_ttl_in_seconds}
-                  min="0"
-                />
-              </div>
+              <DurationInput
+                value={serverDurations[index]?.ttl || "1h"}
+                label="Connection TTL"
+                description="Maximum lifetime of connections"
+                presets={ttlPresets}
+                id="ttl-{index}"
+                on:change={(e) => updateTTL(index, e.detail)}
+              />
             </div>
 
             <div class="mt-4 space-y-3">

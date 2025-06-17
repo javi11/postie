@@ -35,3 +35,6 @@ export const progress = writable<Record<string, JobProgress>>({});
 export const isUploading = derived(progress, (progress) => {
 	return Object.values(progress).some((job: JobProgress) => job.isRunning);
 });
+
+// Create settings store for save functionality
+export const settingsSaveFunction = writable<(() => Promise<void>) | null>(null);

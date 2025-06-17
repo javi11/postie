@@ -117,9 +117,32 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
 	func: T,
 	wait: number,
 ): (...args: Parameters<T>) => void {
-	let timeout: number;
+	let timeout: ReturnType<typeof setTimeout>;
 	return (...args: Parameters<T>) => {
 		clearTimeout(timeout);
 		timeout = setTimeout(() => func(...args), wait);
 	};
+}
+
+/**
+ * Wait for Wails runtime to be ready before making backend calls
+ */
+export async function waitForWailsRuntime(): Promise<void> {
+	const maxAttempts = 50; // Max 5 seconds (50 * 100ms)
+	let attempts = 0;
+
+	while (attempts < maxAttempts) {
+		if (
+			typeof window !== "undefined" &&
+			(window as any).go &&
+			(window as any).go.backend &&
+			(window as any).go.backend.App
+		) {
+			return;
+		}
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		attempts++;
+	}
+
+	throw new Error("Wails runtime not available after timeout");
 }

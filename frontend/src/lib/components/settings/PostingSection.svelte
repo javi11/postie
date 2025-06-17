@@ -15,6 +15,9 @@ import {
 	CloudArrowUpSolid,
 	TrashBinSolid,
 } from "flowbite-svelte-icons";
+import DurationInput from "$lib/components/inputs/DurationInput.svelte";
+import ByteSizeInput from "$lib/components/inputs/ByteSizeInput.svelte";
+import ThrottleRateInput from "$lib/components/inputs/ThrottleRateInput.svelte";
 
 export let config: ConfigData;
 
@@ -46,9 +49,9 @@ if (!config.posting.group_policy) {
 }
 
 const obfuscationOptions = [
-	{ value: "none", name: "None - No obfuscation" },
-	{ value: "partial", name: "Partial - Basic obfuscation" },
-	{ value: "full", name: "Full - Complete obfuscation" },
+	{ value: "none", name: "None" },
+	{ value: "partial", name: "Partial" },
+	{ value: "full", name: "Full" },
 ];
 
 const messageIdOptions = [
@@ -59,6 +62,28 @@ const messageIdOptions = [
 const groupPolicyOptions = [
 	{ value: "all", name: "All - Post to all groups" },
 	{ value: "each_file", name: "Each File - Random group per file" },
+];
+
+// Preset definitions
+const retryDelayPresets = [
+	{ label: "5s", value: 5, unit: "s" },
+	{ label: "30s", value: 30, unit: "s" },
+	{ label: "1m", value: 1, unit: "m" },
+	{ label: "5m", value: 5, unit: "m" },
+];
+
+const articleSizePresets = [
+	{ label: "500KB", value: 500000 },
+	{ label: "750KB", value: 750000 },
+	{ label: "1MB", value: 1000000 },
+];
+
+const throttleRatePresets = [
+	{ label: "Unlimited", value: 0 },
+	{ label: "5 MB/s", value: 5 },
+	{ label: "10 MB/s", value: 10 },
+	{ label: "25 MB/s", value: 25 },
+	{ label: "50 MB/s", value: 50 },
 ];
 
 function addGroup() {
@@ -135,44 +160,31 @@ $: if (
         </P>
       </div>
 
-      <div>
-        <Label for="retry-delay" class="mb-2">Retry Delay</Label>
-        <Input
-          id="retry-delay"
-          bind:value={config.posting.retry_delay}
-          placeholder="5s"
-        />
-        <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-          Delay between retries (e.g., 5s, 30s, 1m)
-        </P>
-      </div>
+      <DurationInput
+        bind:value={config.posting.retry_delay}
+        label="Retry Delay"
+        description="Delay between retries"
+        presets={retryDelayPresets}
+        id="retry-delay"
+      />
 
-      <div>
-        <Label for="article-size" class="mb-2">Article Size (bytes)</Label>
-        <Input
-          id="article-size"
-          type="number"
-          bind:value={config.posting.article_size_in_bytes}
-          min="1000"
-          max="10000000"
-        />
-        <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-          Size of each article chunk (default: 750000)
-        </P>
-      </div>
+      <ByteSizeInput
+        bind:value={config.posting.article_size_in_bytes}
+        label="Article Size"
+        description="Size of each article chunk"
+        presets={articleSizePresets}
+        minValue={1000}
+        maxValue={10000000}
+        id="article-size"
+      />
 
-      <div>
-        <Label for="throttle-rate" class="mb-2">Throttle Rate (MB/s)</Label>
-        <Input
-          id="throttle-rate"
-          type="number"
-          bind:value={throttleRateMB}
-          min="0"
-        />
-        <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-          Upload speed limit in MB per second (0 = unlimited)
-        </P>
-      </div>
+      <ThrottleRateInput
+        bind:value={throttleRateMB}
+        label="Throttle Rate (MB/s)"
+        description="Upload speed limit in MB per second (0 = unlimited)"
+        presets={throttleRatePresets}
+        id="throttle-rate"
+      />
 
       <div>
         <Label for="obfuscation" class="mb-2">Obfuscation Policy</Label>
@@ -181,9 +193,21 @@ $: if (
           items={obfuscationOptions}
           bind:value={config.posting.obfuscation_policy}
         />
-        <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-          Filename obfuscation level
-        </P>
+        <div class="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded text-xs">
+          {#if config.posting.obfuscation_policy === "none"}
+            <P class="text-gray-700 dark:text-gray-300">
+              <strong>None:</strong> Nothing will be obfuscated - all original filenames, subjects, and metadata preserved
+            </P>
+          {:else if config.posting.obfuscation_policy === "partial"}
+            <P class="text-gray-700 dark:text-gray-300">
+              <strong>Partial:</strong> Subject & filename obfuscated, same Yenc filename for all articles, real posted date, consistent poster
+            </P>
+          {:else if config.posting.obfuscation_policy === "full"}
+            <P class="text-gray-700 dark:text-gray-300">
+              <strong>Full:</strong> Subject & filename obfuscated, randomized Yenc filenames per article, randomized dates (within 6 hours), random poster per article, no NGX header
+            </P>
+          {/if}
+        </div>
       </div>
 
       <div>
@@ -195,9 +219,21 @@ $: if (
           items={obfuscationOptions}
           bind:value={config.posting.par2_obfuscation_policy}
         />
-        <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-          PAR2 file obfuscation level
-        </P>
+        <div class="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded text-xs">
+          {#if config.posting.par2_obfuscation_policy === "none"}
+            <P class="text-gray-700 dark:text-gray-300">
+              <strong>None:</strong> PAR2 files will use original filenames and metadata
+            </P>
+          {:else if config.posting.par2_obfuscation_policy === "partial"}
+            <P class="text-gray-700 dark:text-gray-300">
+              <strong>Partial:</strong> PAR2 files will have obfuscated subjects & filenames, but consistent metadata
+            </P>
+          {:else if config.posting.par2_obfuscation_policy === "full"}
+            <P class="text-gray-700 dark:text-gray-300">
+              <strong>Full:</strong> PAR2 files will be fully obfuscated with randomized filenames and metadata
+            </P>
+          {/if}
+        </div>
       </div>
 
       <div>

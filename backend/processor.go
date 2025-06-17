@@ -124,7 +124,7 @@ func (a *App) initializeProcessor() error {
 		Config:       queueCfg,
 		OutputFolder: outputDir,
 		EventEmitter: eventEmitter,
-	}, a.config.GetWatcherConfig().DeleteOriginalFile)
+	})
 
 	// Start processor
 	go func() {

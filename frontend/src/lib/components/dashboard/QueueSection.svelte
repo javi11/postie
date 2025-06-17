@@ -3,6 +3,7 @@ import { toastStore } from "$lib/stores/toast";
 import type { QueueItem } from "$lib/types";
 import { formatDate, formatFileSize, getStatusColor } from "$lib/utils";
 import * as App from "$lib/wailsjs/go/backend/App";
+import { SetQueueItemPriority } from "$lib/wailsjs/go/backend/App";
 import { EventsOn } from "$lib/wailsjs/runtime/runtime";
 import {
 	Badge,
@@ -27,7 +28,6 @@ import {
 	XSolid,
 } from "flowbite-svelte-icons";
 import { onMount } from "svelte";
-import { SetQueueItemPriority } from "$lib/wailsjs/go/backend/App";
 
 let queueItems: QueueItem[] = [];
 

@@ -2,6 +2,7 @@
 import type { ConfigData } from "$lib/types";
 import { Card, Checkbox, Heading, Input, Label, P } from "flowbite-svelte";
 import { LinkSolid } from "flowbite-svelte-icons";
+import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 
 export let config: ConfigData;
 
@@ -13,6 +14,13 @@ if (!config.connection_pool) {
 		skip_providers_verification_on_creation: false,
 	};
 }
+
+const healthCheckPresets = [
+	{ label: "30s", value: 30, unit: "s" },
+	{ label: "1m", value: 1, unit: "m" },
+	{ label: "5m", value: 5, unit: "m" },
+	{ label: "15m", value: 15, unit: "m" },
+];
 </script>
 
 <Card class="max-w-full shadow-sm p-5">
@@ -42,19 +50,13 @@ if (!config.connection_pool) {
         </P>
       </div>
 
-      <div>
-        <Label for="health-check-interval" class="mb-2"
-          >Health Check Interval</Label
-        >
-        <Input
-          id="health-check-interval"
-          bind:value={config.connection_pool.health_check_interval}
-          placeholder="1m"
-        />
-        <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-          Interval between connection health checks (e.g., 30s, 1m, 5m)
-        </P>
-      </div>
+      <DurationInput
+        bind:value={config.connection_pool.health_check_interval}
+        label="Health Check Interval"
+        description="Interval between connection health checks"
+        presets={healthCheckPresets}
+        id="health-check-interval"
+      />
     </div>
 
     <div class="space-y-3">

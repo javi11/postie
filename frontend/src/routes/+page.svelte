@@ -5,6 +5,7 @@ import QueueSection from "$lib/components/dashboard/QueueSection.svelte";
 import QueueStats from "$lib/components/dashboard/QueueStats.svelte";
 import { appStatus, progress } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
+import { waitForWailsRuntime } from "$lib/utils";
 import * as App from "$lib/wailsjs/go/backend/App";
 import { EventsOn } from "$lib/wailsjs/runtime/runtime";
 import { onMount } from "svelte";
@@ -13,6 +14,9 @@ let needsConfiguration = false;
 let criticalConfigError = false;
 
 onMount(async () => {
+	// Wait for Wails runtime to be ready
+	await waitForWailsRuntime();
+
 	// Listen for progress events
 	EventsOn("progress", (data) => {
 		progress.update((jobs) => {
@@ -38,6 +42,8 @@ onMount(async () => {
 
 async function handleUpload() {
 	try {
+		// Ensure runtime is ready before calling backend
+		await waitForWailsRuntime();
 		await App.UploadFiles();
 	} catch (error) {
 		console.error("Upload failed:", error);
@@ -50,6 +56,11 @@ async function handleUpload() {
 			);
 			// Navigate to settings using SvelteKit's navigation
 			window.location.href = "/settings";
+		} else if (errorMessage.includes("Wails runtime not available")) {
+			toastStore.error(
+				"App Not Ready",
+				"Please wait for the application to fully load.",
+			);
 		} else {
 			toastStore.error("Upload failed", errorMessage);
 		}

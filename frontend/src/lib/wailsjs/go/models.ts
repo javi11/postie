@@ -167,6 +167,7 @@ export namespace config {
 	    ignore_patterns: string[];
 	    min_file_size: number;
 	    check_interval: number;
+	    delete_original_file: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new WatcherConfig(source);
@@ -180,6 +181,7 @@ export namespace config {
 	        this.ignore_patterns = source["ignore_patterns"];
 	        this.min_file_size = source["min_file_size"];
 	        this.check_interval = source["check_interval"];
+	        this.delete_original_file = source["delete_original_file"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

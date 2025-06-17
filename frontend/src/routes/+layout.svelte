@@ -3,8 +3,9 @@ import { goto } from "$app/navigation";
 import { page } from "$app/stores";
 import logo from "$lib/assets/images/logo.png";
 import ToastContainer from "$lib/components/ToastContainer.svelte";
-import { appStatus } from "$lib/stores/app";
+import { appStatus, settingsSaveFunction } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
+import { waitForWailsRuntime } from "$lib/utils";
 import * as App from "$lib/wailsjs/go/backend/App";
 import { EventsOn } from "$lib/wailsjs/runtime/runtime";
 import {
@@ -16,14 +17,24 @@ import {
 	NavUl,
 	Navbar,
 } from "flowbite-svelte";
-import { ChartPieSolid, CogSolid } from "flowbite-svelte-icons";
+import { ChartPieSolid, CogSolid, FloppyDiskSolid } from "flowbite-svelte-icons";
 import { onMount } from "svelte";
 import "../style.css";
 
 let needsConfiguration = false;
 let criticalConfigError = false;
 
+async function handleSaveSettings() {
+	const saveFunction = $settingsSaveFunction;
+	if (saveFunction) {
+		await saveFunction();
+	}
+}
+
 onMount(async () => {
+	// Wait for Wails runtime to be ready
+	await waitForWailsRuntime();
+
 	// Listen for config updates
 	EventsOn("config-updated", async () => {
 		await loadAppStatus();
@@ -61,6 +72,9 @@ async function loadAppStatus() {
 		}
 	} catch (error) {
 		console.error("Failed to load app status:", error);
+		// If we can't load app status, assume we need configuration
+		needsConfiguration = true;
+		criticalConfigError = false;
 	}
 }
 </script>
@@ -91,7 +105,7 @@ async function loadAppStatus() {
         <nav class="flex items-center gap-2">
           <Button
             color={$page.route.id === "/" ? "primary" : "alternative"}
-            href="/"
+            onclick={() => goto("/")}
             class="cursor-pointer flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all"
             disabled={needsConfiguration || criticalConfigError}
             aria-current={$page.route.id === "/" ? "page" : undefined}
@@ -101,13 +115,25 @@ async function loadAppStatus() {
           </Button>
           <Button
             color={$page.route.id === "/settings" ? "primary" : "alternative"}
-            href="/settings"
+            onclick={() => goto("/settings")}
             class="cursor-pointer flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all"
             aria-current={$page.route.id === "/settings" ? "page" : undefined}
           >
             <CogSolid class="w-4 h-4" />
             Settings
           </Button>
+          
+          {#if $page.route.id === "/settings" && $settingsSaveFunction}
+            <Button
+              color="green"
+              onclick={handleSaveSettings}
+              class="cursor-pointer flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all ml-2"
+            >
+              <FloppyDiskSolid class="w-4 h-4" />
+              Save Configuration
+            </Button>
+          {/if}
+          
           <div class="ml-4 pl-4 border-l border-gray-200 dark:border-gray-700">
             <DarkMode
               class="cursor-pointer text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-2.5 transition-all"

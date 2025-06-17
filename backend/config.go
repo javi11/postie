@@ -47,6 +47,11 @@ func (a *App) GetConfig() (*config.ConfigData, error) {
 func (a *App) SaveConfig(configData *config.ConfigData) error {
 	slog.Info("Saving config", "path", a.configPath, "configData", configData)
 
+	// Validate server connections before saving
+	if err := a.validateServerConnections(configData); err != nil {
+		return fmt.Errorf("server validation failed: %w", err)
+	}
+
 	if err := config.SaveConfig(configData, a.configPath); err != nil {
 		return err
 	}
@@ -59,6 +64,44 @@ func (a *App) SaveConfig(configData *config.ConfigData) error {
 	// Emit a config update event to the frontend
 	runtime.EventsEmit(a.ctx, "config-updated", configData)
 
+	return nil
+}
+
+// validateServerConnections validates that all configured servers can be connected to
+func (a *App) validateServerConnections(configData *config.ConfigData) error {
+	// Skip validation if no servers are configured
+	if len(configData.Servers) == 0 {
+		return nil
+	}
+
+	// Check if all servers have required fields
+	validServers := 0
+	for _, server := range configData.Servers {
+		if server.Host != "" {
+			validServers++
+		}
+	}
+
+	// If no valid servers, skip connection test
+	if validServers == 0 {
+		return nil
+	}
+
+	slog.Info("Validating server connections", "server_count", validServers)
+
+	// Try to create NNTP pool - this will test connections to all servers
+	pool, err := configData.GetNNTPPool()
+	if err != nil {
+		slog.Error("Server connection validation failed", "error", err)
+		return fmt.Errorf("failed to connect to one or more servers: %w", err)
+	}
+
+	// Close the pool immediately as we were just testing connections
+	if pool != nil {
+		pool.Quit()
+	}
+
+	slog.Info("Server connections validated successfully")
 	return nil
 }
 

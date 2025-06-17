@@ -6,50 +6,36 @@ import PostingSection from "$lib/components/settings/PostingSection.svelte";
 import ServerSection from "$lib/components/settings/ServerSection.svelte";
 import SettingsHeader from "$lib/components/settings/SettingsHeader.svelte";
 import WatcherSection from "$lib/components/settings/WatcherSection.svelte";
-import { appStatus } from "$lib/stores/app";
+import { type AppStatus, appStatus, settingsSaveFunction } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
-import { parseDuration } from "$lib/utils";
+import { parseDuration, waitForWailsRuntime } from "$lib/utils";
 import * as App from "$lib/wailsjs/go/backend/App";
 import { config } from "$lib/wailsjs/go/models";
-import { onMount } from "svelte";
+import { onMount, onDestroy } from "svelte";
+import { Button, Heading, P, Spinner } from "flowbite-svelte";
+import {
+	CheckCircleSolid,
+	CogSolid,
+	ExclamationCircleOutline,
+	FloppyDiskSolid,
+	RefreshOutline,
+} from "flowbite-svelte-icons";
 
-let configData: ConfigData = {
-	servers: [],
-	posting: {
-		max_retries: 3,
-		retry_delay: "5s",
-		article_size_in_bytes: 768000,
-		groups: ["alt.binaries.test"],
-		obfuscation_policy: "none",
-	},
-	par2: {
-		enabled: true,
-		par2_path: "./parpar",
-		redundancy: "10%",
-		volume_size: 200000000,
-		max_input_slices: 4000,
-	},
-	watcher: {
-		enabled: false,
-		size_threshold: 104857600, // 100MB
-		schedule: {
-			start_time: "00:00",
-			end_time: "23:59",
-		},
-		ignore_patterns: ["*.tmp", "*.part", "*.!ut"],
-		min_file_size: 1048576, // 1MB
-		check_interval: 300000000000, // 5m in nanoseconds
-	},
-	output_dir: "./output",
-};
-
-let localConfig: ConfigData;
+let configData: ConfigData | null = null;
+let localConfig: ConfigData | null = null;
 let needsConfiguration = false;
 let criticalConfigError = false;
+let loading = true;
+let loadError = false;
 
 onMount(async () => {
+	// Wait for Wails runtime to be ready
+	await waitForWailsRuntime();
 	await loadConfig();
+
+	// Register save function with the store
+	settingsSaveFunction.set(handleSaveConfig);
 
 	// Subscribe to app status
 	const unsubscribe = appStatus.subscribe((status: AppStatus) => {
@@ -62,6 +48,8 @@ onMount(async () => {
 
 async function loadConfig() {
 	try {
+		loading = true;
+		loadError = false;
 		const config = await App.GetConfig();
 		configData = config;
 		// Initialize localConfig with the loaded config
@@ -85,6 +73,11 @@ async function loadConfig() {
 		}
 	} catch (error) {
 		console.error("Failed to load config:", error);
+		loadError = true;
+		configData = null;
+		localConfig = null;
+	} finally {
+		loading = false;
 	}
 }
 
@@ -115,7 +108,7 @@ async function handleSaveConfig() {
 			}
 		}
 
-		// Convert string values to numbers for integer fields
+		// Copy the config to a new object to avoid modifying the original
 		const configToSave = JSON.parse(JSON.stringify(localConfig));
 
 		// Convert server integer fields
@@ -136,10 +129,7 @@ async function handleSaveConfig() {
 			Number.parseInt(configToSave.posting.article_size_in_bytes) || 750000;
 
 		// Convert duration fields to nanoseconds
-		configToSave.posting.retry_delay =
-			typeof configToSave.posting.retry_delay === "string"
-				? parseDuration(configToSave.posting.retry_delay) || 5000000000 // default 5s
-				: configToSave.posting.retry_delay || 5000000000;
+		configToSave.posting.retry_delay ??= "5s";
 
 		// Convert par2 integer fields
 		configToSave.par2.volume_size =
@@ -154,14 +144,7 @@ async function handleSaveConfig() {
 			configToSave.watcher.min_file_size =
 				Number.parseInt(configToSave.watcher.min_file_size) || 1048576;
 
-			// Convert check_interval to nanoseconds if it's a string
-			if (typeof configToSave.watcher.check_interval === "string") {
-				configToSave.watcher.check_interval =
-					parseDuration(configToSave.watcher.check_interval) || 300000000000; // default 5m
-			} else {
-				configToSave.watcher.check_interval =
-					configToSave.watcher.check_interval || 300000000000;
-			}
+			configToSave.watcher.check_interval ??= "5m";
 		}
 
 		// Ensure output_dir is set
@@ -193,26 +176,10 @@ async function handleSaveConfig() {
 	}
 }
 
-async function handleSelectConfigFile() {
-	try {
-		const file = await App.SelectConfigFile();
-		if (file) {
-			const config = await App.GetConfig();
-			configData = config;
-			// Update localConfig to the loaded config
-			localConfig = JSON.parse(JSON.stringify(config));
-
-			// Update app status
-			const status = await App.GetAppStatus();
-			appStatus.set(status);
-
-			toastStore.success("Configuration loaded", `Config loaded from: ${file}`);
-		}
-	} catch (error) {
-		console.error("Failed to select config file:", error);
-		toastStore.error("Failed to load config file", String(error));
-	}
-}
+onDestroy(() => {
+	// Clean up when the component is destroyed
+	settingsSaveFunction.set(null);
+});
 </script>
 
 <svelte:head>
@@ -221,14 +188,83 @@ async function handleSelectConfigFile() {
 </svelte:head>
 
 <div class="space-y-6">
-  <SettingsHeader
-    {needsConfiguration}
-    {criticalConfigError}
-    on:save={handleSaveConfig}
-    on:selectFile={handleSelectConfigFile}
-  />
+  <!-- Main header section (not sticky) -->
+  <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+      <div class="flex-1">
+        <div class="flex items-center gap-3 mb-2">
+          <CogSolid class="w-6 h-6 text-gray-600 dark:text-gray-400" />
+          <Heading tag="h1" class="text-2xl font-bold text-gray-900 dark:text-white">
+            Settings
+          </Heading>
+          {#if criticalConfigError}
+            <div class="flex items-center gap-2 px-3 py-1 bg-red-100 dark:bg-red-900/30 rounded-full">
+              <ExclamationCircleOutline class="w-4 h-4 text-red-600 dark:text-red-400" />
+              <span class="text-sm font-medium text-red-800 dark:text-red-200">Configuration Error</span>
+            </div>
+          {:else if needsConfiguration}
+            <div class="flex items-center gap-2 px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 rounded-full">
+              <ExclamationCircleOutline class="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
+              <span class="text-sm font-medium text-yellow-800 dark:text-yellow-200">Configuration Required</span>
+            </div>
+          {:else}
+            <div class="flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/30 rounded-full">
+              <CheckCircleSolid class="w-4 h-4 text-green-600 dark:text-green-400" />
+              <span class="text-sm font-medium text-green-800 dark:text-green-200">Configured</span>
+            </div>
+          {/if}
+        </div>
 
-  {#if localConfig}
+        <P class="text-gray-600 dark:text-gray-400">
+          Configure your upload servers, posting settings, and PAR2 options.
+        </P>
+
+        {#if criticalConfigError}
+          <div class="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <P class="text-red-800 dark:text-red-200">
+              <strong>Configuration Error:</strong> There was an error with your server
+              configuration (e.g., invalid hostname like "Locahost", connection failure).
+              Please check and fix your server settings below, then click "Save Configuration".
+            </P>
+          </div>
+        {:else if needsConfiguration}
+          <div class="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+            <P class="text-yellow-800 dark:text-yellow-200">
+              <strong>Setup Required:</strong> Please configure at least one server
+              to start uploading files. All settings are saved automatically when you
+              click "Save Configuration".
+            </P>
+          </div>
+        {/if}
+      </div>
+    </div>
+  </div>
+
+  {#if loading}
+    <div class="flex items-center justify-center py-12">
+      <div class="text-center">
+        <Spinner class="mb-4 w-8 h-8 mx-auto" />
+        <P class="text-gray-600 dark:text-gray-400">Loading configuration...</P>
+      </div>
+    </div>
+  {:else if loadError}
+    <div class="flex items-center justify-center py-12">
+      <div class="text-center max-w-md">
+        <ExclamationCircleOutline class="mb-4 w-12 h-12 mx-auto text-red-500 dark:text-red-400" />
+        <Heading tag="h3" class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+          Failed to Load Configuration
+        </Heading>
+        <P class="mb-4 text-gray-600 dark:text-gray-400">
+          There was an error loading the configuration from the server. 
+          Please check your connection and try again.
+        </P>
+        <Button color="primary" on:click={loadConfig}>
+          <RefreshOutline class="w-4 h-4 mr-2" />
+          Retry
+        </Button>
+      </div>
+    </div>
+  {:else if localConfig}
     <div class="grid gap-3 md:grid-cols-1 lg:grid-cols-2">
       <div class="space-y-6">
         <GeneralSection bind:config={localConfig} />
@@ -239,6 +275,12 @@ async function handleSelectConfigFile() {
       <div class="space-y-6">
         <Par2Section bind:config={localConfig} />
         <WatcherSection bind:config={localConfig} />
+      </div>
+    </div>
+  {:else}
+    <div class="flex items-center justify-center py-12">
+      <div class="text-center">
+        <P class="text-gray-600 dark:text-gray-400">No configuration available.</P>
       </div>
     </div>
   {/if}

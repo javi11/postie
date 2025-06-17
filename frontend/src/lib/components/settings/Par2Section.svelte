@@ -8,6 +8,7 @@ import {
 	Input,
 	Label,
 	P,
+	Select,
 } from "flowbite-svelte";
 import {
 	CirclePlusSolid,
@@ -15,6 +16,8 @@ import {
 	ShieldCheckSolid,
 	TrashBinSolid,
 } from "flowbite-svelte-icons";
+import PercentageInput from "$lib/components/inputs/PercentageInput.svelte";
+import SizeInput from "$lib/components/inputs/SizeInput.svelte";
 
 export let config: ConfigData;
 
@@ -23,23 +26,82 @@ if (!config.par2.extra_par2_options) {
 	config.par2.extra_par2_options = [];
 }
 
-// Helper function to format bytes to MB for display
-function bytesToMB(bytes: number): number {
-	return Math.round(bytes / 1024 / 1024);
+const sizeUnitOptions = [
+	{ value: "MB", name: "MB" },
+	{ value: "GB", name: "GB" },
+];
+
+// Preset definitions
+const redundancyPresets = [
+	{ label: "5%", value: 5 },
+	{ label: "10%", value: 10 },
+	{ label: "15%", value: 15 },
+	{ label: "20%", value: 20 },
+];
+
+const volumeSizePresets = [
+	{ label: "100MB", value: 100, unit: "MB" },
+	{ label: "200MB", value: 200, unit: "MB" },
+	{ label: "500MB", value: 500, unit: "MB" },
+	{ label: "1GB", value: 1, unit: "GB" },
+];
+
+// Helper function to format bytes to different units for display
+function bytesToUnit(bytes: number, unit: string): number {
+	switch (unit) {
+		case "GB": return Math.round((bytes / 1024 / 1024 / 1024) * 100) / 100;
+		case "MB": return Math.round(bytes / 1024 / 1024);
+		default: return bytes;
+	}
 }
 
-// Helper function to convert MB back to bytes
-function mbToBytes(mb: number): number {
-	return mb * 1024 * 1024;
+// Helper function to convert units back to bytes
+function unitToBytes(value: number, unit: string): number {
+	switch (unit) {
+		case "GB": return value * 1024 * 1024 * 1024;
+		case "MB": return value * 1024 * 1024;
+		default: return value;
+	}
 }
 
 // Reactive variables for easier editing
-$: volumeSizeMB = bytesToMB(config.par2.volume_size);
+let volumeSizeValue: number;
+let volumeSizeUnit: string = "MB";
+let redundancyValue: number;
 
-function updateVolumeSize(event: Event) {
-	const target = event.target as HTMLInputElement;
-	const mb = Number.parseInt(target.value) || 200;
-	config.par2.volume_size = mbToBytes(mb);
+// Parse existing values
+$: {
+	const size = config.par2.volume_size || 209715200; // 200MB default
+	if (size >= 1073741824 && size % 1073741824 === 0) {
+		volumeSizeValue = size / 1073741824;
+		volumeSizeUnit = "GB";
+	} else {
+		volumeSizeValue = Math.round(size / 1048576);
+		volumeSizeUnit = "MB";
+	}
+}
+
+// Parse redundancy percentage
+$: {
+	const redundancyStr = config.par2.redundancy || "10%";
+	if (typeof redundancyStr === 'string') {
+		redundancyValue = parseInt(redundancyStr.replace('%', '')) || 10;
+	} else {
+		redundancyValue = 10;
+	}
+}
+
+// Update config when display values change
+$: {
+	if (volumeSizeValue !== undefined && volumeSizeUnit) {
+		config.par2.volume_size = unitToBytes(volumeSizeValue, volumeSizeUnit);
+	}
+}
+
+$: {
+	if (redundancyValue !== undefined && redundancyValue > 0) {
+		config.par2.redundancy = `${redundancyValue}%`;
+	}
 }
 
 function addExtraOption() {
@@ -51,6 +113,14 @@ function removeExtraOption(index: number) {
 		(_, i) => i !== index,
 	);
 }
+
+// Display values for status cards
+$: redundancyDisplay = config.par2.redundancy || "10%";
+$: volumeSizeDisplay = config.par2.volume_size 
+	? config.par2.volume_size >= 1073741824 
+		? `${Math.round(config.par2.volume_size / 1073741824)} GB`
+		: `${Math.round(config.par2.volume_size / 1048576)} MB`
+	: "200 MB";
 </script>
 
 <Card class="max-w-full shadow-sm p-5">
@@ -93,33 +163,26 @@ function removeExtraOption(index: number) {
               </P>
             </div>
 
-            <div>
-              <Label for="redundancy" class="mb-2">Redundancy</Label>
-              <Input
-                id="redundancy"
-                bind:value={config.par2.redundancy}
-                placeholder="10%"
-              />
-              <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                Recovery data percentage (e.g., 10%, 15%)
-              </P>
-            </div>
+            <PercentageInput
+              bind:value={config.par2.redundancy}
+              label="Redundancy"
+              description="Recovery data percentage"
+              presets={redundancyPresets}
+              minValue={1}
+              maxValue={50}
+              id="redundancy"
+            />
 
-            <div>
-              <Label for="volume-size" class="mb-2">Volume Size (MB)</Label>
-              <Input
-                id="volume-size"
-                type="number"
-                value={volumeSizeMB}
-                min="1"
-                max="1000"
-                onchange={updateVolumeSize}
-              />
-              <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                Size of each PAR2 volume file ({config.par2.volume_size.toLocaleString()}
-                bytes)
-              </P>
-            </div>
+            <SizeInput
+              bind:value={config.par2.volume_size}
+              label="Volume Size"
+              description="Size of each PAR2 volume file"
+              presets={volumeSizePresets}
+              minValue={1}
+              maxValue={2000}
+              showBytes={true}
+              id="volume-size"
+            />
 
             <div>
               <Label for="max-slices" class="mb-2">Max Input Slices</Label>
@@ -236,7 +299,7 @@ function removeExtraOption(index: number) {
                 <div
                   class="text-lg font-semibold text-green-800 dark:text-green-200"
                 >
-                  {config.par2.redundancy}
+                  {redundancyDisplay}
                 </div>
                 <div class="text-sm text-green-600 dark:text-green-400">
                   Redundancy
@@ -247,7 +310,7 @@ function removeExtraOption(index: number) {
                 <div
                   class="text-lg font-semibold text-purple-800 dark:text-purple-200"
                 >
-                  {volumeSizeMB} MB
+                  {volumeSizeDisplay}
                 </div>
                 <div class="text-sm text-purple-600 dark:text-purple-400">
                   Volume Size

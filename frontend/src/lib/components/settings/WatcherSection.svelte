@@ -10,6 +10,8 @@ import {
 	Label,
 	P,
 	Textarea,
+	Select,
+	Timepicker,
 } from "flowbite-svelte";
 import {
 	CirclePlusSolid,
@@ -19,6 +21,8 @@ import {
 	TrashBinSolid,
 } from "flowbite-svelte-icons";
 import { onMount } from "svelte";
+import DurationInput from "$lib/components/inputs/DurationInput.svelte";
+import SizeInput from "$lib/components/inputs/SizeInput.svelte";
 
 export let config: ConfigData;
 
@@ -39,35 +43,52 @@ if (!config.watcher) {
 	};
 }
 
-// Convert nanoseconds to human readable format for display
-function nanosToHumanReadable(nanos: number): string {
-	const seconds = nanos / 1000000000;
-	if (seconds < 60) return `${seconds}s`;
-	const minutes = seconds / 60;
-	if (minutes < 60) return `${Math.round(minutes)}m`;
-	const hours = minutes / 60;
-	return `${Math.round(hours)}h`;
+// Preset definitions
+const checkIntervalPresets = [
+	{ label: "30s", value: 30, unit: "s" },
+	{ label: "2m", value: 2, unit: "m" },
+	{ label: "5m", value: 5, unit: "m" },
+	{ label: "10m", value: 10, unit: "m" },
+];
+
+const sizeThresholdPresets = [
+	{ label: "50MB", value: 50, unit: "MB" },
+	{ label: "100MB", value: 100, unit: "MB" },
+	{ label: "500MB", value: 500, unit: "MB" },
+	{ label: "1GB", value: 1, unit: "GB" },
+];
+
+const minFileSizePresets = [
+	{ label: "1MB", value: 1, unit: "MB" },
+	{ label: "10MB", value: 10, unit: "MB" },
+	{ label: "50MB", value: 50, unit: "MB" },
+	{ label: "100MB", value: 100, unit: "MB" },
+];
+
+// Convert nanoseconds to duration string for DurationInput
+function nanosToSeconds(nanos: number): number {
+	return Math.round(nanos / 1000000000);
 }
 
-// Convert human readable format to nanoseconds
-function humanReadableToNanos(str: string): number {
-	const num = Number.parseFloat(str);
-	if (str.includes("h")) return num * 60 * 60 * 1000000000;
-	if (str.includes("m")) return num * 60 * 1000000000;
-	if (str.includes("s")) return num * 1000000000;
-	return num * 1000000000; // Default to seconds
+function secondsToNanos(seconds: number): number {
+	return seconds * 1000000000;
 }
 
-// Reactive variable for check interval display
-$: checkIntervalDisplay =
-	typeof config.watcher.check_interval === "number"
-		? nanosToHumanReadable(config.watcher.check_interval)
-		: config.watcher.check_interval || "5m";
+// Convert check interval for display
+let checkIntervalSeconds: number;
+$: checkIntervalSeconds = nanosToSeconds(config.watcher.check_interval || 300000000000);
 
-function updateCheckInterval(event: Event) {
-	const target = event.target as HTMLInputElement;
-	const value = target.value;
-	config.watcher.check_interval = humanReadableToNanos(value);
+// Convert duration string back to nanoseconds
+function updateCheckInterval(durationString: string) {
+	const match = durationString.match(/^(\d+)([smh])$/);
+	if (match) {
+		const value = parseInt(match[1]);
+		const unit = match[2];
+		let seconds = value;
+		if (unit === 'm') seconds = value * 60;
+		if (unit === 'h') seconds = value * 3600;
+		config.watcher.check_interval = secondsToNanos(seconds);
+	}
 }
 
 onMount(async () => {
@@ -100,33 +121,6 @@ function removeIgnorePattern(index: number) {
 	config.watcher.ignore_patterns = config.watcher.ignore_patterns.filter(
 		(_, i) => i !== index,
 	);
-}
-
-// Convert bytes to MB for display
-function bytesToMB(bytes: number): number {
-	return Math.round(bytes / 1048576);
-}
-
-// Convert MB to bytes for storage
-function mbToBytes(mb: number): number {
-	return mb * 1048576;
-}
-
-// Reactive variables for display
-$: sizeThresholdMB = bytesToMB(config.watcher.size_threshold || 100);
-$: minFileSizeMB = bytesToMB(config.watcher.min_file_size || 1);
-
-// Update config when display values change
-function updateSizeThreshold(event: Event) {
-	const target = event.target as HTMLInputElement;
-	config.watcher.size_threshold = mbToBytes(
-		Number.parseInt(target.value) || 100,
-	);
-}
-
-function updateMinFileSize(event: Event) {
-	const target = event.target as HTMLInputElement;
-	config.watcher.min_file_size = mbToBytes(Number.parseInt(target.value) || 1);
 }
 </script>
 
@@ -206,50 +200,97 @@ function updateMinFileSize(event: Event) {
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Custom DurationInput for check interval since it needs nanosecond conversion -->
             <div>
               <Label for="check-interval" class="mb-2">Check Interval</Label>
-              <Input
-                id="check-interval"
-                value={checkIntervalDisplay}
-                on:input={updateCheckInterval}
-                placeholder="5m"
-              />
+              <div class="flex gap-2">
+                <div class="flex-1">
+                  <Input
+                    id="check-interval"
+                    type="number"
+                    value={Math.round(checkIntervalSeconds >= 3600 ? checkIntervalSeconds / 3600 : checkIntervalSeconds >= 60 ? checkIntervalSeconds / 60 : checkIntervalSeconds)}
+                    min="1"
+                    max="3600"
+                    on:input={(e) => {
+                      const val = parseInt(e.target.value) || 5;
+                      const seconds = checkIntervalSeconds >= 3600 ? val * 3600 : checkIntervalSeconds >= 60 ? val * 60 : val;
+                      config.watcher.check_interval = secondsToNanos(seconds);
+                    }}
+                  />
+                </div>
+                <div class="w-24">
+                  <select
+                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
+                    value={checkIntervalSeconds >= 3600 ? 'h' : checkIntervalSeconds >= 60 ? 'm' : 's'}
+                    onchange={(e) => {
+                      const currentVal = Math.round(checkIntervalSeconds >= 3600 ? checkIntervalSeconds / 3600 : checkIntervalSeconds >= 60 ? checkIntervalSeconds / 60 : checkIntervalSeconds);
+                      const unit = e.target.value;
+                      let seconds = currentVal;
+                      if (unit === 'm') seconds = currentVal * 60;
+                      if (unit === 'h') seconds = currentVal * 3600;
+                      config.watcher.check_interval = secondsToNanos(seconds);
+                    }}
+                  >
+                    <option value="s">Seconds</option>
+                    <option value="m">Minutes</option>
+                    <option value="h">Hours</option>
+                  </select>
+                </div>
+              </div>
               <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                How often to scan for new files (e.g., 30s, 5m, 1h)
+                How often to scan for new files
               </P>
+              <div class="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  class="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  onclick={() => { config.watcher.check_interval = secondsToNanos(30); }}
+                >
+                  30s
+                </button>
+                <button
+                  type="button"
+                  class="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  onclick={() => { config.watcher.check_interval = secondsToNanos(120); }}
+                >
+                  2m
+                </button>
+                <button
+                  type="button"
+                  class="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  onclick={() => { config.watcher.check_interval = secondsToNanos(300); }}
+                >
+                  5m
+                </button>
+                <button
+                  type="button"
+                  class="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  onclick={() => { config.watcher.check_interval = secondsToNanos(600); }}
+                >
+                  10m
+                </button>
+              </div>
             </div>
 
-            <div>
-              <Label for="size-threshold" class="mb-2"
-                >Size Threshold (MB)</Label
-              >
-              <Input
-                id="size-threshold"
-                type="number"
-                value={sizeThresholdMB}
-                on:input={updateSizeThreshold}
-                min="1"
-                max="10000"
-              />
-              <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                Minimum accumulated size before batch processing
-              </P>
-            </div>
+            <SizeInput
+              bind:value={config.watcher.size_threshold}
+              label="Size Threshold"
+              description="Minimum accumulated size before batch processing"
+              presets={sizeThresholdPresets}
+              minValue={1}
+              maxValue={10000}
+              id="size-threshold"
+            />
 
-            <div>
-              <Label for="min-file-size" class="mb-2">Min File Size (MB)</Label>
-              <Input
-                id="min-file-size"
-                type="number"
-                value={minFileSizeMB}
-                on:input={updateMinFileSize}
-                min="0"
-                max="1000"
-              />
-              <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                Minimum size of individual files to process
-              </P>
-            </div>
+            <SizeInput
+              bind:value={config.watcher.min_file_size}
+              label="Min File Size"
+              description="Minimum size of individual files to process"
+              presets={minFileSizePresets}
+              minValue={0}
+              maxValue={1000}
+              id="min-file-size"
+            />
           </div>
 
           <div class="space-y-4">
@@ -265,23 +306,22 @@ function updateMinFileSize(event: Event) {
                 format)
               </P>
 
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="space-y-4">
                 <div>
-                  <Label for="start-time" class="mb-2">Start Time</Label>
-                  <Input
-                    id="start-time"
-                    type="time"
-                    bind:value={config.watcher.schedule.start_time}
+                  <Label class="mb-2">Time Range</Label>
+                  <Timepicker
+                    type="range"
+                    value={config.watcher.schedule.start_time}
+                    endValue={config.watcher.schedule.end_time}
+                    onselect={(data) => {
+                      if (data.time) config.watcher.schedule.start_time = data.time;
+                      if (data.endTime) config.watcher.schedule.end_time = data.endTime;
+                    }}
+                    divClass="shadow-none"
                   />
-                </div>
-
-                <div>
-                  <Label for="end-time" class="mb-2">End Time</Label>
-                  <Input
-                    id="end-time"
-                    type="time"
-                    bind:value={config.watcher.schedule.end_time}
-                  />
+                  <P class="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                    Define when the watcher is allowed to post files (24-hour format)
+                  </P>
                 </div>
               </div>
             </div>
