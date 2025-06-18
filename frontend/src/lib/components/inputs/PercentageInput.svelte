@@ -1,25 +1,25 @@
 <script lang="ts">
 import { Button, Input, Label, P } from "flowbite-svelte";
 
-export let value: string = "10%";
-export let label: string = "";
-export let description: string = "";
-export let placeholder: string = "10";
-export let presets: Array<{ label: string; value: number }> = [];
-export let minValue: number = 1;
-export let maxValue: number = 100;
-export let id: string = "";
+export let value = "10%";
+export const label = "";
+export const description = "";
+export const placeholder = "10";
+export const presets: Array<{ label: string; value: number }> = [];
+export const minValue = 1;
+export const maxValue = 100;
+export const id = "";
 
 let percentageValue: number;
 
 // Parse existing value
 function parseValue(valueString: string) {
-	if (!valueString || typeof valueString !== 'string') {
+	if (!valueString || typeof valueString !== "string") {
 		percentageValue = 10;
 		return;
 	}
-	
-	percentageValue = parseInt(valueString.replace('%', '')) || 10;
+
+	percentageValue = Number.parseInt(valueString.replace("%", "")) || 10;
 }
 
 // Initialize values when value prop changes

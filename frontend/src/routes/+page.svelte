@@ -1,14 +1,15 @@
 <script lang="ts">
+import { goto } from "$app/navigation";
 import DashboardHeader from "$lib/components/dashboard/DashboardHeader.svelte";
 import ProgressSection from "$lib/components/dashboard/ProgressSection.svelte";
 import QueueSection from "$lib/components/dashboard/QueueSection.svelte";
 import QueueStats from "$lib/components/dashboard/QueueStats.svelte";
+import { t } from "$lib/i18n";
 import { appStatus, progress } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import { waitForWailsRuntime } from "$lib/utils";
 import * as App from "$lib/wailsjs/go/backend/App";
 import { EventsOn } from "$lib/wailsjs/runtime/runtime";
-import { goto } from "$app/navigation";
 import { onMount } from "svelte";
 
 let needsConfiguration = false;
@@ -36,7 +37,7 @@ onMount(async () => {
 	const unsubscribe = appStatus.subscribe((status) => {
 		needsConfiguration = status.needsConfiguration;
 		criticalConfigError = status.criticalConfigError;
-		
+
 		// Redirect to settings if configuration is needed or there's a critical error
 		if (needsConfiguration || criticalConfigError) {
 			goto("/settings");
@@ -57,25 +58,22 @@ async function handleUpload() {
 
 		if (errorMessage.includes("configuration required")) {
 			toastStore.error(
-				"Configuration Required",
-				"Please configure at least one server before uploading files.",
+				$t("common.common.error"),
+				$t("common.messages.error_saving"),
 			);
 			// Navigate to settings using SvelteKit's navigation
 			window.location.href = "/settings";
 		} else if (errorMessage.includes("Wails runtime not available")) {
-			toastStore.error(
-				"App Not Ready",
-				"Please wait for the application to fully load.",
-			);
+			toastStore.error($t("common.common.error"), $t("common.common.loading"));
 		} else {
-			toastStore.error("Upload failed", errorMessage);
+			toastStore.error($t("common.common.error"), errorMessage);
 		}
 	}
 }
 </script>
 
 <svelte:head>
-  <title>Dashboard - Postie</title>
+  <title>{$t('dashboard.title')} - Postie</title>
   <meta name="description" content="Manage your uploads and monitor progress" />
 </svelte:head>
 

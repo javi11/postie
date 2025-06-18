@@ -1,7 +1,11 @@
 <script lang="ts">
-import type { ConfigData } from "$lib/types";
+import ByteSizeInput from "$lib/components/inputs/ByteSizeInput.svelte";
+import DurationInput from "$lib/components/inputs/DurationInput.svelte";
+import ThrottleRateInput from "$lib/components/inputs/ThrottleRateInput.svelte";
 import { toastStore } from "$lib/stores/toast";
+import type { ConfigData } from "$lib/types";
 import * as App from "$lib/wailsjs/go/backend/App";
+import { t } from "$lib/i18n";
 import {
 	Button,
 	Card,
@@ -15,12 +19,9 @@ import {
 import {
 	CirclePlusSolid,
 	CloudArrowUpSolid,
-	TrashBinSolid,
 	FloppyDiskSolid,
+	TrashBinSolid,
 } from "flowbite-svelte-icons";
-import DurationInput from "$lib/components/inputs/DurationInput.svelte";
-import ByteSizeInput from "$lib/components/inputs/ByteSizeInput.svelte";
-import ThrottleRateInput from "$lib/components/inputs/ThrottleRateInput.svelte";
 
 export let config: ConfigData;
 
@@ -53,20 +54,21 @@ if (!config.posting.group_policy) {
 	config.posting.group_policy = "each_file";
 }
 
-const obfuscationOptions = [
-	{ value: "none", name: "None" },
-	{ value: "partial", name: "Partial" },
-	{ value: "full", name: "Full" },
+// Create reactive arrays for dropdowns
+$: obfuscationOptions = [
+	{ value: "none", name: $t('settings.posting.obfuscation.none') },
+	{ value: "partial", name: $t('settings.posting.obfuscation.partial') },
+	{ value: "full", name: $t('settings.posting.obfuscation.full') },
 ];
 
-const messageIdOptions = [
-	{ value: "random", name: "Random - Random message IDs" },
-	{ value: "ngx", name: "NGX - NGX format message IDs" },
+$: messageIdOptions = [
+	{ value: "random", name: $t('settings.posting.message_id.random') },
+	{ value: "ngx", name: $t('settings.posting.message_id.ngx') },
 ];
 
-const groupPolicyOptions = [
-	{ value: "all", name: "All - Post to all groups" },
-	{ value: "each_file", name: "Each File - Random group per file" },
+$: groupPolicyOptions = [
+	{ value: "all", name: $t('settings.posting.group_policy_options.all') },
+	{ value: "each_file", name: $t('settings.posting.group_policy_options.each_file') },
 ];
 
 // Preset definitions
@@ -140,28 +142,29 @@ $: if (
 async function savePostingSettings() {
 	try {
 		saving = true;
-		
+
 		// Get the current config from the server to avoid conflicts
 		const currentConfig = await App.GetConfig();
-		
+
 		// Only update the posting fields with proper type conversion
 		currentConfig.posting = {
 			...config.posting,
 			max_retries: Number.parseInt(config.posting.max_retries) || 3,
-			article_size_in_bytes: Number.parseInt(config.posting.article_size_in_bytes) || 750000,
+			article_size_in_bytes:
+				Number.parseInt(config.posting.article_size_in_bytes) || 750000,
 			retry_delay: config.posting.retry_delay || "5s",
 			throttle_rate: config.posting.throttle_rate || 0,
 		};
 
 		await App.SaveConfig(currentConfig);
-		
+
 		toastStore.success(
-			"Posting settings saved",
-			"Your posting configuration has been saved successfully!"
+			$t('settings.posting.saved_success'),
+			$t('settings.posting.saved_success_description'),
 		);
 	} catch (error) {
 		console.error("Failed to save posting settings:", error);
-		toastStore.error("Save failed", String(error));
+		toastStore.error($t('common.messages.error_saving'), String(error));
 	} finally {
 		saving = false;
 	}
@@ -176,13 +179,13 @@ async function savePostingSettings() {
         tag="h2"
         class="text-lg font-semibold text-gray-900 dark:text-white"
       >
-        Posting Configuration
+        {$t('settings.posting.title')}
       </Heading>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div>
-        <Label for="max-retries" class="mb-2">Max Retries</Label>
+        <Label for="max-retries" class="mb-2">{$t('settings.posting.max_retries')}</Label>
         <Input
           id="max-retries"
           type="number"
@@ -191,22 +194,22 @@ async function savePostingSettings() {
           max="10"
         />
         <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-          Number of times to retry failed uploads
+          {$t('settings.posting.max_retries_description')}
         </P>
       </div>
 
       <DurationInput
         bind:value={config.posting.retry_delay}
-        label="Retry Delay"
-        description="Delay between retries"
+        label={$t('settings.posting.retry_delay')}
+        description={$t('settings.posting.retry_delay_description')}
         presets={retryDelayPresets}
         id="retry-delay"
       />
 
       <ByteSizeInput
         bind:value={config.posting.article_size_in_bytes}
-        label="Article Size"
-        description="Size of each article chunk"
+        label={$t('settings.posting.article_size')}
+        description={$t('settings.posting.article_size_description')}
         presets={articleSizePresets}
         minValue={1000}
         maxValue={10000000}
@@ -215,14 +218,14 @@ async function savePostingSettings() {
 
       <ThrottleRateInput
         bind:value={throttleRateMB}
-        label="Throttle Rate (MB/s)"
-        description="Upload speed limit in MB per second (0 = unlimited)"
+        label={$t('settings.posting.throttle_rate')}
+        description={$t('settings.posting.throttle_rate_description')}
         presets={throttleRatePresets}
         id="throttle-rate"
       />
 
       <div>
-        <Label for="obfuscation" class="mb-2">Obfuscation Policy</Label>
+        <Label for="obfuscation" class="mb-2">{$t('settings.posting.obfuscation_policy')}</Label>
         <Select
           id="obfuscation"
           items={obfuscationOptions}
@@ -231,24 +234,24 @@ async function savePostingSettings() {
         <div class="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded text-xs">
           {#if config.posting.obfuscation_policy === "none"}
             <P class="text-gray-700 dark:text-gray-300">
-              <strong>None:</strong> Nothing will be obfuscated - all original filenames, subjects, and metadata preserved
+              {@html $t('settings.posting.obfuscation.none_description')}
             </P>
           {:else if config.posting.obfuscation_policy === "partial"}
             <P class="text-gray-700 dark:text-gray-300">
-              <strong>Partial:</strong> Subject & filename obfuscated, same Yenc filename for all articles, real posted date, consistent poster
+              {@html $t('settings.posting.obfuscation.partial_description')}
             </P>
           {:else if config.posting.obfuscation_policy === "full"}
             <P class="text-gray-700 dark:text-gray-300">
-              <strong>Full:</strong> Subject & filename obfuscated, randomized Yenc filenames per article, randomized dates (within 6 hours), random poster per article, no NGX header
+              {@html $t('settings.posting.obfuscation.full_description')}
             </P>
           {/if}
         </div>
       </div>
 
       <div>
-        <Label for="par2-obfuscation" class="mb-2"
-          >PAR2 Obfuscation Policy</Label
-        >
+        <Label for="par2-obfuscation" class="mb-2">
+          {$t('settings.posting.par2_obfuscation_policy')}
+        </Label>
         <Select
           id="par2-obfuscation"
           items={obfuscationOptions}
@@ -257,41 +260,41 @@ async function savePostingSettings() {
         <div class="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded text-xs">
           {#if config.posting.par2_obfuscation_policy === "none"}
             <P class="text-gray-700 dark:text-gray-300">
-              <strong>None:</strong> PAR2 files will use original filenames and metadata
+              {@html $t('settings.posting.par2_obfuscation.none_description')}
             </P>
           {:else if config.posting.par2_obfuscation_policy === "partial"}
             <P class="text-gray-700 dark:text-gray-300">
-              <strong>Partial:</strong> PAR2 files will have obfuscated subjects & filenames, but consistent metadata
+              {@html $t('settings.posting.par2_obfuscation.partial_description')}
             </P>
           {:else if config.posting.par2_obfuscation_policy === "full"}
             <P class="text-gray-700 dark:text-gray-300">
-              <strong>Full:</strong> PAR2 files will be fully obfuscated with randomized filenames and metadata
+              {@html $t('settings.posting.par2_obfuscation.full_description')}
             </P>
           {/if}
         </div>
       </div>
 
       <div>
-        <Label for="message-id-format" class="mb-2">Message ID Format</Label>
+        <Label for="message-id-format" class="mb-2">{$t('settings.posting.message_id_format')}</Label>
         <Select
           id="message-id-format"
           items={messageIdOptions}
           bind:value={config.posting.message_id_format}
         />
         <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-          Format for article message IDs
+          {$t('settings.posting.message_id_format_description')}
         </P>
       </div>
 
       <div>
-        <Label for="group-policy" class="mb-2">Group Policy</Label>
+        <Label for="group-policy" class="mb-2">{$t('settings.posting.group_policy')}</Label>
         <Select
           id="group-policy"
           items={groupPolicyOptions}
           bind:value={config.posting.group_policy}
         />
         <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-          How to distribute files across newsgroups
+          {$t('settings.posting.group_policy_description')}
         </P>
       </div>
     </div>
@@ -299,10 +302,10 @@ async function savePostingSettings() {
     <div class="space-y-4">
       <div class="flex items-center gap-3">
         <Checkbox bind:checked={config.posting.wait_for_par2} />
-        <Label class="text-sm font-medium">Wait for PAR2</Label>
+        <Label class="text-sm font-medium">{$t('settings.posting.wait_for_par2')}</Label>
       </div>
       <P class="text-sm text-gray-600 dark:text-gray-400 ml-6">
-        Wait for PAR2 files to be created before starting upload
+        {$t('settings.posting.wait_for_par2_description')}
       </P>
     </div>
 
@@ -312,25 +315,25 @@ async function savePostingSettings() {
         tag="h3"
         class="text-md font-medium text-gray-900 dark:text-white"
       >
-        Post Headers
+        {$t('settings.posting.headers.title')}
       </Heading>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <Label for="default-from" class="mb-2">Default From</Label>
+          <Label for="default-from" class="mb-2">{$t('settings.posting.headers.default_from')}</Label>
           <Input
             id="default-from"
             bind:value={config.posting.post_headers.default_from}
             placeholder="poster@example.com"
           />
           <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Default From header (leave empty for random)
+            {$t('settings.posting.headers.default_from_description')}
           </P>
         </div>
 
         <div class="flex items-center gap-3 mt-6">
           <Checkbox bind:checked={config.posting.post_headers.add_ngx_header} />
-          <Label class="text-sm font-medium">Add NGX Header</Label>
+          <Label class="text-sm font-medium">{$t('settings.posting.headers.add_ngx_header')}</Label>
         </div>
       </div>
 
@@ -342,10 +345,10 @@ async function savePostingSettings() {
               tag="h4"
               class="text-sm font-medium text-gray-900 dark:text-white"
             >
-              Custom Headers
+              {$t('settings.posting.headers.custom_headers.title')}
             </Heading>
             <P class="text-sm text-gray-600 dark:text-gray-400">
-              Additional headers to include in posts
+              {$t('settings.posting.headers.custom_headers.description')}
             </P>
           </div>
           <Button
@@ -354,7 +357,7 @@ async function savePostingSettings() {
             class="cursor-pointer flex items-center gap-2"
           >
             <CirclePlusSolid class="w-4 h-4" />
-            Add Header
+            {$t('settings.posting.headers.custom_headers.add_header')}
           </Button>
         </div>
 
@@ -363,10 +366,10 @@ async function savePostingSettings() {
             {#each config.posting.post_headers.custom_headers as header, index (index)}
               <div class="flex items-center gap-3">
                 <div class="flex-1">
-                  <Input bind:value={header.name} placeholder="Header-Name" />
+                  <Input bind:value={header.name} placeholder={$t('settings.posting.headers.custom_headers.header_name_placeholder')} />
                 </div>
                 <div class="flex-1">
-                  <Input bind:value={header.value} placeholder="Header Value" />
+                  <Input bind:value={header.value} placeholder={$t('settings.posting.headers.custom_headers.header_value_placeholder')} />
                 </div>
                 <Button
                   size="sm"
@@ -376,7 +379,7 @@ async function savePostingSettings() {
                   class="cursor-pointer flex items-center gap-1"
                 >
                   <TrashBinSolid class="w-3 h-3" />
-                  Remove
+                  {$t('settings.posting.headers.custom_headers.remove')}
                 </Button>
               </div>
             {/each}
@@ -393,10 +396,10 @@ async function savePostingSettings() {
             tag="h3"
             class="text-md font-medium text-gray-900 dark:text-white"
           >
-            Newsgroups
+            {$t('settings.posting.newsgroups.title')}
           </Heading>
           <P class="text-sm text-gray-600 dark:text-gray-400">
-            Groups where files will be posted
+            {$t('settings.posting.newsgroups.description')}
           </P>
         </div>
         <Button
@@ -405,7 +408,7 @@ async function savePostingSettings() {
           class="cursor-pointer flex items-center gap-2"
         >
           <CirclePlusSolid class="w-4 h-4" />
-          Add Group
+          {$t('settings.posting.newsgroups.add_group')}
         </Button>
       </div>
 
@@ -415,7 +418,7 @@ async function savePostingSettings() {
             <div class="flex-1">
               <Input
                 bind:value={config.posting.groups[index]}
-                placeholder="alt.binaries.example"
+                placeholder={$t('settings.posting.newsgroups.placeholder')}
                 required
               />
             </div>
@@ -428,7 +431,7 @@ async function savePostingSettings() {
                 class="cursor-pointer flex items-center gap-1"
               >
                 <TrashBinSolid class="w-3 h-3" />
-                Remove
+                {$t('settings.posting.newsgroups.remove')}
               </Button>
             {/if}
           </div>
@@ -439,8 +442,7 @@ async function savePostingSettings() {
         class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded"
       >
         <P class="text-sm text-blue-800 dark:text-blue-200">
-          <strong>Common newsgroups:</strong> alt.binaries.test (for testing), alt.binaries.misc,
-          alt.binaries.multimedia. Choose groups appropriate for your content type.
+          {@html $t('settings.posting.newsgroups.info')}
         </P>
       </div>
     </div>
@@ -454,7 +456,7 @@ async function savePostingSettings() {
         class="cursor-pointer flex items-center gap-2"
       >
         <FloppyDiskSolid class="w-4 h-4" />
-        {saving ? "Saving..." : "Save Posting Settings"}
+        {saving ? $t('settings.posting.saving') : $t('settings.posting.save_button')}
       </Button>
     </div>
   </div>

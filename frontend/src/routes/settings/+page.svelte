@@ -2,18 +2,23 @@
 import { goto } from "$app/navigation";
 import GeneralSection from "$lib/components/settings/GeneralSection.svelte";
 import Par2Section from "$lib/components/settings/Par2Section.svelte";
+import PostUploadScriptSection from "$lib/components/settings/PostUploadScriptSection.svelte";
 import PostingSection from "$lib/components/settings/PostingSection.svelte";
 import ServerSection from "$lib/components/settings/ServerSection.svelte";
 import SettingsHeader from "$lib/components/settings/SettingsHeader.svelte";
 import WatcherSection from "$lib/components/settings/WatcherSection.svelte";
-import { type AppStatus, appStatus, settingsSaveFunction } from "$lib/stores/app";
+import { t } from "$lib/i18n";
+import {
+	type AppStatus,
+	appStatus,
+	settingsSaveFunction,
+} from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
 import { parseDuration, waitForWailsRuntime } from "$lib/utils";
 import * as App from "$lib/wailsjs/go/backend/App";
 import { config } from "$lib/wailsjs/go/models";
-import { onMount, onDestroy } from "svelte";
-import { Button, Heading, P, Spinner, DarkMode } from "flowbite-svelte";
+import { Button, DarkMode, Heading, P, Spinner } from "flowbite-svelte";
 import {
 	CheckCircleSolid,
 	CogSolid,
@@ -21,6 +26,7 @@ import {
 	FloppyDiskSolid,
 	RefreshOutline,
 } from "flowbite-svelte-icons";
+import { onDestroy, onMount } from "svelte";
 
 let configData: ConfigData | null = null;
 let localConfig: ConfigData | null = null;
@@ -85,7 +91,7 @@ async function handleSaveConfig() {
 	try {
 		// Validate that at least one server is configured
 		if (!localConfig.servers || localConfig.servers.length === 0) {
-			toastStore.error("Configuration Error", "No servers configured");
+			toastStore.error($t("common.messages.configuration_error"), $t("common.messages.no_servers_configured"));
 			return;
 		}
 
@@ -94,15 +100,15 @@ async function handleSaveConfig() {
 			const server = localConfig.servers[i];
 			if (!server.host || server.host.trim() === "") {
 				toastStore.error(
-					"Configuration Error",
-					`Server ${i + 1}: Host is required`,
+					$t("common.messages.configuration_error"),
+					$t("common.messages.server_host_required", { number: i + 1 }),
 				);
 				return;
 			}
 			if (!server.port || server.port <= 0 || server.port > 65535) {
 				toastStore.error(
-					"Configuration Error",
-					`Server ${i + 1}: Valid port number is required (1-65535)`,
+					$t("common.messages.configuration_error"),
+					$t("common.messages.server_port_required", { number: i + 1 }),
 				);
 				return;
 			}
@@ -162,8 +168,8 @@ async function handleSaveConfig() {
 		appStatus.set(status);
 
 		toastStore.success(
-			"Configuration saved",
-			"Your configuration has been saved successfully!",
+			$t("common.messages.configuration_saved"),
+			$t("common.messages.configuration_saved_description"),
 		);
 
 		// Redirect to dashboard if configuration was needed
@@ -172,7 +178,7 @@ async function handleSaveConfig() {
 		}
 	} catch (error) {
 		console.error("Failed to save config:", error);
-		toastStore.error("Configuration save failed", String(error));
+		toastStore.error($t("common.messages.configuration_save_failed"), String(error));
 	}
 }
 
@@ -183,7 +189,7 @@ onDestroy(() => {
 </script>
 
 <svelte:head>
-  <title>Settings - Postie</title>
+  <title>{$t('settings.title')} - Postie</title>
   <meta name="description" content="Configure your upload settings" />
 </svelte:head>
 
@@ -195,7 +201,7 @@ onDestroy(() => {
         <div class="flex items-center gap-3 mb-2">
           <CogSolid class="w-6 h-6 text-gray-600 dark:text-gray-400" />
           <Heading tag="h1" class="text-2xl font-bold text-gray-900 dark:text-white">
-            Settings
+            {$t('settings.title')}
           </Heading>
           {#if criticalConfigError}
             <div class="flex items-center gap-2 px-3 py-1 bg-red-100 dark:bg-red-900/30 rounded-full">
@@ -218,14 +224,6 @@ onDestroy(() => {
         <P class="text-gray-600 dark:text-gray-400">
           Configure your upload servers, posting settings, and PAR2 options.
         </P>
-
-        <!-- Dark Mode Toggle -->
-        <div class="flex items-center gap-3 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Theme:</span>
-          <DarkMode
-            class="cursor-pointer text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-2.5 transition-all"
-          />
-        </div>
 
         {#if criticalConfigError}
           <div class="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -283,6 +281,7 @@ onDestroy(() => {
       <div class="space-y-6">
         <Par2Section bind:config={localConfig} />
         <WatcherSection bind:config={localConfig} />
+        <PostUploadScriptSection bind:config={localConfig} />
       </div>
     </div>
   {:else}

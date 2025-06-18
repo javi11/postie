@@ -2,6 +2,7 @@
 import { isUploading, progress } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import { formatSpeed, formatTime } from "$lib/utils";
+import { t } from "$lib/i18n";
 import { CancelJob, CancelUpload } from "$lib/wailsjs/go/backend/App";
 import { Button, Card, Heading, P, Progressbar } from "flowbite-svelte";
 import { CloseCircleSolid } from "flowbite-svelte-icons";
@@ -12,12 +13,12 @@ async function cancelJob(jobID: string) {
 	try {
 		await CancelJob(jobID);
 		toastStore.success(
-			"Job cancelled",
-			"Upload has been cancelled successfully",
+			$t("common.messages.job_cancelled"),
+			$t("common.messages.upload_cancelled_description"),
 		);
 	} catch (error) {
 		console.error("Failed to cancel job:", error);
-		toastStore.error("Failed to cancel", String(error));
+		toastStore.error($t("common.messages.failed_to_cancel"), String(error));
 	}
 }
 
@@ -25,12 +26,12 @@ async function cancelDirectUpload() {
 	try {
 		await CancelUpload();
 		toastStore.success(
-			"Upload cancelled",
-			"Upload has been cancelled successfully",
+			$t("common.messages.upload_cancelled"),
+			$t("common.messages.upload_cancelled_description"),
 		);
 	} catch (error) {
 		console.error("Failed to cancel upload:", error);
-		toastStore.error("Failed to cancel upload", String(error));
+		toastStore.error($t("common.messages.failed_to_cancel_upload"), String(error));
 	}
 }
 
@@ -52,7 +53,7 @@ function cancelUpload(jobID: string) {
         tag="h2"
         class="text-xl font-semibold text-gray-900 dark:text-white"
       >
-        Upload Progress
+        {$t("dashboard.progress.title")}
       </Heading>
       <div class="flex items-center gap-3">
         <div
@@ -64,7 +65,7 @@ function cancelUpload(jobID: string) {
               : 'bg-gray-400'}"
           ></div>
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-            {$isUploading ? "Active" : "Idle"}
+            {$isUploading ? $t("dashboard.progress.status.active") : $t("dashboard.progress.status.idle")}
           </span>
         </div>
       </div>
@@ -81,7 +82,7 @@ function cancelUpload(jobID: string) {
                 tag="h2"
                 class="text-xl font-semibold text-gray-900 dark:text-white"
               >
-                Upload Progress (Job {job.jobID})
+                {$t("dashboard.progress.job_title", { jobId: job.jobID })}
               </Heading>
               <Button
                 size="sm"
@@ -91,14 +92,14 @@ function cancelUpload(jobID: string) {
                 class="cursor-pointer flex items-center gap-2 px-3 py-1.5 text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200"
               >
                 <CloseCircleSolid class="w-4 h-4" />
-                Cancel Upload
+                {$t("dashboard.progress.cancel_upload")}
               </Button>
             </div>
             <!-- Overall Progress -->
             <div class="space-y-3">
               <div class="flex justify-between items-center">
                 <P class="text-sm font-medium text-gray-800 dark:text-gray-200"
-                  >Overall Progress</P
+                  >{$t("dashboard.progress.overall")}</P
                 >
                 <span
                   class="text-sm font-semibold text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md"
@@ -123,7 +124,7 @@ function cancelUpload(jobID: string) {
                 <div class="flex justify-between items-center">
                   <P
                     class="text-sm font-medium text-blue-800 dark:text-blue-200"
-                    >Current File</P
+                    >{$t("dashboard.progress.current_file")}</P
                   >
                   <span
                     class="text-sm font-semibold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded-md"
@@ -151,7 +152,7 @@ function cancelUpload(jobID: string) {
                 >
                   <span
                     class="text-sm text-green-600 dark:text-green-400 font-medium"
-                    >Elapsed Time:</span
+                    >{$t("dashboard.progress.elapsed_time")}</span
                   >
                   <span
                     class="text-sm font-semibold text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded-md"
@@ -164,7 +165,7 @@ function cancelUpload(jobID: string) {
                   >
                     <span
                       class="text-sm text-blue-600 dark:text-blue-400 font-medium"
-                      >Upload Speed:</span
+                      >{$t("dashboard.progress.upload_speed")}</span
                     >
                     <span
                       class="text-sm font-semibold text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded-md"
@@ -178,7 +179,7 @@ function cancelUpload(jobID: string) {
                   >
                     <span
                       class="text-sm text-orange-600 dark:text-orange-400 font-medium"
-                      >Est. Remaining:</span
+                      >{$t("dashboard.progress.estimated_remaining")}</span
                     >
                     <span
                       class="text-sm font-semibold text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/30 px-2 py-1 rounded-md"
@@ -194,7 +195,7 @@ function cancelUpload(jobID: string) {
                 class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
               >
                 <span class="text-sm text-gray-600 dark:text-gray-400"
-                  >Stage:</span
+                  >{$t("dashboard.progress.stage")}</span
                 >
                 <span class="text-sm font-medium text-gray-900 dark:text-white"
                   >{job.stage}</span
@@ -205,7 +206,7 @@ function cancelUpload(jobID: string) {
                   class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
                 >
                   <span class="text-sm text-gray-600 dark:text-gray-400"
-                    >Details:</span
+                    >{$t("dashboard.progress.details")}</span
                   >
                   <span
                     class="text-sm font-medium text-gray-900 dark:text-white"
@@ -218,7 +219,7 @@ function cancelUpload(jobID: string) {
               class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
             >
               <span class="text-sm text-gray-600 dark:text-gray-400"
-                >Last Update:</span
+                >{$t("dashboard.progress.last_update")}</span
               >
               <span class="text-sm font-medium text-gray-900 dark:text-white"
                 >{new Date(job.lastUpdate * 1000).toLocaleTimeString()}</span
@@ -247,10 +248,10 @@ function cancelUpload(jobID: string) {
           </svg>
         </div>
         <P class="text-gray-600 dark:text-gray-400 text-lg mb-2 font-medium">
-          No upload in progress
+          {$t("dashboard.progress.no_upload_title")}
         </P>
         <P class="text-gray-500 dark:text-gray-500 text-sm">
-          Click "Start Upload" to begin processing the queue
+          {$t("dashboard.progress.no_upload_description")}
         </P>
       </div>
     {/if}

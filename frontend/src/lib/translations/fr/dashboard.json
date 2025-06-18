@@ -1,0 +1,77 @@
+{
+    "title": "Tableau de Bord",
+    "header": {
+        "title": "Tableau de Téléchargement",
+        "description": "Gérez vos téléchargements de fichiers et surveillez le progrès",
+        "add_files": "Ajouter des Fichiers",
+        "clear_completed": "Vider les Terminés"
+    },
+    "queue": {
+        "title": "File d'Attente de Téléchargement",
+        "items": "éléments",
+        "total_size": "Taille Totale",
+        "progress": "Progrès",
+        "no_items": "Aucun élément dans la file d'attente",
+        "no_items_description": "Téléchargez des fichiers pour les voir ici",
+        "file": "Fichier",
+        "size": "Taille",
+        "status": "Statut",
+        "created": "Créé",
+        "actions": "Actions",
+        "completed_at": "Terminé:",
+        "retry": "Réessayer",
+        "remove": "Supprimer",
+        "download_nzb": "NZB",
+        "increase_priority": "Augmenter la priorité",
+        "decrease_priority": "Diminuer la priorité",
+        "status_types": {
+            "pending": "en attente",
+            "complete": "terminé",
+            "error": "erreur",
+            "waiting": "En attente",
+            "processing": "En traitement",
+            "completed": "Terminé",
+            "failed": "Échoué"
+        }
+    },
+    "progress": {
+        "title": "Progression de Téléchargement",
+        "status": {
+            "active": "Actif",
+            "idle": "Inactif"
+        },
+        "job_title": "Tâche {jobId}",
+        "cancel_upload": "Annuler le Téléchargement",
+        "overall": "Progression Générale",
+        "current_file": "Fichier Actuel",
+        "elapsed_time": "Temps Écoulé",
+        "upload_speed": "Vitesse de Téléchargement",
+        "estimated_remaining": "Temps Estimé Restant",
+        "stage": "Étape",
+        "details": "Détails",
+        "last_update": "Dernière Mise à Jour",
+        "no_upload_title": "Aucun téléchargement en cours",
+        "no_upload_description": "Cliquez sur \"Démarrer le Téléchargement\" pour commencer le traitement de la file d'attente"
+    },
+    "stats": {
+        "title": "Statistiques",
+        "uploaded": "Téléchargé",
+        "pending": "En Attente",
+        "errors": "Erreurs",
+        "rate": "Taux de téléchargement",
+        "queue_stats": {
+            "title": "Statistiques de la File d'Attente",
+            "total": "Total",
+            "running": "En Cours",
+            "complete": "Terminé",
+            "success_rate": "Taux de Réussite"
+        }
+    },
+    "alerts": {
+        "config_error": "Erreur de Configuration",
+        "config_error_description": "Il y a eu une erreur avec la configuration de votre serveur (ex. nom d'hôte invalide, échec de connexion). Veuillez vérifier vos {settingsLink} pour corriger la configuration.",
+        "config_required": "Configuration Requise",
+        "config_required_description": "Veuillez configurer au moins un serveur dans la page {settingsLink} avant de télécharger des fichiers.",
+        "settings_link": "Paramètres"
+    }
+}

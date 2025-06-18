@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -18,11 +19,12 @@ import (
 )
 
 type Postie struct {
-	par2Cfg        *config.Par2Config
-	postingCfg     config.PostingConfig
-	par2runner     *par2.Par2CmdExecutor
-	poster         poster.Poster
-	compressionCfg config.NzbCompressionConfig
+	par2Cfg             *config.Par2Config
+	postingCfg          config.PostingConfig
+	par2runner          *par2.Par2CmdExecutor
+	poster              poster.Poster
+	compressionCfg      config.NzbCompressionConfig
+	postUploadScriptCfg config.PostUploadScriptConfig
 }
 
 func New(
@@ -37,6 +39,7 @@ func New(
 
 	postingConfig := cfg.GetPostingConfig()
 	compressionConfig := cfg.GetNzbCompressionConfig()
+	postUploadScriptConfig := cfg.GetPostUploadScriptConfig()
 
 	// Create par2 runner
 	par2runner := par2.New(ctx, postingConfig.ArticleSizeInBytes, par2Cfg)
@@ -50,11 +53,12 @@ func New(
 	}
 
 	return &Postie{
-		par2Cfg:        par2Cfg,
-		par2runner:     par2runner,
-		poster:         p,
-		postingCfg:     postingConfig,
-		compressionCfg: compressionConfig,
+		par2Cfg:             par2Cfg,
+		par2runner:          par2runner,
+		poster:              p,
+		postingCfg:          postingConfig,
+		compressionCfg:      compressionConfig,
+		postUploadScriptCfg: postUploadScriptConfig,
 	}, nil
 }
 
@@ -170,6 +174,12 @@ func (p *Postie) postInParallel(
 		return fmt.Errorf("error generating NZB file: %w", err)
 	}
 
+	// Execute post upload script if configured
+	if err := p.executePostUploadScript(ctx, nzbPath); err != nil {
+		slog.ErrorContext(ctx, "Post upload script execution failed", "error", err, "nzbPath", nzbPath)
+		// Note: We don't return the error here to avoid failing the upload if the script fails
+	}
+
 	return nil
 }
 
@@ -229,5 +239,39 @@ func (p *Postie) post(
 		return fmt.Errorf("error generating NZB file: %w", err)
 	}
 
+	// Execute post upload script if configured
+	if err := p.executePostUploadScript(ctx, nzbPath); err != nil {
+		slog.ErrorContext(ctx, "Post upload script execution failed", "error", err, "nzbPath", nzbPath)
+		// Note: We don't return the error here to avoid failing the upload if the script fails
+	}
+
+	return nil
+}
+
+func (p *Postie) executePostUploadScript(ctx context.Context, nzbPath string) error {
+	if !p.postUploadScriptCfg.Enabled || p.postUploadScriptCfg.Command == "" {
+		return nil
+	}
+
+	slog.InfoContext(ctx, "Executing post upload script", "command", p.postUploadScriptCfg.Command, "nzbPath", nzbPath)
+
+	// Create timeout context
+	timeoutCtx, cancel := context.WithTimeout(ctx, p.postUploadScriptCfg.Timeout)
+	defer cancel()
+
+	// Replace {{nzb_path}} placeholder with actual NZB path
+	command := strings.ReplaceAll(p.postUploadScriptCfg.Command, "{{nzb_path}}", nzbPath)
+
+	// Parse command using shell
+	cmd := exec.CommandContext(timeoutCtx, "sh", "-c", command)
+	cmd.Dir = filepath.Dir(nzbPath)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		slog.ErrorContext(ctx, "Error executing post upload script", "error", err, "output", string(output), "command", command)
+		return fmt.Errorf("post upload script failed: %w", err)
+	}
+
+	slog.InfoContext(ctx, "Post upload script executed successfully", "command", command, "output", string(output))
 	return nil
 }

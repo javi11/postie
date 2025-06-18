@@ -9,6 +9,7 @@ import {
 	FolderOpenSolid,
 } from "flowbite-svelte-icons";
 import { createEventDispatcher } from "svelte";
+import { t } from '$lib/i18n';
 
 export const needsConfiguration = false;
 export const criticalConfigError = false;
@@ -40,7 +41,7 @@ function handleSelectFile() {
           tag="h1"
           class="text-2xl font-bold text-gray-900 dark:text-white"
         >
-          Settings
+          {$t('settings.header.title')}
         </Heading>
         {#if criticalConfigError}
           <div
@@ -50,7 +51,7 @@ function handleSelectFile() {
               class="w-4 h-4 text-red-600 dark:text-red-400"
             />
             <span class="text-sm font-medium text-red-800 dark:text-red-200"
-              >Configuration Error</span
+              >{$t('settings.header.status.configuration_error')}</span
             >
           </div>
         {:else if needsConfiguration}
@@ -62,7 +63,7 @@ function handleSelectFile() {
             />
             <span
               class="text-sm font-medium text-yellow-800 dark:text-yellow-200"
-              >Configuration Required</span
+              >{$t('settings.header.status.configuration_required')}</span
             >
           </div>
         {:else}
@@ -73,14 +74,14 @@ function handleSelectFile() {
               class="w-4 h-4 text-green-600 dark:text-green-400"
             />
             <span class="text-sm font-medium text-green-800 dark:text-green-200"
-              >Configured</span
+              >{$t('settings.header.status.configured')}</span
             >
           </div>
         {/if}
       </div>
 
       <P class="text-gray-600 dark:text-gray-400">
-        Configure your upload servers, posting settings, and PAR2 options.
+        {$t('settings.header.description')}
       </P>
 
       {#if criticalConfigError}
@@ -88,9 +89,7 @@ function handleSelectFile() {
           class="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
         >
           <P class="text-red-800 dark:text-red-200">
-            <strong>Configuration Error:</strong> There was an error with your server
-            configuration (e.g., invalid hostname like "Locahost", connection failure).
-            Please check and fix your server settings below, then click "Save Configuration".
+            <strong>{$t('settings.header.alerts.configuration_error')}</strong> {$t('settings.header.alerts.configuration_error_description')}
           </P>
         </div>
       {:else if needsConfiguration}
@@ -98,9 +97,7 @@ function handleSelectFile() {
           class="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg"
         >
           <P class="text-yellow-800 dark:text-yellow-200">
-            <strong>Setup Required:</strong> Please configure at least one server
-            to start uploading files. All settings are saved automatically when you
-            click "Save Configuration".
+            <strong>{$t('settings.header.alerts.setup_required')}</strong> {$t('settings.header.alerts.setup_required_description')}
           </P>
         </div>
       {/if}
@@ -113,7 +110,7 @@ function handleSelectFile() {
         class="cursor-pointer flex items-center gap-2"
       >
         <FloppyDiskSolid class="w-4 h-4" />
-        Save Configuration
+        {$t('settings.header.save_configuration')}
       </Button>
     </div>
   </div>

@@ -1,15 +1,15 @@
 <script lang="ts">
 import { Button, Input, Label, P } from "flowbite-svelte";
 
-export let value: number = 0;
-export let label: string = "";
-export let description: string = "";
-export let placeholder: string = "0";
-export let presets: Array<{ label: string; value: number }> = [];
-export let minValue: number = 0;
-export let maxValue: number = 1000;
-export let id: string = "";
-export let unitLabel: string = "MB/s";
+export let value = 0;
+export const label = "";
+export const description = "";
+export const placeholder = "0";
+export const presets: Array<{ label: string; value: number }> = [];
+export const minValue = 0;
+export const maxValue = 1000;
+export const id = "";
+export const unitLabel = "MB/s";
 
 function updateValue() {
 	// This is just to trigger any parent reactive statements

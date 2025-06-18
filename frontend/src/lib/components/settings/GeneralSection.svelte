@@ -1,19 +1,46 @@
 <script lang="ts">
+import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
 import * as App from "$lib/wailsjs/go/backend/App";
-import { toastStore } from "$lib/stores/toast";
-import { Button, Card, Heading, Input, Label, P } from "flowbite-svelte";
-import { CogSolid, FolderOpenSolid, FloppyDiskSolid } from "flowbite-svelte-icons";
+import { t, locale, loadTranslations } from "$lib/i18n";
+import { availableLocales, setStoredLocale } from "$lib/i18n";
+import { page } from "$app/stores";
+import { Button, Card, Heading, Input, Label, P, Select, DarkMode } from "flowbite-svelte";
+import {
+	CogSolid,
+	FloppyDiskSolid,
+	FolderOpenSolid,
+} from "flowbite-svelte-icons";
 import { onMount } from "svelte";
 
 export let config: ConfigData;
 
 let outputDirectory = "";
 let saving = false;
+let selectedLanguage = $locale;
 
 // Initialize config defaults if they don't exist
 if (!config.output_dir) {
 	config.output_dir = "./output";
+}
+
+// Prepare language options for select
+const languageOptions = availableLocales.map(lang => ({
+	value: lang.code,
+	name: `${lang.flag} ${lang.name}`
+}));
+
+async function changeLanguage(event: Event) {
+	const target = event.target as HTMLSelectElement;
+	const newLocale = target.value;
+	
+	// Store the selected locale
+	setStoredLocale(newLocale);
+	
+	// Load translations for the new locale
+	await loadTranslations(newLocale, $page.url.pathname);
+	
+	selectedLanguage = newLocale;
 }
 
 onMount(async () => {
@@ -40,22 +67,22 @@ async function selectOutputDirectory() {
 async function saveGeneralSettings() {
 	try {
 		saving = true;
-		
+
 		// Get the current config from the server to avoid conflicts
 		const currentConfig = await App.GetConfig();
-		
+
 		// Only update the general settings fields
 		currentConfig.output_dir = config.output_dir || "./output";
 
 		await App.SaveConfig(currentConfig);
-		
+
 		toastStore.success(
-			"General settings saved",
-			"Your general configuration has been saved successfully!"
+			$t('settings.general.saved_success'),
+			$t('settings.general.saved_success_description'),
 		);
 	} catch (error) {
 		console.error("Failed to save general settings:", error);
-		toastStore.error("Save failed", String(error));
+		toastStore.error($t('common.messages.error_saving'), String(error));
 	} finally {
 		saving = false;
 	}
@@ -65,6 +92,9 @@ async function saveGeneralSettings() {
 $: if (config.output_dir) {
 	outputDirectory = config.output_dir;
 }
+
+// Keep selectedLanguage in sync with locale store
+$: selectedLanguage = $locale;
 </script>
 
 <Card class="max-w-full shadow-sm p-5">
@@ -75,13 +105,13 @@ $: if (config.output_dir) {
         tag="h2"
         class="text-lg font-semibold text-gray-900 dark:text-white"
       >
-        General Settings
+        {$t('settings.general.title')}
       </Heading>
     </div>
 
     <div class="space-y-4">
       <div>
-        <Label for="output-dir" class="mb-2">Output Directory</Label>
+        <Label for="output-dir" class="mb-2">{$t('settings.general.output_directory')}</Label>
         <div class="flex items-center gap-2">
           <Input
             id="output-dir"
@@ -95,22 +125,68 @@ $: if (config.output_dir) {
             class="cursor-pointer flex items-center gap-2"
           >
             <FolderOpenSolid class="w-4 h-4" />
-            Browse
+            {$t('settings.general.browse')}
           </Button>
         </div>
         <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-          Directory where processed files and NZB files will be stored for both
-          manual uploads and watcher
+          {$t('settings.general.output_directory_description')}
         </P>
+      </div>
+
+      <!-- UI Preferences Section -->
+      <div class="space-y-4">
+        <div class="pb-2 border-b border-gray-200 dark:border-gray-700">
+          <Label class="text-base font-medium text-gray-900 dark:text-white">
+            {$t('settings.general.ui_preferences')}
+          </Label>
+          <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            {$t('settings.general.ui_preferences_description')}
+          </P>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Language Selection -->
+          <div>
+            <Label for="language-select" class="mb-2">
+              {$t('settings.general.language')}
+            </Label>
+            <Select
+              id="language-select"
+              bind:value={selectedLanguage}
+              on:change={changeLanguage}
+              items={languageOptions}
+              class="w-full"
+            />
+            <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              {$t('settings.general.language_description')}
+            </P>
+          </div>
+
+          <!-- Theme Selection -->
+          <div>
+            <Label class="mb-2">
+              {$t('settings.general.theme')}
+            </Label>
+            <div class="flex items-center gap-2 mt-2">
+              <span class="text-sm text-gray-700 dark:text-gray-300">
+                {$t('settings.general.theme_toggle')}
+              </span>
+              <DarkMode
+                class="cursor-pointer text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-2.5 transition-all"
+              />
+            </div>
+            <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              {$t('settings.general.theme_description')}
+            </P>
+          </div>
+        </div>
       </div>
 
       <div
         class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded"
       >
         <P class="text-sm text-blue-800 dark:text-blue-200">
-          <strong>Output Directory:</strong> This is a global setting that applies
-          to both manual file uploads and automatic file watcher uploads. All processed
-          files and generated NZB files will be saved to this location.
+          <strong>{$t('settings.general.info_title')}</strong> {$t('settings.general.info_description')}
         </P>
       </div>
 
@@ -119,9 +195,9 @@ $: if (config.output_dir) {
           class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded"
         >
           <P class="text-sm text-amber-800 dark:text-amber-200">
-            <strong>Current active directory:</strong>
+            <strong>{$t('settings.general.current_active_directory')}</strong>
             {outputDirectory}<br />
-            <strong>New directory after save:</strong>
+            <strong>{$t('settings.general.new_directory_after_save')}</strong>
             {config.output_dir}
           </P>
         </div>
@@ -137,7 +213,7 @@ $: if (config.output_dir) {
         class="cursor-pointer flex items-center gap-2"
       >
         <FloppyDiskSolid class="w-4 h-4" />
-        {saving ? "Saving..." : "Save General Settings"}
+        {saving ? $t('settings.general.saving') : $t('settings.general.save_button')}
       </Button>
     </div>
   </div>

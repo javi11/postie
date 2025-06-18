@@ -1,15 +1,16 @@
 <script lang="ts">
 import { Button, Input, Label, P, Select } from "flowbite-svelte";
 
-export let value: number = 100;
-export let label: string = "";
-export let description: string = "";
-export let placeholder: string = "100";
-export let presets: Array<{ label: string; value: number; unit: string }> = [];
-export let minValue: number = 1;
-export let maxValue: number = 10000;
-export let id: string = "";
-export let showBytes: boolean = false; // Whether to show byte conversion
+export let value = 100;
+export const label = "";
+export const description = "";
+export const placeholder = "100";
+export const presets: Array<{ label: string; value: number; unit: string }> =
+	[];
+export const minValue = 1;
+export const maxValue = 10000;
+export const id = "";
+export const showBytes = false; // Whether to show byte conversion
 
 const sizeUnitOptions = [
 	{ value: "MB", name: "MB" },
@@ -17,23 +18,29 @@ const sizeUnitOptions = [
 ];
 
 let sizeValue: number;
-let sizeUnit: string = "MB";
+let sizeUnit = "MB";
 let initialized = false;
 
 // Helper functions for size conversion
 function bytesToUnit(bytes: number, unit: string): number {
 	switch (unit) {
-		case "GB": return Math.round((bytes / 1024 / 1024 / 1024) * 100) / 100;
-		case "MB": return Math.round(bytes / 1024 / 1024);
-		default: return bytes;
+		case "GB":
+			return Math.round((bytes / 1024 / 1024 / 1024) * 100) / 100;
+		case "MB":
+			return Math.round(bytes / 1024 / 1024);
+		default:
+			return bytes;
 	}
 }
 
 function unitToBytes(val: number, unit: string): number {
 	switch (unit) {
-		case "GB": return val * 1024 * 1024 * 1024;
-		case "MB": return val * 1024 * 1024;
-		default: return val;
+		case "GB":
+			return val * 1024 * 1024 * 1024;
+		case "MB":
+			return val * 1024 * 1024;
+		default:
+			return val;
 	}
 }
 

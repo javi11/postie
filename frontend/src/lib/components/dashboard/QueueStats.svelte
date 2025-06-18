@@ -4,6 +4,7 @@ import * as App from "$lib/wailsjs/go/backend/App";
 import { EventsOn } from "$lib/wailsjs/runtime/runtime";
 import { Badge, Card, Heading } from "flowbite-svelte";
 import { onMount } from "svelte";
+import { t } from '$lib/i18n';
 
 let queueStats: QueueStats = {
 	total: 0,
@@ -45,9 +46,9 @@ async function loadQueueStats() {
     <Heading
       tag="h2"
       class="text-xl font-semibold text-gray-900 dark:text-white"
-    >
-      Queue Statistics
-    </Heading>
+          >
+        {$t('dashboard.stats.queue_stats.title')}
+      </Heading>
 
     <div class="grid grid-cols-2 gap-4">
       <!-- Total -->
@@ -58,7 +59,7 @@ async function loadQueueStats() {
           {queueStats.total}
         </div>
         <div class="text-sm font-medium text-gray-600 dark:text-gray-400">
-          Total
+          {$t('dashboard.stats.queue_stats.total')}
         </div>
       </Card>
 
@@ -72,7 +73,7 @@ async function loadQueueStats() {
           {queueStats.pending}
         </div>
         <div class="text-sm font-medium text-yellow-700 dark:text-yellow-400">
-          Pending
+          {$t('dashboard.stats.pending')}
         </div>
       </Card>
 
@@ -84,7 +85,7 @@ async function loadQueueStats() {
           {queueStats.running}
         </div>
         <div class="text-sm font-medium text-blue-700 dark:text-blue-400">
-          Running
+          {$t('dashboard.stats.queue_stats.running')}
         </div>
       </Card>
 
@@ -96,7 +97,7 @@ async function loadQueueStats() {
           {queueStats.complete}
         </div>
         <div class="text-sm font-medium text-green-700 dark:text-green-400">
-          Complete
+          {$t('dashboard.stats.queue_stats.complete')}
         </div>
       </Card>
 
@@ -110,7 +111,7 @@ async function loadQueueStats() {
               {queueStats.error}
             </div>
             <div class="text-sm font-medium text-red-700 dark:text-red-400">
-              Errors
+              {$t('dashboard.stats.errors')}
             </div>
           </Card>
         </div>
@@ -124,7 +125,7 @@ async function loadQueueStats() {
         >
           <div class="flex justify-between items-center">
             <span class="text-sm font-medium text-green-700 dark:text-green-300"
-              >Success Rate:</span
+              >{$t('dashboard.stats.queue_stats.success_rate')}</span
             >
             <div class="flex items-center gap-2">
               <div class="w-2 h-2 bg-green-500 rounded-full"></div>

@@ -80,6 +80,7 @@ type Config interface {
 	GetWatcherConfig() WatcherConfig
 	GetNzbCompressionConfig() NzbCompressionConfig
 	GetQueueConfig() QueueConfig
+	GetPostUploadScriptConfig() PostUploadScriptConfig
 }
 
 type ConnectionPoolConfig struct {
@@ -94,12 +95,13 @@ type ConfigData struct {
 	ConnectionPool ConnectionPoolConfig `yaml:"connection_pool" json:"connection_pool"`
 	Posting        PostingConfig        `yaml:"posting" json:"posting"`
 	// Check uploaded article configuration. used to check if an article was successfully uploaded and propagated.
-	PostCheck      PostCheck            `yaml:"post_check" json:"post_check"`
-	Par2           Par2Config           `yaml:"par2" json:"par2"`
-	Watcher        WatcherConfig        `yaml:"watcher" json:"watcher"`
-	NzbCompression NzbCompressionConfig `yaml:"nzb_compression" json:"nzb_compression"`
-	Queue          QueueConfig          `yaml:"queue" json:"queue"`
-	OutputDir      string               `yaml:"output_dir" json:"output_dir"`
+	PostCheck        PostCheck              `yaml:"post_check" json:"post_check"`
+	Par2             Par2Config             `yaml:"par2" json:"par2"`
+	Watcher          WatcherConfig          `yaml:"watcher" json:"watcher"`
+	NzbCompression   NzbCompressionConfig   `yaml:"nzb_compression" json:"nzb_compression"`
+	Queue            QueueConfig            `yaml:"queue" json:"queue"`
+	OutputDir        string                 `yaml:"output_dir" json:"output_dir"`
+	PostUploadScript PostUploadScriptConfig `yaml:"post_upload_script" json:"post_upload_script"`
 }
 
 type Par2Config struct {
@@ -213,6 +215,16 @@ type QueueConfig struct {
 	PriorityProcessing bool `yaml:"priority_processing" json:"priority_processing"`
 	// Maximum concurrent uploads from queue
 	MaxConcurrentUploads int `yaml:"max_concurrent_uploads" json:"max_concurrent_uploads"`
+}
+
+// PostUploadScriptConfig represents the post upload script configuration
+type PostUploadScriptConfig struct {
+	// Whether to enable the post upload script execution. Default value is `false`.
+	Enabled bool `yaml:"enabled" json:"enabled"`
+	// Command to execute after NZB generation. Use {{nzb_path}} placeholder for the NZB file path
+	Command string `yaml:"command" json:"command"`
+	// Timeout for script execution. Default value is `30s`.
+	Timeout time.Duration `yaml:"timeout" json:"timeout"`
 }
 
 // Load loads configuration from a file
@@ -338,7 +350,7 @@ func Load(path string) (*ConfigData, error) {
 	}
 
 	if cfg.Queue.MaxConcurrentUploads <= 0 {
-		cfg.Queue.MaxConcurrentUploads = 3
+		cfg.Queue.MaxConcurrentUploads = 1
 	}
 
 	// Validate configuration
@@ -607,7 +619,6 @@ func GetDefaultConfig() ConfigData {
 			Type:    CompressionTypeNone,
 			Level:   0,
 		},
-		OutputDir: "./output",
 		Queue: QueueConfig{
 			DatabaseType:         "sqlite",
 			DatabasePath:         "./postie_queue.db",
@@ -617,7 +628,13 @@ func GetDefaultConfig() ConfigData {
 			MaxQueueSize:         1000,
 			CleanupAfter:         24 * time.Hour,
 			PriorityProcessing:   false,
-			MaxConcurrentUploads: 3,
+			MaxConcurrentUploads: 1,
+		},
+		OutputDir: "./output",
+		PostUploadScript: PostUploadScriptConfig{
+			Enabled: false,
+			Command: "",
+			Timeout: 30 * time.Second,
 		},
 	}
 }
@@ -634,4 +651,8 @@ func SaveConfig(configData *ConfigData, path string) error {
 	}
 
 	return nil
+}
+
+func (c *ConfigData) GetPostUploadScriptConfig() PostUploadScriptConfig {
+	return c.PostUploadScript
 }

@@ -103,7 +103,7 @@ func New(ctx context.Context, cfg config.Config) (Poster, error) {
 		stats:    stats,
 	}
 
-	throttleRate := cfg.GetPostingConfig().ThrottleRate
+	throttleRate := p.cfg.ThrottleRate
 	if throttleRate > 0 {
 		p.throttle = NewThrottle(throttleRate, time.Second)
 	}

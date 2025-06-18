@@ -1,8 +1,9 @@
 <script lang="ts">
+import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 import type { ConfigData } from "$lib/types";
+import { t } from "$lib/i18n";
 import { Card, Checkbox, Heading, Input, Label, P } from "flowbite-svelte";
 import { LinkSolid } from "flowbite-svelte-icons";
-import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 
 export let config: ConfigData;
 
@@ -31,13 +32,13 @@ const healthCheckPresets = [
         tag="h2"
         class="text-lg font-semibold text-gray-900 dark:text-white"
       >
-        Connection Pool Configuration
+        {$t('settings.connection_pool.title')}
       </Heading>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div>
-        <Label for="min-connections" class="mb-2">Minimum Connections</Label>
+        <Label for="min-connections" class="mb-2">{$t('settings.connection_pool.min_connections')}</Label>
         <Input
           id="min-connections"
           type="number"
@@ -46,14 +47,14 @@ const healthCheckPresets = [
           max="50"
         />
         <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-          Minimum number of connections to maintain in the pool
+          {$t('settings.connection_pool.min_connections_description')}
         </P>
       </div>
 
       <DurationInput
         bind:value={config.connection_pool.health_check_interval}
-        label="Health Check Interval"
-        description="Interval between connection health checks"
+        label={$t('settings.connection_pool.health_check_interval')}
+        description={$t('settings.connection_pool.health_check_interval_description')}
         presets={healthCheckPresets}
         id="health-check-interval"
       />
@@ -67,12 +68,11 @@ const healthCheckPresets = [
           }
         />
         <Label class="text-sm font-medium"
-          >Skip Provider Verification on Creation</Label
+          >{$t('settings.connection_pool.skip_providers_verification_on_creation')}</Label
         >
       </div>
       <P class="text-sm text-gray-600 dark:text-gray-400 ml-6">
-        Skip verifying server connectivity when creating the connection pool.
-        Useful for faster startup times.
+        {$t('settings.connection_pool.skip_providers_verification_on_creation_description')}
       </P>
     </div>
 
@@ -80,9 +80,7 @@ const healthCheckPresets = [
       class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded"
     >
       <P class="text-sm text-blue-800 dark:text-blue-200">
-        <strong>Connection Pool:</strong> Manages the connections to your NNTP servers.
-        A larger minimum connection count provides better performance but uses more
-        resources.
+        <strong>{$t('settings.connection_pool.info_title')}</strong> {$t('settings.connection_pool.info_description')}
       </P>
     </div>
   </div>

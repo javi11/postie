@@ -1,22 +1,24 @@
 <script lang="ts">
 import { Button, Input, Label, P, Select } from "flowbite-svelte";
 import { createEventDispatcher } from "svelte";
+import { t } from '$lib/i18n';
 
-export let value: string = "5s";
-export let label: string = "";
-export let description: string = "";
-export let placeholder: string = "5";
-export let presets: Array<{ label: string; value: number; unit: string }> = [];
-export let minValue: number = 1;
-export let maxValue: number = 3600;
-export let id: string = "";
+export let value = "5s";
+export const label = "";
+export const description = "";
+export const placeholder = "5";
+export const presets: Array<{ label: string; value: number; unit: string }> =
+	[];
+export const minValue = 1;
+export const maxValue = 3600;
+export const id = "";
 
 const dispatch = createEventDispatcher();
 
-const timeUnitOptions = [
-	{ value: "s", name: "Seconds" },
-	{ value: "m", name: "Minutes" },
-	{ value: "h", name: "Hours" },
+$: timeUnitOptions = [
+	{ value: "s", name: $t('common.inputs.time_units.seconds') },
+	{ value: "m", name: $t('common.inputs.time_units.minutes') },
+	{ value: "h", name: $t('common.inputs.time_units.hours') },
 ];
 
 let durationValue: number;
@@ -24,15 +26,15 @@ let durationUnit: string;
 
 // Parse existing value
 function parseValue(valueString: string) {
-	if (!valueString || typeof valueString !== 'string') {
+	if (!valueString || typeof valueString !== "string") {
 		durationValue = 5;
 		durationUnit = "s";
 		return;
 	}
-	
+
 	const match = valueString.match(/^(\d+)([smh])$/);
 	if (match) {
-		durationValue = parseInt(match[1]);
+		durationValue = Number.parseInt(match[1]);
 		durationUnit = match[2];
 	} else {
 		// Fallback for invalid format
@@ -51,7 +53,7 @@ function updateValue() {
 	if (durationValue !== undefined && durationUnit && durationValue > 0) {
 		const newValue = `${durationValue}${durationUnit}`;
 		value = newValue;
-		dispatch('change', newValue);
+		dispatch("change", newValue);
 	}
 }
 

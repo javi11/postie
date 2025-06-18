@@ -2,6 +2,7 @@
 import { toastStore } from "$lib/stores/toast";
 import type { QueueItem } from "$lib/types";
 import { formatDate, formatFileSize, getStatusColor } from "$lib/utils";
+import { t } from "$lib/i18n";
 import * as App from "$lib/wailsjs/go/backend/App";
 import { SetQueueItemPriority } from "$lib/wailsjs/go/backend/App";
 import { EventsOn } from "$lib/wailsjs/runtime/runtime";
@@ -52,7 +53,7 @@ async function loadQueue() {
 		queueItems = items || [];
 	} catch (error) {
 		console.error("Failed to load queue:", error);
-		toastStore.error("Failed to load queue", String(error));
+		toastStore.error($t("common.messages.failed_to_load_queue"), String(error));
 	}
 }
 
@@ -63,10 +64,10 @@ async function removeFromQueue(id: string) {
 		queueItems = queueItems.filter((item) => item.id !== id);
 		// Immediately refresh the queue to ensure UI updates
 		await loadQueue();
-		toastStore.success("Item removed", "Item has been removed from the queue");
+		toastStore.success($t("common.messages.item_removed"), $t("common.messages.item_removed_description"));
 	} catch (error) {
 		console.error("Failed to remove item from queue:", error);
-		toastStore.error("Failed to remove item", String(error));
+		toastStore.error($t("common.messages.failed_to_remove_item"), String(error));
 	}
 }
 
@@ -74,12 +75,12 @@ async function downloadNZB(id: string, fileName: string) {
 	try {
 		await App.DownloadNZB(id);
 		toastStore.success(
-			"NZB Downloaded",
+			$t("common.messages.nzb_downloaded"),
 			`NZB file for ${fileName} has been saved`,
 		);
 	} catch (error) {
 		console.error("Failed to download NZB:", error);
-		toastStore.error("Failed to download NZB", String(error));
+		toastStore.error($t("common.messages.failed_to_download_nzb"), String(error));
 	}
 }
 
@@ -89,7 +90,7 @@ async function changePriority(id: string, newPriority: number) {
 		await loadQueue();
 	} catch (error) {
 		console.error("Failed to update priority:", error);
-		toastStore.error("Failed to update priority", String(error));
+		toastStore.error($t("common.messages.failed_to_update_priority"), String(error));
 	}
 }
 
@@ -116,13 +117,13 @@ function getStatusIcon(status: string) {
         tag="h2"
         class="text-xl font-semibold text-gray-900 dark:text-white"
       >
-        Upload Queue
+        {$t("dashboard.queue.title")}
       </Heading>
       <div
         class="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-full border border-blue-200 dark:border-blue-800"
       >
         <span class="text-sm font-medium text-blue-800 dark:text-blue-200">
-          {queueItems.length} items
+          {queueItems.length} {$t("dashboard.queue.items")}
         </span>
       </div>
     </div>
@@ -147,10 +148,10 @@ function getStatusIcon(status: string) {
           </svg>
         </div>
         <P class="text-gray-600 dark:text-gray-400 text-lg mb-2 font-medium">
-          No items in queue
+          {$t("dashboard.queue.no_items")}
         </P>
         <P class="text-gray-500 dark:text-gray-500 text-sm">
-          Add files to get started with your uploads
+          {$t("dashboard.queue.no_items_description")}
         </P>
       </div>
     {:else}
@@ -160,11 +161,11 @@ function getStatusIcon(status: string) {
         <div class="overflow-x-auto">
           <Table hoverable={true} striped={true} class="table-auto">
             <TableHead>
-              <TableHeadCell>File</TableHeadCell>
-              <TableHeadCell>Size</TableHeadCell>
-              <TableHeadCell>Status</TableHeadCell>
-              <TableHeadCell>Created</TableHeadCell>
-              <TableHeadCell class="text-right">Actions</TableHeadCell>
+              <TableHeadCell>{$t("dashboard.queue.file")}</TableHeadCell>
+              <TableHeadCell>{$t("dashboard.queue.size")}</TableHeadCell>
+              <TableHeadCell>{$t("dashboard.queue.status")}</TableHeadCell>
+              <TableHeadCell>{$t("dashboard.queue.created")}</TableHeadCell>
+              <TableHeadCell class="text-right">{$t("dashboard.queue.actions")}</TableHeadCell>
             </TableHead>
             <TableBody class="divide-y">
               {#each queueItems as item (item.id)}
@@ -207,20 +208,20 @@ function getStatusIcon(status: string) {
                       </Badge>
                       {#if item.retryCount > 0}
                         <Badge color="gray" border={true}>
-                          Retry {item.retryCount}
+                          {$t("dashboard.queue.retry")} {item.retryCount}
                         </Badge>
                       {/if}
                       {#if item.status === "pending"}
                         <div class="flex items-center gap-1 ml-2">
                           <button
                             class="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-xs"
-                            title="Increase priority"
+                            title={$t("dashboard.queue.increase_priority")}
                             on:click={() => changePriority(item.id, item.priority + 1)}
                           >▲</button>
                           <span class="px-1 text-xs font-mono">{item.priority}</span>
                           <button
                             class="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-xs"
-                            title="Decrease priority"
+                            title={$t("dashboard.queue.decrease_priority")}
                             on:click={() => changePriority(item.id, item.priority - 1)}
                             disabled={item.priority <= 0}
                           >▼</button>
@@ -248,7 +249,7 @@ function getStatusIcon(status: string) {
                       <div
                         class="text-xs text-gray-500 dark:text-gray-400 mt-1"
                       >
-                        Completed: {formatDate(item.completedAt)}
+                        {$t("dashboard.queue.completed")}: {formatDate(item.completedAt)}
                       </div>
                     {/if}
                   </TableBodyCell>
@@ -262,7 +263,7 @@ function getStatusIcon(status: string) {
                           class="cursor-pointer flex items-center gap-1"
                         >
                           <DownloadSolid class="w-3 h-3" />
-                          NZB
+                          {$t("dashboard.queue.nzb")}
                         </Button>
                       {:else}
                         <Button
@@ -273,7 +274,7 @@ function getStatusIcon(status: string) {
                           class="cursor-pointer flex items-center gap-1"
                         >
                           <TrashBinSolid class="w-3 h-3" />
-                          Remove
+                          {$t("dashboard.queue.remove")}
                         </Button>
                       {/if}
                     </div>

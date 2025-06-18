@@ -3,6 +3,7 @@ import { goto } from "$app/navigation";
 import { page } from "$app/stores";
 import logo from "$lib/assets/images/logo.png";
 import ToastContainer from "$lib/components/ToastContainer.svelte";
+import { t } from "$lib/i18n";
 import { appStatus, settingsSaveFunction } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import { waitForWailsRuntime } from "$lib/utils";
@@ -16,7 +17,11 @@ import {
 	NavUl,
 	Navbar,
 } from "flowbite-svelte";
-import { ChartPieSolid, CogSolid, FloppyDiskSolid } from "flowbite-svelte-icons";
+import {
+	ChartPieSolid,
+	CogSolid,
+	FloppyDiskSolid,
+} from "flowbite-svelte-icons";
 import { onMount } from "svelte";
 import "../style.css";
 
@@ -42,11 +47,11 @@ onMount(async () => {
 	// Listen for par2 download events
 	EventsOn("par2-download-status", (data) => {
 		if (data.status === "downloading") {
-			toastStore.info("Downloading Dependencies", data.message);
+			toastStore.info($t("common.common.loading"), data.message);
 		} else if (data.status === "completed") {
-			toastStore.success("Dependencies Ready", data.message);
+			toastStore.success($t("common.common.success"), data.message);
 		} else if (data.status === "error") {
-			toastStore.error("Download Failed", data.message);
+			toastStore.error($t("common.common.error"), data.message);
 		}
 	});
 
@@ -73,8 +78,8 @@ async function loadAppStatus() {
 		// Auto-redirect to settings if there's a critical configuration error
 		if (criticalConfigError && $page.route.id !== "/settings") {
 			toastStore.error(
-				"Configuration Error",
-				"There was an error with your server configuration. Please check your settings.",
+				$t("common.common.error"),
+				$t("common.messages.error_saving"),
 			);
 			goto("/settings");
 		}
@@ -119,7 +124,7 @@ async function loadAppStatus() {
             aria-current={$page.route.id === "/" ? "page" : undefined}
           >
             <ChartPieSolid class="w-4 h-4" />
-            Dashboard
+            {$t('common.nav.dashboard')}
           </Button>
           <Button
             color={$page.route.id === "/settings" ? "secondary" : "gray"}
@@ -128,6 +133,7 @@ async function loadAppStatus() {
             aria-current={$page.route.id === "/settings" ? "page" : undefined}
           >
             <CogSolid class="w-4 h-4" />
+            <span class="hidden md:inline ml-2">{$t('common.nav.settings')}</span>
           </Button>
         </nav>
       </div>

@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { ConfigData } from "$lib/types";
+import { t } from "$lib/i18n";
 import {
 	Card,
 	Checkbox,
@@ -28,10 +29,11 @@ if (!config.queue) {
 	};
 }
 
-const databaseTypes = [
-	{ value: "sqlite", name: "SQLite - File-based database" },
-	{ value: "postgres", name: "PostgreSQL - Network database" },
-	{ value: "mysql", name: "MySQL - Network database" },
+// Create reactive array for database types dropdown
+$: databaseTypes = [
+	{ value: "sqlite", name: $t('settings.queue.database_types.sqlite') },
+	{ value: "postgres", name: $t('settings.queue.database_types.postgres') },
+	{ value: "mysql", name: $t('settings.queue.database_types.mysql') },
 ];
 </script>
 
@@ -43,44 +45,44 @@ const databaseTypes = [
         tag="h2"
         class="text-lg font-semibold text-gray-900 dark:text-white"
       >
-        Queue Configuration
+        {$t('settings.queue.title')}
       </Heading>
     </div>
 
     <div class="space-y-6">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <Label for="database-type" class="mb-2">Database Type</Label>
+          <Label for="database-type" class="mb-2">{$t('settings.queue.database_type')}</Label>
           <Select
             id="database-type"
             items={databaseTypes}
             bind:value={config.queue.database_type}
           />
           <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Database system to use for the upload queue
+            {$t('settings.queue.database_type_description')}
           </P>
         </div>
 
         <div>
-          <Label for="database-path" class="mb-2"
-            >Database Path/Connection</Label
-          >
+          <Label for="database-path" class="mb-2">
+            {$t('settings.queue.database_path')}
+          </Label>
           <Input
             id="database-path"
             bind:value={config.queue.database_path}
             placeholder={config.queue.database_type === "sqlite"
-              ? "./postie_queue.db"
-              : "host=localhost user=postie dbname=postie"}
+              ? $t('settings.queue.database_path_placeholder_sqlite')
+              : $t('settings.queue.database_path_placeholder_network')}
           />
           <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
             {config.queue.database_type === "sqlite"
-              ? "File path for SQLite database"
-              : "Connection string for database"}
+              ? $t('settings.queue.database_path_description_sqlite')
+              : $t('settings.queue.database_path_description_network')}
           </P>
         </div>
 
         <div>
-          <Label for="batch-size" class="mb-2">Batch Size</Label>
+          <Label for="batch-size" class="mb-2">{$t('settings.queue.batch_size')}</Label>
           <Input
             id="batch-size"
             type="number"
@@ -89,13 +91,12 @@ const databaseTypes = [
             max="100"
           />
           <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Number of items to process in each batch
+            {$t('settings.queue.batch_size_description')}
           </P>
         </div>
 
         <div>
-          <Label for="max-concurrent" class="mb-2">Max Concurrent Uploads</Label
-          >
+          <Label for="max-concurrent" class="mb-2">{$t('settings.queue.max_concurrent_uploads')}</Label>
           <Input
             id="max-concurrent"
             type="number"
@@ -104,12 +105,12 @@ const databaseTypes = [
             max="20"
           />
           <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Maximum number of simultaneous uploads from queue
+            {$t('settings.queue.max_concurrent_uploads_description')}
           </P>
         </div>
 
         <div>
-          <Label for="queue-max-retries" class="mb-2">Max Retries</Label>
+          <Label for="queue-max-retries" class="mb-2">{$t('settings.queue.max_retries')}</Label>
           <Input
             id="queue-max-retries"
             type="number"
@@ -118,24 +119,24 @@ const databaseTypes = [
             max="10"
           />
           <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Maximum retry attempts for failed uploads
+            {$t('settings.queue.max_retries_description')}
           </P>
         </div>
 
         <div>
-          <Label for="queue-retry-delay" class="mb-2">Retry Delay</Label>
+          <Label for="queue-retry-delay" class="mb-2">{$t('settings.queue.retry_delay')}</Label>
           <Input
             id="queue-retry-delay"
             bind:value={config.queue.retry_delay}
-            placeholder="5m"
+            placeholder={$t('settings.queue.retry_delay_placeholder')}
           />
           <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Delay between retry attempts (e.g., 30s, 5m, 1h)
+            {$t('settings.queue.retry_delay_description')}
           </P>
         </div>
 
         <div>
-          <Label for="max-queue-size" class="mb-2">Max Queue Size</Label>
+          <Label for="max-queue-size" class="mb-2">{$t('settings.queue.max_queue_size')}</Label>
           <Input
             id="max-queue-size"
             type="number"
@@ -143,19 +144,19 @@ const databaseTypes = [
             min="0"
           />
           <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Maximum items in queue (0 = unlimited)
+            {$t('settings.queue.max_queue_size_description')}
           </P>
         </div>
 
         <div>
-          <Label for="cleanup-after" class="mb-2">Cleanup After</Label>
+          <Label for="cleanup-after" class="mb-2">{$t('settings.queue.cleanup_after')}</Label>
           <Input
             id="cleanup-after"
             bind:value={config.queue.cleanup_after}
-            placeholder="24h"
+            placeholder={$t('settings.queue.cleanup_after_placeholder')}
           />
           <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Auto-cleanup completed items after duration (0 = keep forever)
+            {$t('settings.queue.cleanup_after_description')}
           </P>
         </div>
       </div>
@@ -163,10 +164,10 @@ const databaseTypes = [
       <div class="space-y-3">
         <div class="flex items-center gap-3">
           <Checkbox bind:checked={config.queue.priority_processing} />
-          <Label class="text-sm font-medium">Priority Processing</Label>
+          <Label class="text-sm font-medium">{$t('settings.queue.priority_processing')}</Label>
         </div>
         <P class="text-sm text-gray-600 dark:text-gray-400 ml-6">
-          Process larger files first to optimize upload efficiency
+          {$t('settings.queue.priority_processing_description')}
         </P>
       </div>
     </div>
@@ -175,9 +176,7 @@ const databaseTypes = [
       class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded"
     >
       <P class="text-sm text-blue-800 dark:text-blue-200">
-        <strong>Upload Queue:</strong> Manages file uploads with persistence, retry
-        logic, and concurrent processing. Use SQLite for simple setups or PostgreSQL/MySQL
-        for high-volume operations.
+        {@html $t('settings.queue.info')}
       </P>
     </div>
   </div>

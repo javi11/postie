@@ -1,7 +1,10 @@
 <script lang="ts">
-import type { ConfigData } from "$lib/types";
+import PercentageInput from "$lib/components/inputs/PercentageInput.svelte";
+import SizeInput from "$lib/components/inputs/SizeInput.svelte";
 import { toastStore } from "$lib/stores/toast";
+import type { ConfigData } from "$lib/types";
 import * as App from "$lib/wailsjs/go/backend/App";
+import { t } from "$lib/i18n";
 import {
 	Button,
 	Card,
@@ -14,13 +17,11 @@ import {
 } from "flowbite-svelte";
 import {
 	CirclePlusSolid,
+	FloppyDiskSolid,
 	InfoCircleSolid,
 	ShieldCheckSolid,
 	TrashBinSolid,
-	FloppyDiskSolid,
 } from "flowbite-svelte-icons";
-import PercentageInput from "$lib/components/inputs/PercentageInput.svelte";
-import SizeInput from "$lib/components/inputs/SizeInput.svelte";
 
 export let config: ConfigData;
 
@@ -54,24 +55,30 @@ const volumeSizePresets = [
 // Helper function to format bytes to different units for display
 function bytesToUnit(bytes: number, unit: string): number {
 	switch (unit) {
-		case "GB": return Math.round((bytes / 1024 / 1024 / 1024) * 100) / 100;
-		case "MB": return Math.round(bytes / 1024 / 1024);
-		default: return bytes;
+		case "GB":
+			return Math.round((bytes / 1024 / 1024 / 1024) * 100) / 100;
+		case "MB":
+			return Math.round(bytes / 1024 / 1024);
+		default:
+			return bytes;
 	}
 }
 
 // Helper function to convert units back to bytes
 function unitToBytes(value: number, unit: string): number {
 	switch (unit) {
-		case "GB": return value * 1024 * 1024 * 1024;
-		case "MB": return value * 1024 * 1024;
-		default: return value;
+		case "GB":
+			return value * 1024 * 1024 * 1024;
+		case "MB":
+			return value * 1024 * 1024;
+		default:
+			return value;
 	}
 }
 
 // Reactive variables for easier editing
 let volumeSizeValue: number;
-let volumeSizeUnit: string = "MB";
+let volumeSizeUnit = "MB";
 let redundancyValue: number;
 
 // Parse existing values
@@ -89,8 +96,8 @@ $: {
 // Parse redundancy percentage
 $: {
 	const redundancyStr = config.par2.redundancy || "10%";
-	if (typeof redundancyStr === 'string') {
-		redundancyValue = parseInt(redundancyStr.replace('%', '')) || 10;
+	if (typeof redundancyStr === "string") {
+		redundancyValue = Number.parseInt(redundancyStr.replace("%", "")) || 10;
 	} else {
 		redundancyValue = 10;
 	}
@@ -122,10 +129,10 @@ function removeExtraOption(index: number) {
 async function savePar2Settings() {
 	try {
 		saving = true;
-		
+
 		// Get the current config from the server to avoid conflicts
 		const currentConfig = await App.GetConfig();
-		
+
 		// Only update the par2 fields with proper type conversion
 		currentConfig.par2 = {
 			...config.par2,
@@ -134,14 +141,14 @@ async function savePar2Settings() {
 		};
 
 		await App.SaveConfig(currentConfig);
-		
+
 		toastStore.success(
-			"PAR2 settings saved",
-			"Your PAR2 configuration has been saved successfully!"
+			$t('settings.par2.saved_success'),
+			$t('settings.par2.saved_success_description'),
 		);
 	} catch (error) {
 		console.error("Failed to save PAR2 settings:", error);
-		toastStore.error("Save failed", String(error));
+		toastStore.error($t('common.messages.error_saving'), String(error));
 	} finally {
 		saving = false;
 	}
@@ -149,8 +156,8 @@ async function savePar2Settings() {
 
 // Display values for status cards
 $: redundancyDisplay = config.par2.redundancy || "10%";
-$: volumeSizeDisplay = config.par2.volume_size 
-	? config.par2.volume_size >= 1073741824 
+$: volumeSizeDisplay = config.par2.volume_size
+	? config.par2.volume_size >= 1073741824
 		? `${Math.round(config.par2.volume_size / 1073741824)} GB`
 		: `${Math.round(config.par2.volume_size / 1048576)} MB`
 	: "200 MB";
@@ -164,7 +171,7 @@ $: volumeSizeDisplay = config.par2.volume_size
         tag="h2"
         class="text-lg font-semibold text-gray-900 dark:text-white"
       >
-        PAR2 Recovery Files
+        {$t('settings.par2.title')}
       </Heading>
     </div>
 
@@ -172,9 +179,9 @@ $: volumeSizeDisplay = config.par2.volume_size
       <div class="flex items-center gap-3">
         <Checkbox bind:checked={config.par2.enabled} />
         <div>
-          <Label class="text-base font-medium">Enable PAR2 generation</Label>
+          <Label class="text-base font-medium">{$t('settings.par2.enable')}</Label>
           <P class="text-sm text-gray-600 dark:text-gray-400">
-            Generate recovery files for error correction and repair
+            {$t('settings.par2.enable_description')}
           </P>
         </div>
       </div>
@@ -185,21 +192,21 @@ $: volumeSizeDisplay = config.par2.volume_size
         >
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <Label for="par2-path" class="mb-2">PAR2 Executable Path</Label>
+              <Label for="par2-path" class="mb-2">{$t('settings.par2.par2_path')}</Label>
               <Input
                 id="par2-path"
                 bind:value={config.par2.par2_path}
                 placeholder="./parpar"
               />
               <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                Path to PAR2 executable or parpar
+                {$t('settings.par2.par2_path_description')}
               </P>
             </div>
 
             <PercentageInput
               bind:value={config.par2.redundancy}
-              label="Redundancy"
-              description="Recovery data percentage"
+              label={$t('settings.par2.redundancy')}
+              description={$t('settings.par2.redundancy_description')}
               presets={redundancyPresets}
               minValue={1}
               maxValue={50}
@@ -208,8 +215,8 @@ $: volumeSizeDisplay = config.par2.volume_size
 
             <SizeInput
               bind:value={config.par2.volume_size}
-              label="Volume Size"
-              description="Size of each PAR2 volume file"
+              label={$t('settings.par2.volume_size')}
+              description={$t('settings.par2.volume_size_description')}
               presets={volumeSizePresets}
               minValue={1}
               maxValue={2000}
@@ -218,7 +225,7 @@ $: volumeSizeDisplay = config.par2.volume_size
             />
 
             <div>
-              <Label for="max-slices" class="mb-2">Max Input Slices</Label>
+              <Label for="max-slices" class="mb-2">{$t('settings.par2.max_input_slices')}</Label>
               <Input
                 id="max-slices"
                 type="number"
@@ -227,7 +234,7 @@ $: volumeSizeDisplay = config.par2.volume_size
                 max="10000"
               />
               <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                Maximum number of input slices for processing
+                {$t('settings.par2.max_input_slices_description')}
               </P>
             </div>
           </div>
@@ -240,10 +247,10 @@ $: volumeSizeDisplay = config.par2.volume_size
                   tag="h4"
                   class="text-sm font-medium text-gray-900 dark:text-white"
                 >
-                  Extra PAR2 Options
+                  {$t('settings.par2.extra_options.title')}
                 </Heading>
                 <P class="text-sm text-gray-600 dark:text-gray-400">
-                  Additional command-line arguments for PAR2 executable
+                  {$t('settings.par2.extra_options.description')}
                 </P>
               </div>
               <Button
@@ -252,7 +259,7 @@ $: volumeSizeDisplay = config.par2.volume_size
                 class="cursor-pointer flex items-center gap-2"
               >
                 <CirclePlusSolid class="w-4 h-4" />
-                Add Option
+                {$t('settings.par2.extra_options.add_option')}
               </Button>
             </div>
 
@@ -263,7 +270,7 @@ $: volumeSizeDisplay = config.par2.volume_size
                     <div class="flex-1">
                       <Input
                         bind:value={config.par2.extra_par2_options[index]}
-                        placeholder="--option=value"
+                        placeholder={$t('settings.par2.extra_options.placeholder')}
                       />
                     </div>
                     <Button
@@ -274,7 +281,7 @@ $: volumeSizeDisplay = config.par2.volume_size
                       class="cursor-pointer flex items-center gap-1"
                     >
                       <TrashBinSolid class="w-3 h-3" />
-                      Remove
+                      {$t('settings.par2.extra_options.remove')}
                     </Button>
                   </div>
                 {/each}
@@ -284,8 +291,7 @@ $: volumeSizeDisplay = config.par2.volume_size
                 class="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded"
               >
                 <P class="text-sm text-gray-600 dark:text-gray-400">
-                  No extra options configured. Add custom PAR2 arguments if
-                  needed.
+                  {$t('settings.par2.extra_options.no_options')}
                 </P>
               </div>
             {/if}
@@ -303,25 +309,15 @@ $: volumeSizeDisplay = config.par2.volume_size
                   <P
                     class="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2"
                   >
-                    PAR2 Recovery Information
+                    {$t('settings.par2.info.title')}
                   </P>
                   <ul
                     class="text-sm text-blue-700 dark:text-blue-300 space-y-1 list-disc list-inside"
                   >
-                    <li>
-                      PAR2 files allow recovery of damaged or missing files
-                    </li>
-                    <li>
-                      Redundancy percentage determines how much data can be
-                      recovered
-                    </li>
-                    <li>
-                      Higher redundancy = better recovery but larger PAR2 files
-                    </li>
-                    <li>
-                      Volume size controls how PAR2 data is split across files
-                    </li>
-                    <li>Extra options allow fine-tuning of PAR2 generation</li>
+                    <li>{$t('settings.par2.info.features.redundancy_percentage_determines_how_much_data_can_be_recovered')}</li>
+                    <li>{$t('settings.par2.info.features.higher_redundancy_better_recovery_but_larger_par2_files')}</li>
+                    <li>{$t('settings.par2.info.features.volume_size_controls_how_par2_data_is_split_across_files')}</li>
+                    <li>{$t('settings.par2.info.features.extra_options_allow_fine_tuning_of_par2_generation')}</li>
                   </ul>
                 </div>
               </div>
@@ -335,7 +331,7 @@ $: volumeSizeDisplay = config.par2.volume_size
                   {redundancyDisplay}
                 </div>
                 <div class="text-sm text-green-600 dark:text-green-400">
-                  Redundancy
+                  {$t('settings.par2.status.redundancy')}
                 </div>
               </div>
 
@@ -346,7 +342,7 @@ $: volumeSizeDisplay = config.par2.volume_size
                   {volumeSizeDisplay}
                 </div>
                 <div class="text-sm text-purple-600 dark:text-purple-400">
-                  Volume Size
+                  {$t('settings.par2.status.volume_size')}
                 </div>
               </div>
 
@@ -357,7 +353,7 @@ $: volumeSizeDisplay = config.par2.volume_size
                   {config.par2.max_input_slices.toLocaleString()}
                 </div>
                 <div class="text-sm text-blue-600 dark:text-blue-400">
-                  Max Slices
+                  {$t('settings.par2.status.max_slices')}
                 </div>
               </div>
             </div>
@@ -368,8 +364,7 @@ $: volumeSizeDisplay = config.par2.volume_size
           class="ml-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg"
         >
           <P class="text-sm text-yellow-800 dark:text-yellow-200">
-            <strong>PAR2 disabled:</strong> Recovery files will not be generated.
-            This may make it difficult to repair damaged uploads.
+            {@html $t('settings.par2.disabled_message')}
           </P>
         </div>
       {/if}
@@ -384,7 +379,7 @@ $: volumeSizeDisplay = config.par2.volume_size
         class="cursor-pointer flex items-center gap-2"
       >
         <FloppyDiskSolid class="w-4 h-4" />
-        {saving ? "Saving..." : "Save PAR2 Settings"}
+        {saving ? $t('settings.par2.saving') : $t('settings.par2.save_button')}
       </Button>
     </div>
   </div>

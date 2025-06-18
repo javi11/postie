@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { ConfigData } from "$lib/types";
+import { t } from "$lib/i18n";
 import {
 	Card,
 	Checkbox,
@@ -22,10 +23,11 @@ if (!config.nzb_compression) {
 	};
 }
 
-const compressionTypes = [
-	{ value: "none", name: "None - No compression" },
-	{ value: "zstd", name: "Zstandard (zstd) - Fast compression" },
-	{ value: "brotli", name: "Brotli - High compression ratio" },
+// Dynamic compression types based on translations
+$: compressionTypes = [
+	{ value: "none", name: $t('settings.nzb_compression.compression_types.none') },
+	{ value: "zstd", name: $t('settings.nzb_compression.compression_types.zstd') },
+	{ value: "brotli", name: $t('settings.nzb_compression.compression_types.brotli') },
 ];
 
 // Get compression level limits based on type
@@ -76,37 +78,37 @@ $: if (config.nzb_compression.type === "none") {
         tag="h2"
         class="text-lg font-semibold text-gray-900 dark:text-white"
       >
-        NZB Compression Configuration
+        {$t('settings.nzb_compression.title')}
       </Heading>
     </div>
 
     <div class="space-y-4">
       <div class="flex items-center gap-3">
         <Checkbox bind:checked={config.nzb_compression.enabled} />
-        <Label class="text-sm font-medium">Enable NZB Compression</Label>
+        <Label class="text-sm font-medium">{$t('settings.nzb_compression.enable')}</Label>
       </div>
       <P class="text-sm text-gray-600 dark:text-gray-400 ml-6">
-        Compress generated NZB files to reduce file size
+        {$t('settings.nzb_compression.enable_description')}
       </P>
     </div>
 
     {#if config.nzb_compression.enabled}
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <Label for="compression-type" class="mb-2">Compression Type</Label>
+          <Label for="compression-type" class="mb-2">{$t('settings.nzb_compression.compression_type')}</Label>
           <Select
             id="compression-type"
             items={compressionTypes}
             bind:value={config.nzb_compression.type}
           />
           <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Algorithm to use for compression
+            {$t('settings.nzb_compression.compression_type_description')}
           </P>
         </div>
 
         {#if config.nzb_compression.type !== "none"}
           <div>
-            <Label for="compression-level" class="mb-2">Compression Level</Label
+            <Label for="compression-level" class="mb-2">{$t('settings.nzb_compression.compression_level')}</Label
             >
             <Input
               id="compression-level"
@@ -116,8 +118,7 @@ $: if (config.nzb_compression.type === "none") {
               max={compressionLimits.max}
             />
             <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Level {compressionLimits.min}-{compressionLimits.max}
-              (higher = better compression, slower)
+              {$t('settings.nzb_compression.compression_level_description', { min: compressionLimits.min, max: compressionLimits.max })}
             </P>
           </div>
         {/if}
@@ -128,8 +129,7 @@ $: if (config.nzb_compression.type === "none") {
           class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded"
         >
           <P class="text-sm text-blue-800 dark:text-blue-200">
-            <strong>Zstandard:</strong> Fast compression with good ratios. Recommended
-            levels: 1-3 for speed, 6-9 for balance, 15+ for maximum compression.
+            <strong>{$t('settings.nzb_compression.info.zstd_title')}</strong> {$t('settings.nzb_compression.info.zstd_description')}
           </P>
         </div>
       {:else if config.nzb_compression.type === "brotli"}
@@ -137,9 +137,7 @@ $: if (config.nzb_compression.type === "none") {
           class="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded"
         >
           <P class="text-sm text-green-800 dark:text-green-200">
-            <strong>Brotli:</strong> Excellent compression ratios but slower than
-            zstd. Recommended levels: 1-4 for speed, 5-8 for balance, 9-11 for maximum
-            compression.
+            <strong>{$t('settings.nzb_compression.info.brotli_title')}</strong> {$t('settings.nzb_compression.info.brotli_description')}
           </P>
         </div>
       {/if}
@@ -148,8 +146,7 @@ $: if (config.nzb_compression.type === "none") {
         class="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded"
       >
         <P class="text-sm text-gray-600 dark:text-gray-400">
-          NZB files will be saved uncompressed. Enable compression to reduce
-          file sizes.
+          {$t('settings.nzb_compression.info.disabled_description')}
         </P>
       </div>
     {/if}

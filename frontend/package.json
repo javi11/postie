@@ -17,6 +17,7 @@
 		"@sveltejs/vite-plugin-svelte": "^5.1.0",
 		"@tailwindcss/vite": "^4.1.8",
 		"@tsconfig/svelte": "^5.0.4",
+		"@types/node": "^24.0.1",
 		"autoprefixer": "^10.4.21",
 		"flowbite": "^3.1.2",
 		"flowbite-svelte": "^1.6.2",
@@ -26,7 +27,9 @@
 		"svelte-preprocess": "^6.0.3",
 		"tailwindcss": "^4.1.8",
 		"typescript": "^5.8.3",
-		"vite": "^6.3.5",
-		"@types/node": "^24.0.1"
+		"vite": "^6.3.5"
+	},
+	"dependencies": {
+		"sveltekit-i18n": "^2.4.2"
 	}
 }

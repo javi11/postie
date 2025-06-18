@@ -1,30 +1,31 @@
 <script lang="ts">
+import DurationInput from "$lib/components/inputs/DurationInput.svelte";
+import SizeInput from "$lib/components/inputs/SizeInput.svelte";
+import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
 import * as App from "$lib/wailsjs/go/backend/App";
-import { toastStore } from "$lib/stores/toast";
+import { t } from '$lib/i18n';
 import {
 	Button,
 	Card,
-	Checkbox,
 	Heading,
 	Input,
 	Label,
 	P,
-	Textarea,
 	Select,
+	Textarea,
 	Timepicker,
+	Toggle,
 } from "flowbite-svelte";
 import {
 	CirclePlusSolid,
 	EyeSolid,
+	FloppyDiskSolid,
 	FolderOpenSolid,
 	FolderSolid,
 	TrashBinSolid,
-	FloppyDiskSolid,
 } from "flowbite-svelte-icons";
 import { onMount } from "svelte";
-import DurationInput from "$lib/components/inputs/DurationInput.svelte";
-import SizeInput from "$lib/components/inputs/SizeInput.svelte";
 
 export let config: ConfigData;
 
@@ -79,17 +80,19 @@ function secondsToNanos(seconds: number): number {
 
 // Convert check interval for display
 let checkIntervalSeconds: number;
-$: checkIntervalSeconds = nanosToSeconds(config.watcher.check_interval || 300000000000);
+$: checkIntervalSeconds = nanosToSeconds(
+	config.watcher.check_interval || 300000000000,
+);
 
 // Convert duration string back to nanoseconds
 function updateCheckInterval(durationString: string) {
 	const match = durationString.match(/^(\d+)([smh])$/);
 	if (match) {
-		const value = parseInt(match[1]);
+		const value = Number.parseInt(match[1]);
 		const unit = match[2];
 		let seconds = value;
-		if (unit === 'm') seconds = value * 60;
-		if (unit === 'h') seconds = value * 3600;
+		if (unit === "m") seconds = value * 60;
+		if (unit === "h") seconds = value * 3600;
 		config.watcher.check_interval = secondsToNanos(seconds);
 	}
 }
@@ -129,29 +132,30 @@ function removeIgnorePattern(index: number) {
 async function saveWatcherSettings() {
 	try {
 		saving = true;
-		
+
 		// Get the current config from the server to avoid conflicts
 		const currentConfig = await App.GetConfig();
-		
+
 		// Only update the watcher fields with proper type conversion
 		if (config.watcher) {
 			currentConfig.watcher = {
 				...config.watcher,
-				size_threshold: Number.parseInt(config.watcher.size_threshold) || 104857600,
+				size_threshold:
+					Number.parseInt(config.watcher.size_threshold) || 104857600,
 				min_file_size: Number.parseInt(config.watcher.min_file_size) || 1048576,
 				check_interval: config.watcher.check_interval || "5m",
 			};
 		}
 
 		await App.SaveConfig(currentConfig);
-		
+
 		toastStore.success(
-			"Watcher settings saved",
-			"Your file watcher configuration has been saved successfully!"
+			$t('settings.watcher.saved_success'),
+			$t('settings.watcher.saved_success_description'),
 		);
 	} catch (error) {
 		console.error("Failed to save watcher settings:", error);
-		toastStore.error("Save failed", String(error));
+		toastStore.error($t('common.messages.error_saving'), String(error));
 	} finally {
 		saving = false;
 	}
@@ -166,16 +170,16 @@ async function saveWatcherSettings() {
         tag="h2"
         class="text-lg font-semibold text-gray-900 dark:text-white"
       >
-        File Watcher
+        {$t('settings.watcher.title')}
       </Heading>
     </div>
 
     <div class="space-y-4">
       <div class="flex items-center gap-3">
-        <Checkbox bind:checked={config.watcher.enabled} />
+        <Toggle bind:checked={config.watcher.enabled} />
         <div class="flex items-center gap-2">
           <FolderSolid class="w-4 h-4 text-purple-600 dark:text-purple-400" />
-          <Label class="text-sm font-medium">Enable File Watcher</Label>
+          <Label class="text-sm font-medium">{$t('settings.watcher.enable')}</Label>
         </div>
       </div>
 
@@ -183,10 +187,7 @@ async function saveWatcherSettings() {
         class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded"
       >
         <P class="text-sm text-blue-800 dark:text-blue-200">
-          <strong>File Watcher:</strong> Automatically monitors a directory for new
-          files and uploads them when they meet the configured criteria. Files are
-          queued for processing and moved to the global output directory after successful
-          upload.
+          <strong>{$t('settings.watcher.title')}:</strong> {$t('settings.watcher.description')}
         </P>
       </div>
 
@@ -200,19 +201,19 @@ async function saveWatcherSettings() {
                 tag="h3"
                 class="text-md font-medium text-gray-900 dark:text-white mb-2"
               >
-                Directories
+                {$t('settings.watcher.directories')}
               </Heading>
               <P class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                Configure where the watcher monitors files for automatic uploads
+                {$t('settings.watcher.directories_description')}
               </P>
 
               <div>
-                <Label class="mb-2">Watch Directory</Label>
+                <Label class="mb-2">{$t('settings.watcher.watch_directory')}</Label>
                 <div class="flex items-center gap-2">
                   <Input
                     value={watchDirectory}
                     readonly
-                    placeholder="Select watch directory..."
+                    placeholder={$t('common.inputs.select_directory')}
                     class="flex-1"
                   />
                   <Button
@@ -221,13 +222,11 @@ async function saveWatcherSettings() {
                     class="cursor-pointer flex items-center gap-2"
                   >
                     <FolderOpenSolid class="w-4 h-4" />
-                    Browse
+                    {$t('common.inputs.browse')}
                   </Button>
                 </div>
                 <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  Directory where new files will be monitored for automatic
-                  upload. Processed files will be moved to the global output
-                  directory.
+                  {$t('settings.watcher.watch_directory_description')}
                 </P>
               </div>
             </div>
@@ -236,7 +235,7 @@ async function saveWatcherSettings() {
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <!-- Custom DurationInput for check interval since it needs nanosecond conversion -->
             <div>
-              <Label for="check-interval" class="mb-2">Check Interval</Label>
+              <Label for="check-interval" class="mb-2">{$t('settings.watcher.check_interval')}</Label>
               <div class="flex gap-2">
                 <div class="flex-1">
                   <Input
@@ -265,14 +264,14 @@ async function saveWatcherSettings() {
                       config.watcher.check_interval = secondsToNanos(seconds);
                     }}
                   >
-                    <option value="s">Seconds</option>
-                    <option value="m">Minutes</option>
-                    <option value="h">Hours</option>
+                    <option value="s">{$t('common.inputs.time_units.seconds')}</option>
+                    <option value="m">{$t('common.inputs.time_units.minutes')}</option>
+                    <option value="h">{$t('common.inputs.time_units.hours')}</option>
                   </select>
                 </div>
               </div>
               <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                How often to scan for new files
+                {$t('settings.watcher.check_interval_description')}
               </P>
               <div class="mt-2 flex flex-wrap gap-2">
                 <button
@@ -308,8 +307,8 @@ async function saveWatcherSettings() {
 
             <SizeInput
               bind:value={config.watcher.size_threshold}
-              label="Size Threshold"
-              description="Minimum accumulated size before batch processing"
+              label={$t('settings.watcher.size_threshold')}
+              description={$t('settings.watcher.size_threshold_description')}
               presets={sizeThresholdPresets}
               minValue={1}
               maxValue={10000}
@@ -318,8 +317,8 @@ async function saveWatcherSettings() {
 
             <SizeInput
               bind:value={config.watcher.min_file_size}
-              label="Min File Size"
-              description="Minimum size of individual files to process"
+              label={$t('settings.watcher.min_file_size')}
+              description={$t('settings.watcher.min_file_size_description')}
               presets={minFileSizePresets}
               minValue={0}
               maxValue={1000}
@@ -333,16 +332,15 @@ async function saveWatcherSettings() {
                 tag="h3"
                 class="text-md font-medium text-gray-900 dark:text-white mb-2"
               >
-                Posting Schedule
+                {$t('settings.watcher.posting_schedule')}
               </Heading>
               <P class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                Define when the watcher is allowed to post files (24-hour
-                format)
+                {$t('settings.watcher.posting_schedule_description')}
               </P>
 
               <div class="space-y-4">
                 <div>
-                  <Label class="mb-2">Time Range</Label>
+                  <Label class="mb-2">{$t('settings.watcher.time_range')}</Label>
                   <Timepicker
                     type="range"
                     value={config.watcher.schedule.start_time}
@@ -354,7 +352,7 @@ async function saveWatcherSettings() {
                     divClass="shadow-none"
                   />
                   <P class="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                    Define when the watcher is allowed to post files (24-hour format)
+                    {$t('settings.watcher.time_range_description')}
                   </P>
                 </div>
               </div>
@@ -367,10 +365,10 @@ async function saveWatcherSettings() {
                     tag="h3"
                     class="text-md font-medium text-gray-900 dark:text-white"
                   >
-                    Ignore Patterns
+                    {$t('settings.watcher.ignore_patterns')}
                   </Heading>
                   <P class="text-sm text-gray-600 dark:text-gray-400">
-                    File patterns to ignore (uses glob syntax)
+                    {$t('settings.watcher.ignore_patterns_description')}
                   </P>
                 </div>
                 <Button
@@ -379,7 +377,7 @@ async function saveWatcherSettings() {
                   class="cursor-pointer flex items-center gap-2"
                 >
                   <CirclePlusSolid class="w-4 h-4" />
-                  Add Pattern
+                  {$t('settings.watcher.add_pattern')}
                 </Button>
               </div>
 
@@ -389,7 +387,7 @@ async function saveWatcherSettings() {
                     <div class="flex-1">
                       <Input
                         bind:value={config.watcher.ignore_patterns[index]}
-                        placeholder="*.tmp"
+                        placeholder={$t('settings.watcher.pattern_placeholder')}
                       />
                     </div>
                     <Button
@@ -400,7 +398,7 @@ async function saveWatcherSettings() {
                       class="cursor-pointer flex items-center gap-1"
                     >
                       <TrashBinSolid class="w-3 h-3" />
-                      Remove
+                      {$t('settings.watcher.remove')}
                     </Button>
                   </div>
                 {/each}
@@ -410,9 +408,7 @@ async function saveWatcherSettings() {
                 class="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded"
               >
                 <P class="text-sm text-gray-700 dark:text-gray-300">
-                  <strong>Common patterns:</strong> *.tmp (temporary files), *.part
-                  (partial downloads), *.!ut (uTorrent), *.crdownload (Chrome downloads),
-                  *.download (Firefox)
+                  {@html $t('settings.watcher.common_patterns')}
                 </P>
               </div>
             </div>
@@ -430,7 +426,7 @@ async function saveWatcherSettings() {
         class="cursor-pointer flex items-center gap-2"
       >
         <FloppyDiskSolid class="w-4 h-4" />
-        {saving ? "Saving..." : "Save Watcher Settings"}
+        {saving ? $t('settings.watcher.saving') : $t('settings.watcher.save_button')}
       </Button>
     </div>
   </div>

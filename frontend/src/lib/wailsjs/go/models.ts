@@ -102,6 +102,22 @@ export namespace backend {
 
 export namespace config {
 	
+	export class PostUploadScriptConfig {
+	    enabled: boolean;
+	    command: string;
+	    timeout: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new PostUploadScriptConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.command = source["command"];
+	        this.timeout = source["timeout"];
+	    }
+	}
 	export class QueueConfig {
 	    database_type: string;
 	    database_path: string;
@@ -394,6 +410,7 @@ export namespace config {
 	    nzb_compression: NzbCompressionConfig;
 	    queue: QueueConfig;
 	    output_dir: string;
+	    post_upload_script: PostUploadScriptConfig;
 	
 	    static createFrom(source: any = {}) {
 	        return new ConfigData(source);
@@ -410,6 +427,7 @@ export namespace config {
 	        this.nzb_compression = this.convertValues(source["nzb_compression"], NzbCompressionConfig);
 	        this.queue = this.convertValues(source["queue"], QueueConfig);
 	        this.output_dir = source["output_dir"];
+	        this.post_upload_script = this.convertValues(source["post_upload_script"], PostUploadScriptConfig);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -430,6 +448,7 @@ export namespace config {
 		    return a;
 		}
 	}
+	
 	
 	
 	

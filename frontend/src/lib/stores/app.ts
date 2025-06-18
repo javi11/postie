@@ -37,4 +37,6 @@ export const isUploading = derived(progress, (progress) => {
 });
 
 // Create settings store for save functionality
-export const settingsSaveFunction = writable<(() => Promise<void>) | null>(null);
+export const settingsSaveFunction = writable<(() => Promise<void>) | null>(
+	null,
+);

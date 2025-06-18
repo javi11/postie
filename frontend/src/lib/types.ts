@@ -130,6 +130,12 @@ export interface QueueConfig {
 	max_concurrent_uploads: number;
 }
 
+export interface PostUploadScriptConfig {
+	enabled: boolean;
+	command: string;
+	timeout: string;
+}
+
 export interface ConfigData {
 	servers: ServerConfig[];
 	connection_pool: ConnectionPoolConfig;
@@ -140,4 +146,5 @@ export interface ConfigData {
 	nzb_compression: NzbCompressionConfig;
 	queue: QueueConfig;
 	output_dir: string;
+	post_upload_script: PostUploadScriptConfig;
 }
