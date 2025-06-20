@@ -2,19 +2,14 @@
 import { Button, Input, Label, P } from "flowbite-svelte";
 
 export let value = 0;
-export const label = "";
-export const description = "";
-export const placeholder = "0";
-export const presets: Array<{ label: string; value: number }> = [];
-export const minValue = 0;
-export const maxValue = 1000;
-export const id = "";
-export const unitLabel = "MB/s";
-
-function updateValue() {
-	// This is just to trigger any parent reactive statements
-	value = value;
-}
+export let label = "";
+export let description = "";
+export let placeholder = "0";
+export let presets: Array<{ label: string; value: number }> = [];
+export let minValue = 0;
+export let maxValue = 1000;
+export let id = "";
+export let unitLabel = "MB/s";
 
 function setPreset(presetValue: number) {
 	value = presetValue;
@@ -22,9 +17,7 @@ function setPreset(presetValue: number) {
 </script>
 
 <div>
-	{#if label}
-		<Label for={id} class="mb-2">{label}</Label>
-	{/if}
+	<Label for={id} class="mb-2">{label}</Label>
 	<div class="flex gap-2">
 		<div class="flex-1">
 			<Input
@@ -34,18 +27,15 @@ function setPreset(presetValue: number) {
 				min={minValue}
 				max={maxValue}
 				{placeholder}
-				on:input={updateValue}
 			/>
 		</div>
 		<div class="w-16 flex items-center justify-center text-sm font-medium text-gray-600 dark:text-gray-400">
 			{unitLabel}
 		</div>
 	</div>
-	{#if description}
-		<P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-			{description}
-		</P>
-	{/if}
+	<P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+		{description}
+	</P>
 	{#if presets.length > 0}
 		<div class="mt-2 flex flex-wrap gap-2">
 			{#each presets as preset}

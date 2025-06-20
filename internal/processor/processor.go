@@ -16,6 +16,8 @@ import (
 	"maragu.dev/goqite"
 )
 
+const maxRetries = 3
+
 type Processor struct {
 	queue        *queue.Queue
 	postie       *postie.Postie
@@ -252,6 +254,7 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 				"jobID":               jobID,
 				"speed":               speed,
 				"secondsLeft":         secondsLeft,
+				"elapsedTime":         elapsedTime,
 			})
 		}
 
@@ -288,6 +291,9 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 					"percentage":          0,
 					"currentFileProgress": 0,
 					"jobID":               jobID,
+					"speed":               0,
+					"secondsLeft":         0,
+					"elapsedTime":         0,
 				})
 			}
 			return context.Canceled
@@ -306,6 +312,9 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 				"percentage":          0,
 				"currentFileProgress": 0,
 				"jobID":               jobID,
+				"speed":               0,
+				"secondsLeft":         0,
+				"elapsedTime":         0,
 			})
 		}
 
@@ -325,6 +334,9 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 			"percentage":          100,
 			"currentFileProgress": 100,
 			"jobID":               jobID,
+			"speed":               0,
+			"secondsLeft":         0,
+			"elapsedTime":         0,
 		})
 	}
 
@@ -339,12 +351,24 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 }
 
 func (p *Processor) handleProcessingError(ctx context.Context, msg *goqite.Message, job *queue.FileJob, jobID string, err error) error {
-	slog.ErrorContext(ctx, "Error processing file", "error", err, "path", job.Path)
+	slog.ErrorContext(ctx, "Error processing file", "error", err, "path", job.Path, "retryCount", job.RetryCount)
 
-	// Re-add the job to the queue for retry since it was already removed when processing started
-	if readdErr := p.queue.ReaddJob(ctx, job); readdErr != nil {
-		slog.ErrorContext(ctx, "Failed to re-add job to queue", "error", readdErr, "path", job.Path)
-		// Return the original error, but log the re-add failure
+	job.RetryCount++
+
+	if job.RetryCount >= maxRetries {
+		slog.ErrorContext(ctx, "Job failed permanently after reaching max retries", "path", job.Path)
+		if err := p.queue.MarkAsError(ctx, msg.ID, job, err.Error()); err != nil {
+			slog.ErrorContext(ctx, "Failed to mark job as error", "error", err, "path", job.Path)
+			// Re-add to queue as a fallback
+			if readdErr := p.queue.ReaddJob(ctx, job); readdErr != nil {
+				slog.ErrorContext(ctx, "Failed to re-add job to queue", "error", readdErr, "path", job.Path)
+			}
+		}
+	} else {
+		// Re-add the job to the queue for retry
+		if readdErr := p.queue.ReaddJob(ctx, job); readdErr != nil {
+			slog.ErrorContext(ctx, "Failed to re-add job to queue for retry", "error", readdErr, "path", job.Path)
+		}
 	}
 
 	// Emit error event
@@ -363,7 +387,7 @@ func (p *Processor) handleProcessingError(ctx context.Context, msg *goqite.Messa
 		})
 	}
 
-	return err
+	return nil
 }
 
 // CancelJob cancels a running job by its ID

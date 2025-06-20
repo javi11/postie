@@ -1,78 +1,82 @@
 {
-    "title": "Panel de Control",
-    "header": {
-        "title": "Panel de Subidas",
-        "description": "Gestiona tus cargas de archivos y monitorea el progreso",
-        "add_files": "Agregar Archivos",
-        "clear_completed": "Limpiar Completados"
-    },
-    "queue": {
-        "title": "Cola de Carga",
-        "items": "elementos",
-        "total_size": "Tamaño Total",
-        "progress": "Progreso",
-        "no_items": "No hay elementos en la cola",
-        "no_items_description": "Suba archivos para verlos aquí",
-        "file": "Archivo",
-        "size": "Tamaño",
-        "status": "Estado",
-        "created": "Creado",
-        "actions": "Acciones",
-        "completed_at": "Completado:",
-        "retry": "Reintentar",
-        "remove": "Eliminar",
-        "download_nzb": "NZB",
-        "increase_priority": "Aumentar prioridad",
-        "decrease_priority": "Disminuir prioridad",
-        "status_types": {
-            "pending": "pendiente",
-            "complete": "completo",
-            "error": "error",
-            "waiting": "Esperando",
-            "processing": "Procesando",
-            "completed": "Completado",
-            "failed": "Fallido"
-        },
-        "nzb": "NZB"
-    },
-    "progress": {
-        "title": "Progreso de Carga",
-        "status": {
-            "active": "Activo",
-            "idle": "Inactivo"
-        },
-        "job_title": "Trabajo {jobId}",
-        "cancel_upload": "Cancelar Carga",
-        "overall": "Progreso General",
-        "current_file": "Archivo Actual",
-        "elapsed_time": "Tiempo Transcurrido",
-        "upload_speed": "Velocidad de Carga",
-        "estimated_remaining": "Tiempo Estimado Restante",
-        "stage": "Etapa",
-        "details": "Detalles",
-        "last_update": "Última Actualización",
-        "no_upload_title": "No hay carga en progreso",
-        "no_upload_description": "Haga clic en \"Iniciar Carga\" para comenzar a procesar la cola"
-    },
-    "stats": {
-        "title": "Estadísticas",
-        "uploaded": "Subido",
-        "pending": "Pendiente",
-        "errors": "Errores",
-        "rate": "Velocidad de Subida",
-        "queue_stats": {
-            "title": "Estadísticas de Cola",
-            "total": "Total",
-            "running": "En Ejecución",
-            "complete": "Completo",
-            "success_rate": "Tasa de Éxito"
-        }
-    },
-    "alerts": {
-        "config_error": "Error de Configuración",
-        "config_error_description": "Hubo un error con la configuración del servidor (ej. nombre de host inválido, fallo de conexión). Por favor revisa tu {settingsLink} para corregir la configuración.",
-        "config_required": "Configuración Requerida",
-        "config_required_description": "Por favor configura al menos un servidor en la página de {settingsLink} antes de subir archivos.",
-        "settings_link": "Configuración"
-    }
+	"title": "Panel de Control",
+	"header": {
+		"title": "Panel de Subidas",
+		"description": "Gestiona tus cargas de archivos y monitorea el progreso",
+		"add_files": "Agregar Archivos",
+		"clear_completed": "Limpiar Completados"
+	},
+	"queue": {
+		"title": "Cola de Carga",
+		"items": "elementos",
+		"total_size": "Tamaño Total",
+		"progress": "Progreso",
+		"no_items": "No hay elementos en la cola",
+		"no_items_description": "Suba archivos para verlos aquí",
+		"file": "Archivo",
+		"size": "Tamaño",
+		"status": "Estado",
+		"created": "Creado",
+		"actions": "Acciones",
+		"completed_at": "Completado:",
+		"completed": "Completado",
+		"retry": "Reintentar",
+		"cancel": "Cancelar",
+		"remove": "Eliminar",
+		"download_nzb": "NZB",
+		"increase_priority": "Aumentar prioridad",
+		"decrease_priority": "Disminuir prioridad",
+		"updated_at": "Actualizado:",
+		"remove_from_queue": "Eliminar de la cola",
+		"status_types": {
+			"pending": "pendiente",
+			"complete": "completo",
+			"error": "error",
+			"waiting": "Esperando",
+			"processing": "Procesando",
+			"completed": "Completado",
+			"failed": "Fallido"
+		},
+		"nzb": "NZB"
+	},
+	"progress": {
+		"title": "Progreso de Carga",
+		"status": {
+			"active": "Activo",
+			"idle": "Inactivo"
+		},
+		"job_title": "Trabajo {jobId}",
+		"cancel_upload": "Cancelar Carga",
+		"overall": "Progreso General",
+		"current_file": "Archivo Actual",
+		"elapsed_time": "Tiempo Transcurrido",
+		"upload_speed": "Velocidad de Carga",
+		"estimated_remaining": "Tiempo Estimado Restante",
+		"stage": "Etapa",
+		"details": "Detalles",
+		"last_update": "Última Actualización",
+		"no_upload_title": "No hay carga en progreso",
+		"no_upload_description": "Haga clic en \"Iniciar Carga\" para comenzar a procesar la cola"
+	},
+	"stats": {
+		"title": "Estadísticas",
+		"uploaded": "Subido",
+		"pending": "Pendiente",
+		"errors": "Errores",
+		"rate": "Velocidad de Subida",
+		"queue_stats": {
+			"title": "Estadísticas de Cola",
+			"total": "Total",
+			"running": "En Ejecución",
+			"complete": "Completo",
+			"success_rate": "Tasa de Éxito"
+		}
+	},
+	"alerts": {
+		"config_error": "Error de Configuración",
+		"config_error_description": "Hubo un error con la configuración del servidor (ej. nombre de host inválido, fallo de conexión). Por favor revisa tu {settingsLink} para corregir la configuración.",
+		"config_required": "Configuración Requerida",
+		"config_required_description": "Por favor configura al menos un servidor en la página de {settingsLink} antes de subir archivos.",
+		"settings_link": "Configuración"
+	}
 }

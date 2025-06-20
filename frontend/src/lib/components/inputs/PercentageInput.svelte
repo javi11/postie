@@ -2,13 +2,13 @@
 import { Button, Input, Label, P } from "flowbite-svelte";
 
 export let value = "10%";
-export const label = "";
-export const description = "";
-export const placeholder = "10";
-export const presets: Array<{ label: string; value: number }> = [];
-export const minValue = 1;
-export const maxValue = 100;
-export const id = "";
+export let label = "";
+export let description = "";
+export let placeholder = "10";
+export let presets: Array<{ label: string; value: number }> = [];
+export let minValue = 1;
+export let maxValue = 100;
+export let id = "";
 
 let percentageValue: number;
 

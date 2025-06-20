@@ -64,10 +64,16 @@ async function removeFromQueue(id: string) {
 		queueItems = queueItems.filter((item) => item.id !== id);
 		// Immediately refresh the queue to ensure UI updates
 		await loadQueue();
-		toastStore.success($t("common.messages.item_removed"), $t("common.messages.item_removed_description"));
+		toastStore.success(
+			$t("common.messages.item_removed"),
+			$t("common.messages.item_removed_description"),
+		);
 	} catch (error) {
 		console.error("Failed to remove item from queue:", error);
-		toastStore.error($t("common.messages.failed_to_remove_item"), String(error));
+		toastStore.error(
+			$t("common.messages.failed_to_remove_item"),
+			String(error),
+		);
 	}
 }
 
@@ -80,7 +86,35 @@ async function downloadNZB(id: string, fileName: string) {
 		);
 	} catch (error) {
 		console.error("Failed to download NZB:", error);
-		toastStore.error($t("common.messages.failed_to_download_nzb"), String(error));
+		toastStore.error(
+			$t("common.messages.failed_to_download_nzb"),
+			String(error),
+		);
+	}
+}
+
+async function retryJob(id: string) {
+	try {
+		await App.RetryJob(id);
+		await loadQueue();
+		toastStore.success($t("common.messages.item_retried"));
+	} catch (error) {
+		console.error("Failed to retry job:", error);
+		toastStore.error($t("common.messages.failed_to_retry_item"), String(error));
+	}
+}
+
+async function cancelJob(id: string) {
+	try {
+		await App.CancelJob(id);
+		await loadQueue();
+		toastStore.success($t("common.messages.item_cancelled"));
+	} catch (error) {
+		console.error("Failed to cancel job:", error);
+		toastStore.error(
+			$t("common.messages.failed_to_cancel_item"),
+			String(error),
+		);
 	}
 }
 
@@ -90,7 +124,10 @@ async function changePriority(id: string, newPriority: number) {
 		await loadQueue();
 	} catch (error) {
 		console.error("Failed to update priority:", error);
-		toastStore.error($t("common.messages.failed_to_update_priority"), String(error));
+		toastStore.error(
+			$t("common.messages.failed_to_update_priority"),
+			String(error),
+		);
 	}
 }
 
@@ -216,13 +253,13 @@ function getStatusIcon(status: string) {
                           <button
                             class="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-xs"
                             title={$t("dashboard.queue.increase_priority")}
-                            on:click={() => changePriority(item.id, item.priority + 1)}
+                            onclick={() => changePriority(item.id, item.priority + 1)}
                           >▲</button>
                           <span class="px-1 text-xs font-mono">{item.priority}</span>
                           <button
                             class="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-xs"
                             title={$t("dashboard.queue.decrease_priority")}
-                            on:click={() => changePriority(item.id, item.priority - 1)}
+                            onclick={() => changePriority(item.id, item.priority - 1)}
                             disabled={item.priority <= 0}
                           >▼</button>
                         </div>
@@ -254,29 +291,49 @@ function getStatusIcon(status: string) {
                     {/if}
                   </TableBodyCell>
                   <TableBodyCell class="text-right">
-                    <div class="flex justify-end gap-2">
-                      {#if item.status === "complete" && item.nzbPath}
+                    <div class="flex items-center justify-end space-x-2">
+                      {#if item.status === "complete"}
                         <Button
                           size="xs"
                           color="blue"
                           onclick={() => downloadNZB(item.id, item.fileName)}
-                          class="cursor-pointer flex items-center gap-1"
+                          title={$t("dashboard.queue.download_nzb")}
                         >
-                          <DownloadSolid class="w-3 h-3" />
-                          {$t("dashboard.queue.nzb")}
-                        </Button>
-                      {:else}
-                        <Button
-                          size="xs"
-                          color="red"
-                          variant="outline"
-                          onclick={() => removeFromQueue(item.id)}
-                          class="cursor-pointer flex items-center gap-1"
-                        >
-                          <TrashBinSolid class="w-3 h-3" />
-                          {$t("dashboard.queue.remove")}
+                          <DownloadSolid class="w-4 h-4" />
                         </Button>
                       {/if}
+                      {#if item.status === "error"}
+                        <Button
+                          class="cursor-pointer"
+                          size="xs"
+                          color="yellow"
+                          onclick={() => retryJob(item.id)}
+                          title={$t("dashboard.queue.retry")}
+                        >
+                          <PlaySolid class="w-4 h-4" />
+                        </Button>
+                      {/if}
+                      {#if item.status === "pending"}
+                        <Button
+                          class="cursor-pointer"
+                          size="xs"
+                          color="red"
+                          onclick={() => cancelJob(item.id)}
+                          title={$t("dashboard.queue.cancel")}
+                        >
+                          <XSolid class="w-4 h-4" />
+                        </Button>
+                      {/if}
+
+                      <Button
+                        class="cursor-pointer"
+                        size="xs"
+                        color="red"
+                        onclick={() => removeFromQueue(item.id)}
+                        title={$t("dashboard.queue.remove_from_queue")}
+                      >
+                        <TrashBinSolid class="w-4 h-4" />
+                      </Button>
                     </div>
                   </TableBodyCell>
                 </TableBodyRow>

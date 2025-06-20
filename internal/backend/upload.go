@@ -117,6 +117,7 @@ func (a *App) UploadFiles() error {
 			TransferredBytes:    int64Ptr(0),
 			CurrentFileBytes:    int64Ptr(0),
 			CurrentFileProgress: float64Ptr(0.0),
+			ElapsedTime:         float64Ptr(0.0),
 		})
 
 		// Track transferred bytes
@@ -154,6 +155,7 @@ func (a *App) UploadFiles() error {
 				CurrentFileBytes:    int64Ptr(0),
 				CurrentFileProgress: float64Ptr(0.0),
 				Percentage:          percentage,
+				ElapsedTime:         float64Ptr(0.0),
 			})
 
 			if a.postie != nil {

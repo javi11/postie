@@ -1,22 +1,17 @@
 <script lang="ts">
 import { Button, Input, Label, P } from "flowbite-svelte";
-import { t } from '$lib/i18n';
+import { t } from "$lib/i18n";
 
 export let value = 750000;
-export const label = "";
-export const description = "";
-export const placeholder = "750000";
-export const presets: Array<{ label: string; value: number }> = [];
-export const minValue = 1000;
-export const maxValue = 10000000;
-export const id = "";
+export let label = "";
+export let description = "";
+export let placeholder = "750000";
+export let presets: Array<{ label: string; value: number }> = [];
+export let minValue = 1000;
+export let maxValue = 10000000;
+export let id = "";
 
-$: unitLabel = $t('common.inputs.bytes');
-
-function updateValue() {
-	// This is just to trigger any parent reactive statements
-	value = value;
-}
+$: unitLabel = $t("common.inputs.bytes");
 
 function setPreset(presetValue: number) {
 	value = presetValue;

@@ -90,6 +90,10 @@ export function RemoveFromQueue(arg1) {
   return window['go']['backend']['App']['RemoveFromQueue'](arg1);
 }
 
+export function RetryJob(arg1) {
+  return window['go']['backend']['App']['RetryJob'](arg1);
+}
+
 export function SaveConfig(arg1) {
   return window['go']['backend']['App']['SaveConfig'](arg1);
 }

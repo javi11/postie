@@ -2,15 +2,14 @@
 import { Button, Input, Label, P, Select } from "flowbite-svelte";
 
 export let value = 100;
-export const label = "";
-export const description = "";
-export const placeholder = "100";
-export const presets: Array<{ label: string; value: number; unit: string }> =
-	[];
-export const minValue = 1;
-export const maxValue = 10000;
-export const id = "";
-export const showBytes = false; // Whether to show byte conversion
+export let label = "";
+export let description = "";
+export let placeholder = "100";
+export let presets: Array<{ label: string; value: number; unit: string }> = [];
+export let minValue = 1;
+export let maxValue = 10000;
+export let id = "";
+export let showBytes = false; // Whether to show byte conversion
 
 const sizeUnitOptions = [
 	{ value: "MB", name: "MB" },

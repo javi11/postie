@@ -215,8 +215,11 @@ func (p *Par2CmdExecutor) Create(ctx context.Context, files []fileinfo.FileInfo)
 								if processing {
 									stage = "par2_processing"
 								}
+								speed := parProgressBar.State().KBsPerSecond
+								secondsLeft := parProgressBar.State().SecondsLeft
+								elapsedTime := parProgressBar.State().SecondsSince
 								details := fmt.Sprintf("PAR2 %s: %d%% complete", stage, percentInt)
-								p.callback(stage, int64(percentInt), 100, details, 0.0, 0.0, 0.0)
+								p.callback(stage, int64(percentInt), 100, details, speed, secondsLeft, elapsedTime)
 							}
 						}
 					}

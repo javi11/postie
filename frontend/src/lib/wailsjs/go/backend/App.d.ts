@@ -48,6 +48,8 @@ export function NavigateToSettings():Promise<void>;
 
 export function RemoveFromQueue(arg1:string):Promise<void>;
 
+export function RetryJob(arg1:string):Promise<void>;
+
 export function SaveConfig(arg1:config.ConfigData):Promise<void>;
 
 export function SelectConfigFile():Promise<string>;

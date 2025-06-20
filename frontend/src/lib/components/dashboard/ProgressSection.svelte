@@ -31,7 +31,10 @@ async function cancelDirectUpload() {
 		);
 	} catch (error) {
 		console.error("Failed to cancel upload:", error);
-		toastStore.error($t("common.messages.failed_to_cancel_upload"), String(error));
+		toastStore.error(
+			$t("common.messages.failed_to_cancel_upload"),
+			String(error),
+		);
 	}
 }
 
@@ -145,7 +148,6 @@ function cancelUpload(jobID: string) {
               </div>
             {/if}
             <!-- Timing Information -->
-            {#if job.elapsedTime > 0}
               <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div
                   class="flex justify-between items-center p-3 bg-green-50 dark:bg-green-900/10 rounded-lg border border-green-200/50 dark:border-green-800/50"
@@ -159,7 +161,6 @@ function cancelUpload(jobID: string) {
                     >{formatTime(job.elapsedTime * 1000)}</span
                   >
                 </div>
-                {#if job.speed > 0}
                   <div
                     class="flex justify-between items-center p-3 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-200/50 dark:border-blue-800/50"
                   >
@@ -172,8 +173,6 @@ function cancelUpload(jobID: string) {
                       >{formatSpeed(job.speed * 1024)}</span
                     >
                   </div>
-                {/if}
-                {#if job.secondsLeft > 0}
                   <div
                     class="flex justify-between items-center p-3 bg-orange-50 dark:bg-orange-900/10 rounded-lg border border-orange-200/50 dark:border-orange-800/50"
                   >
@@ -186,9 +185,7 @@ function cancelUpload(jobID: string) {
                       >{formatTime(job.secondsLeft * 1000)}</span
                     >
                   </div>
-                {/if}
               </div>
-            {/if}
             <!-- Status Information -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div

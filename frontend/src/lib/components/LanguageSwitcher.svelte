@@ -34,11 +34,11 @@ function handleClickOutside(event: MouseEvent) {
 }
 </script>
 
-<svelte:window on:click={handleClickOutside} />
+<svelte:window onclick={handleClickOutside} />
 
 <div class="language-switcher relative">
   <button
-    on:click={toggleDropdown}
+    onclick={toggleDropdown}
     class="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors"
     aria-label={$t('common.nav.language')}
   >
@@ -59,7 +59,7 @@ function handleClickOutside(event: MouseEvent) {
       <div class="py-1">
         {#each availableLocales as langOption}
           <button
-            on:click={() => changeLocale(langOption.code)}
+            onclick={() => changeLocale(langOption.code)}
             class="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors {currentLocale === langOption.code ? 'bg-gray-50 dark:bg-gray-700' : ''}"
           >
             <span class="text-lg mr-3">{langOption.flag}</span>

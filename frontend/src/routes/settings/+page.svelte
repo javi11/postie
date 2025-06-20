@@ -91,7 +91,10 @@ async function handleSaveConfig() {
 	try {
 		// Validate that at least one server is configured
 		if (!localConfig.servers || localConfig.servers.length === 0) {
-			toastStore.error($t("common.messages.configuration_error"), $t("common.messages.no_servers_configured"));
+			toastStore.error(
+				$t("common.messages.configuration_error"),
+				$t("common.messages.no_servers_configured"),
+			);
 			return;
 		}
 
@@ -178,7 +181,10 @@ async function handleSaveConfig() {
 		}
 	} catch (error) {
 		console.error("Failed to save config:", error);
-		toastStore.error($t("common.messages.configuration_save_failed"), String(error));
+		toastStore.error(
+			$t("common.messages.configuration_save_failed"),
+			String(error),
+		);
 	}
 }
 
@@ -264,7 +270,7 @@ onDestroy(() => {
           There was an error loading the configuration from the server. 
           Please check your connection and try again.
         </P>
-        <Button color="primary" on:click={loadConfig}>
+        <Button color="primary" onclick={loadConfig}>
           <RefreshOutline class="w-4 h-4 mr-2" />
           Retry
         </Button>

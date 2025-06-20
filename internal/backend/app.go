@@ -191,6 +191,20 @@ func (a *App) GetRunningJobDetails() ([]*processor.RunningJobDetails, error) {
 	return a.processor.GetRunningJobDetails(), nil
 }
 
+// RetryJob retries a failed job
+func (a *App) RetryJob(id string) error {
+	if a.queue == nil {
+		return nil
+	}
+	err := a.queue.RetryErroredJob(a.ctx, id)
+	if err != nil {
+		return err
+	}
+
+	runtime.EventsEmit(a.ctx, "queue:updated")
+	return nil
+}
+
 // Helper function to get keys from map
 func getKeys(m map[string]bool) []string {
 	keys := make([]string, 0, len(m))

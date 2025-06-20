@@ -1,24 +1,23 @@
 <script lang="ts">
 import { Button, Input, Label, P, Select } from "flowbite-svelte";
 import { createEventDispatcher } from "svelte";
-import { t } from '$lib/i18n';
+import { t } from "$lib/i18n";
 
 export let value = "5s";
-export const label = "";
-export const description = "";
-export const placeholder = "5";
-export const presets: Array<{ label: string; value: number; unit: string }> =
-	[];
-export const minValue = 1;
-export const maxValue = 3600;
-export const id = "";
+export let label = "";
+export let description = "";
+export let placeholder = "5";
+export let presets: Array<{ label: string; value: number; unit: string }> = [];
+export let minValue = 1;
+export let maxValue = 3600;
+export let id = "";
 
 const dispatch = createEventDispatcher();
 
 $: timeUnitOptions = [
-	{ value: "s", name: $t('common.inputs.time_units.seconds') },
-	{ value: "m", name: $t('common.inputs.time_units.minutes') },
-	{ value: "h", name: $t('common.inputs.time_units.hours') },
+	{ value: "s", name: $t("common.inputs.time_units.seconds") },
+	{ value: "m", name: $t("common.inputs.time_units.minutes") },
+	{ value: "h", name: $t("common.inputs.time_units.hours") },
 ];
 
 let durationValue: number;

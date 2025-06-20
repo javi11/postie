@@ -100,6 +100,9 @@ func (a *App) initializeWatcher() error {
 					if jobID, ok := progressData["jobID"].(string); ok {
 						a.progress.JobID = jobID
 					}
+					if elapsedTime, ok := progressData["elapsedTime"].(float64); ok {
+						a.progress.ElapsedTime = elapsedTime
+					}
 
 					// Clear JobID when job is no longer running
 					if stage, ok := progressData["stage"].(string); ok {

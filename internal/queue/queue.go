@@ -38,10 +38,11 @@ type QueueItem struct {
 }
 
 type FileJob struct {
-	Path      string    `json:"path"`
-	Size      int64     `json:"size"`
-	Priority  int       `json:"priority"`
-	CreatedAt time.Time `json:"createdAt"`
+	Path       string    `json:"path"`
+	Size       int64     `json:"size"`
+	Priority   int       `json:"priority"`
+	CreatedAt  time.Time `json:"createdAt"`
+	RetryCount int       `json:"retryCount"`
 }
 
 type CompletedItem struct {
@@ -139,6 +140,21 @@ func initGoqiteSchema(db *sql.DB) error {
 
 		create index if not exists completed_items_completed_at_idx on completed_items (completed_at);
 		create index if not exists completed_items_path_idx on completed_items (path);
+
+		-- Table for errored items
+		create table if not exists errored_items (
+			id text primary key,
+			path text not null,
+			size integer not null,
+			priority integer not null default 0,
+			error_message text not null,
+			created_at text not null,
+			errored_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ')),
+			job_data blob not null
+		);
+
+		create index if not exists errored_items_errored_at_idx on errored_items (errored_at);
+		create index if not exists errored_items_path_idx on errored_items (path);
 	`
 
 	_, err := db.Exec(schema)
@@ -148,10 +164,11 @@ func initGoqiteSchema(db *sql.DB) error {
 // AddFile adds a file to the queue for processing
 func (q *Queue) AddFile(ctx context.Context, path string, size int64) error {
 	job := FileJob{
-		Path:      path,
-		Size:      size,
-		Priority:  0,
-		CreatedAt: time.Now(),
+		Path:       path,
+		Size:       size,
+		Priority:   0,
+		CreatedAt:  time.Now(),
+		RetryCount: 0,
 	}
 
 	jobData, err := json.Marshal(job)
@@ -169,10 +186,11 @@ func (q *Queue) AddFile(ctx context.Context, path string, size int64) error {
 // AddFileWithPriority adds a file to the queue with a specific priority
 func (q *Queue) AddFileWithPriority(ctx context.Context, path string, size int64, priority int) error {
 	job := FileJob{
-		Path:      path,
-		Size:      size,
-		Priority:  priority,
-		CreatedAt: time.Now(),
+		Path:       path,
+		Size:       size,
+		Priority:   priority,
+		CreatedAt:  time.Now(),
+		RetryCount: 0,
 	}
 
 	jobData, err := json.Marshal(job)
@@ -294,7 +312,7 @@ func (q *Queue) GetQueueItems() ([]QueueItem, error) {
 			FileName:    getFileName(job.Path),
 			Size:        job.Size,
 			Status:      status,
-			RetryCount:  received,
+			RetryCount:  job.RetryCount,
 			Priority:    job.Priority,
 			CreatedAt:   createdTime,
 			UpdatedAt:   updatedTime,
@@ -355,7 +373,63 @@ func (q *Queue) GetQueueItems() ([]QueueItem, error) {
 		items = append(items, item)
 	}
 
-	return items, completedRows.Err()
+	if err := completedRows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Get errored items
+	erroredRows, err := q.db.Query(`
+		SELECT id, path, size, priority, error_message, created_at, errored_at, job_data
+		FROM errored_items
+		ORDER BY errored_at DESC
+		LIMIT 100
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := erroredRows.Close(); err != nil {
+			slog.Error("Failed to close errored rows", "error", err)
+		}
+	}()
+
+	for erroredRows.Next() {
+		var id, path, errMsg, createdAt, erroredAt string
+		var size int64
+		var priority int
+		var jobData []byte
+
+		err := erroredRows.Scan(&id, &path, &size, &priority, &errMsg, &createdAt, &erroredAt, &jobData)
+		if err != nil {
+			return nil, err
+		}
+
+		var job FileJob
+		if err := json.Unmarshal(jobData, &job); err != nil {
+			continue // Skip invalid jobs
+		}
+
+		// Parse timestamps
+		createdTime, _ := time.Parse("2006-01-02T15:04:05.000Z", createdAt)
+		erroredTime, _ := time.Parse("2006-01-02T15:04:05.000Z", erroredAt)
+
+		item := QueueItem{
+			ID:           id,
+			Path:         path,
+			FileName:     getFileName(path),
+			Size:         size,
+			Status:       StatusError,
+			RetryCount:   job.RetryCount,
+			Priority:     priority,
+			ErrorMessage: &errMsg,
+			CreatedAt:    createdTime,
+			UpdatedAt:    erroredTime,
+		}
+
+		items = append(items, item)
+	}
+
+	return items, erroredRows.Err()
 }
 
 // RemoveFromQueue removes an item from the queue by ID (handles both active and completed)
@@ -632,5 +706,57 @@ func (q *Queue) SetQueueItemPriority(id string, priority int) error {
 	if err != nil {
 		return fmt.Errorf("failed to update queue item priority: %w", err)
 	}
+	return nil
+}
+
+// MarkAsError marks a file job as errored and adds it to the errored_items table
+func (q *Queue) MarkAsError(ctx context.Context, msgID goqite.ID, job *FileJob, errMsg string) error {
+	created := job.CreatedAt.Format("2006-01-02T15:04:05.000Z")
+
+	jobData, err := json.Marshal(job)
+	if err != nil {
+		return fmt.Errorf("failed to marshal job data: %w", err)
+	}
+
+	_, err = q.db.Exec(`
+		INSERT INTO errored_items (id, path, size, priority, error_message, created_at, job_data)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, string(msgID), job.Path, job.Size, job.Priority, errMsg, created, jobData)
+
+	if err != nil {
+		return fmt.Errorf("failed to insert errored item: %w", err)
+	}
+
+	return nil
+}
+
+// RetryErroredJob retries an errored job by moving it back to the main queue
+func (q *Queue) RetryErroredJob(ctx context.Context, id string) error {
+	var jobData []byte
+	err := q.db.QueryRow("SELECT job_data FROM errored_items WHERE id = ?", id).Scan(&jobData)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("errored item not found: %s", id)
+		}
+		return fmt.Errorf("failed to get errored item: %w", err)
+	}
+
+	var job FileJob
+	if err := json.Unmarshal(jobData, &job); err != nil {
+		return fmt.Errorf("failed to unmarshal job data: %w", err)
+	}
+
+	// Reset retry count and re-add to queue
+	job.RetryCount = 0
+	if err := q.ReaddJob(ctx, &job); err != nil {
+		return fmt.Errorf("failed to re-add job to queue: %w", err)
+	}
+
+	// Delete from errored items
+	_, err = q.db.Exec("DELETE FROM errored_items WHERE id = ?", id)
+	if err != nil {
+		return fmt.Errorf("failed to delete errored item: %w", err)
+	}
+
 	return nil
 }
