@@ -2,7 +2,8 @@
 	"nav": {
 		"dashboard": "Panel de Control",
 		"settings": "Configuración",
-		"language": "Idioma"
+		"language": "Idioma",
+		"logs": "Logs"
 	},
 	"actions": {
 		"save": "Guardar",
@@ -15,6 +16,9 @@
 		"reset": "Restablecer"
 	},
 	"common": {
+		"start_auto_refresh": "Iniciar auto-actualización",
+		"stop_auto_refresh": "Detener auto-actualización",
+		"refresh": "Actualizar",
 		"loading": "Cargando...",
 		"error": "Error",
 		"success": "Éxito",

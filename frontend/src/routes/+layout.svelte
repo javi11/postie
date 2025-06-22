@@ -21,6 +21,7 @@ import {
 	ChartPieSolid,
 	CogSolid,
 	FloppyDiskSolid,
+	FileDocOutline,
 } from "flowbite-svelte-icons";
 import { onMount } from "svelte";
 import "../style.css";
@@ -134,6 +135,15 @@ async function loadAppStatus() {
           >
             <CogSolid class="w-4 h-4" />
             <span class="hidden md:inline ml-2">{$t('common.nav.settings')}</span>
+          </Button>
+          <Button
+            color={$page.route.id === "/logs" ? "secondary" : "gray"}
+            onclick={() => goto("/logs")}
+            class="cursor-pointer flex items-center text-sm font-medium transition-all"
+            aria-current={$page.route.id === "/logs" ? "page" : undefined}
+          >
+            <FileDocOutline class="w-4 h-4" />
+            <span class="hidden md:inline ml-2">{$t('common.nav.logs')}</span>
           </Button>
         </nav>
       </div>

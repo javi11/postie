@@ -17,12 +17,11 @@ function createToastStore() {
 		const id = crypto.randomUUID();
 		const newToast: ToastMessage = {
 			id,
-			duration: 5000,
 			...toast,
+			duration: 8000,
 		};
 
 		update((toasts) => [...toasts, newToast]);
-
 		// Auto-remove after duration
 		if (newToast.duration && newToast.duration > 0) {
 			setTimeout(() => {

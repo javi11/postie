@@ -38,7 +38,7 @@ import {
         <ArrowLeftOutline class="w-4 h-4" />
         Back to Dashboard
       </Button>
-      <Button color="alternative" onclick={() => window.location.reload()}>
+      <Button color="alternative" onclick={() => App.NavigateToDashboard()}>
         Refresh Page
       </Button>
     </div>

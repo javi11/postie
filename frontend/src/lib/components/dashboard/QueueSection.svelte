@@ -104,20 +104,6 @@ async function retryJob(id: string) {
 	}
 }
 
-async function cancelJob(id: string) {
-	try {
-		await App.CancelJob(id);
-		await loadQueue();
-		toastStore.success($t("common.messages.item_cancelled"));
-	} catch (error) {
-		console.error("Failed to cancel job:", error);
-		toastStore.error(
-			$t("common.messages.failed_to_cancel_item"),
-			String(error),
-		);
-	}
-}
-
 async function changePriority(id: string, newPriority: number) {
 	try {
 		await SetQueueItemPriority(id, newPriority);
@@ -311,17 +297,6 @@ function getStatusIcon(status: string) {
                           title={$t("dashboard.queue.retry")}
                         >
                           <PlaySolid class="w-4 h-4" />
-                        </Button>
-                      {/if}
-                      {#if item.status === "pending"}
-                        <Button
-                          class="cursor-pointer"
-                          size="xs"
-                          color="red"
-                          onclick={() => cancelJob(item.id)}
-                          title={$t("dashboard.queue.cancel")}
-                        >
-                          <XSolid class="w-4 h-4" />
                         </Button>
                       {/if}
 

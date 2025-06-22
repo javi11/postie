@@ -2,7 +2,9 @@
 	"app_name": "Postie",
 	"nav": {
 		"dashboard": "Tableau de bord",
-		"settings": "Paramètres"
+		"settings": "Paramètres",
+		"language": "Langue",
+		"logs": "Logs"
 	},
 	"actions": {
 		"save": "Sauvegarder",
@@ -32,6 +34,9 @@
 		"paused": "En pause"
 	},
 	"common": {
+		"start_auto_refresh": "Démarrer l'auto-actualisation",
+		"stop_auto_refresh": "Arrêter l'auto-actualisation",
+		"refresh": "Actualiser",
 		"loading": "Chargement...",
 		"error": "Erreur",
 		"success": "Succès",

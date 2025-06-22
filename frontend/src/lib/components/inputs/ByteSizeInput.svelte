@@ -31,7 +31,6 @@ function setPreset(presetValue: number) {
 				min={minValue}
 				max={maxValue}
 				{placeholder}
-				on:input={updateValue}
 			/>
 		</div>
 		<div class="w-20 flex items-center justify-center text-sm font-medium text-gray-600 dark:text-gray-400">

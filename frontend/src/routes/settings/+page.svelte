@@ -32,11 +32,10 @@ let configData: ConfigData | null = null;
 let localConfig: ConfigData | null = null;
 let needsConfiguration = false;
 let criticalConfigError = false;
-let loading = true;
+let loading = false;
 let loadError = false;
 
 onMount(async () => {
-	// Wait for Wails runtime to be ready
 	await waitForWailsRuntime();
 	await loadConfig();
 
@@ -212,39 +211,35 @@ onDestroy(() => {
           {#if criticalConfigError}
             <div class="flex items-center gap-2 px-3 py-1 bg-red-100 dark:bg-red-900/30 rounded-full">
               <ExclamationCircleOutline class="w-4 h-4 text-red-600 dark:text-red-400" />
-              <span class="text-sm font-medium text-red-800 dark:text-red-200">Configuration Error</span>
+              <span class="text-sm font-medium text-red-800 dark:text-red-200">{$t('settings.configuration_error')}</span>
             </div>
           {:else if needsConfiguration}
             <div class="flex items-center gap-2 px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 rounded-full">
               <ExclamationCircleOutline class="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
-              <span class="text-sm font-medium text-yellow-800 dark:text-yellow-200">Configuration Required</span>
+              <span class="text-sm font-medium text-yellow-800 dark:text-yellow-200">{$t('settings.header.status.configuration_required')}</span>
             </div>
           {:else}
             <div class="flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/30 rounded-full">
               <CheckCircleSolid class="w-4 h-4 text-green-600 dark:text-green-400" />
-              <span class="text-sm font-medium text-green-800 dark:text-green-200">Configured</span>
+              <span class="text-sm font-medium text-green-800 dark:text-green-200">{$t('settings.header.status.configured')}</span>
             </div>
           {/if}
         </div>
 
         <P class="text-gray-600 dark:text-gray-400">
-          Configure your upload servers, posting settings, and PAR2 options.
+          {$t('settings.header.description')}
         </P>
 
         {#if criticalConfigError}
           <div class="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
             <P class="text-red-800 dark:text-red-200">
-              <strong>Configuration Error:</strong> There was an error with your server
-              configuration (e.g., invalid hostname like "Locahost", connection failure).
-              Please check and fix your server settings below, then click "Save Configuration".
+              <strong>{$t('settings.header.status.configuration_error')}</strong> {$t('settings.header.status.configuration_error_description')}
             </P>
           </div>
         {:else if needsConfiguration}
           <div class="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
             <P class="text-yellow-800 dark:text-yellow-200">
-              <strong>Setup Required:</strong> Please configure at least one server
-              to start uploading files. All settings are saved automatically when you
-              click "Save Configuration".
+              <strong>{$t('settings.header.alerts.setup_required')}</strong> {$t('settings.header.alerts.setup_required_description')}
             </P>
           </div>
         {/if}
@@ -252,11 +247,11 @@ onDestroy(() => {
     </div>
   </div>
 
-  {#if loading}
+  {#if loading === true}
     <div class="flex items-center justify-center py-12">
       <div class="text-center">
         <Spinner class="mb-4 w-8 h-8 mx-auto" />
-        <P class="text-gray-600 dark:text-gray-400">Loading configuration...</P>
+        <P class="text-gray-600 dark:text-gray-400">{$t('common.common.loading')}</P>
       </div>
     </div>
   {:else if loadError}
@@ -264,15 +259,14 @@ onDestroy(() => {
       <div class="text-center max-w-md">
         <ExclamationCircleOutline class="mb-4 w-12 h-12 mx-auto text-red-500 dark:text-red-400" />
         <Heading tag="h3" class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
-          Failed to Load Configuration
+          {$t('settings.header.status.failed_to_load_configuration')}
         </Heading>
         <P class="mb-4 text-gray-600 dark:text-gray-400">
-          There was an error loading the configuration from the server. 
-          Please check your connection and try again.
+          {$t('settings.header.status.failed_to_load_configuration_description')}
         </P>
         <Button color="primary" onclick={loadConfig}>
           <RefreshOutline class="w-4 h-4 mr-2" />
-          Retry
+          {$t('settings.retry')}
         </Button>
       </div>
     </div>
@@ -293,7 +287,7 @@ onDestroy(() => {
   {:else}
     <div class="flex items-center justify-center py-12">
       <div class="text-center">
-        <P class="text-gray-600 dark:text-gray-400">No configuration available.</P>
+        <P class="text-gray-600 dark:text-gray-400">{$t('settings.no_configuration_available')}</P>
       </div>
     </div>
   {/if}

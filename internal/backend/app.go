@@ -2,7 +2,9 @@ package backend
 
 import (
 	"context"
+	"io"
 	"log/slog"
+	"os"
 	"sync"
 
 	"github.com/javi11/postie/internal/config"
@@ -12,6 +14,7 @@ import (
 	"github.com/javi11/postie/pkg/postie"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // App struct for the Wails application
@@ -48,14 +51,31 @@ func NewApp() *App {
 			Database: "./postie_queue.db",
 			Par2:     "./parpar",
 			Data:     ".",
+			Log:      "./postie.log",
 		}
 	}
+
+	// Setup logging
+	logFile := &lumberjack.Logger{
+		Filename:   appPaths.Log,
+		MaxSize:    5, // megabytes
+		MaxBackups: 3,
+		MaxAge:     28, //days
+		Compress:   true,
+	}
+
+	multiWriter := io.MultiWriter(os.Stdout, logFile)
+	logger := slog.New(slog.NewJSONHandler(multiWriter, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
+	slog.SetDefault(logger)
 
 	slog.Info("Using OS-specific paths",
 		"config", appPaths.Config,
 		"database", appPaths.Database,
 		"par2", appPaths.Par2,
-		"data", appPaths.Data)
+		"data", appPaths.Data,
+		"log", appPaths.Log)
 
 	return &App{
 		configPath: appPaths.Config,
@@ -212,6 +232,15 @@ func getKeys(m map[string]bool) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// GetLogs returns the content of the log file.
+func (a *App) GetLogs() (string, error) {
+	content, err := os.ReadFile(a.appPaths.Log)
+	if err != nil {
+		return "", err
+	}
+	return string(content), nil
 }
 
 // NavigateToSettings emits an event to navigate to the settings page

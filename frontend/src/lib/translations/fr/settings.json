@@ -1,5 +1,6 @@
 {
 	"title": "Paramètres",
+	"no_configuration_available": "Aucune configuration disponible",
 	"header": {
 		"title": "Paramètres",
 		"description": "Configurez Postie selon vos besoins. Tous les paramètres sont automatiquement sauvegardés.",
@@ -7,7 +8,9 @@
 		"status": {
 			"configuration_error": "Erreur de Configuration",
 			"configuration_required": "Configuration Requise",
-			"configured": "Configuré"
+			"configured": "Configuré",
+			"failed_to_load_configuration": "Erreur lors du chargement de la configuration",
+			"failed_to_load_configuration_description": "Veuillez vérifier les paramètres de configuration et réessayer."
 		},
 		"alerts": {
 			"configuration_error": "Erreur Critique de Configuration :",

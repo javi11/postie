@@ -12,6 +12,7 @@ type AppPaths struct {
 	Database string
 	Par2     string
 	Data     string
+	Log      string
 }
 
 // GetAppPaths returns the appropriate paths for the current operating system
@@ -64,6 +65,7 @@ func GetAppPaths() (*AppPaths, error) {
 		Database: filepath.Join(dataDir, "postie_queue.db"),
 		Par2:     filepath.Join(dataDir, par2Name),
 		Data:     dataDir,
+		Log:      filepath.Join(dataDir, "postie.log"),
 	}, nil
 }
 

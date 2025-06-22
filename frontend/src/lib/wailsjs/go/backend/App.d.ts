@@ -22,6 +22,8 @@ export function GetConfig():Promise<config.ConfigData>;
 
 export function GetConfigPath():Promise<string>;
 
+export function GetLogs():Promise<string>;
+
 export function GetNZBContent(arg1:string):Promise<string>;
 
 export function GetOutputDirectory():Promise<string>;

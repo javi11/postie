@@ -1,5 +1,6 @@
 {
 	"title": "Configuración",
+	"no_configuration_available": "No hay configuración disponible",
 	"header": {
 		"title": "Configuración",
 		"description": "Configure Postie para satisfacer sus necesidades. Todas las configuraciones se guardan automáticamente.",
@@ -7,7 +8,9 @@
 		"status": {
 			"configuration_error": "Error de Configuración",
 			"configuration_required": "Configuración Requerida",
-			"configured": "Configurado"
+			"configured": "Configurado",
+			"failed_to_load_configuration": "Error al cargar la configuración",
+			"failed_to_load_configuration_description": "Por favor, verifique los ajustes de configuración y vuelva a intentarlo."
 		},
 		"alerts": {
 			"configuration_error": "Error Crítico de Configuración:",

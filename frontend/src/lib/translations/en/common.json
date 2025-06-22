@@ -2,6 +2,7 @@
 	"nav": {
 		"dashboard": "Dashboard",
 		"settings": "Settings",
+		"logs": "Logs",
 		"language": "Language"
 	},
 	"actions": {
@@ -15,6 +16,9 @@
 		"reset": "Reset"
 	},
 	"common": {
+		"start_auto_refresh": "Start auto-refresh",
+		"stop_auto_refresh": "Stop auto-refresh",
+		"refresh": "Refresh",
 		"loading": "Loading...",
 		"error": "Error",
 		"success": "Success",

@@ -38,6 +38,10 @@ export function GetConfigPath() {
   return window['go']['backend']['App']['GetConfigPath']();
 }
 
+export function GetLogs() {
+  return window['go']['backend']['App']['GetLogs']();
+}
+
 export function GetNZBContent(arg1) {
   return window['go']['backend']['App']['GetNZBContent'](arg1);
 }

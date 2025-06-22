@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"os"
 
 	"github.com/javi11/postie/internal/backend"
 	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/logger"
 	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/menu/keys"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -26,20 +28,20 @@ func main() {
 
 	// File menu
 	fileMenu := appMenu.AddSubmenu("File")
-	fileMenu.AddText("Settings", keys.CmdOrCtrl("comma"), func(_ *menu.CallbackData) {
+	fileMenu.AddText("Settings", keys.Control("comma"), func(_ *menu.CallbackData) {
 		app.NavigateToSettings()
 	})
 	fileMenu.AddSeparator()
-	fileMenu.AddText("Quit", keys.CmdOrCtrl("q"), func(_ *menu.CallbackData) {
-		runtime.Quit(nil)
+	fileMenu.AddText("Quit", keys.Control("q"), func(_ *menu.CallbackData) {
+		runtime.Quit(context.Background())
 	})
 
 	// View menu
 	viewMenu := appMenu.AddSubmenu("View")
-	viewMenu.AddText("Dashboard", keys.CmdOrCtrl("1"), func(_ *menu.CallbackData) {
+	viewMenu.AddText("Dashboard", keys.Control("1"), func(_ *menu.CallbackData) {
 		app.NavigateToDashboard()
 	})
-	viewMenu.AddText("Settings", keys.CmdOrCtrl("2"), func(_ *menu.CallbackData) {
+	viewMenu.AddText("Settings", keys.Control("2"), func(_ *menu.CallbackData) {
 		app.NavigateToSettings()
 	})
 
@@ -53,8 +55,13 @@ func main() {
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 		DisableResize:    false,
-		Menu:             appMenu,
-		OnStartup:        app.Startup,
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId: "postie",
+		},
+		EnableDefaultContextMenu: true,
+		Menu:                     appMenu,
+		OnStartup:                app.Startup,
+		LogLevelProduction:       logger.DEBUG,
 		Bind: []interface{}{
 			app,
 		},

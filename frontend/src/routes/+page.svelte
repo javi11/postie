@@ -62,7 +62,7 @@ async function handleUpload() {
 				$t("common.messages.error_saving"),
 			);
 			// Navigate to settings using SvelteKit's navigation
-			window.location.href = "/settings";
+			App.NavigateToSettings();
 		} else if (errorMessage.includes("Wails runtime not available")) {
 			toastStore.error($t("common.common.error"), $t("common.common.loading"));
 		} else {
