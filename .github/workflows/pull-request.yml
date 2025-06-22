@@ -56,7 +56,47 @@ jobs:
           name: cli-snapshot
           path: dist/*
 
-  build-gui-test:
+  build-gui-macos:
+    if: ${{ !contains(github.event.head_commit.message, 'docs:') }}
+    runs-on: macos-13
+    needs: test
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # checkout
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Install Wails (version from wails.json)
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      # Install Bun
+      - name: Install Bun
+        run: npm install -g bun
+
+      # Build macOS GUI using Wails config (Universal Binary)
+      - name: Build macOS GUI
+        run: wails build -platform darwin/universal
+        env:
+          CGO_ENABLED: 1
+
+      # Upload macOS artifact
+      - name: Upload macOS GUI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: postie-gui-macos-universal
+          path: build/bin
+  build-gui-windows:
     if: ${{ !contains(github.event.head_commit.message, 'docs:') }}
     runs-on: windows-latest
     needs: test
@@ -86,7 +126,7 @@ jobs:
 
       # Build Windows GUI using Wails config
       - name: Build Windows GUI
-        run: wails build -platform windows/amd64
+        run: wails build -platform windows/amd64 -ldflags="-extldflags=-static"
         env:
           CGO_ENABLED: 1
 

@@ -30,6 +30,7 @@
 		"vite": "^6.3.5"
 	},
 	"dependencies": {
+		"svelte-tiny-virtual-list": "^2.1.2",
 		"sveltekit-i18n": "^2.4.2"
 	}
 }

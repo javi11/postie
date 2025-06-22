@@ -16,6 +16,7 @@ import {
 	NavLi,
 	NavUl,
 	Navbar,
+	DarkMode,
 } from "flowbite-svelte";
 import {
 	ChartPieSolid,
@@ -94,67 +95,68 @@ async function loadAppStatus() {
 </script>
 
 <div
-  class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800"
+	class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800"
 >
-  <!-- Header/Navigation -->
-  <header
-    class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200/60 dark:border-gray-700/60 sticky top-0 z-50"
-  >
-    <div class="max-w-7xl mx-auto px-6 py-4">
-      <div class="flex items-center justify-between">
-        <!-- Logo and Brand -->
-        <div class="flex items-center gap-3">
-          <img src={logo} alt="Postie UI" class="w-8 h-8" loading="lazy" />
-          <div>
-            <h1 class="text-xl font-bold text-gray-900 dark:text-white">
-              Postie
-            </h1>
-            <p class="text-xs text-gray-500 dark:text-gray-400">
-              Upload Manager
-            </p>
-          </div>
-        </div>
+	<DarkMode class="hidden" />
+	<!-- Header/Navigation -->
+	<header
+		class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200/60 dark:border-gray-700/60 sticky top-0 z-50"
+	>
+		<div class="max-w-7xl mx-auto px-6 py-4">
+			<div class="flex items-center justify-between">
+				<!-- Logo and Brand -->
+				<div class="flex items-center gap-3">
+					<img src={logo} alt="Postie UI" class="w-8 h-8" loading="lazy" />
+					<div>
+						<h1 class="text-xl font-bold text-gray-900 dark:text-white">
+							Postie
+						</h1>
+						<p class="text-xs text-gray-500 dark:text-gray-400">
+							Upload Manager
+						</p>
+					</div>
+				</div>
 
-        <!-- Navigation -->
-        <nav class="flex items-center gap-2">
-          <Button
-            color={$page.route.id === "/" ? "primary" : "alternative"}
-            onclick={() => goto("/")}
-            class="cursor-pointer flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all"
-            disabled={needsConfiguration || criticalConfigError}
-            aria-current={$page.route.id === "/" ? "page" : undefined}
-          >
-            <ChartPieSolid class="w-4 h-4" />
-            {$t('common.nav.dashboard')}
-          </Button>
-          <Button
-            color={$page.route.id === "/settings" ? "secondary" : "gray"}
-            onclick={() => goto("/settings")}
-            class="cursor-pointer flex items-center text-sm font-medium transition-all"
-            aria-current={$page.route.id === "/settings" ? "page" : undefined}
-          >
-            <CogSolid class="w-4 h-4" />
-            <span class="hidden md:inline ml-2">{$t('common.nav.settings')}</span>
-          </Button>
-          <Button
-            color={$page.route.id === "/logs" ? "secondary" : "gray"}
-            onclick={() => goto("/logs")}
-            class="cursor-pointer flex items-center text-sm font-medium transition-all"
-            aria-current={$page.route.id === "/logs" ? "page" : undefined}
-          >
-            <FileDocOutline class="w-4 h-4" />
-            <span class="hidden md:inline ml-2">{$t('common.nav.logs')}</span>
-          </Button>
-        </nav>
-      </div>
-    </div>
-  </header>
+				<!-- Navigation -->
+				<nav class="flex items-center gap-2">
+					<Button
+						color={$page.route.id === "/" ? "primary" : "alternative"}
+						onclick={() => goto("/")}
+						class="cursor-pointer flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all"
+						disabled={needsConfiguration || criticalConfigError}
+						aria-current={$page.route.id === "/" ? "page" : undefined}
+					>
+						<ChartPieSolid class="w-4 h-4" />
+						{$t('common.nav.dashboard')}
+					</Button>
+					<Button
+						color={$page.route.id === "/settings" ? "secondary" : "gray"}
+						onclick={() => goto("/settings")}
+						class="cursor-pointer flex items-center text-sm font-medium transition-all"
+						aria-current={$page.route.id === "/settings" ? "page" : undefined}
+					>
+						<CogSolid class="w-4 h-4" />
+						<span class="hidden md:inline ml-2">{$t('common.nav.settings')}</span>
+					</Button>
+					<Button
+						color={$page.route.id === "/logs" ? "secondary" : "gray"}
+						onclick={() => goto("/logs")}
+						class="cursor-pointer flex items-center text-sm font-medium transition-all"
+						aria-current={$page.route.id === "/logs" ? "page" : undefined}
+					>
+						<FileDocOutline class="w-4 h-4" />
+						<span class="hidden md:inline ml-2">{$t('common.nav.logs')}</span>
+					</Button>
+				</nav>
+			</div>
+		</div>
+	</header>
 
-  <!-- Page Content -->
-  <main class="max-w-7xl mx-auto px-6 py-8">
-    <slot />
-  </main>
+	<!-- Page Content -->
+	<main class="max-w-7xl mx-auto px-6 py-8">
+		<slot />
+	</main>
 
-  <!-- Toast notifications -->
-  <ToastContainer />
+	<!-- Toast notifications -->
+	<ToastContainer />
 </div>

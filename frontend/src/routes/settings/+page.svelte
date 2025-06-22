@@ -32,6 +32,7 @@ let configData: ConfigData | null = null;
 let localConfig: ConfigData | null = null;
 let needsConfiguration = false;
 let criticalConfigError = false;
+let criticalConfigErrorMessage = "";
 let loading = false;
 let loadError = false;
 
@@ -46,6 +47,7 @@ onMount(async () => {
 	const unsubscribe = appStatus.subscribe((status: AppStatus) => {
 		needsConfiguration = status.needsConfiguration;
 		criticalConfigError = status.criticalConfigError;
+		criticalConfigErrorMessage = status.error;
 	});
 
 	return unsubscribe;
@@ -211,7 +213,7 @@ onDestroy(() => {
           {#if criticalConfigError}
             <div class="flex items-center gap-2 px-3 py-1 bg-red-100 dark:bg-red-900/30 rounded-full">
               <ExclamationCircleOutline class="w-4 h-4 text-red-600 dark:text-red-400" />
-              <span class="text-sm font-medium text-red-800 dark:text-red-200">{$t('settings.configuration_error')}</span>
+              <span class="text-sm font-medium text-red-800 dark:text-red-200">{$t('settings.header.status.configuration_error')}</span>
             </div>
           {:else if needsConfiguration}
             <div class="flex items-center gap-2 px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 rounded-full">
@@ -233,7 +235,8 @@ onDestroy(() => {
         {#if criticalConfigError}
           <div class="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
             <P class="text-red-800 dark:text-red-200">
-              <strong>{$t('settings.header.status.configuration_error')}</strong> {$t('settings.header.status.configuration_error_description')}
+              <strong>{$t('settings.header.status.configuration_error')}:</strong>
+              {criticalConfigErrorMessage}
             </P>
           </div>
         {:else if needsConfiguration}

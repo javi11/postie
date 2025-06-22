@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -19,24 +20,25 @@ import (
 
 // App struct for the Wails application
 type App struct {
-	ctx          context.Context
-	config       *config.ConfigData
-	configPath   string
-	appPaths     *AppPaths
-	postie       *postie.Postie
-	progress     *ProgressTracker
-	progressMux  sync.RWMutex
-	uploading    bool
-	uploadingMux sync.RWMutex
-	uploadCtx    context.Context
-	uploadCancel context.CancelFunc
-	queue        *queue.Queue
-	processor    *processor.Processor
-	watcher      *watcher.Watcher
-	watchCtx     context.Context
-	watchCancel  context.CancelFunc
-	procCtx      context.Context
-	procCancel   context.CancelFunc
+	ctx                  context.Context
+	config               *config.ConfigData
+	configPath           string
+	appPaths             *AppPaths
+	postie               *postie.Postie
+	progress             *ProgressTracker
+	progressMux          sync.RWMutex
+	uploading            bool
+	uploadingMux         sync.RWMutex
+	uploadCtx            context.Context
+	uploadCancel         context.CancelFunc
+	queue                *queue.Queue
+	processor            *processor.Processor
+	watcher              *watcher.Watcher
+	watchCtx             context.Context
+	watchCancel          context.CancelFunc
+	procCtx              context.Context
+	procCancel           context.CancelFunc
+	criticalErrorMessage string
 }
 
 // NewApp creates a new App application struct
@@ -123,6 +125,7 @@ func (a *App) Startup(ctx context.Context) {
 
 	// Initialize processor if configuration is valid
 	if err := a.initializeProcessor(); err != nil {
+		a.criticalErrorMessage = err.Error()
 		slog.Error("Failed to initialize processor", "error", err)
 	}
 
@@ -143,6 +146,7 @@ func (a *App) GetAppStatus() map[string]interface{} {
 		"configPath":          a.configPath,
 		"uploading":           a.IsUploading(),
 		"criticalConfigError": false, // Default to false
+		"error":               "",
 	}
 
 	if a.config != nil {
@@ -165,6 +169,7 @@ func (a *App) GetAppStatus() map[string]interface{} {
 		// Set criticalConfigError if we have servers configured but postie instance creation failed
 		if hasServers && validServers > 0 && a.postie == nil {
 			status["criticalConfigError"] = true
+			status["error"] = a.criticalErrorMessage
 		}
 	} else {
 		status["hasServers"] = false
@@ -236,11 +241,31 @@ func getKeys(m map[string]bool) []string {
 
 // GetLogs returns the content of the log file.
 func (a *App) GetLogs() (string, error) {
-	content, err := os.ReadFile(a.appPaths.Log)
+	file, err := os.Open(a.appPaths.Log)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to open log file: %w", err)
 	}
-	return string(content), nil
+	defer file.Close()
+
+	stat, err := file.Stat()
+	if err != nil {
+		return "", fmt.Errorf("failed to get log file stats: %w", err)
+	}
+
+	// Read last 1MB of the file
+	const maxLogSize = 1024 * 1024
+	start := stat.Size() - maxLogSize
+	if start < 0 {
+		start = 0
+	}
+
+	buffer := make([]byte, stat.Size()-start)
+	_, err = file.ReadAt(buffer, start)
+	if err != nil && err != io.EOF {
+		return "", fmt.Errorf("failed to read log file: %w", err)
+	}
+
+	return string(buffer), nil
 }
 
 // NavigateToSettings emits an event to navigate to the settings page

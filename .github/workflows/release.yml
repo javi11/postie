@@ -59,7 +59,7 @@ jobs:
           go-version: 1.24.0
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       # checkout
       - name: Checkout
@@ -77,7 +77,7 @@ jobs:
 
       # Build Windows GUI using Wails config
       - name: Build Windows GUI
-        run: wails build -platform windows/amd64
+        run: wails build -platform windows/amd64 -ldflags="-extldflags=-static"
         env:
           CGO_ENABLED: 1
 
@@ -99,7 +99,7 @@ jobs:
           go-version: 1.24.0
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       # checkout
       - name: Checkout

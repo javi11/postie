@@ -4,7 +4,7 @@ import SizeInput from "$lib/components/inputs/SizeInput.svelte";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
 import * as App from "$lib/wailsjs/go/backend/App";
-import { t } from '$lib/i18n';
+import { t } from "$lib/i18n";
 import {
 	Button,
 	Card,
@@ -150,12 +150,12 @@ async function saveWatcherSettings() {
 		await App.SaveConfig(currentConfig);
 
 		toastStore.success(
-			$t('settings.watcher.saved_success'),
-			$t('settings.watcher.saved_success_description'),
+			$t("settings.watcher.saved_success"),
+			$t("settings.watcher.saved_success_description"),
 		);
 	} catch (error) {
 		console.error("Failed to save watcher settings:", error);
-		toastStore.error($t('common.messages.error_saving'), String(error));
+		toastStore.error($t("common.messages.error_saving"), String(error));
 	} finally {
 		saving = false;
 	}

@@ -9,6 +9,7 @@ import {
 	PlayOutline,
 } from "flowbite-svelte-icons";
 import { frontendLogs, type LogEntry } from "$lib/stores/logs";
+import VirtualList from "svelte-tiny-virtual-list";
 
 type BackendLogEntry = {
 	time: string;
@@ -29,7 +30,7 @@ $: {
 
 let loading = true;
 let autoRefreshEnabled = false;
-let intervalId: ReturnType<typeof setInterval> | undefined;
+let intervalId: ReturnType<typeof setTimeout> | undefined;
 
 async function loadLogs() {
 	loading = true;
@@ -75,21 +76,25 @@ frontendLogs.subscribe((logs) => {
 function startAutoRefresh() {
 	if (autoRefreshEnabled) return;
 	autoRefreshEnabled = true;
-	loadLogs();
-	intervalId = setInterval(loadLogs, 2000); // 2 seconds
+	const refresh = async () => {
+		await loadLogs();
+		if (autoRefreshEnabled) {
+			intervalId = setTimeout(refresh, 2000); // 2 seconds
+		}
+	};
+	refresh();
 }
 
 function stopAutoRefresh() {
 	if (!autoRefreshEnabled) return;
 	autoRefreshEnabled = false;
 	if (intervalId) {
-		clearInterval(intervalId);
+		clearTimeout(intervalId);
 		intervalId = undefined;
 	}
 }
 
 onMount(() => {
-	loadLogs();
 	startAutoRefresh();
 });
 
@@ -138,31 +143,42 @@ function getLevelColor(level: LogEntry["level"]) {
 				</Button>
 			</div>
 		</div>
-		<div class="max-h-screen overflow-auto rounded-lg bg-gray-800 p-4 font-mono">
-            {#if loading}
-                <div class="flex items-center justify-center text-white">
-                    <Spinner class="mr-2 w-8 h-8" />
-                    {$t('common.common.loading')}
-                </div>
-            {:else}
-                {#each combinedLogs as log (log.timestamp.getTime() + log.message)}
-                    <div class="flex items-start gap-2">
-                        <span class="w-48 flex-shrink-0 text-gray-500">
-                            {log.timestamp.toLocaleTimeString()}
-                        </span>
-                        <span class="w-16 flex-shrink-0 font-bold uppercase"
-                            class:text-red-400={log.level === 'error'}
-                            class:text-yellow-400={log.level === 'warn'}
-                            class:text-blue-400={log.level === 'info'}
-                            class:text-purple-400={log.level === 'debug'}
-                            class:text-gray-400={log.level === 'log'}
-                        >
-                            [{log.level}]
-                        </span>
-                        <pre class="whitespace-pre-wrap text-gray-200">{log.message}</pre>
-                    </div>
-                {/each}
-            {/if}
+		<div
+			class="h-[calc(100vh-20rem)] rounded-lg bg-gray-800 p-4 font-mono"
+		>
+			{#if loading}
+				<div class="flex items-center justify-center text-white">
+					<Spinner class="mr-2 h-8 w-8" />
+					{$t('common.common.loading')}
+				</div>
+			{:else}
+				<VirtualList
+					width="100%"
+					height="100%"
+					itemCount={combinedLogs.length}
+					estimatedItemSize={24}
+				>
+					<div slot="item" let:index let:style {style}>
+						{@const log = combinedLogs[index]}
+						<div class="flex items-start gap-2">
+							<span class="w-48 flex-shrink-0 text-gray-500">
+								{log.timestamp.toLocaleTimeString()}
+							</span>
+							<span
+								class="w-16 flex-shrink-0 font-bold uppercase"
+								class:text-red-400={log.level === "error"}
+								class:text-yellow-400={log.level === "warn"}
+								class:text-blue-400={log.level === "info"}
+								class:text-purple-400={log.level === "debug"}
+								class:text-gray-400={log.level === "log"}
+							>
+								[{log.level}]
+							</span>
+							<pre class="whitespace-pre-wrap text-gray-200">{log.message}</pre>
+						</div>
+					</div>
+				</VirtualList>
+			{/if}
 		</div>
 	</Card>
-</div> 
+</div>
