@@ -58,7 +58,7 @@ jobs:
 
   build-gui-test:
     if: ${{ !contains(github.event.head_commit.message, 'docs:') }}
-    runs-on: macos-13
+    runs-on: windows-latest
     needs: test
     permissions:
       contents: write
@@ -68,7 +68,7 @@ jobs:
           go-version: 1.24.0
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       # checkout
       - name: Checkout
@@ -84,15 +84,15 @@ jobs:
       - name: Install Bun
         run: npm install -g bun
 
-      # Build macOS GUI using Wails config (Universal Binary)
-      - name: Build macOS GUI
-        run: wails build -platform darwin/universal
+      # Build Windows GUI using Wails config
+      - name: Build Windows GUI
+        run: wails build -platform windows/amd64
         env:
           CGO_ENABLED: 1
 
-      # Upload macOS artifact
-      - name: Upload macOS GUI artifact
+      # Upload Windows artifact
+      - name: Upload Windows GUI artifact
         uses: actions/upload-artifact@v4
         with:
-          name: postie-gui-macos-universal
+          name: postie-gui-windows-amd64
           path: build/bin
