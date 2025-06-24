@@ -163,6 +163,39 @@ func initGoqiteSchema(db *sql.DB) error {
 
 // AddFile adds a file to the queue for processing
 func (q *Queue) AddFile(ctx context.Context, path string, size int64) error {
+	// Check if the path already exists in pending queue, completed items, or errored items
+	exists, err := q.pathExists(path)
+	if err != nil {
+		return fmt.Errorf("failed to check if path exists: %w", err)
+	}
+	if exists {
+		slog.InfoContext(ctx, "File already exists in queue, ignoring", "path", path)
+		return nil
+	}
+
+	job := FileJob{
+		Path:       path,
+		Size:       size,
+		Priority:   0,
+		CreatedAt:  time.Now(),
+		RetryCount: 0,
+	}
+
+	jobData, err := json.Marshal(job)
+	if err != nil {
+		return fmt.Errorf("failed to marshal job: %w", err)
+	}
+
+	slog.InfoContext(ctx, "Adding file to queue", "path", path, "size", size)
+
+	return q.queue.Send(ctx, goqite.Message{
+		Body: jobData,
+	})
+}
+
+// AddFileWithoutDuplicateCheck adds a file to the queue without checking for duplicates
+// This is useful when original files are deleted after processing, making duplicate checks unnecessary
+func (q *Queue) AddFileWithoutDuplicateCheck(ctx context.Context, path string, size int64) error {
 	job := FileJob{
 		Path:       path,
 		Size:       size,
@@ -185,6 +218,39 @@ func (q *Queue) AddFile(ctx context.Context, path string, size int64) error {
 
 // AddFileWithPriority adds a file to the queue with a specific priority
 func (q *Queue) AddFileWithPriority(ctx context.Context, path string, size int64, priority int) error {
+	// Check if the path already exists in pending queue, completed items, or errored items
+	exists, err := q.pathExists(path)
+	if err != nil {
+		return fmt.Errorf("failed to check if path exists: %w", err)
+	}
+	if exists {
+		slog.InfoContext(ctx, "File already exists in queue, ignoring", "path", path)
+		return nil
+	}
+
+	job := FileJob{
+		Path:       path,
+		Size:       size,
+		Priority:   priority,
+		CreatedAt:  time.Now(),
+		RetryCount: 0,
+	}
+
+	jobData, err := json.Marshal(job)
+	if err != nil {
+		return fmt.Errorf("failed to marshal job: %w", err)
+	}
+
+	slog.InfoContext(ctx, "Adding file to queue", "path", path, "size", size)
+
+	return q.queue.Send(ctx, goqite.Message{
+		Body: jobData,
+	})
+}
+
+// AddFileWithPriorityWithoutDuplicateCheck adds a file to the queue with a specific priority without checking for duplicates
+// This is useful when original files are deleted after processing, making duplicate checks unnecessary
+func (q *Queue) AddFileWithPriorityWithoutDuplicateCheck(ctx context.Context, path string, size int64, priority int) error {
 	job := FileJob{
 		Path:       path,
 		Size:       size,
@@ -432,7 +498,7 @@ func (q *Queue) GetQueueItems() ([]QueueItem, error) {
 	return items, erroredRows.Err()
 }
 
-// RemoveFromQueue removes an item from the queue by ID (handles both active and completed)
+// RemoveFromQueue removes an item from the queue by ID (handles active, completed, and errored items)
 func (q *Queue) RemoveFromQueue(id string) error {
 	// First check if the item exists in completed items
 	var exists bool
@@ -446,7 +512,18 @@ func (q *Queue) RemoveFromQueue(id string) error {
 		return q.RemoveCompletedItem(id)
 	}
 
-	// If not found in completed items, try to remove from active queue
+	// Check if the item exists in errored items
+	err = q.db.QueryRow("SELECT EXISTS(SELECT 1 FROM errored_items WHERE id = ?)", id).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("failed to check errored items: %w", err)
+	}
+
+	if exists {
+		// Remove from errored items
+		return q.RemoveErroredItem(id)
+	}
+
+	// If not found in completed or errored items, try to remove from active queue
 	return q.queue.Delete(q.runCtx, goqite.ID(id))
 }
 
@@ -477,7 +554,18 @@ func (q *Queue) RemoveCompletedItem(id string) error {
 	return nil
 }
 
-// ClearQueue removes all completed items from the queue
+// RemoveErroredItem removes an errored item from the database
+func (q *Queue) RemoveErroredItem(id string) error {
+	// Delete the database record
+	_, err := q.db.Exec("DELETE FROM errored_items WHERE id = ?", id)
+	if err != nil {
+		return fmt.Errorf("failed to delete errored item: %w", err)
+	}
+
+	return nil
+}
+
+// ClearQueue removes all completed, errored, and active items from the queue
 func (q *Queue) ClearQueue() error {
 	// Get all NZB paths before deleting
 	rows, err := q.db.Query("SELECT nzb_path FROM completed_items")
@@ -501,6 +589,12 @@ func (q *Queue) ClearQueue() error {
 
 	// Clear completed items from database
 	_, err = q.db.Exec("DELETE FROM completed_items")
+	if err != nil {
+		return err
+	}
+
+	// Clear errored items from database
+	_, err = q.db.Exec("DELETE FROM errored_items")
 	if err != nil {
 		return err
 	}
@@ -555,7 +649,7 @@ func (q *Queue) ClearCompletedItems() error {
 	return nil
 }
 
-// GetQueueStats returns statistics about the queue including completed items
+// GetQueueStats returns statistics about the queue including completed and errored items
 func (q *Queue) GetQueueStats() (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 
@@ -580,11 +674,17 @@ func (q *Queue) GetQueueStats() (map[string]interface{}, error) {
 		stats["complete"] = 0
 	}
 
-	// For compatibility with existing UI
-	stats["error"] = 0
+	// Count errored items
+	var errorCount int
+	err = q.db.QueryRow("SELECT COUNT(*) FROM errored_items").Scan(&errorCount)
+	if err == nil {
+		stats["error"] = errorCount
+	} else {
+		stats["error"] = 0
+	}
 
-	// Add total including completed
-	stats["total_including_completed"] = pending + complete
+	// Add total including completed and errored
+	stats["total_including_completed"] = pending + complete + errorCount
 
 	return stats, nil
 }
@@ -598,6 +698,42 @@ func (q *Queue) Close() error {
 		return q.db.Close()
 	}
 	return nil
+}
+
+// pathExists checks if a file path already exists in pending queue, completed items, or errored items
+func (q *Queue) pathExists(path string) (bool, error) {
+	// Check pending queue items
+	var count int
+	err := q.db.QueryRow(`
+		SELECT COUNT(*) FROM goqite 
+		WHERE queue = 'file_jobs' AND json_extract(body, '$.Path') = ?
+	`, path).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("failed to check pending queue: %w", err)
+	}
+	if count > 0 {
+		return true, nil
+	}
+
+	// Check completed items
+	err = q.db.QueryRow("SELECT COUNT(*) FROM completed_items WHERE path = ?", path).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("failed to check completed items: %w", err)
+	}
+	if count > 0 {
+		return true, nil
+	}
+
+	// Check errored items
+	err = q.db.QueryRow("SELECT COUNT(*) FROM errored_items WHERE path = ?", path).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("failed to check errored items: %w", err)
+	}
+	if count > 0 {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func getFileName(path string) string {

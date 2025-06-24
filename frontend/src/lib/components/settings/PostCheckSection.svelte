@@ -3,6 +3,14 @@ import type { ConfigData } from "$lib/types";
 import { t } from "$lib/i18n";
 import { Card, Checkbox, Heading, Input, Label, P } from "flowbite-svelte";
 import { CheckCircleSolid } from "flowbite-svelte-icons";
+import DurationInput from "../inputs/DurationInput.svelte";
+
+const presets = [
+	{ label: "5s", value: 5, unit: "s" },
+	{ label: "10s", value: 10, unit: "s" },
+	{ label: "30s", value: 30, unit: "s" },
+	{ label: "1m", value: 1, unit: "m" },
+];
 
 export let config: ConfigData;
 
@@ -41,15 +49,16 @@ if (!config.post_check) {
     {#if config.post_check.enabled}
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <Label for="check-delay" class="mb-2">{$t('settings.post_check.check_delay')}</Label>
-          <Input
+          <DurationInput
             id="check-delay"
             bind:value={config.post_check.delay}
-            placeholder="10s"
+            label={$t('settings.post_check.check_delay')}
+            description={$t('settings.post_check.check_delay_description')}
+            placeholder="10"
+            minValue={1}
+            maxValue={300}
+            presets={presets}
           />
-          <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            {$t('settings.post_check.check_delay_description')}
-          </P>
         </div>
 
         <div>

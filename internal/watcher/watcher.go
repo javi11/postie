@@ -14,9 +14,15 @@ import (
 	"github.com/opencontainers/selinux/pkg/pwalkdir"
 )
 
+// ProcessorInterface defines the interface for checking running jobs
+type ProcessorInterface interface {
+	IsPathBeingProcessed(path string) bool
+}
+
 type Watcher struct {
 	cfg          config.WatcherConfig
 	queue        *queue.Queue
+	processor    ProcessorInterface
 	watchFolder  string
 	eventEmitter func(eventName string, optionalData ...interface{})
 }
@@ -24,12 +30,14 @@ type Watcher struct {
 func New(
 	cfg config.WatcherConfig,
 	queue *queue.Queue,
+	processor ProcessorInterface,
 	watchFolder string,
 	eventEmitter func(eventName string, optionalData ...interface{}),
 ) *Watcher {
 	return &Watcher{
 		cfg:          cfg,
 		queue:        queue,
+		processor:    processor,
 		watchFolder:  watchFolder,
 		eventEmitter: eventEmitter,
 	}
@@ -51,6 +59,8 @@ func (w *Watcher) Start(ctx context.Context) error {
 				if err := w.scanDirectory(ctx); err != nil {
 					slog.ErrorContext(ctx, "Error scanning directory", "error", err)
 				}
+			} else {
+				slog.Info("Not within schedule, skipping scan")
 			}
 		}
 	}
@@ -96,8 +106,21 @@ func (w *Watcher) scanDirectory(ctx context.Context) error {
 			return nil
 		}
 
+		// Check if file is currently being processed
+		if w.processor != nil && w.processor.IsPathBeingProcessed(path) {
+			slog.InfoContext(ctx, "File is currently being processed, ignoring", "path", path)
+			return nil
+		}
+
 		// Add file to queue
-		if err := w.queue.AddFile(ctx, path, info.Size()); err != nil {
+		// If delete original file is enabled, skip duplicate check since files are deleted after processing
+		if w.cfg.DeleteOriginalFile {
+			err = w.queue.AddFileWithoutDuplicateCheck(ctx, path, info.Size())
+		} else {
+			err = w.queue.AddFile(ctx, path, info.Size())
+		}
+
+		if err != nil {
 			slog.ErrorContext(ctx, "Error adding file to queue", "path", path, "error", err)
 			return nil // Continue processing other files
 		}

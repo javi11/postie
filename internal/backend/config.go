@@ -47,6 +47,11 @@ func (a *App) GetConfig() (*config.ConfigData, error) {
 func (a *App) SaveConfig(configData *config.ConfigData) error {
 	slog.Info("Saving config", "path", a.configPath, "configData", configData)
 
+	if a.postie != nil {
+		a.postie.Close()
+		a.postie = nil
+	}
+
 	// Validate server connections before saving
 	if err := a.validateServerConnections(configData); err != nil {
 		return fmt.Errorf("server validation failed: %w", err)
@@ -63,6 +68,8 @@ func (a *App) SaveConfig(configData *config.ConfigData) error {
 
 	// Emit a config update event to the frontend
 	runtime.EventsEmit(a.ctx, "config-updated", configData)
+
+	slog.Info("Config saved successfully")
 
 	return nil
 }
@@ -247,7 +254,13 @@ func (a *App) ensurePar2Executable(ctx context.Context) {
 
 // GetWatchDirectory returns the current watch directory
 func (a *App) GetWatchDirectory() string {
-	// Use the OS-specific data directory for watch folder
+	if a.config != nil {
+		watcherCfg := a.config.GetWatcherConfig()
+		if watcherCfg.WatchDirectory != "" {
+			return watcherCfg.WatchDirectory
+		}
+	}
+	// Use the OS-specific data directory for watch folder as default
 	watchDir := filepath.Join(a.appPaths.Data, "watch")
 	return watchDir
 }

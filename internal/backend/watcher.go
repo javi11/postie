@@ -40,14 +40,11 @@ func (a *App) initializeWatcher() error {
 		return nil
 	}
 
-	// Set default watch directory
-	exePath, err := os.Executable()
-	var watchDir string
-	if err != nil {
-		watchDir = "./watch"
-	} else {
-		exeDir := filepath.Dir(exePath)
-		watchDir = filepath.Join(exeDir, "watch")
+	// Get watch directory from config, or use default if not set
+	watchDir := watcherCfg.WatchDirectory
+	if watchDir == "" {
+		// Use the OS-specific data directory for watch folder as default
+		watchDir = filepath.Join(a.appPaths.Data, "watch")
 	}
 
 	// Ensure watch directory exists
@@ -123,7 +120,7 @@ func (a *App) initializeWatcher() error {
 	a.watchCtx, a.watchCancel = context.WithCancel(context.Background())
 
 	// Initialize watcher
-	a.watcher = watcher.New(watcherCfg, a.queue, watchDir, eventEmitter)
+	a.watcher = watcher.New(watcherCfg, a.queue, a.processor, watchDir, eventEmitter)
 
 	// Start watcher
 	go func() {

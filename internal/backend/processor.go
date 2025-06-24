@@ -117,13 +117,17 @@ func (a *App) initializeProcessor() error {
 		}
 	}
 
+	// Get watcher config for delete original file setting
+	watcherCfg := a.config.GetWatcherConfig()
+
 	// Initialize processor (always needed)
 	a.processor = processor.New(processor.ProcessorOptions{
-		Queue:        a.queue,
-		Postie:       a.postie,
-		Config:       queueCfg,
-		OutputFolder: outputDir,
-		EventEmitter: eventEmitter,
+		Queue:              a.queue,
+		Postie:             a.postie,
+		Config:             queueCfg,
+		OutputFolder:       outputDir,
+		EventEmitter:       eventEmitter,
+		DeleteOriginalFile: watcherCfg.DeleteOriginalFile,
 	})
 
 	// Start processor

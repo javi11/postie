@@ -26,6 +26,7 @@ watcher:
     - "*.!ut"
   min_file_size: 1048576 # Minimum file size to process (1MB)
   check_interval: 5m # How often to check for new files
+  delete_original_file: false # Whether to delete source files after successful upload
 ```
 
 ### Configuration Options
@@ -37,6 +38,7 @@ watcher:
 - **ignore_patterns**: File patterns to ignore (uses glob syntax)
 - **min_file_size**: Minimum size of individual files to process
 - **check_interval**: How frequently to scan the watch directory
+- **delete_original_file**: Whether to permanently delete source files after successful upload (default: false)
 
 ## Starting the Watcher
 

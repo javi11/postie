@@ -93,8 +93,8 @@
 		"failed_to_cancel_item": "Échec de l'annulation de l'élément",
 		"configuration_error": "Erreur de Configuration",
 		"no_servers_configured": "Aucun serveur configuré",
-		"server_host_required": "Serveur {number}: L'hôte est requis",
-		"server_port_required": "Serveur {number}: Un numéro de port valide est requis (1-65535)",
+		"server_host_required": "Serveur {{number}}: L'hôte est requis",
+		"server_port_required": "Serveur {{number}}: Un numéro de port valide est requis (1-65535)",
 		"configuration_saved": "Configuration sauvegardée",
 		"configuration_saved_description": "Votre configuration a été sauvegardée avec succès !",
 		"configuration_save_failed": "Échec de la sauvegarde de la configuration"

@@ -178,6 +178,7 @@ export namespace config {
 	}
 	export class WatcherConfig {
 	    enabled: boolean;
+	    watch_directory: string;
 	    size_threshold: number;
 	    schedule: ScheduleConfig;
 	    ignore_patterns: string[];
@@ -192,6 +193,7 @@ export namespace config {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.enabled = source["enabled"];
+	        this.watch_directory = source["watch_directory"];
 	        this.size_threshold = source["size_threshold"];
 	        this.schedule = this.convertValues(source["schedule"], ScheduleConfig);
 	        this.ignore_patterns = source["ignore_patterns"];

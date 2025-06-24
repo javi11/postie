@@ -82,6 +82,10 @@ export function GetWatchDirectory() {
   return window['go']['backend']['App']['GetWatchDirectory']();
 }
 
+export function HandleDroppedFiles(arg1) {
+  return window['go']['backend']['App']['HandleDroppedFiles'](arg1);
+}
+
 export function IsUploading() {
   return window['go']['backend']['App']['IsUploading']();
 }
@@ -120,6 +124,10 @@ export function SelectWatchDirectory() {
 
 export function SetQueueItemPriority(arg1, arg2) {
   return window['go']['backend']['App']['SetQueueItemPriority'](arg1, arg2);
+}
+
+export function Startup(arg1) {
+  return window['go']['backend']['App']['Startup'](arg1);
 }
 
 export function UploadFiles() {

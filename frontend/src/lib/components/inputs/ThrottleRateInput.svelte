@@ -1,15 +1,29 @@
 <script lang="ts">
 import { Button, Input, Label, P } from "flowbite-svelte";
 
-export let value = 0;
-export let label = "";
-export let description = "";
-export let placeholder = "0";
-export let presets: Array<{ label: string; value: number }> = [];
-export let minValue = 0;
-export let maxValue = 1000;
-export let id = "";
-export let unitLabel = "MB/s";
+interface ComponentProps {
+	value?: number;
+	label?: string;
+	description?: string;
+	placeholder?: string;
+	presets?: Array<{ label: string; value: number }>;
+	minValue?: number;
+	maxValue?: number;
+	id?: string;
+	unitLabel?: string;
+}
+
+let {
+	value = $bindable(0),
+	label = "",
+	description = "",
+	placeholder = "0",
+	presets = [],
+	minValue = 0,
+	maxValue = 1000,
+	id = "",
+	unitLabel = "MB/s",
+}: ComponentProps = $props();
 
 function setPreset(presetValue: number) {
 	value = presetValue;

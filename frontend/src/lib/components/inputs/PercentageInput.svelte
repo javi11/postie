@@ -1,16 +1,29 @@
 <script lang="ts">
 import { Button, Input, Label, P } from "flowbite-svelte";
 
-export let value = "10%";
-export let label = "";
-export let description = "";
-export let placeholder = "10";
-export let presets: Array<{ label: string; value: number }> = [];
-export let minValue = 1;
-export let maxValue = 100;
-export let id = "";
+interface ComponentProps {
+	value?: string;
+	label?: string;
+	description?: string;
+	placeholder?: string;
+	presets?: Array<{ label: string; value: number }>;
+	minValue?: number;
+	maxValue?: number;
+	id?: string;
+}
 
-let percentageValue: number;
+let {
+	value = $bindable("10%"),
+	label = "",
+	description = "",
+	placeholder = "10",
+	presets = [],
+	minValue = 1,
+	maxValue = 100,
+	id = "",
+}: ComponentProps = $props();
+
+let percentageValue = $state(10);
 
 // Parse existing value
 function parseValue(valueString: string) {
@@ -23,20 +36,21 @@ function parseValue(valueString: string) {
 }
 
 // Initialize values when value prop changes
-$: if (value) {
-	parseValue(value);
-}
+$effect(() => {
+	if (value) {
+		parseValue(value);
+	}
+});
 
 // Update value when internal value changes
-function updateValue() {
-	if (percentageValue !== undefined && percentageValue > 0) {
+$effect(() => {
+	if (percentageValue !== undefined) {
 		value = `${percentageValue}%`;
 	}
-}
+});
 
 function setPreset(presetValue: number) {
 	percentageValue = presetValue;
-	updateValue();
 }
 </script>
 
@@ -53,7 +67,6 @@ function setPreset(presetValue: number) {
 				min={minValue}
 				max={maxValue}
 				{placeholder}
-				on:input={updateValue}
 			/>
 		</div>
 		<div class="w-12 flex items-center justify-center text-sm font-medium text-gray-600 dark:text-gray-400">

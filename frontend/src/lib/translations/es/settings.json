@@ -1,6 +1,12 @@
 {
 	"title": "Configuración",
 	"no_configuration_available": "No hay configuración disponible",
+	"tabs": {
+		"core_configuration": "Configuración Principal",
+		"upload_settings": "Configuración de Subida",
+		"file_processing": "Procesamiento de Archivos",
+		"automation": "Automatización"
+	},
 	"header": {
 		"title": "Configuración",
 		"description": "Configure Postie para satisfacer sus necesidades. Todas las configuraciones se guardan automáticamente.",
@@ -59,7 +65,7 @@
 		"compression_type": "Tipo de Compresión",
 		"compression_type_description": "Algoritmo a usar para la compresión",
 		"compression_level": "Nivel de Compresión",
-		"compression_level_description": "Nivel {min}-{max} (mayor = mejor compresión, más lento)",
+		"compression_level_description": "Nivel {{min}}-{{max}} (mayor = mejor compresión, más lento)",
 		"compression_types": {
 			"none": "Ninguno - Sin compresión",
 			"zstd": "Zstandard (zstd) - Compresión rápida",
@@ -98,6 +104,10 @@
 		"size_threshold_description": "Tamaño acumulado mínimo antes del procesamiento por lotes",
 		"min_file_size": "Tamaño Mínimo de Archivo",
 		"min_file_size_description": "Tamaño mínimo de archivos individuales a procesar",
+		"behavior": "Comportamiento de Archivos",
+		"behavior_description": "Configure cómo deben manejarse los archivos procesados",
+		"delete_original_file": "Eliminar archivos originales después de la carga",
+		"delete_original_file_description": "Elimina permanentemente los archivos fuente del directorio de monitoreo después de una carga exitosa. Use con precaución ya que esta acción no se puede deshacer.",
 		"posting_schedule": "Programación de Publicación",
 		"posting_schedule_description": "Defina cuándo el monitor puede publicar archivos (formato 24 horas)",
 		"time_range": "Rango de Tiempo",
@@ -338,7 +348,7 @@
 		"add_first_server": "Agregar Su Primer Servidor",
 		"no_servers_title": "No hay servidores configurados",
 		"no_servers_description": "Agregue al menos un servidor NNTP para comenzar a cargar.",
-		"server_number": "Servidor {number}",
+		"server_number": "Servidor {{number}}",
 		"remove": "Eliminar",
 		"host": "Host",
 		"host_required": "Host *",
@@ -361,7 +371,7 @@
 		"saved_success": "Configuración del servidor guardada",
 		"saved_success_description": "¡Su configuración del servidor se ha guardado exitosamente!",
 		"validation_errors": {
-			"host_required": "Servidor {number}: Se requiere host",
+			"host_required": "Servidor {{number}}: Se requiere host",
 			"port_invalid": "Servidor {number}: Se requiere un número de puerto válido (1-65535)"
 		},
 		"tip": "<strong>Consejo:</strong> Configure múltiples servidores para mejor redundancia y velocidades de carga. La aplicación distribuirá automáticamente las cargas entre todos los servidores configurados."

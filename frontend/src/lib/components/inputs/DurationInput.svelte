@@ -1,27 +1,37 @@
 <script lang="ts">
 import { Button, Input, Label, P, Select } from "flowbite-svelte";
-import { createEventDispatcher } from "svelte";
 import { t } from "$lib/i18n";
 
-export let value = "5s";
-export let label = "";
-export let description = "";
-export let placeholder = "5";
-export let presets: Array<{ label: string; value: number; unit: string }> = [];
-export let minValue = 1;
-export let maxValue = 3600;
-export let id = "";
+interface ComponentProps {
+	value?: string;
+	label?: string;
+	description?: string;
+	placeholder?: string;
+	presets?: Array<{ label: string; value: number; unit: string }>;
+	minValue?: number;
+	maxValue?: number;
+	id?: string;
+}
 
-const dispatch = createEventDispatcher();
+let {
+	value = $bindable("5s"),
+	label = "",
+	description = "",
+	placeholder = "5",
+	presets = [],
+	minValue = 1,
+	maxValue = 3600,
+	id = "",
+}: ComponentProps = $props();
 
-$: timeUnitOptions = [
+let timeUnitOptions = $derived([
 	{ value: "s", name: $t("common.inputs.time_units.seconds") },
 	{ value: "m", name: $t("common.inputs.time_units.minutes") },
 	{ value: "h", name: $t("common.inputs.time_units.hours") },
-];
+]);
 
-let durationValue: number;
-let durationUnit: string;
+let durationValue = $state(5);
+let durationUnit = $state("s");
 
 // Parse existing value
 function parseValue(valueString: string) {
@@ -43,23 +53,22 @@ function parseValue(valueString: string) {
 }
 
 // Initialize values when value prop changes
-$: if (value) {
-	parseValue(value);
-}
-
-// Update value and dispatch change event
-function updateValue() {
-	if (durationValue !== undefined && durationUnit && durationValue > 0) {
-		const newValue = `${durationValue}${durationUnit}`;
-		value = newValue;
-		dispatch("change", newValue);
+$effect(() => {
+	if (value) {
+		parseValue(value);
 	}
-}
+});
+
+// Update value when internal values change
+$effect(() => {
+	if (durationValue !== undefined && durationUnit !== undefined) {
+		value = `${durationValue}${durationUnit}`;
+	}
+});
 
 function setPreset(presetValue: number, presetUnit: string) {
 	durationValue = presetValue;
 	durationUnit = presetUnit;
-	updateValue();
 }
 </script>
 
@@ -76,14 +85,12 @@ function setPreset(presetValue: number, presetUnit: string) {
 				min={minValue}
 				max={maxValue}
 				{placeholder}
-				on:input={updateValue}
 			/>
 		</div>
 		<div class="w-24">
 			<Select
 				items={timeUnitOptions}
 				bind:value={durationUnit}
-				on:change={updateValue}
 			/>
 		</div>
 	</div>

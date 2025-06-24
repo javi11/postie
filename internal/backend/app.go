@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -354,4 +355,61 @@ func (a *App) NavigateToDashboard() {
 	if a.ctx != nil {
 		runtime.EventsEmit(a.ctx, "navigate-to-dashboard")
 	}
+}
+
+// HandleDroppedFiles processes files that are dropped onto the application window
+func (a *App) HandleDroppedFiles(filePaths []string) error {
+	if len(filePaths) == 0 {
+		return fmt.Errorf("no files dropped")
+	}
+
+	slog.Info("Files dropped onto window", "count", len(filePaths), "files", filePaths)
+
+	// Check if configuration is valid before proceeding
+	status := a.GetAppStatus()
+	if needsConfig, ok := status["needsConfiguration"].(bool); ok && needsConfig {
+		return fmt.Errorf("configuration required: Please configure at least one server in the Settings page before uploading files")
+	}
+
+	// If we have a queue, add files to it
+	if a.queue != nil {
+		addedCount := 0
+		for _, filePath := range filePaths {
+			// Get file info
+			info, err := os.Stat(filePath)
+			if err != nil {
+				slog.Warn("Could not get file info for dropped file, skipping", "file", filePath, "error", err)
+				continue
+			}
+
+			// Skip directories for now
+			if info.IsDir() {
+				slog.Info("Skipping directory", "path", filePath)
+				continue
+			}
+
+			// Add file to queue
+			if err := a.queue.AddFile(context.Background(), filePath, info.Size()); err != nil {
+				slog.Warn("Could not add dropped file to queue, skipping", "file", filePath, "error", err)
+				continue
+			}
+
+			addedCount++
+			slog.Info("Dropped file added to queue", "file", filepath.Base(filePath), "size", info.Size())
+		}
+
+		if addedCount > 0 {
+			slog.Info("Added dropped files to queue", "added", addedCount, "total", len(filePaths))
+			// Emit event to refresh queue in frontend
+			runtime.EventsEmit(a.ctx, "queue-updated")
+		}
+
+		if addedCount == 0 {
+			return fmt.Errorf("no valid files could be added to queue")
+		}
+
+		return nil
+	}
+
+	return fmt.Errorf("queue not initialized")
 }

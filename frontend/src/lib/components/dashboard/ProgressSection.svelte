@@ -12,6 +12,14 @@ $: jobs = Object.values($progress);
 async function cancelJob(jobID: string) {
 	try {
 		await CancelJob(jobID);
+
+		// Immediately remove the job from progress store as a safety measure
+		progress.update((jobs) => {
+			console.log("Force removing cancelled job from progress:", jobID);
+			const { [jobID]: _, ...rest } = jobs;
+			return rest;
+		});
+
 		toastStore.success(
 			$t("common.messages.job_cancelled"),
 			$t("common.messages.upload_cancelled_description"),

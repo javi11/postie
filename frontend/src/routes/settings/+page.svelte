@@ -1,7 +1,9 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
 import GeneralSection from "$lib/components/settings/GeneralSection.svelte";
+import NzbCompressionSection from "$lib/components/settings/NzbCompressionSection.svelte";
 import Par2Section from "$lib/components/settings/Par2Section.svelte";
+import PostCheckSection from "$lib/components/settings/PostCheckSection.svelte";
 import PostUploadScriptSection from "$lib/components/settings/PostUploadScriptSection.svelte";
 import PostingSection from "$lib/components/settings/PostingSection.svelte";
 import ServerSection from "$lib/components/settings/ServerSection.svelte";
@@ -18,13 +20,24 @@ import type { ConfigData } from "$lib/types";
 import { parseDuration, waitForWailsRuntime } from "$lib/utils";
 import * as App from "$lib/wailsjs/go/backend/App";
 import { config } from "$lib/wailsjs/go/models";
-import { Button, DarkMode, Heading, P, Spinner } from "flowbite-svelte";
+import {
+	Button,
+	DarkMode,
+	Heading,
+	P,
+	Spinner,
+	Tabs,
+	TabItem,
+} from "flowbite-svelte";
 import {
 	CheckCircleSolid,
 	CogSolid,
 	ExclamationCircleOutline,
 	FloppyDiskSolid,
 	RefreshOutline,
+	CloudArrowUpSolid,
+	FileSolid,
+	EyeSolid,
 } from "flowbite-svelte-icons";
 import { onDestroy, onMount } from "svelte";
 
@@ -35,7 +48,6 @@ let criticalConfigError = false;
 let criticalConfigErrorMessage = "";
 let loading = false;
 let loadError = false;
-
 onMount(async () => {
 	await waitForWailsRuntime();
 	await loadConfig();
@@ -273,20 +285,62 @@ onDestroy(() => {
         </Button>
       </div>
     </div>
-  {:else if localConfig}
-    <div class="grid gap-3 md:grid-cols-1 lg:grid-cols-2">
-      <div class="space-y-6">
-        <GeneralSection bind:config={localConfig} />
-        <ServerSection bind:config={localConfig} />
-        <PostingSection bind:config={localConfig} />
-      </div>
+      {:else if localConfig}
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <Tabs style="underline" defaultClass="flex rounded-t-lg overflow-hidden bg-gray-50 dark:bg-gray-700" contentClass="p-6 bg-white dark:bg-gray-800 rounded-b-lg">
+          <TabItem open title="{$t('settings.tabs.core_configuration')}">
+            <svelte:fragment slot="title">
+              <div class="flex items-center gap-2">
+                <CogSolid class="w-4 h-4" />
+                {$t('settings.tabs.core_configuration')}
+              </div>
+            </svelte:fragment>
+            <div class="space-y-6">
+              <GeneralSection bind:config={localConfig} />
+              <ServerSection bind:config={localConfig} />
+            </div>
+          </TabItem>
 
-      <div class="space-y-6">
-        <Par2Section bind:config={localConfig} />
-        <WatcherSection bind:config={localConfig} />
-        <PostUploadScriptSection bind:config={localConfig} />
+          <TabItem title="{$t('settings.tabs.upload_settings')}">
+            <svelte:fragment slot="title">
+              <div class="flex items-center gap-2">
+                <CloudArrowUpSolid class="w-4 h-4" />
+                {$t('settings.tabs.upload_settings')}
+              </div>
+            </svelte:fragment>
+            <div class="space-y-6">
+              <PostingSection bind:config={localConfig} />
+              <PostCheckSection bind:config={localConfig} />
+            </div>
+          </TabItem>
+
+          <TabItem title="{$t('settings.tabs.file_processing')}">
+            <svelte:fragment slot="title">
+              <div class="flex items-center gap-2">
+                <FileSolid class="w-4 h-4" />
+                {$t('settings.tabs.file_processing')}
+              </div>
+            </svelte:fragment>
+            <div class="space-y-6">
+              <Par2Section bind:config={localConfig} />
+              <NzbCompressionSection bind:config={localConfig} />
+            </div>
+          </TabItem>
+
+          <TabItem title="{$t('settings.tabs.automation')}">
+            <svelte:fragment slot="title">
+              <div class="flex items-center gap-2">
+                <EyeSolid class="w-4 h-4" />
+                {$t('settings.tabs.automation')}
+              </div>
+            </svelte:fragment>
+            <div class="space-y-6">
+              <WatcherSection bind:config={localConfig} />
+              <PostUploadScriptSection bind:config={localConfig} />
+            </div>
+          </TabItem>
+        </Tabs>
       </div>
-    </div>
   {:else}
     <div class="flex items-center justify-center py-12">
       <div class="text-center">

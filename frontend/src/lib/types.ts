@@ -105,11 +105,13 @@ export interface ScheduleConfig {
 
 export interface WatcherConfig {
 	enabled: boolean;
+	watch_directory: string;
 	size_threshold: number;
 	schedule: ScheduleConfig;
 	ignore_patterns: string[];
 	min_file_size: number;
 	check_interval: number;
+	delete_original_file: boolean;
 }
 
 export interface NzbCompressionConfig {

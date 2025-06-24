@@ -212,6 +212,7 @@ watcher:
     - "*.!ut"
   min_file_size: 1048576 # 1MB
   check_interval: 5m # How often to check for new files
+  delete_original_file: false # Delete source files after upload
 ```
 
 > **Note:** For information about file hashing and verification, please see the [File Hash and Verification](file-hash.md) documentation.

@@ -100,7 +100,7 @@ The watch command will monitor the configured directory and upload files accordi
 		}()
 
 		// Create watcher
-		w := watcher.New(watcherCfg, q, watchDir, noopEventEmitter)
+		w := watcher.New(watcherCfg, q, proc, watchDir, noopEventEmitter)
 
 		// Handle shutdown signals
 		sigChan := make(chan os.Signal, 1)

@@ -27,10 +27,29 @@ import {
 	PlaySolid,
 	TrashBinSolid,
 	XSolid,
+	ChevronDoubleLeftOutline,
+	ChevronDoubleRightOutline,
 } from "flowbite-svelte-icons";
 import { onMount } from "svelte";
 
 let queueItems: QueueItem[] = [];
+
+// Pagination state
+let currentPage = 1;
+let itemsPerPage = 10;
+
+// Computed properties for pagination
+$: totalPages = Math.ceil(queueItems.length / itemsPerPage);
+$: startIndex = (currentPage - 1) * itemsPerPage;
+$: endIndex = startIndex + itemsPerPage;
+$: currentPageItems = queueItems.slice(startIndex, endIndex);
+$: startItem = queueItems.length === 0 ? 0 : startIndex + 1;
+$: endItem = Math.min(endIndex, queueItems.length);
+
+// Reset to first page when queue items change significantly
+$: if (queueItems.length > 0 && currentPage > totalPages) {
+	currentPage = 1;
+}
 
 onMount(() => {
 	// Listen for queue updates
@@ -129,6 +148,18 @@ function getStatusIcon(status: string) {
 			return ClockSolid;
 	}
 }
+
+function goToPage(page: number) {
+	if (page >= 1 && page <= totalPages) {
+		currentPage = page;
+	}
+}
+
+function changeItemsPerPage(event: Event) {
+	const target = event.target as HTMLSelectElement;
+	itemsPerPage = Number.parseInt(target.value);
+	currentPage = 1; // Reset to first page when changing items per page
+}
 </script>
 
 <Card
@@ -142,12 +173,32 @@ function getStatusIcon(status: string) {
       >
         {$t("dashboard.queue.title")}
       </Heading>
-      <div
-        class="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-full border border-blue-200 dark:border-blue-800"
-      >
-        <span class="text-sm font-medium text-blue-800 dark:text-blue-200">
-          {queueItems.length} {$t("dashboard.queue.items")}
-        </span>
+      <div class="flex items-center gap-3">
+        <div
+          class="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-full border border-blue-200 dark:border-blue-800"
+        >
+          <span class="text-sm font-medium text-blue-800 dark:text-blue-200">
+            {queueItems.length} {$t("dashboard.queue.items")}
+          </span>
+        </div>
+        {#if queueItems.length > 0}
+          <div class="flex items-center gap-2">
+            <label for="items-per-page" class="text-sm text-gray-600 dark:text-gray-400">
+              {$t("dashboard.queue.items_per_page")}:
+            </label>
+            <select
+              id="items-per-page"
+              class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              value={itemsPerPage}
+              onchange={changeItemsPerPage}
+            >
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+            </select>
+          </div>
+        {/if}
       </div>
     </div>
 
@@ -191,7 +242,7 @@ function getStatusIcon(status: string) {
               <TableHeadCell class="text-right">{$t("dashboard.queue.actions")}</TableHeadCell>
             </TableHead>
             <TableBody class="divide-y">
-              {#each queueItems as item (item.id)}
+              {#each currentPageItems as item (item.id)}
                 <TableBodyRow>
                   <TableBodyCell>
                     <div class="max-w-xs">
@@ -316,6 +367,71 @@ function getStatusIcon(status: string) {
             </TableBody>
           </Table>
         </div>
+
+        <!-- Pagination Controls -->
+        {#if totalPages > 1}
+          <div class="px-6 py-4 bg-gray-50/80 dark:bg-gray-700/80 border-t border-gray-200/40 dark:border-gray-600/40">
+            <div class="flex items-center justify-between">
+              <div class="text-sm text-gray-700 dark:text-gray-300">
+                {$t("dashboard.queue.showing")} {startItem} {$t("dashboard.queue.to")} {endItem} {$t("dashboard.queue.of")} {queueItems.length} {$t("dashboard.queue.entries")}
+              </div>
+              
+              <div class="flex items-center space-x-2">
+                <Button
+                  size="sm"
+                  color="light"
+                  disabled={currentPage === 1}
+                  onclick={() => goToPage(currentPage - 1)}
+                  class="flex items-center gap-1"
+                >
+                  <ChevronDoubleLeftOutline class="w-4 h-4" />
+                  {$t("dashboard.queue.previous")}
+                </Button>
+                
+                <div class="flex items-center space-x-1">
+                  {#each Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
+                    if (totalPages <= 7) return i + 1;
+                    if (currentPage <= 4) return i + 1;
+                    if (currentPage >= totalPages - 3) return totalPages - 6 + i;
+                    return currentPage - 3 + i;
+                  }) as page}
+                    <Button
+                      size="sm"
+                      color={currentPage === page ? "blue" : "light"}
+                      onclick={() => goToPage(page)}
+                      class="w-8 h-8 p-0 flex items-center justify-center"
+                    >
+                      {page}
+                    </Button>
+                  {/each}
+                  
+                  {#if totalPages > 7 && currentPage < totalPages - 3}
+                    <span class="text-gray-500 dark:text-gray-400">...</span>
+                    <Button
+                      size="sm"
+                      color="light"
+                      onclick={() => goToPage(totalPages)}
+                      class="w-8 h-8 p-0 flex items-center justify-center"
+                    >
+                      {totalPages}
+                    </Button>
+                  {/if}
+                </div>
+                
+                <Button
+                  size="sm"
+                  color="light"
+                  disabled={currentPage === totalPages}
+                  onclick={() => goToPage(currentPage + 1)}
+                  class="flex items-center gap-1"
+                >
+                  {$t("dashboard.queue.next")}
+                  <ChevronDoubleRightOutline class="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        {/if}
       </div>
     {/if}
   </div>

@@ -62,6 +62,60 @@
 }
 
 @layer components {
+	/* Drag and Drop Overlay */
+	.drag-overlay {
+		@apply fixed inset-0 z-50 flex items-center justify-center;
+		background: rgba(59, 130, 246, 0.9);
+		backdrop-filter: blur(4px);
+		animation: fadeIn 0.2s ease-out;
+	}
+
+	.drag-overlay-content {
+		@apply text-center p-12 rounded-2xl border-4 border-dashed border-white/50 bg-white/10;
+		animation: scaleIn 0.3s ease-out;
+	}
+
+	.drag-icon {
+		@apply mx-auto mb-6 w-24 h-24 rounded-full bg-white/20 flex items-center justify-center;
+		animation: bounce 2s infinite;
+	}
+
+	@keyframes fadeIn {
+		from { opacity: 0; }
+		to { opacity: 1; }
+	}
+
+	@keyframes scaleIn {
+		from { 
+			opacity: 0;
+			transform: scale(0.8); 
+		}
+		to { 
+			opacity: 1;
+			transform: scale(1); 
+		}
+	}
+
+	@keyframes bounce {
+		0%, 20%, 53%, 80%, 100% {
+			transform: translate3d(0, 0, 0);
+		}
+		40%, 43% {
+			transform: translate3d(0, -10px, 0);
+		}
+		70% {
+			transform: translate3d(0, -5px, 0);
+		}
+		90% {
+			transform: translate3d(0, -2px, 0);
+		}
+	}
+
+	/* Wails drop target styles */
+	.wails-drop-target-active {
+		@apply ring-4 ring-blue-500/50;
+	}
+
 	/* Enhanced card styles */
 	.glass-card {
 		@apply bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm border border-gray-200/60 dark:border-gray-700/60 rounded-xl shadow-lg shadow-gray-900/5 dark:shadow-gray-900/20;

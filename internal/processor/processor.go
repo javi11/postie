@@ -393,19 +393,49 @@ func (p *Processor) handleProcessingError(ctx context.Context, msg *goqite.Messa
 // CancelJob cancels a running job by its ID
 func (p *Processor) CancelJob(jobID string) error {
 	p.jobsMux.Lock()
-	defer p.jobsMux.Unlock()
 
 	cancelFunc, exists := p.runningJobs[jobID]
 	if !exists {
+		p.jobsMux.Unlock()
 		return fmt.Errorf("job %s is not currently running", jobID)
 	}
+
+	// Get job details before removing from tracking
+	var fileName string
+	if jobDetails, exists := p.runningJobDetails[jobID]; exists {
+		fileName = jobDetails.FileName
+	}
+	if fileName == "" {
+		fileName = "Unknown file"
+	}
+
+	// Remove from tracking first to prevent duplicate events
+	delete(p.runningJobs, jobID)
+	delete(p.runningJobDetails, jobID)
+
+	p.jobsMux.Unlock()
 
 	// Cancel the job's context
 	cancelFunc()
 
-	// Remove from tracking
-	delete(p.runningJobs, jobID)
-	delete(p.runningJobDetails, jobID)
+	// Emit immediate cancellation event to frontend
+	if p.eventEmitter != nil {
+		p.eventEmitter("progress", map[string]interface{}{
+			"currentFile":         fileName,
+			"totalFiles":          1,
+			"completedFiles":      0,
+			"stage":               "Cancelled",
+			"details":             fmt.Sprintf("Cancelled %s", fileName),
+			"isRunning":           false,
+			"lastUpdate":          time.Now().Unix(),
+			"percentage":          0,
+			"currentFileProgress": 0,
+			"jobID":               jobID,
+			"speed":               0,
+			"secondsLeft":         0,
+			"elapsedTime":         0,
+		})
+	}
 
 	slog.Info("Job cancelled", "jobID", jobID)
 	return nil
@@ -450,6 +480,19 @@ func (p *Processor) GetRunningJobDetails() []*RunningJobDetails {
 		details = append(details, &detailCopy)
 	}
 	return details
+}
+
+// IsPathBeingProcessed checks if a file path is currently being processed
+func (p *Processor) IsPathBeingProcessed(path string) bool {
+	p.jobsMux.RLock()
+	defer p.jobsMux.RUnlock()
+
+	for _, jobDetails := range p.runningJobDetails {
+		if jobDetails.Path == path {
+			return true
+		}
+	}
+	return false
 }
 
 func getFileName(path string) string {

@@ -3,6 +3,7 @@
 import {config} from '../models';
 import {backend} from '../models';
 import {processor} from '../models';
+import {context} from '../models';
 
 export function AddFilesToQueue():Promise<void>;
 
@@ -44,6 +45,8 @@ export function GetRunningJobs():Promise<Array<processor.RunningJobItem>>;
 
 export function GetWatchDirectory():Promise<string>;
 
+export function HandleDroppedFiles(arg1:Array<string>):Promise<void>;
+
 export function IsUploading():Promise<boolean>;
 
 export function NavigateToDashboard():Promise<void>;
@@ -63,5 +66,7 @@ export function SelectOutputDirectory():Promise<string>;
 export function SelectWatchDirectory():Promise<string>;
 
 export function SetQueueItemPriority(arg1:string,arg2:number):Promise<void>;
+
+export function Startup(arg1:context.Context):Promise<void>;
 
 export function UploadFiles():Promise<void>;

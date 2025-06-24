@@ -1,6 +1,12 @@
 {
 	"title": "Settings",
 	"no_configuration_available": "No configuration available",
+	"tabs": {
+		"core_configuration": "Core Configuration",
+		"upload_settings": "Upload Settings",
+		"file_processing": "File Processing",
+		"automation": "Automation"
+	},
 	"header": {
 		"title": "Settings",
 		"description": "Configure Postie to match your needs. All settings are automatically saved.",
@@ -59,7 +65,7 @@
 		"compression_type": "Compression Type",
 		"compression_type_description": "Algorithm to use for compression",
 		"compression_level": "Compression Level",
-		"compression_level_description": "Level {min}-{max} (higher = better compression, slower)",
+		"compression_level_description": "Level {{min}}-{{max}} (higher = better compression, slower)",
 		"compression_types": {
 			"none": "None - No compression",
 			"zstd": "Zstandard (zstd) - Fast compression",
@@ -98,6 +104,10 @@
 		"size_threshold_description": "Minimum accumulated size before batch processing",
 		"min_file_size": "Min File Size",
 		"min_file_size_description": "Minimum size of individual files to process",
+		"behavior": "File Behavior",
+		"behavior_description": "Configure how processed files should be handled",
+		"delete_original_file": "Delete original files after upload",
+		"delete_original_file_description": "Permanently removes source files from the watch directory after successful upload. Use with caution as this action cannot be undone.",
 		"posting_schedule": "Posting Schedule",
 		"posting_schedule_description": "Define when the watcher is allowed to post files (24-hour format)",
 		"time_range": "Time Range",
@@ -294,7 +304,7 @@
 		"add_first_server": "Add Your First Server",
 		"no_servers_title": "No servers configured",
 		"no_servers_description": "Add at least one NNTP server to start uploading.",
-		"server_number": "Server {number}",
+		"server_number": "Server {{number}}",
 		"remove": "Remove",
 		"host": "Host",
 		"host_required": "Host *",

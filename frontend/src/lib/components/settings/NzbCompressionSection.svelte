@@ -10,7 +10,7 @@ import {
 	P,
 	Select,
 } from "flowbite-svelte";
-import { ArchiveBoxSolid } from "flowbite-svelte-icons";
+import { ArchiveSolid } from "flowbite-svelte-icons";
 
 export let config: ConfigData;
 
@@ -25,9 +25,18 @@ if (!config.nzb_compression) {
 
 // Dynamic compression types based on translations
 $: compressionTypes = [
-	{ value: "none", name: $t('settings.nzb_compression.compression_types.none') },
-	{ value: "zstd", name: $t('settings.nzb_compression.compression_types.zstd') },
-	{ value: "brotli", name: $t('settings.nzb_compression.compression_types.brotli') },
+	{
+		value: "none",
+		name: $t("settings.nzb_compression.compression_types.none"),
+	},
+	{
+		value: "zstd",
+		name: $t("settings.nzb_compression.compression_types.zstd"),
+	},
+	{
+		value: "brotli",
+		name: $t("settings.nzb_compression.compression_types.brotli"),
+	},
 ];
 
 // Get compression level limits based on type
@@ -73,7 +82,7 @@ $: if (config.nzb_compression.type === "none") {
 <Card class="max-w-full shadow-sm p-5">
   <div class="space-y-6">
     <div class="flex items-center gap-3">
-      <ArchiveBoxSolid class="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+      <ArchiveSolid class="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
       <Heading
         tag="h2"
         class="text-lg font-semibold text-gray-900 dark:text-white"

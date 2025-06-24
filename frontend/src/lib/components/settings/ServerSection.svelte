@@ -146,14 +146,18 @@ async function saveServerSettings() {
 			if (!server.host || server.host.trim() === "") {
 				toastStore.error(
 					"Configuration Error",
-					$t('settings.server.validation_errors.host_required', { number: i + 1 }),
+					$t("settings.server.validation_errors.host_required", {
+						number: i + 1,
+					}),
 				);
 				return;
 			}
 			if (!server.port || server.port <= 0 || server.port > 65535) {
 				toastStore.error(
 					"Configuration Error",
-					$t('settings.server.validation_errors.port_invalid', { number: i + 1 }),
+					$t("settings.server.validation_errors.port_invalid", {
+						number: i + 1,
+					}),
 				);
 				return;
 			}
@@ -176,12 +180,12 @@ async function saveServerSettings() {
 		await App.SaveConfig(currentConfig);
 
 		toastStore.success(
-			$t('settings.server.saved_success'),
-			$t('settings.server.saved_success_description'),
+			$t("settings.server.saved_success"),
+			$t("settings.server.saved_success_description"),
 		);
 	} catch (error) {
 		console.error("Failed to save server settings:", error);
-		toastStore.error($t('common.messages.error_saving'), String(error));
+		toastStore.error($t("common.messages.error_saving"), String(error));
 	} finally {
 		saving = false;
 	}
@@ -313,7 +317,7 @@ async function saveServerSettings() {
                 description={$t('settings.server.connection_idle_timeout_description')}
                 presets={idleTimePresets}
                 id="idle-time-{index}"
-                on:change={(e) => updateIdleTime(index, e.detail)}
+                onchange={(e) => updateIdleTime(index, e.detail)}
               />
 
               <DurationInput
@@ -322,7 +326,7 @@ async function saveServerSettings() {
                 description={$t('settings.server.connection_ttl_description')}
                 presets={ttlPresets}
                 id="ttl-{index}"
-                on:change={(e) => updateTTL(index, e.detail)}
+                onchange={(e) => updateTTL(index, e.detail)}
               />
             </div>
 

@@ -112,8 +112,23 @@ func New(ctx context.Context, cfg config.Config) (Poster, error) {
 }
 
 func (p *poster) Close() {
+	slog.Info("Closing poster")
+
 	if p.pool != nil {
-		p.pool.Quit()
+		done := make(chan struct{})
+		go func() {
+			p.pool.Quit()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			// Quit completed successfully
+		case <-time.After(5 * time.Second):
+			// Timeout occurred, ignore and set pool to nil
+			slog.Warn("Pool quit timed out after 5 seconds, setting pool to nil")
+		}
+		p.pool = nil
 	}
 }
 

@@ -172,6 +172,7 @@ type PostingConfig struct {
 
 type WatcherConfig struct {
 	Enabled            bool           `yaml:"enabled" json:"enabled"`
+	WatchDirectory     string         `yaml:"watch_directory" json:"watch_directory"`
 	SizeThreshold      int64          `yaml:"size_threshold" json:"size_threshold"`
 	Schedule           ScheduleConfig `yaml:"schedule" json:"schedule"`
 	IgnorePatterns     []string       `yaml:"ignore_patterns" json:"ignore_patterns"`
@@ -604,15 +605,17 @@ func GetDefaultConfig() ConfigData {
 			ExtraPar2Options: []string{},
 		},
 		Watcher: WatcherConfig{
-			Enabled:       false,
-			SizeThreshold: 104857600, // 100MB
+			Enabled:        false,
+			WatchDirectory: "",        // Will be set to default in backend if empty
+			SizeThreshold:  104857600, // 100MB
 			Schedule: ScheduleConfig{
 				StartTime: "00:00",
 				EndTime:   "23:59",
 			},
-			IgnorePatterns: []string{"*.tmp", "*.part", "*.!ut"},
-			MinFileSize:    1048576, // 1MB
-			CheckInterval:  5 * time.Minute,
+			IgnorePatterns:     []string{"*.tmp", "*.part", "*.!ut"},
+			MinFileSize:        1048576, // 1MB
+			CheckInterval:      5 * time.Minute,
+			DeleteOriginalFile: false, // Default to keeping original files for safety
 		},
 		NzbCompression: NzbCompressionConfig{
 			Enabled: disabled,

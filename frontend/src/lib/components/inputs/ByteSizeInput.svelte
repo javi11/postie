@@ -2,16 +2,29 @@
 import { Button, Input, Label, P } from "flowbite-svelte";
 import { t } from "$lib/i18n";
 
-export let value = 750000;
-export let label = "";
-export let description = "";
-export let placeholder = "750000";
-export let presets: Array<{ label: string; value: number }> = [];
-export let minValue = 1000;
-export let maxValue = 10000000;
-export let id = "";
+interface ComponentProps {
+	value?: number;
+	label?: string;
+	description?: string;
+	placeholder?: string;
+	presets?: Array<{ label: string; value: number }>;
+	minValue?: number;
+	maxValue?: number;
+	id?: string;
+}
 
-$: unitLabel = $t("common.inputs.bytes");
+let {
+	value = $bindable(750000),
+	label = "",
+	description = "",
+	placeholder = "750000",
+	presets = [],
+	minValue = 1000,
+	maxValue = 10000000,
+	id = "",
+}: ComponentProps = $props();
+
+let unitLabel = $derived($t("common.inputs.bytes"));
 
 function setPreset(presetValue: number) {
 	value = presetValue;

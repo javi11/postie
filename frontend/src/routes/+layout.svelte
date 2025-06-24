@@ -66,6 +66,31 @@ onMount(async () => {
 		goto("/");
 	});
 
+	// Listen for edit menu events
+	EventsOn("menu-cut", () => {
+		document.execCommand("cut");
+	});
+
+	EventsOn("menu-copy", () => {
+		document.execCommand("copy");
+	});
+
+	EventsOn("menu-paste", () => {
+		document.execCommand("paste");
+	});
+
+	EventsOn("menu-undo", () => {
+		document.execCommand("undo");
+	});
+
+	EventsOn("menu-redo", () => {
+		document.execCommand("redo");
+	});
+
+	EventsOn("menu-select-all", () => {
+		document.execCommand("selectAll");
+	});
+
 	// Load initial app status
 	await loadAppStatus();
 });
@@ -95,12 +120,13 @@ async function loadAppStatus() {
 </script>
 
 <div
-	class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800"
+	class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 overflow-hidden"
 >
 	<DarkMode class="hidden" />
+
 	<!-- Header/Navigation -->
 	<header
-		class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200/60 dark:border-gray-700/60 sticky top-0 z-50"
+		class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200/60 dark:border-gray-700/60 sticky top-0 z-50 pt-5"
 	>
 		<div class="max-w-7xl mx-auto px-6 py-4">
 			<div class="flex items-center justify-between">

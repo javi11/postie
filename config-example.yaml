@@ -55,6 +55,7 @@ watcher:
     - '*.!ut'
   min_file_size: 1048576
   check_interval: 5m
+  delete_original_file: false # Delete source files after successful upload
 
 # Global output directory for processed files and NZB files
 output_dir: './output'
@@ -89,7 +90,7 @@ queue:
 # This command will be executed after NZB file generation is complete
 post_upload_script:
   enabled: false
-  command: ''  # Command to execute, use {{nzb_path}} placeholder for NZB file path
+  command: '' # Command to execute, use {{nzb_path}} placeholder for NZB file path
   timeout: 30s # Maximum time to wait for command execution
 
 # Example: Using curl to send a webhook notification

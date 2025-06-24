@@ -36,6 +36,7 @@ let saving = false;
 if (!config.watcher) {
 	config.watcher = {
 		enabled: false,
+		watch_directory: "",
 		size_threshold: 104857600, // 100MB
 		schedule: {
 			start_time: "00:00",
@@ -44,6 +45,7 @@ if (!config.watcher) {
 		ignore_patterns: ["*.tmp", "*.part", "*.!ut"],
 		min_file_size: 1048576, // 1MB
 		check_interval: 300000000000, // 5m in nanoseconds
+		delete_original_file: false,
 	};
 }
 
@@ -100,6 +102,12 @@ function updateCheckInterval(durationString: string) {
 onMount(async () => {
 	try {
 		watchDirectory = await App.GetWatchDirectory();
+		// Sync with config if it's not already set
+		if (!config.watcher.watch_directory && watchDirectory) {
+			config.watcher.watch_directory = watchDirectory;
+		} else if (config.watcher.watch_directory) {
+			watchDirectory = config.watcher.watch_directory;
+		}
 	} catch (error) {
 		console.error("Failed to get watch directory:", error);
 	}
@@ -110,6 +118,7 @@ async function selectWatchDirectory() {
 		const dir = await App.SelectWatchDirectory();
 		if (dir) {
 			watchDirectory = dir;
+			config.watcher.watch_directory = dir;
 		}
 	} catch (error) {
 		console.error("Failed to select directory:", error);
@@ -140,10 +149,12 @@ async function saveWatcherSettings() {
 		if (config.watcher) {
 			currentConfig.watcher = {
 				...config.watcher,
+				watch_directory: config.watcher.watch_directory || "",
 				size_threshold:
 					Number.parseInt(config.watcher.size_threshold) || 104857600,
 				min_file_size: Number.parseInt(config.watcher.min_file_size) || 1048576,
 				check_interval: config.watcher.check_interval || "5m",
+				delete_original_file: config.watcher.delete_original_file || false,
 			};
 		}
 
@@ -244,7 +255,7 @@ async function saveWatcherSettings() {
                     value={Math.round(checkIntervalSeconds >= 3600 ? checkIntervalSeconds / 3600 : checkIntervalSeconds >= 60 ? checkIntervalSeconds / 60 : checkIntervalSeconds)}
                     min="1"
                     max="3600"
-                    on:input={(e) => {
+                    oninput={(e) => {
                       const val = parseInt(e.target.value) || 5;
                       const seconds = checkIntervalSeconds >= 3600 ? val * 3600 : checkIntervalSeconds >= 60 ? val * 60 : val;
                       config.watcher.check_interval = secondsToNanos(seconds);
@@ -324,6 +335,34 @@ async function saveWatcherSettings() {
               maxValue={1000}
               id="min-file-size"
             />
+          </div>
+
+          <div class="space-y-4">
+            <div>
+              <Heading
+                tag="h3"
+                class="text-md font-medium text-gray-900 dark:text-white mb-2"
+              >
+                {$t('settings.watcher.behavior')}
+              </Heading>
+              <P class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                {$t('settings.watcher.behavior_description')}
+              </P>
+
+              <div class="space-y-4">
+                <div>
+                  <Toggle
+                    bind:checked={config.watcher.delete_original_file}
+                    class="mb-2"
+                  >
+                    {$t('settings.watcher.delete_original_file')}
+                  </Toggle>
+                  <P class="text-sm text-gray-600 dark:text-gray-400">
+                    {$t('settings.watcher.delete_original_file_description')}
+                  </P>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="space-y-4">

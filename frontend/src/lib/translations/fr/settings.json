@@ -1,6 +1,12 @@
 {
 	"title": "Paramètres",
 	"no_configuration_available": "Aucune configuration disponible",
+	"tabs": {
+		"core_configuration": "Configuration de Base",
+		"upload_settings": "Paramètres de Téléchargement",
+		"file_processing": "Traitement des Fichiers",
+		"automation": "Automatisation"
+	},
 	"header": {
 		"title": "Paramètres",
 		"description": "Configurez Postie selon vos besoins. Tous les paramètres sont automatiquement sauvegardés.",
@@ -59,7 +65,7 @@
 		"compression_type": "Type de Compression",
 		"compression_type_description": "Algorithme à utiliser pour la compression",
 		"compression_level": "Niveau de Compression",
-		"compression_level_description": "Niveau {min}-{max} (plus élevé = meilleure compression, plus lent)",
+		"compression_level_description": "Niveau {{min}}-{{max}} (plus élevé = meilleure compression, plus lent)",
 		"compression_types": {
 			"none": "Aucune - Pas de compression",
 			"zstd": "Zstandard (zstd) - Compression rapide",
@@ -98,6 +104,10 @@
 		"size_threshold_description": "Taille accumulée minimale avant le traitement par lot",
 		"min_file_size": "Taille Minimale de Fichier",
 		"min_file_size_description": "Taille minimale des fichiers individuels à traiter",
+		"behavior": "Comportement des Fichiers",
+		"behavior_description": "Configurez comment les fichiers traités doivent être gérés",
+		"delete_original_file": "Supprimer les fichiers originaux après le téléchargement",
+		"delete_original_file_description": "Supprime définitivement les fichiers source du répertoire de surveillance après un téléchargement réussi. Utilisez avec prudence car cette action ne peut pas être annulée.",
 		"posting_schedule": "Planification de Publication",
 		"posting_schedule_description": "Définissez quand le surveillant peut publier des fichiers (format 24 heures)",
 		"time_range": "Plage de Temps",
@@ -338,7 +348,7 @@
 		"add_first_server": "Ajouter Votre Premier Serveur",
 		"no_servers_title": "Aucun serveur configuré",
 		"no_servers_description": "Ajoutez au moins un serveur NNTP pour commencer à télécharger.",
-		"server_number": "Serveur {number}",
+		"server_number": "Serveur {{number}}",
 		"remove": "Supprimer",
 		"host": "Hôte",
 		"host_required": "Hôte *",
@@ -361,8 +371,8 @@
 		"saved_success": "Paramètres du serveur sauvegardés",
 		"saved_success_description": "Votre configuration de serveur a été sauvegardée avec succès !",
 		"validation_errors": {
-			"host_required": "Serveur {number} : L'hôte est requis",
-			"port_invalid": "Serveur {number} : Un numéro de port valide est requis (1-65535)"
+			"host_required": "Serveur {{number}} : L'hôte est requis",
+			"port_invalid": "Serveur {{number}} : Un numéro de port valide est requis (1-65535)"
 		},
 		"tip": "<strong>Astuce :</strong> Configurez plusieurs serveurs pour une meilleure redondance et des vitesses de téléchargement. L'application distribuera automatiquement les téléchargements entre tous les serveurs configurés."
 	}

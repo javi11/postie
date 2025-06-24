@@ -28,6 +28,13 @@
 		"decrease_priority": "Disminuir prioridad",
 		"updated_at": "Actualizado:",
 		"remove_from_queue": "Eliminar de la cola",
+		"items_per_page": "Elementos por página",
+		"showing": "Mostrando",
+		"to": "a",
+		"of": "de",
+		"entries": "entradas",
+		"previous": "Anterior",
+		"next": "Siguiente",
 		"status_types": {
 			"pending": "pendiente",
 			"complete": "completo",
@@ -45,7 +52,7 @@
 			"active": "Activo",
 			"idle": "Inactivo"
 		},
-		"job_title": "Trabajo {jobId}",
+		"job_title": "Trabajo {{jobId}}",
 		"cancel_upload": "Cancelar Carga",
 		"overall": "Progreso General",
 		"current_file": "Archivo Actual",
@@ -74,9 +81,9 @@
 	},
 	"alerts": {
 		"config_error": "Error de Configuración",
-		"config_error_description": "Hubo un error con la configuración del servidor (ej. nombre de host inválido, fallo de conexión). Por favor revisa tu {settingsLink} para corregir la configuración.",
+		"config_error_description": "Hubo un error con la configuración del servidor (ej. nombre de host inválido, fallo de conexión). Por favor revisa tu {{settingsLink}} para corregir la configuración.",
 		"config_required": "Configuración Requerida",
-		"config_required_description": "Por favor configura al menos un servidor en la página de {settingsLink} antes de subir archivos.",
+		"config_required_description": "Por favor configura al menos un servidor en la página de {{settingsLink}} antes de subir archivos.",
 		"settings_link": "Configuración"
 	}
 }

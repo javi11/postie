@@ -27,6 +27,13 @@
 		"increase_priority": "Increase priority",
 		"decrease_priority": "Decrease priority",
 		"remove_from_queue": "Remove from queue",
+		"items_per_page": "Items per page",
+		"showing": "Showing",
+		"to": "to",
+		"of": "of",
+		"entries": "entries",
+		"previous": "Previous",
+		"next": "Next",
 		"status_types": {
 			"pending": "pending",
 			"complete": "complete",
@@ -43,7 +50,7 @@
 			"active": "Active",
 			"idle": "Idle"
 		},
-		"job_title": "Job {jobId}",
+		"job_title": "Job {{jobId}}",
 		"cancel_upload": "Cancel Upload",
 		"overall": "Overall Progress",
 		"current_file": "Current File",
@@ -72,9 +79,9 @@
 	},
 	"alerts": {
 		"config_error": "Configuration Error",
-		"config_error_description": "There was an error with your server configuration (e.g., invalid hostname, connection failure). Please check your {settingsLink} to fix the configuration.",
+		"config_error_description": "There was an error with your server configuration (e.g., invalid hostname, connection failure). Please check your {{settingsLink}} to fix the configuration.",
 		"config_required": "Configuration Required",
-		"config_required_description": "Please configure at least one server in the {settingsLink} page before uploading files.",
+		"config_required_description": "Please configure at least one server in the {{settingsLink}} page before uploading files.",
 		"settings_link": "Settings"
 	}
 }
