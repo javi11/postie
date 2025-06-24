@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/javi11/postie/internal/config"
@@ -241,31 +242,104 @@ func getKeys(m map[string]bool) []string {
 
 // GetLogs returns the content of the log file.
 func (a *App) GetLogs() (string, error) {
+	return a.GetLogsPaginated(0, 0) // 0, 0 means get last 1MB like before
+}
+
+// GetLogsPaginated returns paginated log content
+// limit: number of lines to return (0 = use original 1MB limit)
+// offset: number of lines to skip from the end (0 = start from most recent)
+func (a *App) GetLogsPaginated(limit, offset int) (string, error) {
 	file, err := os.Open(a.appPaths.Log)
 	if err != nil {
 		return "", fmt.Errorf("failed to open log file: %w", err)
 	}
 	defer file.Close()
 
-	stat, err := file.Stat()
+	if limit == 0 {
+		// Original behavior - read last 1MB
+		stat, err := file.Stat()
+		if err != nil {
+			return "", fmt.Errorf("failed to get log file stats: %w", err)
+		}
+
+		const maxLogSize = 1024 * 1024
+		start := stat.Size() - maxLogSize
+		if start < 0 {
+			start = 0
+		}
+
+		buffer := make([]byte, stat.Size()-start)
+		_, err = file.ReadAt(buffer, start)
+		if err != nil && err != io.EOF {
+			return "", fmt.Errorf("failed to read log file: %w", err)
+		}
+
+		return string(buffer), nil
+	}
+
+	// New paginated behavior
+	return a.readLogLines(file, limit, offset)
+}
+
+// readLogLines reads lines from the log file with pagination
+func (a *App) readLogLines(file *os.File, limit, offset int) (string, error) {
+	// For very large files (>10MB), we should optimize this
+	// For now, we'll read the entire file for simplicity
+	content, err := io.ReadAll(file)
 	if err != nil {
-		return "", fmt.Errorf("failed to get log file stats: %w", err)
-	}
-
-	// Read last 1MB of the file
-	const maxLogSize = 1024 * 1024
-	start := stat.Size() - maxLogSize
-	if start < 0 {
-		start = 0
-	}
-
-	buffer := make([]byte, stat.Size()-start)
-	_, err = file.ReadAt(buffer, start)
-	if err != nil && err != io.EOF {
 		return "", fmt.Errorf("failed to read log file: %w", err)
 	}
 
-	return string(buffer), nil
+	if len(content) == 0 {
+		return "", nil
+	}
+
+	// Split into lines
+	lines := strings.Split(string(content), "\n")
+
+	// Remove empty last line if it exists (common with newline-terminated files)
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+
+	totalLines := len(lines)
+	if totalLines == 0 {
+		return "", nil
+	}
+
+	// Validate parameters
+	if offset < 0 {
+		offset = 0
+	}
+	if limit <= 0 {
+		return "", fmt.Errorf("limit must be positive")
+	}
+
+	// Calculate start and end indices
+	// We want the most recent lines, so we work backwards from the end
+	endIndex := totalLines - offset
+	if endIndex <= 0 {
+		return "", nil // No lines to return
+	}
+
+	startIndex := endIndex - limit
+	if startIndex < 0 {
+		startIndex = 0
+	}
+
+	// Ensure we don't go out of bounds
+	if startIndex >= totalLines {
+		return "", nil
+	}
+	if endIndex > totalLines {
+		endIndex = totalLines
+	}
+
+	// Get the requested lines
+	requestedLines := lines[startIndex:endIndex]
+
+	// Join with newlines and return
+	return strings.Join(requestedLines, "\n"), nil
 }
 
 // NavigateToSettings emits an event to navigate to the settings page

@@ -167,6 +167,7 @@ func (a *App) loadConfig() error {
 		slog.Error("Failed to create postie instance", "error", err)
 		// Don't return error here - allow app to continue without postie
 		// The user can configure servers later and restart
+		a.criticalErrorMessage = err.Error()
 		a.postie = nil
 		return nil
 	}

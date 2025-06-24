@@ -24,6 +24,8 @@ export function GetConfigPath():Promise<string>;
 
 export function GetLogs():Promise<string>;
 
+export function GetLogsPaginated(arg1:number,arg2:number):Promise<string>;
+
 export function GetNZBContent(arg1:string):Promise<string>;
 
 export function GetOutputDirectory():Promise<string>;

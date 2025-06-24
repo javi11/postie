@@ -42,6 +42,10 @@ export function GetLogs() {
   return window['go']['backend']['App']['GetLogs']();
 }
 
+export function GetLogsPaginated(arg1, arg2) {
+  return window['go']['backend']['App']['GetLogsPaginated'](arg1, arg2);
+}
+
 export function GetNZBContent(arg1) {
   return window['go']['backend']['App']['GetNZBContent'](arg1);
 }
