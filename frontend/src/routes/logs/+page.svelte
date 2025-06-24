@@ -1,15 +1,15 @@
 <script lang="ts">
-import { GetLogsPaginated } from "$lib/wailsjs/go/backend/App";
-import { onDestroy, onMount } from "svelte";
-import { Card, Button, Spinner } from "flowbite-svelte";
 import { t } from "$lib/i18n";
+import { type LogEntry, frontendLogs } from "$lib/stores/logs";
+import { GetLogsPaginated } from "$lib/wailsjs/go/backend/App";
+import { Button, Card, Spinner } from "flowbite-svelte";
 import {
 	ArrowsRepeatOutline,
+	ChevronDownOutline,
 	PauseOutline,
 	PlayOutline,
-	ChevronDownOutline,
 } from "flowbite-svelte-icons";
-import { frontendLogs, type LogEntry } from "$lib/stores/logs";
+import { onDestroy, onMount } from "svelte";
 
 type BackendLogEntry = {
 	time: string;

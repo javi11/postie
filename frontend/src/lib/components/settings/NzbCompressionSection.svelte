@@ -1,6 +1,6 @@
 <script lang="ts">
-import type { ConfigData } from "$lib/types";
 import { t } from "$lib/i18n";
+import type { ConfigData } from "$lib/types";
 import {
 	Card,
 	Checkbox,

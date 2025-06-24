@@ -254,7 +254,11 @@ func (a *App) GetLogsPaginated(limit, offset int) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to open log file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			slog.Error("Failed to close log file", "error", err)
+		}
+	}()
 
 	if limit == 0 {
 		// Original behavior - read last 1MB

@@ -1,6 +1,6 @@
 <script lang="ts">
-import type { ConfigData } from "$lib/types";
 import { t } from "$lib/i18n";
+import type { ConfigData } from "$lib/types";
 import { Card, Checkbox, Heading, Input, Label, P } from "flowbite-svelte";
 import { CheckCircleSolid } from "flowbite-svelte-icons";
 import DurationInput from "../inputs/DurationInput.svelte";

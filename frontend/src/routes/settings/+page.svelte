@@ -26,18 +26,18 @@ import {
 	Heading,
 	P,
 	Spinner,
-	Tabs,
 	TabItem,
+	Tabs,
 } from "flowbite-svelte";
 import {
 	CheckCircleSolid,
+	CloudArrowUpSolid,
 	CogSolid,
 	ExclamationCircleOutline,
+	EyeSolid,
+	FileSolid,
 	FloppyDiskSolid,
 	RefreshOutline,
-	CloudArrowUpSolid,
-	FileSolid,
-	EyeSolid,
 } from "flowbite-svelte-icons";
 import { onDestroy, onMount } from "svelte";
 

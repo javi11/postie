@@ -11,7 +11,7 @@ import { waitForWailsRuntime } from "$lib/utils";
 import * as App from "$lib/wailsjs/go/backend/App";
 import { EventsOn } from "$lib/wailsjs/runtime/runtime";
 import { PlusOutline } from "flowbite-svelte-icons";
-import { onMount, onDestroy } from "svelte";
+import { onDestroy, onMount } from "svelte";
 
 let needsConfiguration = false;
 let criticalConfigError = false;

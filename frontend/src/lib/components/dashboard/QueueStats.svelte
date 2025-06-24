@@ -1,10 +1,10 @@
 <script lang="ts">
+import { t } from "$lib/i18n";
 import type { QueueStats } from "$lib/types";
 import * as App from "$lib/wailsjs/go/backend/App";
 import { EventsOn } from "$lib/wailsjs/runtime/runtime";
 import { Badge, Card, Heading } from "flowbite-svelte";
 import { onMount } from "svelte";
-import { t } from "$lib/i18n";
 
 let queueStats: QueueStats = {
 	total: 0,

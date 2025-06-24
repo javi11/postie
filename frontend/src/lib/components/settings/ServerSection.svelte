@@ -1,9 +1,9 @@
 <script lang="ts">
 import DurationInput from "$lib/components/inputs/DurationInput.svelte";
+import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData, ServerConfig } from "$lib/types";
 import * as App from "$lib/wailsjs/go/backend/App";
-import { t } from "$lib/i18n";
 import {
 	Button,
 	ButtonGroup,

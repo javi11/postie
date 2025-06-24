@@ -1,6 +1,6 @@
 <script lang="ts">
-import type { ConfigData } from "$lib/types";
 import { t } from "$lib/i18n";
+import type { ConfigData } from "$lib/types";
 import {
 	Card,
 	Checkbox,
@@ -31,9 +31,9 @@ if (!config.queue) {
 
 // Create reactive array for database types dropdown
 $: databaseTypes = [
-	{ value: "sqlite", name: $t('settings.queue.database_types.sqlite') },
-	{ value: "postgres", name: $t('settings.queue.database_types.postgres') },
-	{ value: "mysql", name: $t('settings.queue.database_types.mysql') },
+	{ value: "sqlite", name: $t("settings.queue.database_types.sqlite") },
+	{ value: "postgres", name: $t("settings.queue.database_types.postgres") },
+	{ value: "mysql", name: $t("settings.queue.database_types.mysql") },
 ];
 </script>
 

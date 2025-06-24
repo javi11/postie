@@ -1,7 +1,7 @@
 <script lang="ts">
 import DurationInput from "$lib/components/inputs/DurationInput.svelte";
-import type { ConfigData } from "$lib/types";
 import { t } from "$lib/i18n";
+import type { ConfigData } from "$lib/types";
 import { Card, Checkbox, Heading, Input, Label, P } from "flowbite-svelte";
 import { LinkSolid } from "flowbite-svelte-icons";
 

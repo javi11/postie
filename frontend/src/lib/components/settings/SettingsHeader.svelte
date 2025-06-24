@@ -1,4 +1,5 @@
 <script lang="ts">
+import { t } from "$lib/i18n";
 import type { ConfigData } from "$lib/types";
 import { Button, ButtonGroup, Heading, P } from "flowbite-svelte";
 import {
@@ -9,7 +10,6 @@ import {
 	FolderOpenSolid,
 } from "flowbite-svelte-icons";
 import { createEventDispatcher } from "svelte";
-import { t } from '$lib/i18n';
 
 export const needsConfiguration = false;
 export const criticalConfigError = false;

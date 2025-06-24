@@ -11,18 +11,18 @@ import * as App from "$lib/wailsjs/go/backend/App";
 import { EventsOn } from "$lib/wailsjs/runtime/runtime";
 import {
 	Button,
+	DarkMode,
 	NavBrand,
 	NavHamburger,
 	NavLi,
 	NavUl,
 	Navbar,
-	DarkMode,
 } from "flowbite-svelte";
 import {
 	ChartPieSolid,
 	CogSolid,
-	FloppyDiskSolid,
 	FileDocOutline,
+	FloppyDiskSolid,
 } from "flowbite-svelte-icons";
 import { onMount } from "svelte";
 import "../style.css";

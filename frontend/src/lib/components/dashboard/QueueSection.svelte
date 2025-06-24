@@ -1,8 +1,8 @@
 <script lang="ts">
+import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import type { QueueItem } from "$lib/types";
 import { formatDate, formatFileSize, getStatusColor } from "$lib/utils";
-import { t } from "$lib/i18n";
 import * as App from "$lib/wailsjs/go/backend/App";
 import { SetQueueItemPriority } from "$lib/wailsjs/go/backend/App";
 import { EventsOn } from "$lib/wailsjs/runtime/runtime";
@@ -21,14 +21,14 @@ import {
 } from "flowbite-svelte";
 import {
 	CheckCircleSolid,
+	ChevronDoubleLeftOutline,
+	ChevronDoubleRightOutline,
 	ClockSolid,
 	DownloadSolid,
 	ExclamationCircleSolid,
 	PlaySolid,
 	TrashBinSolid,
 	XSolid,
-	ChevronDoubleLeftOutline,
-	ChevronDoubleRightOutline,
 } from "flowbite-svelte-icons";
 import { onMount } from "svelte";
 

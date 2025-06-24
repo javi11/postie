@@ -75,9 +75,3 @@ function handleClickOutside(event: MouseEvent) {
     </div>
   {/if}
 </div>
-
-<style>
-  .language-switcher {
-    @apply inline-block;
-  }
-</style> 

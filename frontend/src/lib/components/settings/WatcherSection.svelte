@@ -1,10 +1,10 @@
 <script lang="ts">
 import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 import SizeInput from "$lib/components/inputs/SizeInput.svelte";
+import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
 import * as App from "$lib/wailsjs/go/backend/App";
-import { t } from "$lib/i18n";
 import {
 	Button,
 	Card,

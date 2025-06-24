@@ -1,10 +1,10 @@
 <script lang="ts">
 import PercentageInput from "$lib/components/inputs/PercentageInput.svelte";
 import SizeInput from "$lib/components/inputs/SizeInput.svelte";
+import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
 import * as App from "$lib/wailsjs/go/backend/App";
-import { t } from "$lib/i18n";
 import {
 	Button,
 	Card,
@@ -143,12 +143,12 @@ async function savePar2Settings() {
 		await App.SaveConfig(currentConfig);
 
 		toastStore.success(
-			$t('settings.par2.saved_success'),
-			$t('settings.par2.saved_success_description'),
+			$t("settings.par2.saved_success"),
+			$t("settings.par2.saved_success_description"),
 		);
 	} catch (error) {
 		console.error("Failed to save PAR2 settings:", error);
-		toastStore.error($t('common.messages.error_saving'), String(error));
+		toastStore.error($t("common.messages.error_saving"), String(error));
 	} finally {
 		saving = false;
 	}

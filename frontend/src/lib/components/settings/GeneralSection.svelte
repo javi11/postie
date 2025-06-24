@@ -1,11 +1,20 @@
 <script lang="ts">
+import { page } from "$app/stores";
+import { loadTranslations, locale, t } from "$lib/i18n";
+import { availableLocales, setStoredLocale } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
 import * as App from "$lib/wailsjs/go/backend/App";
-import { t, locale, loadTranslations } from "$lib/i18n";
-import { availableLocales, setStoredLocale } from "$lib/i18n";
-import { page } from "$app/stores";
-import { Button, Card, Heading, Input, Label, P, Select, DarkMode } from "flowbite-svelte";
+import {
+	Button,
+	Card,
+	DarkMode,
+	Heading,
+	Input,
+	Label,
+	P,
+	Select,
+} from "flowbite-svelte";
 import {
 	CogSolid,
 	FloppyDiskSolid,
@@ -25,22 +34,22 @@ if (!config.output_dir) {
 }
 
 // Prepare language options for select
-const languageOptions = availableLocales.map(lang => ({
+const languageOptions = availableLocales.map((lang) => ({
 	value: lang.code,
-	name: `${lang.flag} ${lang.name}`
+	name: `${lang.flag} ${lang.name}`,
 }));
 
 async function changeLanguage(event: Event) {
 	const target = event.target as HTMLSelectElement;
 	const newLocale = target.value;
-	
+
 	// Store the selected locale
 	setStoredLocale(newLocale);
-	
+
 	// The sveltekit-i18n library should automatically handle loading the new translations
 	// when the locale store is updated.
 	locale.set(newLocale);
-	
+
 	selectedLanguage = newLocale;
 }
 
@@ -78,12 +87,12 @@ async function saveGeneralSettings() {
 		await App.SaveConfig(currentConfig);
 
 		toastStore.success(
-			$t('settings.general.saved_success'),
-			$t('settings.general.saved_success_description'),
+			$t("settings.general.saved_success"),
+			$t("settings.general.saved_success_description"),
 		);
 	} catch (error) {
 		console.error("Failed to save general settings:", error);
-		toastStore.error($t('common.messages.error_saving'), String(error));
+		toastStore.error($t("common.messages.error_saving"), String(error));
 	} finally {
 		saving = false;
 	}

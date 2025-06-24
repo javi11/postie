@@ -1,5 +1,5 @@
 import { getBrowserLocale, getStoredLocale, loadTranslations } from "$lib/i18n";
-import { setupConsoleInterceptor } from '$lib/stores/logs';
+import { setupConsoleInterceptor } from "$lib/stores/logs";
 
 export const prerender = true;
 export const ssr = false;

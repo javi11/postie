@@ -1,6 +1,6 @@
 <script lang="ts">
-import { Button, Input, Label, P } from "flowbite-svelte";
 import { t } from "$lib/i18n";
+import { Button, Input, Label, P } from "flowbite-svelte";
 
 interface ComponentProps {
 	value?: number;

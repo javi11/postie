@@ -1,7 +1,7 @@
 <script lang="ts">
+import { t } from "$lib/i18n";
 import { isUploading } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
-import { t } from "$lib/i18n";
 import * as App from "$lib/wailsjs/go/backend/App";
 import { Alert, Button, Card, Heading, P } from "flowbite-svelte";
 import {
@@ -18,7 +18,10 @@ export let criticalConfigError: boolean;
 async function addFilesToQueue() {
 	try {
 		await App.AddFilesToQueue();
-		toastStore.success($t("common.messages.files_added"), $t("common.messages.files_added_description"));
+		toastStore.success(
+			$t("common.messages.files_added"),
+			$t("common.messages.files_added_description"),
+		);
 	} catch (error) {
 		console.error("Failed to add files to queue:", error);
 	}
@@ -33,7 +36,10 @@ async function clearQueue() {
 		);
 	} catch (error) {
 		console.error("Failed to clear queue:", error);
-		toastStore.error($t("common.messages.failed_to_clear_queue"), String(error));
+		toastStore.error(
+			$t("common.messages.failed_to_clear_queue"),
+			String(error),
+		);
 	}
 }
 
@@ -46,7 +52,10 @@ async function cancelUpload() {
 		);
 	} catch (error) {
 		console.error("Failed to cancel upload:", error);
-		toastStore.error($t("common.messages.failed_to_cancel_upload"), String(error));
+		toastStore.error(
+			$t("common.messages.failed_to_cancel_upload"),
+			String(error),
+		);
 	}
 }
 </script>

@@ -1,3 +1,14 @@
+import type * as App from "./wailsjs/go/backend/App";
+
+type GoWindow = Window &
+	typeof globalThis & {
+		go: {
+			backend: {
+				App: typeof App;
+			};
+		};
+	};
+
 /**
  * Format file size in bytes to human readable format
  */
@@ -134,9 +145,9 @@ export async function waitForWailsRuntime(): Promise<void> {
 	while (attempts < maxAttempts) {
 		if (
 			typeof window !== "undefined" &&
-			(window as any).go &&
-			(window as any).go.backend &&
-			(window as any).go.backend.App
+			(window as GoWindow).go &&
+			(window as GoWindow).go.backend &&
+			(window as GoWindow).go.backend.App
 		) {
 			return;
 		}

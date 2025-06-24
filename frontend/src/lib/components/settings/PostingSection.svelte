@@ -2,10 +2,10 @@
 import ByteSizeInput from "$lib/components/inputs/ByteSizeInput.svelte";
 import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 import ThrottleRateInput from "$lib/components/inputs/ThrottleRateInput.svelte";
+import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
 import * as App from "$lib/wailsjs/go/backend/App";
-import { t } from "$lib/i18n";
 import {
 	Button,
 	Card,
@@ -56,19 +56,22 @@ if (!config.posting.group_policy) {
 
 // Create reactive arrays for dropdowns
 $: obfuscationOptions = [
-	{ value: "none", name: $t('settings.posting.obfuscation.none') },
-	{ value: "partial", name: $t('settings.posting.obfuscation.partial') },
-	{ value: "full", name: $t('settings.posting.obfuscation.full') },
+	{ value: "none", name: $t("settings.posting.obfuscation.none") },
+	{ value: "partial", name: $t("settings.posting.obfuscation.partial") },
+	{ value: "full", name: $t("settings.posting.obfuscation.full") },
 ];
 
 $: messageIdOptions = [
-	{ value: "random", name: $t('settings.posting.message_id.random') },
-	{ value: "ngx", name: $t('settings.posting.message_id.ngx') },
+	{ value: "random", name: $t("settings.posting.message_id.random") },
+	{ value: "ngx", name: $t("settings.posting.message_id.ngx") },
 ];
 
 $: groupPolicyOptions = [
-	{ value: "all", name: $t('settings.posting.group_policy_options.all') },
-	{ value: "each_file", name: $t('settings.posting.group_policy_options.each_file') },
+	{ value: "all", name: $t("settings.posting.group_policy_options.all") },
+	{
+		value: "each_file",
+		name: $t("settings.posting.group_policy_options.each_file"),
+	},
 ];
 
 // Preset definitions
@@ -159,12 +162,12 @@ async function savePostingSettings() {
 		await App.SaveConfig(currentConfig);
 
 		toastStore.success(
-			$t('settings.posting.saved_success'),
-			$t('settings.posting.saved_success_description'),
+			$t("settings.posting.saved_success"),
+			$t("settings.posting.saved_success_description"),
 		);
 	} catch (error) {
 		console.error("Failed to save posting settings:", error);
-		toastStore.error($t('common.messages.error_saving'), String(error));
+		toastStore.error($t("common.messages.error_saving"), String(error));
 	} finally {
 		saving = false;
 	}

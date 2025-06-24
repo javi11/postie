@@ -1,8 +1,8 @@
 <script lang="ts">
+import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
 import * as App from "$lib/wailsjs/go/backend/App";
-import { t } from "$lib/i18n";
 import {
 	Badge,
 	Button,
@@ -54,12 +54,12 @@ async function savePostUploadScriptSettings() {
 		await App.SaveConfig(currentConfig);
 
 		toastStore.success(
-			$t('settings.post_upload_script.saved_success'),
-			$t('settings.post_upload_script.saved_success_description'),
+			$t("settings.post_upload_script.saved_success"),
+			$t("settings.post_upload_script.saved_success_description"),
 		);
 	} catch (error) {
 		console.error("Failed to save post upload script settings:", error);
-		toastStore.error($t('common.messages.error_saving'), String(error));
+		toastStore.error($t("common.messages.error_saving"), String(error));
 	} finally {
 		saving = false;
 	}
