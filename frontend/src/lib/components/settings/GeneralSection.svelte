@@ -33,6 +33,10 @@ if (!config.output_dir) {
 	config.output_dir = "./output";
 }
 
+if (config.maintain_original_extension === undefined) {
+	config.maintain_original_extension = true;
+}
+
 // Prepare language options for select
 const languageOptions = availableLocales.map((lang) => ({
 	value: lang.code,
@@ -52,15 +56,6 @@ async function changeLanguage(event: Event) {
 
 	selectedLanguage = newLocale;
 }
-
-onMount(async () => {
-	try {
-		outputDirectory = await App.GetOutputDirectory();
-	} catch (error) {
-		console.error("Failed to get output directory:", error);
-		outputDirectory = config.output_dir || "./output";
-	}
-});
 
 async function selectOutputDirectory() {
 	try {
@@ -83,6 +78,8 @@ async function saveGeneralSettings() {
 
 		// Only update the general settings fields
 		currentConfig.output_dir = config.output_dir || "./output";
+		currentConfig.maintain_original_extension =
+			config.maintain_original_extension ?? true;
 
 		await App.SaveConfig(currentConfig);
 
@@ -147,6 +144,26 @@ $: selectedLanguage = $locale;
 					<P class="text-sm text-blue-800 dark:text-blue-200">
 						<strong>{$t('settings.general.info_title')}</strong>
 						{$t('settings.general.info_description')}
+					</P>
+				</div>
+
+				<div>
+					<Label for="maintain-extension" class="mb-2">
+						{$t('settings.general.maintain_original_extension')}
+					</Label>
+					<div class="flex items-center gap-2">
+						<input
+							id="maintain-extension"
+							type="checkbox"
+							bind:checked={config.maintain_original_extension}
+							class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+						/>
+						<span class="text-sm text-gray-700 dark:text-gray-300">
+							{config.maintain_original_extension ? $t('settings.general.maintain_extension_enabled') : $t('settings.general.maintain_extension_disabled')}
+						</span>
+					</div>
+					<P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+						{$t('settings.general.maintain_original_extension_description')}
 					</P>
 				</div>
 

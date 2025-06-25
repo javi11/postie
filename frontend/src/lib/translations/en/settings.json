@@ -11,6 +11,8 @@
 		"title": "Settings",
 		"description": "Configure Postie to match your needs. All settings are automatically saved.",
 		"save_configuration": "Save Configuration",
+		"advanced_mode": "Advanced Mode",
+		"advanced_mode_description": "Show advanced configuration options for fine-tuning",
 		"status": {
 			"configuration_error": "Configuration Error",
 			"configuration_required": "Configuration Required",
@@ -56,7 +58,11 @@
 		"language_description": "Select your preferred language for the interface",
 		"theme": "Theme",
 		"theme_toggle": "Dark/Light Mode",
-		"theme_description": "Toggle between dark and light themes for better visibility"
+		"theme_description": "Toggle between dark and light themes for better visibility",
+		"maintain_original_extension": "Maintain Original File Extension",
+		"maintain_original_extension_description": "When enabled, NZB files will be named as 'filename.ext.nzb'. When disabled, they will be named as 'filename.nzb'.",
+		"maintain_extension_enabled": "Original extensions will be maintained",
+		"maintain_extension_disabled": "Original extensions will be removed"
 	},
 	"nzb_compression": {
 		"title": "NZB Compression Configuration",
@@ -173,7 +179,11 @@
 		"max_reposts": "Max Re-posts",
 		"max_reposts_description": "Maximum number of times to retry posting if article check fails",
 		"info_title": "Post Check:",
-		"info_description": "Verifies article availability after upload to ensure successful propagation. May increase upload time but improves reliability."
+		"info_description": "Verifies article availability after upload to ensure successful propagation. May increase upload time but improves reliability.",
+		"save_button": "Save Post Check Settings",
+		"saving": "Saving...",
+		"saved_success": "Post check settings saved",
+		"saved_success_description": "Your post check configuration has been saved successfully!"
 	},
 	"posting": {
 		"title": "Posting Configuration",

@@ -40,3 +40,6 @@ export const isUploading = derived(progress, (progress) => {
 export const settingsSaveFunction = writable<(() => Promise<void>) | null>(
 	null,
 );
+
+// Create advanced mode store for settings UI
+export const advancedMode = writable<boolean>(false);

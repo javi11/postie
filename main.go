@@ -132,7 +132,7 @@ func main() {
 				Message: "© 2025 Postie",
 				Icon:    icon,
 			},
-			TitleBar:            mac.TitleBarHiddenInset(),
+			Appearance:          mac.NSAppearanceNameAccessibilityHighContrastVibrantDark,
 			WindowIsTranslucent: true,
 		},
 	})

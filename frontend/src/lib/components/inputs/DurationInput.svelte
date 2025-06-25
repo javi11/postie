@@ -24,51 +24,49 @@ let {
 	id = "",
 }: ComponentProps = $props();
 
-let timeUnitOptions = $derived([
+const timeUnitOptions = [
 	{ value: "s", name: $t("common.inputs.time_units.seconds") },
 	{ value: "m", name: $t("common.inputs.time_units.minutes") },
 	{ value: "h", name: $t("common.inputs.time_units.hours") },
-]);
+];
 
-let durationValue = $state(5);
-let durationUnit = $state("s");
+// Local state for the inputs
+let numberValue = $state(5);
+let unitValue = $state("s");
 
-// Parse existing value
-function parseValue(valueString: string) {
-	if (!valueString || typeof valueString !== "string") {
-		durationValue = 5;
-		durationUnit = "s";
+// Parse the bound value and sync with local state
+function parseAndSync() {
+	if (!value || typeof value !== "string") {
+		numberValue = 5;
+		unitValue = "s";
 		return;
 	}
 
-	const match = valueString.match(/^(\d+)([smh])$/);
+	const match = value.match(/^(\d+)([smh])$/);
 	if (match) {
-		durationValue = Number.parseInt(match[1]);
-		durationUnit = match[2];
+		numberValue = Number.parseInt(match[1]);
+		unitValue = match[2];
 	} else {
 		// Fallback for invalid format
-		durationValue = 5;
-		durationUnit = "s";
+		numberValue = 5;
+		unitValue = "s";
 	}
 }
 
-// Initialize values when value prop changes
+// Sync local state when bound value changes
 $effect(() => {
-	if (value) {
-		parseValue(value);
-	}
+	parseAndSync();
 });
 
-// Update value when internal values change
-$effect(() => {
-	if (durationValue !== undefined && durationUnit !== undefined) {
-		value = `${durationValue}${durationUnit}`;
-	}
-});
+// Update bound value when local state changes
+function updateValue() {
+	value = `${numberValue}${unitValue}`;
+}
 
 function setPreset(presetValue: number, presetUnit: string) {
-	durationValue = presetValue;
-	durationUnit = presetUnit;
+	numberValue = presetValue;
+	unitValue = presetUnit;
+	updateValue();
 }
 </script>
 
@@ -81,16 +79,18 @@ function setPreset(presetValue: number, presetUnit: string) {
 			<Input
 				{id}
 				type="number"
-				bind:value={durationValue}
+				bind:value={numberValue}
 				min={minValue}
 				max={maxValue}
 				{placeholder}
+				oninput={updateValue}
 			/>
 		</div>
 		<div class="w-24">
 			<Select
 				items={timeUnitOptions}
-				bind:value={durationUnit}
+				bind:value={unitValue}
+				onchange={updateValue}
 			/>
 		</div>
 	</div>

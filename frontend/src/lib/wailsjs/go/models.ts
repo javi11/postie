@@ -412,6 +412,7 @@ export namespace config {
 	    nzb_compression: NzbCompressionConfig;
 	    queue: QueueConfig;
 	    output_dir: string;
+	    maintain_original_extension?: boolean;
 	    post_upload_script: PostUploadScriptConfig;
 	
 	    static createFrom(source: any = {}) {
@@ -429,6 +430,7 @@ export namespace config {
 	        this.nzb_compression = this.convertValues(source["nzb_compression"], NzbCompressionConfig);
 	        this.queue = this.convertValues(source["queue"], QueueConfig);
 	        this.output_dir = source["output_dir"];
+	        this.maintain_original_extension = source["maintain_original_extension"];
 	        this.post_upload_script = this.convertValues(source["post_upload_script"], PostUploadScriptConfig);
 	    }
 	

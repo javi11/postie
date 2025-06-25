@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,18 +30,20 @@ type Processor struct {
 	// Track running jobs and their contexts for cancellation
 	runningJobs map[string]context.CancelFunc
 	// Track detailed information about running jobs
-	runningJobDetails  map[string]*RunningJobDetails
-	jobsMux            sync.RWMutex
-	deleteOriginalFile bool
+	runningJobDetails         map[string]*RunningJobDetails
+	jobsMux                   sync.RWMutex
+	deleteOriginalFile        bool
+	maintainOriginalExtension bool
 }
 
 type ProcessorOptions struct {
-	Queue              *queue.Queue
-	Postie             *postie.Postie
-	Config             config.QueueConfig
-	OutputFolder       string
-	EventEmitter       func(eventName string, optionalData ...interface{})
-	DeleteOriginalFile bool
+	Queue                     *queue.Queue
+	Postie                    *postie.Postie
+	Config                    config.QueueConfig
+	OutputFolder              string
+	EventEmitter              func(eventName string, optionalData ...interface{})
+	DeleteOriginalFile        bool
+	MaintainOriginalExtension bool
 }
 
 // RunningJobDetails stores detailed information about a running job
@@ -62,14 +65,15 @@ type RunningJobItem struct {
 
 func New(opts ProcessorOptions) *Processor {
 	return &Processor{
-		queue:              opts.Queue,
-		postie:             opts.Postie,
-		cfg:                opts.Config,
-		outputFolder:       opts.OutputFolder,
-		eventEmitter:       opts.EventEmitter,
-		runningJobs:        make(map[string]context.CancelFunc),
-		runningJobDetails:  make(map[string]*RunningJobDetails),
-		deleteOriginalFile: opts.DeleteOriginalFile,
+		queue:                     opts.Queue,
+		postie:                    opts.Postie,
+		cfg:                       opts.Config,
+		outputFolder:              opts.OutputFolder,
+		eventEmitter:              opts.EventEmitter,
+		runningJobs:               make(map[string]context.CancelFunc),
+		runningJobDetails:         make(map[string]*RunningJobDetails),
+		deleteOriginalFile:        opts.DeleteOriginalFile,
+		maintainOriginalExtension: opts.MaintainOriginalExtension,
 	}
 }
 
@@ -161,7 +165,8 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 
 	// Generate the NZB path that would have been created by the postie.Post method
 	// Since we're processing a single file, the NZB will be in the output folder with the same base name
-	nzbPath := filepath.Join(p.outputFolder, filepath.Base(job.Path)+".nzb")
+	nzbFilename := p.generateNZBFilename(job.Path)
+	nzbPath := filepath.Join(p.outputFolder, nzbFilename)
 
 	// Mark as completed with the NZB path and job data
 	if err := p.queue.CompleteFile(ctx, msg.ID, nzbPath, job); err != nil {
@@ -493,6 +498,21 @@ func (p *Processor) IsPathBeingProcessed(path string) bool {
 		}
 	}
 	return false
+}
+
+// generateNZBFilename creates the NZB filename based on the configuration
+func (p *Processor) generateNZBFilename(originalFilePath string) string {
+	basename := filepath.Base(originalFilePath)
+
+	if p.maintainOriginalExtension {
+		// Keep original extension: filename.ext.nzb
+		return basename + ".nzb"
+	} else {
+		// Remove original extension: filename.nzb
+		ext := filepath.Ext(basename)
+		nameWithoutExt := strings.TrimSuffix(basename, ext)
+		return nameWithoutExt + ".nzb"
+	}
 }
 
 func getFileName(path string) string {

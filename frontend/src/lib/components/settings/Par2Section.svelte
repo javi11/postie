@@ -2,6 +2,7 @@
 import PercentageInput from "$lib/components/inputs/PercentageInput.svelte";
 import SizeInput from "$lib/components/inputs/SizeInput.svelte";
 import { t } from "$lib/i18n";
+import { advancedMode } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
 import * as App from "$lib/wailsjs/go/backend/App";
@@ -224,6 +225,7 @@ $: volumeSizeDisplay = config.par2.volume_size
               id="volume-size"
             />
 
+{#if $advancedMode}
             <div>
               <Label for="max-slices" class="mb-2">{$t('settings.par2.max_input_slices')}</Label>
               <Input
@@ -237,8 +239,10 @@ $: volumeSizeDisplay = config.par2.volume_size
                 {$t('settings.par2.max_input_slices_description')}
               </P>
             </div>
+{/if}
           </div>
 
+{#if $advancedMode}
           <!-- Extra PAR2 Options Section -->
           <div class="space-y-4">
             <div class="flex items-center justify-between">
@@ -296,6 +300,7 @@ $: volumeSizeDisplay = config.par2.volume_size
               </div>
             {/if}
           </div>
+{/if}
 
           <div class="space-y-4">
             <div

@@ -19,12 +19,13 @@ import (
 )
 
 type Postie struct {
-	par2Cfg             *config.Par2Config
-	postingCfg          config.PostingConfig
-	par2runner          *par2.Par2CmdExecutor
-	poster              poster.Poster
-	compressionCfg      config.NzbCompressionConfig
-	postUploadScriptCfg config.PostUploadScriptConfig
+	par2Cfg                   *config.Par2Config
+	postingCfg                config.PostingConfig
+	par2runner                *par2.Par2CmdExecutor
+	poster                    poster.Poster
+	compressionCfg            config.NzbCompressionConfig
+	postUploadScriptCfg       config.PostUploadScriptConfig
+	maintainOriginalExtension bool
 }
 
 func New(
@@ -40,6 +41,7 @@ func New(
 	postingConfig := cfg.GetPostingConfig()
 	compressionConfig := cfg.GetNzbCompressionConfig()
 	postUploadScriptConfig := cfg.GetPostUploadScriptConfig()
+	maintainOriginalExtension := cfg.GetMaintainOriginalExtension()
 
 	// Create par2 runner
 	par2runner := par2.New(ctx, postingConfig.ArticleSizeInBytes, par2Cfg)
@@ -53,12 +55,13 @@ func New(
 	}
 
 	return &Postie{
-		par2Cfg:             par2Cfg,
-		par2runner:          par2runner,
-		poster:              p,
-		postingCfg:          postingConfig,
-		compressionCfg:      compressionConfig,
-		postUploadScriptCfg: postUploadScriptConfig,
+		par2Cfg:                   par2Cfg,
+		par2runner:                par2runner,
+		poster:                    p,
+		postingCfg:                postingConfig,
+		compressionCfg:            compressionConfig,
+		postUploadScriptCfg:       postUploadScriptConfig,
+		maintainOriginalExtension: maintainOriginalExtension,
 	}, nil
 }
 
@@ -169,7 +172,8 @@ func (p *Postie) postInParallel(
 	dirPath := filepath.Dir(f.Path)
 	dirPath = strings.TrimPrefix(dirPath, rootDir)
 
-	nzbPath := filepath.Join(outputDir, dirPath, filepath.Base(f.Path)+".nzb")
+	nzbFilename := p.generateNZBFilename(f.Path)
+	nzbPath := filepath.Join(outputDir, dirPath, nzbFilename)
 	if err := nzbGen.Generate(nzbPath); err != nil {
 		return fmt.Errorf("error generating NZB file: %w", err)
 	}
@@ -234,7 +238,8 @@ func (p *Postie) post(
 	dirPath := filepath.Dir(f.Path)
 	dirPath = strings.TrimPrefix(dirPath, rootDir)
 
-	nzbPath := filepath.Join(outputDir, dirPath, filepath.Base(f.Path)+".nzb")
+	nzbFilename := p.generateNZBFilename(f.Path)
+	nzbPath := filepath.Join(outputDir, dirPath, nzbFilename)
 	if err := nzbGen.Generate(nzbPath); err != nil {
 		return fmt.Errorf("error generating NZB file: %w", err)
 	}
@@ -246,6 +251,21 @@ func (p *Postie) post(
 	}
 
 	return nil
+}
+
+// generateNZBFilename creates the NZB filename based on the configuration
+func (p *Postie) generateNZBFilename(originalFilePath string) string {
+	basename := filepath.Base(originalFilePath)
+
+	if p.maintainOriginalExtension {
+		// Keep original extension: filename.ext.nzb
+		return basename + ".nzb"
+	} else {
+		// Remove original extension: filename.nzb
+		ext := filepath.Ext(basename)
+		nameWithoutExt := strings.TrimSuffix(basename, ext)
+		return nameWithoutExt + ".nzb"
+	}
 }
 
 func (p *Postie) executePostUploadScript(ctx context.Context, nzbPath string) error {

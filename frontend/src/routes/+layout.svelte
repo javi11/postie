@@ -126,7 +126,7 @@ async function loadAppStatus() {
 
 	<!-- Header/Navigation -->
 	<header
-		class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200/60 dark:border-gray-700/60 sticky top-0 z-50 pt-5"
+		class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200/60 dark:border-gray-700/60 sticky top-0 z-50"
 	>
 		<div class="max-w-7xl mx-auto px-6 py-4">
 			<div class="flex items-center justify-between">

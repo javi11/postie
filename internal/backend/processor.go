@@ -122,12 +122,13 @@ func (a *App) initializeProcessor() error {
 
 	// Initialize processor (always needed)
 	a.processor = processor.New(processor.ProcessorOptions{
-		Queue:              a.queue,
-		Postie:             a.postie,
-		Config:             queueCfg,
-		OutputFolder:       outputDir,
-		EventEmitter:       eventEmitter,
-		DeleteOriginalFile: watcherCfg.DeleteOriginalFile,
+		Queue:                     a.queue,
+		Postie:                    a.postie,
+		Config:                    queueCfg,
+		OutputFolder:              outputDir,
+		EventEmitter:              eventEmitter,
+		DeleteOriginalFile:        watcherCfg.DeleteOriginalFile,
+		MaintainOriginalExtension: a.config.GetMaintainOriginalExtension(),
 	})
 
 	// Start processor

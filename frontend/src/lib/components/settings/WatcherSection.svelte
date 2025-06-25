@@ -2,6 +2,7 @@
 import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 import SizeInput from "$lib/components/inputs/SizeInput.svelte";
 import { t } from "$lib/i18n";
+import { advancedMode } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
 import * as App from "$lib/wailsjs/go/backend/App";
@@ -337,6 +338,7 @@ async function saveWatcherSettings() {
             />
           </div>
 
+{#if $advancedMode}
           <div class="space-y-4">
             <div>
               <Heading
@@ -364,6 +366,7 @@ async function saveWatcherSettings() {
               </div>
             </div>
           </div>
+{/if}
 
           <div class="space-y-4">
             <div>
@@ -397,6 +400,7 @@ async function saveWatcherSettings() {
               </div>
             </div>
 
+{#if $advancedMode}
             <div class="space-y-4">
               <div class="flex items-center justify-between">
                 <div>
@@ -451,6 +455,7 @@ async function saveWatcherSettings() {
                 </P>
               </div>
             </div>
+{/if}
           </div>
         </div>
       {/if}

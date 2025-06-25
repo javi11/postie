@@ -11,6 +11,8 @@
 		"title": "Configuración",
 		"description": "Configure Postie para satisfacer sus necesidades. Todas las configuraciones se guardan automáticamente.",
 		"save_configuration": "Guardar Configuración",
+		"advanced_mode": "Modo Avanzado",
+		"advanced_mode_description": "Mostrar opciones de configuración avanzadas para ajuste fino",
 		"status": {
 			"configuration_error": "Error de Configuración",
 			"configuration_required": "Configuración Requerida",
@@ -56,7 +58,11 @@
 		"language_description": "Seleccione su idioma preferido para la interfaz",
 		"theme": "Tema",
 		"theme_toggle": "Modo Oscuro/Claro",
-		"theme_description": "Alternar entre temas oscuro y claro para mejor visibilidad"
+		"theme_description": "Alternar entre temas oscuro y claro para mejor visibilidad",
+		"maintain_original_extension": "Mantener Extensión Original del Archivo",
+		"maintain_original_extension_description": "Cuando está habilitado, los archivos NZB se nombrarán como 'archivo.ext.nzb'. Cuando está deshabilitado, se nombrarán como 'archivo.nzb'.",
+		"maintain_extension_enabled": "Las extensiones originales se mantendrán",
+		"maintain_extension_disabled": "Las extensiones originales se eliminarán"
 	},
 	"nzb_compression": {
 		"title": "Configuración de Compresión NZB",
@@ -173,7 +179,11 @@
 		"max_reposts": "Máximo de Re-publicaciones",
 		"max_reposts_description": "Número máximo de veces para reintentar la publicación si falla la verificación del artículo",
 		"info_title": "Verificación Post:",
-		"info_description": "Verifica la disponibilidad del artículo después de la carga para asegurar una propagación exitosa. Puede aumentar el tiempo de carga pero mejora la confiabilidad."
+		"info_description": "Verifica la disponibilidad del artículo después de la carga para asegurar una propagación exitosa. Puede aumentar el tiempo de carga pero mejora la confiabilidad.",
+		"save_button": "Guardar Configuración de Verificación",
+		"saving": "Guardando...",
+		"saved_success": "Configuración de verificación guardada",
+		"saved_success_description": "¡Tu configuración de verificación post se ha guardado exitosamente!"
 	},
 	"posting": {
 		"title": "Configuración de Publicación",

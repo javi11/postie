@@ -10,7 +10,7 @@ import {
 	P,
 	Select,
 } from "flowbite-svelte";
-import { QueueListSolid } from "flowbite-svelte-icons";
+import { QuoteOutline } from "flowbite-svelte-icons";
 
 export let config: ConfigData;
 
@@ -40,7 +40,7 @@ $: databaseTypes = [
 <Card class="max-w-full shadow-sm p-5">
   <div class="space-y-6">
     <div class="flex items-center gap-3">
-      <QueueListSolid class="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
+      <QuoteOutline class="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
       <Heading
         tag="h2"
         class="text-lg font-semibold text-gray-900 dark:text-white"

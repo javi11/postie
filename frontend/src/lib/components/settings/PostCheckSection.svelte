@@ -1,8 +1,18 @@
 <script lang="ts">
 import { t } from "$lib/i18n";
+import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
-import { Card, Checkbox, Heading, Input, Label, P } from "flowbite-svelte";
-import { CheckCircleSolid } from "flowbite-svelte-icons";
+import * as App from "$lib/wailsjs/go/backend/App";
+import {
+	Button,
+	Card,
+	Checkbox,
+	Heading,
+	Input,
+	Label,
+	P,
+} from "flowbite-svelte";
+import { CheckCircleSolid, FloppyDiskSolid } from "flowbite-svelte-icons";
 import DurationInput from "../inputs/DurationInput.svelte";
 
 const presets = [
@@ -14,6 +24,8 @@ const presets = [
 
 export let config: ConfigData;
 
+let saving = false;
+
 // Ensure post_check exists with defaults
 if (!config.post_check) {
 	config.post_check = {
@@ -21,6 +33,34 @@ if (!config.post_check) {
 		delay: "10s",
 		max_reposts: 1,
 	};
+}
+
+async function savePostCheckSettings() {
+	try {
+		saving = true;
+
+		// Get the current config from the server to avoid conflicts
+		const currentConfig = await App.GetConfig();
+
+		// Only update the post_check fields with proper type conversion
+		currentConfig.post_check = {
+			enabled: config.post_check.enabled || false,
+			delay: config.post_check.delay || "10s",
+			max_reposts: Number.parseInt(config.post_check.max_reposts) || 1,
+		};
+
+		await App.SaveConfig(currentConfig);
+
+		toastStore.success(
+			$t("settings.post_check.saved_success"),
+			$t("settings.post_check.saved_success_description"),
+		);
+	} catch (error) {
+		console.error("Failed to save post check settings:", error);
+		toastStore.error($t("common.messages.error_saving"), String(error));
+	} finally {
+		saving = false;
+	}
 }
 </script>
 
@@ -83,6 +123,19 @@ if (!config.post_check) {
       <P class="text-sm text-yellow-800 dark:text-yellow-200">
         <strong>{$t('settings.post_check.info_title')}</strong> {$t('settings.post_check.info_description')}
       </P>
+    </div>
+
+    <!-- Save Button -->
+    <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
+      <Button
+        color="green"
+        onclick={savePostCheckSettings}
+        disabled={saving}
+        class="cursor-pointer flex items-center gap-2"
+      >
+        <FloppyDiskSolid class="w-4 h-4" />
+        {saving ? $t('settings.post_check.saving') : $t('settings.post_check.save_button')}
+      </Button>
     </div>
   </div>
 </Card>

@@ -9,11 +9,14 @@ import PostingSection from "$lib/components/settings/PostingSection.svelte";
 import ServerSection from "$lib/components/settings/ServerSection.svelte";
 import SettingsHeader from "$lib/components/settings/SettingsHeader.svelte";
 import WatcherSection from "$lib/components/settings/WatcherSection.svelte";
+import ConnectionPoolSection from "$lib/components/settings/ConnectionPoolSection.svelte";
+import QueueSection from "$lib/components/settings/QueueSection.svelte";
 import { t } from "$lib/i18n";
 import {
 	type AppStatus,
 	appStatus,
 	settingsSaveFunction,
+	advancedMode,
 } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
@@ -28,6 +31,7 @@ import {
 	Spinner,
 	TabItem,
 	Tabs,
+	Toggle,
 } from "flowbite-svelte";
 import {
 	CheckCircleSolid,
@@ -151,7 +155,40 @@ async function handleSaveConfig() {
 			Number.parseInt(configToSave.posting.article_size_in_bytes) || 750000;
 
 		// Convert duration fields to nanoseconds
-		configToSave.posting.retry_delay ??= "5s";
+		configToSave.posting.retry_delay = parseDuration(
+			configToSave.posting.retry_delay || "5s",
+		);
+
+		// Convert post_check duration fields
+		if (configToSave.post_check) {
+			configToSave.post_check.delay = parseDuration(
+				configToSave.post_check.delay || "10s",
+			);
+		}
+
+		// Convert queue duration fields
+		if (configToSave.queue) {
+			configToSave.queue.retry_delay = parseDuration(
+				configToSave.queue.retry_delay || "5m",
+			);
+			configToSave.queue.cleanup_after = parseDuration(
+				configToSave.queue.cleanup_after || "24h",
+			);
+		}
+
+		// Convert post_upload_script timeout
+		if (configToSave.post_upload_script) {
+			configToSave.post_upload_script.timeout = parseDuration(
+				configToSave.post_upload_script.timeout || "30s",
+			);
+		}
+
+		// Convert connection pool duration fields
+		if (configToSave.connection_pool) {
+			configToSave.connection_pool.health_check_interval = parseDuration(
+				configToSave.connection_pool.health_check_interval || "1m",
+			);
+		}
 
 		// Convert par2 integer fields
 		configToSave.par2.volume_size =
@@ -166,7 +203,9 @@ async function handleSaveConfig() {
 			configToSave.watcher.min_file_size =
 				Number.parseInt(configToSave.watcher.min_file_size) || 1048576;
 
-			configToSave.watcher.check_interval ??= "5m";
+			configToSave.watcher.check_interval = parseDuration(
+				configToSave.watcher.check_interval || "5m",
+			);
 		}
 
 		// Ensure output_dir is set
@@ -259,6 +298,20 @@ onDestroy(() => {
           </div>
         {/if}
       </div>
+      
+      <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
+        <div class="flex items-center gap-3">
+          <Toggle class="cursor-pointer" bind:checked={$advancedMode} />
+          <div>
+            <P class="text-sm font-medium text-gray-900 dark:text-white">
+              {$t('settings.header.advanced_mode')}
+            </P>
+            <P class="text-xs text-gray-600 dark:text-gray-400">
+              {$t('settings.header.advanced_mode_description')}
+            </P>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -311,6 +364,10 @@ onDestroy(() => {
             <div class="space-y-6">
               <PostingSection bind:config={localConfig} />
               <PostCheckSection bind:config={localConfig} />
+              {#if $advancedMode}
+                <QueueSection bind:config={localConfig} />
+                <ConnectionPoolSection bind:config={localConfig} />
+              {/if}
             </div>
           </TabItem>
 

@@ -81,6 +81,7 @@ type Config interface {
 	GetNzbCompressionConfig() NzbCompressionConfig
 	GetQueueConfig() QueueConfig
 	GetPostUploadScriptConfig() PostUploadScriptConfig
+	GetMaintainOriginalExtension() bool
 }
 
 type ConnectionPoolConfig struct {
@@ -95,13 +96,14 @@ type ConfigData struct {
 	ConnectionPool ConnectionPoolConfig `yaml:"connection_pool" json:"connection_pool"`
 	Posting        PostingConfig        `yaml:"posting" json:"posting"`
 	// Check uploaded article configuration. used to check if an article was successfully uploaded and propagated.
-	PostCheck        PostCheck              `yaml:"post_check" json:"post_check"`
-	Par2             Par2Config             `yaml:"par2" json:"par2"`
-	Watcher          WatcherConfig          `yaml:"watcher" json:"watcher"`
-	NzbCompression   NzbCompressionConfig   `yaml:"nzb_compression" json:"nzb_compression"`
-	Queue            QueueConfig            `yaml:"queue" json:"queue"`
-	OutputDir        string                 `yaml:"output_dir" json:"output_dir"`
-	PostUploadScript PostUploadScriptConfig `yaml:"post_upload_script" json:"post_upload_script"`
+	PostCheck                 PostCheck              `yaml:"post_check" json:"post_check"`
+	Par2                      Par2Config             `yaml:"par2" json:"par2"`
+	Watcher                   WatcherConfig          `yaml:"watcher" json:"watcher"`
+	NzbCompression            NzbCompressionConfig   `yaml:"nzb_compression" json:"nzb_compression"`
+	Queue                     QueueConfig            `yaml:"queue" json:"queue"`
+	OutputDir                 string                 `yaml:"output_dir" json:"output_dir"`
+	MaintainOriginalExtension *bool                  `yaml:"maintain_original_extension" json:"maintain_original_extension"`
+	PostUploadScript          PostUploadScriptConfig `yaml:"post_upload_script" json:"post_upload_script"`
 }
 
 type Par2Config struct {
@@ -352,6 +354,11 @@ func Load(path string) (*ConfigData, error) {
 
 	if cfg.Queue.MaxConcurrentUploads <= 0 {
 		cfg.Queue.MaxConcurrentUploads = 1
+	}
+
+	// Set default for maintain original extension (default to true)
+	if cfg.MaintainOriginalExtension == nil {
+		cfg.MaintainOriginalExtension = &enabled
 	}
 
 	// Validate configuration
@@ -633,7 +640,8 @@ func GetDefaultConfig() ConfigData {
 			PriorityProcessing:   false,
 			MaxConcurrentUploads: 1,
 		},
-		OutputDir: "./output",
+		OutputDir:                 "./output",
+		MaintainOriginalExtension: &enabled,
 		PostUploadScript: PostUploadScriptConfig{
 			Enabled: false,
 			Command: "",
@@ -658,4 +666,11 @@ func SaveConfig(configData *ConfigData, path string) error {
 
 func (c *ConfigData) GetPostUploadScriptConfig() PostUploadScriptConfig {
 	return c.PostUploadScript
+}
+
+func (c *ConfigData) GetMaintainOriginalExtension() bool {
+	if c.MaintainOriginalExtension == nil {
+		return true // Default to true
+	}
+	return *c.MaintainOriginalExtension
 }

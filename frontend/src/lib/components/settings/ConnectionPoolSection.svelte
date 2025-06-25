@@ -3,7 +3,7 @@ import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 import { t } from "$lib/i18n";
 import type { ConfigData } from "$lib/types";
 import { Card, Checkbox, Heading, Input, Label, P } from "flowbite-svelte";
-import { LinkSolid } from "flowbite-svelte-icons";
+import { LinkOutline } from "flowbite-svelte-icons";
 
 export let config: ConfigData;
 
@@ -27,7 +27,7 @@ const healthCheckPresets = [
 <Card class="max-w-full shadow-sm p-5">
   <div class="space-y-6">
     <div class="flex items-center gap-3">
-      <LinkSolid class="w-5 h-5 text-purple-600 dark:text-purple-400" />
+      <LinkOutline class="w-5 h-5 text-purple-600 dark:text-purple-400" />
       <Heading
         tag="h2"
         class="text-lg font-semibold text-gray-900 dark:text-white"

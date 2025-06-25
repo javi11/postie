@@ -60,12 +60,18 @@ func GetAppPaths() (*AppPaths, error) {
 		par2Name = "parpar.exe"
 	}
 
+	logPath := filepath.Join(dataDir, "postie.log")
+	_, err = os.Create(logPath)
+	if err != nil {
+		return nil, err
+	}
+
 	return &AppPaths{
 		Config:   filepath.Join(configDir, "config.yaml"),
 		Database: filepath.Join(dataDir, "postie_queue.db"),
 		Par2:     filepath.Join(dataDir, par2Name),
 		Data:     dataDir,
-		Log:      filepath.Join(dataDir, "postie.log"),
+		Log:      logPath,
 	}, nil
 }
 

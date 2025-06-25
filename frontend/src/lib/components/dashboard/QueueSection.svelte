@@ -99,10 +99,6 @@ async function removeFromQueue(id: string) {
 async function downloadNZB(id: string, fileName: string) {
 	try {
 		await App.DownloadNZB(id);
-		toastStore.success(
-			$t("common.messages.nzb_downloaded"),
-			`NZB file for ${fileName} has been saved`,
-		);
 	} catch (error) {
 		console.error("Failed to download NZB:", error);
 		toastStore.error(

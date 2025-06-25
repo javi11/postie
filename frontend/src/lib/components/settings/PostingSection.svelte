@@ -3,6 +3,7 @@ import ByteSizeInput from "$lib/components/inputs/ByteSizeInput.svelte";
 import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 import ThrottleRateInput from "$lib/components/inputs/ThrottleRateInput.svelte";
 import { t } from "$lib/i18n";
+import { advancedMode } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
 import * as App from "$lib/wailsjs/go/backend/App";
@@ -219,6 +220,7 @@ async function savePostingSettings() {
         id="article-size"
       />
 
+{#if $advancedMode}
       <ThrottleRateInput
         bind:value={throttleRateMB}
         label={$t('settings.posting.throttle_rate')}
@@ -300,6 +302,7 @@ async function savePostingSettings() {
           {$t('settings.posting.group_policy_description')}
         </P>
       </div>
+{/if}
     </div>
 
     <div class="space-y-4">
@@ -312,6 +315,7 @@ async function savePostingSettings() {
       </P>
     </div>
 
+{#if $advancedMode}
     <!-- Post Headers Section -->
     <div class="space-y-4">
       <Heading
@@ -390,6 +394,7 @@ async function savePostingSettings() {
         {/if}
       </div>
     </div>
+{/if}
 
     <!-- Newsgroups Section -->
     <div class="space-y-4">

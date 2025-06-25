@@ -11,6 +11,8 @@
 		"title": "Paramètres",
 		"description": "Configurez Postie selon vos besoins. Tous les paramètres sont automatiquement sauvegardés.",
 		"save_configuration": "Sauvegarder la Configuration",
+		"advanced_mode": "Mode Avancé",
+		"advanced_mode_description": "Afficher les options de configuration avancées pour un réglage fin",
 		"status": {
 			"configuration_error": "Erreur de Configuration",
 			"configuration_required": "Configuration Requise",
@@ -56,7 +58,11 @@
 		"language_description": "Sélectionnez votre langue préférée pour l'interface",
 		"theme": "Thème",
 		"theme_toggle": "Mode Sombre/Clair",
-		"theme_description": "Basculer entre les thèmes sombre et clair pour une meilleure visibilité"
+		"theme_description": "Basculer entre les thèmes sombre et clair pour une meilleure visibilité",
+		"maintain_original_extension": "Maintenir l'Extension Originale du Fichier",
+		"maintain_original_extension_description": "Lorsqu'activé, les fichiers NZB seront nommés comme 'fichier.ext.nzb'. Lorsque désactivé, ils seront nommés comme 'fichier.nzb'.",
+		"maintain_extension_enabled": "Les extensions originales seront maintenues",
+		"maintain_extension_disabled": "Les extensions originales seront supprimées"
 	},
 	"nzb_compression": {
 		"title": "Configuration de Compression NZB",
@@ -173,7 +179,11 @@
 		"max_reposts": "Maximum de Re-publications",
 		"max_reposts_description": "Nombre maximum de fois pour réessayer la publication si la vérification d'article échoue",
 		"info_title": "Vérification Post :",
-		"info_description": "Vérifie la disponibilité des articles après téléchargement pour assurer une propagation réussie. Peut augmenter le temps de téléchargement mais améliore la fiabilité."
+		"info_description": "Vérifie la disponibilité des articles après téléchargement pour assurer une propagation réussie. Peut augmenter le temps de téléchargement mais améliore la fiabilité.",
+		"save_button": "Sauvegarder les Paramètres de Vérification",
+		"saving": "Sauvegarde...",
+		"saved_success": "Paramètres de vérification sauvegardés",
+		"saved_success_description": "Votre configuration de vérification post a été sauvegardée avec succès !"
 	},
 	"posting": {
 		"title": "Configuration de Publication",
