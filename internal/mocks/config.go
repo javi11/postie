@@ -42,6 +42,20 @@ func (m *MockConfig) EXPECT() *MockConfigMockRecorder {
 	return m.recorder
 }
 
+// GetMaintainOriginalExtension mocks base method.
+func (m *MockConfig) GetMaintainOriginalExtension() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMaintainOriginalExtension")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// GetMaintainOriginalExtension indicates an expected call of GetMaintainOriginalExtension.
+func (mr *MockConfigMockRecorder) GetMaintainOriginalExtension() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaintainOriginalExtension", reflect.TypeOf((*MockConfig)(nil).GetMaintainOriginalExtension))
+}
+
 // GetNNTPPool mocks base method.
 func (m *MockConfig) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
 	m.ctrl.T.Helper()

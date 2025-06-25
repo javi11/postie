@@ -1,22 +1,22 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
+import ConnectionPoolSection from "$lib/components/settings/ConnectionPoolSection.svelte";
 import GeneralSection from "$lib/components/settings/GeneralSection.svelte";
 import NzbCompressionSection from "$lib/components/settings/NzbCompressionSection.svelte";
 import Par2Section from "$lib/components/settings/Par2Section.svelte";
 import PostCheckSection from "$lib/components/settings/PostCheckSection.svelte";
 import PostUploadScriptSection from "$lib/components/settings/PostUploadScriptSection.svelte";
 import PostingSection from "$lib/components/settings/PostingSection.svelte";
+import QueueSection from "$lib/components/settings/QueueSection.svelte";
 import ServerSection from "$lib/components/settings/ServerSection.svelte";
 import SettingsHeader from "$lib/components/settings/SettingsHeader.svelte";
 import WatcherSection from "$lib/components/settings/WatcherSection.svelte";
-import ConnectionPoolSection from "$lib/components/settings/ConnectionPoolSection.svelte";
-import QueueSection from "$lib/components/settings/QueueSection.svelte";
 import { t } from "$lib/i18n";
 import {
 	type AppStatus,
+	advancedMode,
 	appStatus,
 	settingsSaveFunction,
-	advancedMode,
 } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
