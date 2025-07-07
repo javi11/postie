@@ -374,6 +374,15 @@ func (ws *WebServer) handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("Processing %d uploaded files", len(files))
+
+	// Emit initial upload progress
+	ws.wsHub.EmitEvent("upload-progress", map[string]interface{}{
+		"stage": "saving",
+		"progress": 0,
+		"fileCount": len(files),
+	})
+
 	// Create temporary directory for uploaded files
 	tempDir, err := os.MkdirTemp("", "postie-*")
 	if err != nil {
@@ -383,7 +392,7 @@ func (ws *WebServer) handleUpload(w http.ResponseWriter, r *http.Request) {
 
 	// Save uploaded files to temporary location
 	var filePaths []string
-	for _, fileHeader := range files {
+	for i, fileHeader := range files {
 		file, err := fileHeader.Open()
 		if err != nil {
 			http.Error(w, "Failed to open uploaded file", http.StatusInternalServerError)
@@ -407,12 +416,37 @@ func (ws *WebServer) handleUpload(w http.ResponseWriter, r *http.Request) {
 		}
 
 		filePaths = append(filePaths, tempFilePath)
+
+		// Emit progress for file saving
+		progress := float64(i+1) / float64(len(files)) * 50 // 50% for saving files
+		ws.wsHub.EmitEvent("upload-progress", map[string]interface{}{
+			"stage": "saving",
+			"progress": progress,
+			"currentFile": fileHeader.Filename,
+			"fileCount": len(files),
+		})
 	}
 
+	// Emit progress for processing stage
+	ws.wsHub.EmitEvent("upload-progress", map[string]interface{}{
+		"stage": "processing",
+		"progress": 75,
+		"fileCount": len(files),
+	})
+
 	if err := ws.app.HandleDroppedFiles(filePaths); err != nil {
+		ws.wsHub.EmitEvent("upload-error", map[string]interface{}{
+			"error": err.Error(),
+		})
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// Emit completion
+	ws.wsHub.EmitEvent("upload-complete", map[string]interface{}{
+		"fileCount": len(files),
+		"message": "Files successfully processed and added to queue",
+	})
 
 	w.WriteHeader(http.StatusOK)
 }

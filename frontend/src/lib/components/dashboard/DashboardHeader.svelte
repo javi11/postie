@@ -1,7 +1,7 @@
 <script lang="ts">
 import { t } from "$lib/i18n";
-import { isUploading } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
+import { uploadStore, uploadActions } from "$lib/stores/upload";
 import apiClient from "$lib/api/client";
 import { Alert, Button, Card, Heading, P } from "flowbite-svelte";
 import {
@@ -9,45 +9,39 @@ import {
 	CloseCircleSolid,
 	ExclamationCircleSolid,
 	TrashBinSolid,
-	UploadSolid,
 } from "flowbite-svelte-icons";
 
 export let needsConfiguration: boolean;
 export let criticalConfigError: boolean;
+export let handleUpload: () => Promise<void>;
 
-async function addFilesToQueue() {
+function formatFileSize(bytes: number): string {
+	if (bytes === 0) return "0 Bytes";
+	const k = 1024;
+	const sizes = ["Bytes", "KB", "MB", "GB"];
+	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	return `${Number.parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`;
+}
+
+async function cancelCurrentUpload() {
 	try {
-		if (apiClient.environment === "web") {
-			// In web mode, create a file input dialog
-			const input = document.createElement("input");
-			input.type = "file";
-			input.multiple = true;
-			input.onchange = async (e) => {
-				const files = (e.target as HTMLInputElement).files;
-				if (files && files.length > 0) {
-					try {
-						await apiClient.uploadFileList(files);
-						toastStore.success(
-							$t("common.messages.files_added"),
-							$t("common.messages.files_added_description"),
-						);
-					} catch (error) {
-						console.error("File upload failed:", error);
-						toastStore.error($t("common.common.error"), String(error));
-					}
-				}
-			};
-			input.click();
-		} else {
-			// In Wails mode, use the native file picker
-			await apiClient.addFilesToQueue();
-			toastStore.success(
-				$t("common.messages.files_added"),
-				$t("common.messages.files_added_description"),
-			);
+		// Cancel the upload (this will abort the XMLHttpRequest)
+		uploadActions.cancelUpload();
+
+		// Also try to cancel on server side if possible
+		try {
+			await apiClient.cancelUpload();
+		} catch (serverError) {
+			// Server cancel may fail, but that's okay since we already cancelled client-side
+			console.warn("Server-side cancel failed:", serverError);
 		}
+
+		toastStore.success(
+			$t("common.messages.upload_cancelled"),
+			"Upload has been cancelled",
+		);
 	} catch (error) {
-		console.error("Failed to add files to queue:", error);
+		console.error("Failed to cancel upload:", error);
 		toastStore.error($t("common.common.error"), String(error));
 	}
 }
@@ -68,21 +62,6 @@ async function clearQueue() {
 	}
 }
 
-async function cancelUpload() {
-	try {
-		await apiClient.cancelUpload();
-		toastStore.success(
-			$t("common.messages.upload_cancelled"),
-			$t("common.messages.upload_cancelled_description"),
-		);
-	} catch (error) {
-		console.error("Failed to cancel upload:", error);
-		toastStore.error(
-			$t("common.messages.failed_to_cancel_upload"),
-			String(error),
-		);
-	}
-}
 </script>
 
 <Card
@@ -104,15 +83,56 @@ async function cancelUpload() {
     </div>
 
     <div class="flex flex-wrap gap-3">
-      <Button
-        color="primary"
-        onclick={addFilesToQueue}
-        disabled={needsConfiguration}
-        class="cursor-pointer flex items-center gap-2 px-6 py-3 text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200 border-gray-300 dark:border-gray-600"
-      >
-        <CirclePlusSolid class="w-4 h-4" />
-        {$t("dashboard.header.add_files")}
-      </Button>
+      {#if $uploadStore.isUploading}
+        <!-- Upload Progress Indicator -->
+        <div class="bg-white rounded-lg border border-gray-200 p-4 min-w-[300px]">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm font-medium text-gray-900">
+              Uploading {$uploadStore.files.length} file{$uploadStore.files.length !== 1 ? 's' : ''}
+            </span>
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-gray-500">
+                {Math.round($uploadStore.totalProgress)}%
+              </span>
+              <Button
+                size="xs"
+                color="red"
+                onclick={cancelCurrentUpload}
+                class="cursor-pointer h-6 w-6 flex items-center justify-center"
+              >
+                <CloseCircleSolid class="w-3 h-3" />
+              </Button>
+            </div>
+          </div>
+          
+          <!-- Overall Progress Bar -->
+          <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
+            <div
+              class="bg-blue-500 h-2 rounded-full transition-all duration-300"
+              style="width: {$uploadStore.totalProgress}%"
+            ></div>
+          </div>
+
+          <!-- Current File Info -->
+          {#if $uploadStore.files.length > 0}
+            {@const currentFile = $uploadStore.files.find(f => f.status === 'uploading' || f.status === 'processing') || $uploadStore.files[0]}
+            <div class="text-xs text-gray-600 truncate">
+              {currentFile.name} ({formatFileSize(currentFile.size)})
+            </div>
+          {/if}
+        </div>
+      {:else}
+        <!-- Add Files Button -->
+        <Button
+          color="primary"
+          onclick={handleUpload}
+          disabled={needsConfiguration}
+          class="cursor-pointer flex items-center gap-2 px-6 py-3 text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200 border-gray-300 dark:border-gray-600"
+        >
+          <CirclePlusSolid class="w-4 h-4" />
+          {$t("dashboard.header.add_files")}
+        </Button>
+      {/if}
 
       <Button
         color="red"

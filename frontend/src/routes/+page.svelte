@@ -7,6 +7,7 @@ import QueueStats from "$lib/components/dashboard/QueueStats.svelte";
 import { t } from "$lib/i18n";
 import { appStatus, progress } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
+import { uploadActions } from "$lib/stores/upload";
 import apiClient from "$lib/api/client";
 import { PlusOutline } from "flowbite-svelte-icons";
 import { onDestroy, onMount } from "svelte";
@@ -51,12 +52,30 @@ onMount(async () => {
 		console.log("Queue updated via drag and drop");
 	});
 
+	// Listen for upload progress events from server
+	await apiClient.on("upload-progress", (data) => {
+		console.log("Upload progress:", data);
+		// Server progress events help track the processing stage
+	});
+
+	await apiClient.on("upload-complete", (data) => {
+		console.log("Upload complete:", data);
+		// Mark all processing files as completed when upload is complete
+		uploadActions.completeUpload();
+	});
+
+	await apiClient.on("upload-error", (data) => {
+		console.log("Upload error:", data);
+		// Handle upload errors from server
+		toastStore.error($t("common.common.error"), data.error || "Upload failed");
+	});
+
 	// Listen for progress events
 	await apiClient.on("progress", (data) => {
 		progress.update((jobs) => {
 			// For direct uploads without jobID, use a default key
 			const jobKey = data.jobID || "direct-upload";
-			
+
 			// Remove job if not running (completed, cancelled, or error)
 			if (!data.isRunning) {
 				const { [jobKey]: _, ...rest } = jobs;
@@ -129,18 +148,65 @@ async function handleDrop(e: DragEvent) {
 
 	// Handle file upload based on environment
 	if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-		try {
-			if (apiClient.environment === "web") {
-				// In web mode, upload files directly via HTTP
-				await apiClient.uploadFileList(e.dataTransfer.files);
-				toastStore.success(
-					$t("common.common.success"),
-					$t("common.messages.files_added_description"),
-				);
+		await handleFileUpload(e.dataTransfer.files);
+	}
+}
+
+async function handleFileUpload(files: FileList) {
+	try {
+		if (apiClient.environment === "web") {
+			// In web mode, upload files directly via HTTP with progress tracking
+			const uploadFiles = uploadActions.startUpload(files);
+
+			// Set all files to uploading status
+			for (const file of uploadFiles) {
+				uploadActions.setFileStatus(file.id, "uploading");
 			}
-			// In Wails mode, the backend OnFileDrop handler in main.go processes files automatically
-		} catch (error) {
-			console.error("File upload failed:", error);
+
+			// For simplicity, treat all files as one upload batch
+			// In a more sophisticated implementation, you could upload files individually
+			const totalProgress = { current: 0 };
+
+			await apiClient.uploadFileList(
+				files,
+				(progress) => {
+					// Update progress for all files proportionally
+					for (const file of uploadFiles) {
+						uploadActions.updateFileProgress(file.id, progress, "uploading");
+					}
+					totalProgress.current = progress;
+				},
+				(xhr) => {
+					// Store the XMLHttpRequest for cancellation
+					uploadActions.setCurrentRequest(xhr);
+				},
+			);
+
+			// Mark all files as processing (they're now being handled by the server)
+			for (const file of uploadFiles) {
+				uploadActions.setFileStatus(file.id, "processing");
+			}
+
+			// Listen for completion via WebSocket events
+			// The files will be marked as completed when queue updates come through
+
+			toastStore.success(
+				$t("common.common.success"),
+				$t("common.messages.files_added_description"),
+			);
+		}
+		// In Wails mode, the backend OnFileDrop handler in main.go processes files automatically
+	} catch (error) {
+		const err = error as Error;
+		console.error("File upload failed:", error);
+
+		// Mark all files as error
+		const uploadFiles = uploadActions.startUpload(files);
+		for (const file of uploadFiles) {
+			uploadActions.setError(file.id, String(error));
+		}
+
+		if (err.message !== "Upload cancelled") {
 			toastStore.error($t("common.common.error"), String(error));
 		}
 	}
@@ -159,16 +225,7 @@ async function handleUpload() {
 			input.onchange = async (e) => {
 				const files = (e.target as HTMLInputElement).files;
 				if (files && files.length > 0) {
-					try {
-						await apiClient.uploadFileList(files);
-						toastStore.success(
-							$t("common.common.success"),
-							$t("common.messages.files_added_description"),
-						);
-					} catch (error) {
-						console.error("File upload failed:", error);
-						toastStore.error($t("common.common.error"), String(error));
-					}
+					await handleFileUpload(files);
 				}
 			};
 			input.click();
@@ -190,7 +247,7 @@ async function handleUpload() {
 			}
 		} else if (errorMessage.includes("runtime not available")) {
 			toastStore.error($t("common.common.error"), $t("common.common.loading"));
-		} else {
+		} else if (!errorMessage.includes("Upload cancelled")) {
 			toastStore.error($t("common.common.error"), errorMessage);
 		}
 	}

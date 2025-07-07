@@ -254,20 +254,49 @@ export class WebClient {
 	}
 
 	// Upload management
-	async uploadFiles(files: FileList): Promise<void> {
+	async uploadFiles(files: FileList, onProgress?: (progress: number) => void, setRequest?: (xhr: XMLHttpRequest) => void): Promise<void> {
 		const formData = new FormData();
 		for (let i = 0; i < files.length; i++) {
 			formData.append('files', files[i]);
 		}
 		
-		const response = await fetch(`${API_BASE}/upload`, {
-			method: 'POST',
-			body: formData,
+		return new Promise((resolve, reject) => {
+			const xhr = new XMLHttpRequest();
+			
+			// Store the request reference for cancellation
+			if (setRequest) {
+				setRequest(xhr);
+			}
+			
+			// Track upload progress
+			if (onProgress) {
+				xhr.upload.addEventListener('progress', (event) => {
+					if (event.lengthComputable) {
+						const progress = (event.loaded / event.total) * 100;
+						onProgress(progress);
+					}
+				});
+			}
+			
+			xhr.addEventListener('load', () => {
+				if (xhr.status >= 200 && xhr.status < 300) {
+					resolve();
+				} else {
+					reject(new Error(`HTTP error! status: ${xhr.status}`));
+				}
+			});
+			
+			xhr.addEventListener('error', () => {
+				reject(new Error('Upload failed'));
+			});
+			
+			xhr.addEventListener('abort', () => {
+				reject(new Error('Upload cancelled'));
+			});
+			
+			xhr.open('POST', `${API_BASE}/upload`);
+			xhr.send(formData);
 		});
-		
-		if (!response.ok) {
-			throw new Error(`HTTP error! status: ${response.status}`);
-		}
 	}
 
 	async cancelUpload(): Promise<void> {

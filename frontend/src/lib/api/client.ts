@@ -367,7 +367,7 @@ export class UnifiedClient {
 		}
 	}
 
-	async uploadFileList(files: FileList): Promise<void> {
+	async uploadFileList(files: FileList, onProgress?: (progress: number) => void, setRequest?: (xhr: XMLHttpRequest) => void): Promise<void> {
 		await this.initialize();
 
 		if (this._environment === 'wails') {
@@ -378,7 +378,7 @@ export class UnifiedClient {
 		
 		if (this._environment === 'web') {
 			const client = await getWebClient();
-			return client.uploadFiles(files);
+			return client.uploadFiles(files, onProgress, setRequest);
 		}
 
 		throw new Error('No client available');

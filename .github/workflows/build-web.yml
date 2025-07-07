@@ -2,7 +2,7 @@ name: Build Web Version
 
 on:
   push:
-    branches: ["main", "feat-postie-ui"]
+    branches: ["main"]
     tags:
       - "v*.*.*"
   pull_request:
