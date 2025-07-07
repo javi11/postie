@@ -67,14 +67,27 @@
 		"title": "Statistics",
 		"uploaded": "Uploaded",
 		"pending": "Pending",
+		"running": "Running",
+		"complete": "Complete",
+		"completed": "Completed",
 		"errors": "Errors",
+		"failed": "Failed",
+		"in_progress": "In Progress",
 		"rate": "Upload Rate",
 		"queue_stats": {
 			"title": "Queue Statistics",
-			"total": "Total",
-			"running": "Running",
-			"complete": "Complete",
-			"success_rate": "Success Rate:"
+			"overview": "Real-time view of your upload queue status",
+			"total_items": "Total Items",
+			"waiting_to_process": "Waiting to process",
+			"currently_processing": "Currently processing", 
+			"successfully_finished": "Successfully finished",
+			"errors_detected": "Errors Detected",
+			"failed_to_process": "Items that failed to process",
+			"failed_items": "Failed items",
+			"queue_progress": "Queue Progress",
+			"overall_completion": "Overall completion status",
+			"no_items": "No items in queue",
+			"upload_files_prompt": "Upload some files to see queue statistics"
 		}
 	},
 	"alerts": {

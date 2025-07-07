@@ -69,14 +69,27 @@
 		"title": "Estadísticas",
 		"uploaded": "Subido",
 		"pending": "Pendiente",
+		"running": "En Ejecución",
+		"complete": "Completo",
+		"completed": "Completado",
 		"errors": "Errores",
+		"failed": "Fallido",
+		"in_progress": "En Progreso",
 		"rate": "Velocidad de Subida",
 		"queue_stats": {
 			"title": "Estadísticas de Cola",
-			"total": "Total",
-			"running": "En Ejecución",
-			"complete": "Completo",
-			"success_rate": "Tasa de Éxito"
+			"overview": "Vista en tiempo real del estado de tu cola de carga",
+			"total_items": "Total de Elementos",
+			"waiting_to_process": "Esperando procesar",
+			"currently_processing": "Procesando actualmente",
+			"successfully_finished": "Terminado exitosamente",
+			"errors_detected": "Errores Detectados",
+			"failed_to_process": "Elementos que fallaron al procesar",
+			"failed_items": "Elementos fallidos",
+			"queue_progress": "Progreso de Cola",
+			"overall_completion": "Estado general de finalización",
+			"no_items": "No hay elementos en la cola",
+			"upload_files_prompt": "Sube algunos archivos para ver estadísticas de cola"
 		}
 	},
 	"alerts": {

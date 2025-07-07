@@ -68,14 +68,27 @@
 		"title": "Statistiques",
 		"uploaded": "Téléchargé",
 		"pending": "En Attente",
+		"running": "En Cours",
+		"complete": "Terminé",
+		"completed": "Terminé",
 		"errors": "Erreurs",
+		"failed": "Échoué",
+		"in_progress": "En Cours",
 		"rate": "Taux de téléchargement",
 		"queue_stats": {
 			"title": "Statistiques de la File d'Attente",
-			"total": "Total",
-			"running": "En Cours",
-			"complete": "Terminé",
-			"success_rate": "Taux de Réussite"
+			"overview": "Vue en temps réel de l'état de votre file d'attente de téléchargement",
+			"total_items": "Total des Éléments",
+			"waiting_to_process": "En attente de traitement",
+			"currently_processing": "En cours de traitement",
+			"successfully_finished": "Terminé avec succès",
+			"errors_detected": "Erreurs Détectées",
+			"failed_to_process": "Éléments qui ont échoué lors du traitement",
+			"failed_items": "Éléments échoués",
+			"queue_progress": "Progression de la File d'Attente",
+			"overall_completion": "État général d'achèvement",
+			"no_items": "Aucun élément dans la file d'attente",
+			"upload_files_prompt": "Téléchargez des fichiers pour voir les statistiques de la file d'attente"
 		}
 	},
 	"alerts": {
