@@ -20,7 +20,6 @@ import (
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/nzb"
 	"github.com/javi11/postie/internal/par2"
-	"github.com/mnightingale/rapidyenc"
 	"github.com/sourcegraph/conc/pool"
 )
 
@@ -76,7 +75,6 @@ type poster struct {
 	cfg      config.PostingConfig
 	checkCfg config.PostCheck
 	pool     nntppool.UsenetConnectionPool
-	encoder  *rapidyenc.Encoder
 	stats    *Stats
 	throttle *Throttle
 	callback ProgressCallback
@@ -89,8 +87,6 @@ func New(ctx context.Context, cfg config.Config) (Poster, error) {
 		return nil, fmt.Errorf("error getting NNTP pool: %w", err)
 	}
 
-	yenc := rapidyenc.NewEncoder()
-
 	stats := &Stats{
 		StartTime: time.Now(),
 	}
@@ -99,7 +95,6 @@ func New(ctx context.Context, cfg config.Config) (Poster, error) {
 		cfg:      cfg.GetPostingConfig(),
 		checkCfg: cfg.GetPostCheckConfig(),
 		pool:     pool,
-		encoder:  yenc,
 		stats:    stats,
 	}
 
@@ -594,13 +589,13 @@ func (p *poster) postArticle(ctx context.Context, article *article.Article, file
 	article.Hash = articleHash
 
 	// Create article
-	art, err := article.EncodeBytes(p.encoder, body)
+	buff, err := article.Encode(body)
 	if err != nil {
 		return fmt.Errorf("error encoding article: %w", err)
 	}
 
 	// Post article
-	if err := p.pool.Post(ctx, art); err != nil {
+	if err := p.pool.Post(ctx, buff); err != nil {
 		return fmt.Errorf("error posting article: %w", err)
 	}
 

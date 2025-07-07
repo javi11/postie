@@ -113,7 +113,17 @@ func (a *App) initializeProcessor() error {
 				}
 			}
 
-			runtime.EventsEmit(a.ctx, eventName, optionalData...)
+			// Emit events for both desktop and web modes
+			if !a.isWebMode {
+				runtime.EventsEmit(a.ctx, eventName, optionalData...)
+			} else if a.webEventEmitter != nil {
+				// For web mode, send the data appropriately
+				var data interface{}
+				if len(optionalData) > 0 {
+					data = optionalData[0]
+				}
+				a.webEventEmitter(eventName, data)
+			}
 		}
 	}
 
@@ -153,7 +163,11 @@ func (a *App) CancelJob(id string) error {
 		return err
 	}
 
-	// Emit event to refresh queue in frontend
-	runtime.EventsEmit(a.ctx, "queue-updated")
+	// Emit event to refresh queue in frontend for both desktop and web modes
+	if !a.isWebMode {
+		runtime.EventsEmit(a.ctx, "queue-updated")
+	} else if a.webEventEmitter != nil {
+		a.webEventEmitter("queue-updated", nil)
+	}
 	return nil
 }

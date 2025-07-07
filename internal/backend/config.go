@@ -66,8 +66,12 @@ func (a *App) SaveConfig(configData *config.ConfigData) error {
 		return err
 	}
 
-	// Emit a config update event to the frontend
-	runtime.EventsEmit(a.ctx, "config-updated", configData)
+	// Emit a config update event to the frontend for both desktop and web modes
+	if !a.isWebMode {
+		runtime.EventsEmit(a.ctx, "config-updated", configData)
+	} else if a.webEventEmitter != nil {
+		a.webEventEmitter("config-updated", configData)
+	}
 
 	slog.Info("Config saved successfully")
 
@@ -228,28 +232,49 @@ func (a *App) ensurePar2Executable(ctx context.Context) {
 
 	slog.Info("Par2 executable not found, downloading...")
 
-	// Emit progress event to frontend
-	runtime.EventsEmit(a.ctx, "par2-download-status", map[string]interface{}{
-		"status":  "downloading",
-		"message": "Downloading par2 executable...",
-	})
+	// Emit progress event to frontend for both desktop and web modes
+	if !a.isWebMode {
+		runtime.EventsEmit(a.ctx, "par2-download-status", map[string]interface{}{
+			"status":  "downloading",
+			"message": "Downloading par2 executable...",
+		})
+	} else if a.webEventEmitter != nil {
+		a.webEventEmitter("par2-download-status", map[string]interface{}{
+			"status":  "downloading",
+			"message": "Downloading par2 executable...",
+		})
+	}
 
 	// Download par2 executable
 	execPath, err := parpardownloader.DownloadParParCmd(par2Path)
 	if err != nil {
 		slog.Error("Failed to download par2 executable", "error", err)
-		runtime.EventsEmit(a.ctx, "par2-download-status", map[string]interface{}{
-			"status":  "error",
-			"message": fmt.Sprintf("Failed to download par2 executable: %v", err),
-		})
+		if !a.isWebMode {
+			runtime.EventsEmit(a.ctx, "par2-download-status", map[string]interface{}{
+				"status":  "error",
+				"message": fmt.Sprintf("Failed to download par2 executable: %v", err),
+			})
+		} else if a.webEventEmitter != nil {
+			a.webEventEmitter("par2-download-status", map[string]interface{}{
+				"status":  "error",
+				"message": fmt.Sprintf("Failed to download par2 executable: %v", err),
+			})
+		}
 		return
 	}
 
 	slog.Info("Par2 executable downloaded successfully", "path", execPath)
-	runtime.EventsEmit(a.ctx, "par2-download-status", map[string]interface{}{
-		"status":  "completed",
-		"message": "Par2 executable downloaded successfully",
-	})
+	if !a.isWebMode {
+		runtime.EventsEmit(a.ctx, "par2-download-status", map[string]interface{}{
+			"status":  "completed",
+			"message": "Par2 executable downloaded successfully",
+		})
+	} else if a.webEventEmitter != nil {
+		a.webEventEmitter("par2-download-status", map[string]interface{}{
+			"status":  "completed",
+			"message": "Par2 executable downloaded successfully",
+		})
+	}
 }
 
 // GetWatchDirectory returns the current watch directory
@@ -297,6 +322,18 @@ func (a *App) SelectWatchDirectory() (string, error) {
 func (a *App) SelectOutputDirectory() (string, error) {
 	dir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "Select output directory",
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return dir, nil
+}
+
+// SelectTempDirectory allows user to select a temporary directory for PAR2 files
+func (a *App) SelectTempDirectory() (string, error) {
+	dir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select temporary directory for PAR2 files",
 	})
 	if err != nil {
 		return "", err

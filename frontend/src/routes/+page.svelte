@@ -7,9 +7,7 @@ import QueueStats from "$lib/components/dashboard/QueueStats.svelte";
 import { t } from "$lib/i18n";
 import { appStatus, progress } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
-import { waitForWailsRuntime } from "$lib/utils";
-import * as App from "$lib/wailsjs/go/backend/App";
-import { EventsOn } from "$lib/wailsjs/runtime/runtime";
+import apiClient from "$lib/api/client";
 import { PlusOutline } from "flowbite-svelte-icons";
 import { onDestroy, onMount } from "svelte";
 
@@ -19,18 +17,17 @@ let isDragOver = false;
 let dragCounter = 0;
 
 onMount(async () => {
-	// Wait for Wails runtime to be ready
-	await waitForWailsRuntime();
+	// Initialize API client
+	await apiClient.initialize();
 
-	// Set up drag over detection for UI feedback only
-	// The backend OnFileDrop in main.go handles the actual file processing
+	// Set up drag over detection for UI feedback
 	window.addEventListener("dragenter", handleDragEnter);
 	window.addEventListener("dragleave", handleDragLeave);
 	window.addEventListener("dragover", handleDragOver);
 	window.addEventListener("drop", handleDrop);
 
 	// Listen for file drop events from backend
-	EventsOn("file-drop-success", (count) => {
+	await apiClient.on("file-drop-success", (count) => {
 		// Hide overlay when files are successfully processed
 		isDragOver = false;
 		dragCounter = 0;
@@ -40,7 +37,7 @@ onMount(async () => {
 		);
 	});
 
-	EventsOn("file-drop-error", (error) => {
+	await apiClient.on("file-drop-error", (error) => {
 		// Hide overlay when there's an error
 		isDragOver = false;
 		dragCounter = 0;
@@ -48,39 +45,28 @@ onMount(async () => {
 	});
 
 	// Listen for queue updates (from drag and drop or other sources)
-	EventsOn("queue-updated", () => {
+	await apiClient.on("queue-updated", () => {
 		// This event is emitted when files are added to queue via drag and drop
 		// The QueueSection component should automatically refresh its data
 		console.log("Queue updated via drag and drop");
 	});
 
 	// Listen for progress events
-	EventsOn("progress", (data) => {
+	await apiClient.on("progress", (data) => {
 		progress.update((jobs) => {
-			if (!data.jobID) return jobs;
-
+			// For direct uploads without jobID, use a default key
+			const jobKey = data.jobID || "direct-upload";
+			
 			// Remove job if not running (completed, cancelled, or error)
 			if (!data.isRunning) {
-				console.log(
-					"Removing job from progress:",
-					data.jobID,
-					"stage:",
-					data.stage,
-				);
-				const { [data.jobID]: _, ...rest } = jobs;
+				const { [jobKey]: _, ...rest } = jobs;
 				return rest;
 			}
 
 			// Otherwise, update/add job
-			console.log(
-				"Updating job progress:",
-				data.jobID,
-				"stage:",
-				data.stage,
-				"isRunning:",
-				data.isRunning,
-			);
-			return { ...jobs, [data.jobID]: data };
+			// Ensure jobID is set for UI consistency
+			const jobData = { ...data, jobID: jobKey };
+			return { ...jobs, [jobKey]: jobData };
 		});
 	});
 
@@ -133,20 +119,60 @@ function handleDragOver(e: DragEvent) {
 	}
 }
 
-function handleDrop(e: DragEvent) {
+async function handleDrop(e: DragEvent) {
 	e.preventDefault();
 	console.log("Drop detected!", e.dataTransfer?.files);
+
 	// Hide the overlay when files are dropped
-	// The backend OnFileDrop handler in main.go will process the files
 	isDragOver = false;
 	dragCounter = 0;
+
+	// Handle file upload based on environment
+	if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+		try {
+			if (apiClient.environment === "web") {
+				// In web mode, upload files directly via HTTP
+				await apiClient.uploadFileList(e.dataTransfer.files);
+				toastStore.success(
+					$t("common.common.success"),
+					$t("common.messages.files_added_description"),
+				);
+			}
+			// In Wails mode, the backend OnFileDrop handler in main.go processes files automatically
+		} catch (error) {
+			console.error("File upload failed:", error);
+			toastStore.error($t("common.common.error"), String(error));
+		}
+	}
 }
 
 async function handleUpload() {
 	try {
-		// Ensure runtime is ready before calling backend
-		await waitForWailsRuntime();
-		await App.UploadFiles();
+		if (apiClient.environment === "wails") {
+			// In Wails mode, use the existing upload flow
+			await apiClient.uploadFiles();
+		} else {
+			// In web mode, trigger file input dialog
+			const input = document.createElement("input");
+			input.type = "file";
+			input.multiple = true;
+			input.onchange = async (e) => {
+				const files = (e.target as HTMLInputElement).files;
+				if (files && files.length > 0) {
+					try {
+						await apiClient.uploadFileList(files);
+						toastStore.success(
+							$t("common.common.success"),
+							$t("common.messages.files_added_description"),
+						);
+					} catch (error) {
+						console.error("File upload failed:", error);
+						toastStore.error($t("common.common.error"), String(error));
+					}
+				}
+			};
+			input.click();
+		}
 	} catch (error) {
 		console.error("Upload failed:", error);
 		const errorMessage = String(error);
@@ -156,9 +182,13 @@ async function handleUpload() {
 				$t("common.common.error"),
 				$t("common.messages.error_saving"),
 			);
-			// Navigate to settings using SvelteKit's navigation
-			App.NavigateToSettings();
-		} else if (errorMessage.includes("Wails runtime not available")) {
+			// Navigate to settings
+			if (apiClient.environment === "wails") {
+				await apiClient.navigateToSettings();
+			} else {
+				goto("/settings");
+			}
+		} else if (errorMessage.includes("runtime not available")) {
 			toastStore.error($t("common.common.error"), $t("common.common.loading"));
 		} else {
 			toastStore.error($t("common.common.error"), errorMessage);

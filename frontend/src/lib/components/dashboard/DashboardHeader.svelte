@@ -2,7 +2,7 @@
 import { t } from "$lib/i18n";
 import { isUploading } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
-import * as App from "$lib/wailsjs/go/backend/App";
+import apiClient from "$lib/api/client";
 import { Alert, Button, Card, Heading, P } from "flowbite-svelte";
 import {
 	CirclePlusSolid,
@@ -17,19 +17,44 @@ export let criticalConfigError: boolean;
 
 async function addFilesToQueue() {
 	try {
-		await App.AddFilesToQueue();
-		toastStore.success(
-			$t("common.messages.files_added"),
-			$t("common.messages.files_added_description"),
-		);
+		if (apiClient.environment === "web") {
+			// In web mode, create a file input dialog
+			const input = document.createElement("input");
+			input.type = "file";
+			input.multiple = true;
+			input.onchange = async (e) => {
+				const files = (e.target as HTMLInputElement).files;
+				if (files && files.length > 0) {
+					try {
+						await apiClient.uploadFileList(files);
+						toastStore.success(
+							$t("common.messages.files_added"),
+							$t("common.messages.files_added_description"),
+						);
+					} catch (error) {
+						console.error("File upload failed:", error);
+						toastStore.error($t("common.common.error"), String(error));
+					}
+				}
+			};
+			input.click();
+		} else {
+			// In Wails mode, use the native file picker
+			await apiClient.addFilesToQueue();
+			toastStore.success(
+				$t("common.messages.files_added"),
+				$t("common.messages.files_added_description"),
+			);
+		}
 	} catch (error) {
 		console.error("Failed to add files to queue:", error);
+		toastStore.error($t("common.common.error"), String(error));
 	}
 }
 
 async function clearQueue() {
 	try {
-		await App.ClearQueue();
+		await apiClient.clearQueue();
 		toastStore.success(
 			$t("common.messages.queue_cleared"),
 			$t("common.messages.queue_cleared_description"),
@@ -45,7 +70,7 @@ async function clearQueue() {
 
 async function cancelUpload() {
 	try {
-		await App.CancelUpload();
+		await apiClient.cancelUpload();
 		toastStore.success(
 			$t("common.messages.upload_cancelled"),
 			$t("common.messages.upload_cancelled_description"),

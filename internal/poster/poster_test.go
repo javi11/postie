@@ -14,7 +14,6 @@ import (
 	"github.com/javi11/postie/internal/article"
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/mocks"
-	"github.com/mnightingale/rapidyenc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -86,7 +85,6 @@ func TestPost(t *testing.T) {
 			cfg:      createTestConfig(),
 			checkCfg: checkCfg,
 			pool:     mockPool,
-			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
 			throttle: NewThrottle(1024*1024, time.Second),
 		}
@@ -130,7 +128,6 @@ func TestPost(t *testing.T) {
 			cfg:      createTestConfig(),
 			checkCfg: checkCfg,
 			pool:     mockPool,
-			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
 			throttle: NewThrottle(1024*1024, time.Second),
 		}
@@ -168,7 +165,6 @@ func TestPost(t *testing.T) {
 			cfg:      createTestConfig(),
 			checkCfg: checkCfg,
 			pool:     mockPool,
-			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
 			throttle: NewThrottle(1024*1024, time.Second),
 		}
@@ -206,7 +202,6 @@ func TestPost(t *testing.T) {
 			cfg:      createTestConfig(),
 			checkCfg: checkCfg,
 			pool:     mockPool,
-			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
 			throttle: NewThrottle(1024*1024, time.Second),
 		}
@@ -244,7 +239,6 @@ func TestPost(t *testing.T) {
 			cfg:      createTestConfig(),
 			checkCfg: checkCfg,
 			pool:     mockPool,
-			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
 			throttle: NewThrottle(1024*1024, time.Second),
 		}
@@ -356,7 +350,6 @@ func TestPost(t *testing.T) {
 
 		p := &poster{
 			pool:     mockPool,
-			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
 			throttle: NewThrottle(1024*1024, time.Second),
 		}
@@ -372,6 +365,7 @@ func TestPost(t *testing.T) {
 			Date:       time.Now(),
 			Offset:     0,
 			Size:       uint64(len(content)),
+			FileSize:   int64(len(content)),
 		}
 
 		// Post the article
@@ -404,7 +398,6 @@ func TestPost(t *testing.T) {
 			cfg:      createTestConfig(),
 			checkCfg: createTestPostCheckConfig(),
 			pool:     mockPool,
-			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
 			throttle: NewThrottle(1024*1024, time.Second),
 		}
@@ -495,7 +488,6 @@ func TestPostArticle(t *testing.T) {
 
 		p := &poster{
 			pool:     mockPool,
-			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
 			throttle: NewThrottle(1024*1024, time.Second),
 		}
@@ -511,6 +503,7 @@ func TestPostArticle(t *testing.T) {
 			Date:       time.Now(),
 			Offset:     0,
 			Size:       uint64(len(content)),
+			FileSize:   int64(len(content)),
 		}
 
 		err = p.postArticle(ctx, art, file)
@@ -542,7 +535,6 @@ func TestPostArticle(t *testing.T) {
 
 		p := &poster{
 			pool:     mockPool,
-			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
 			throttle: NewThrottle(1024*1024, time.Second),
 		}
@@ -583,7 +575,6 @@ func TestPostArticle(t *testing.T) {
 
 		p := &poster{
 			pool:     mockPool,
-			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
 			throttle: NewThrottle(1024*1024, time.Second),
 		}
@@ -599,6 +590,7 @@ func TestPostArticle(t *testing.T) {
 			Date:       time.Now(),
 			Offset:     0,
 			Size:       uint64(len(content)),
+			FileSize:   int64(len(content)),
 		}
 
 		err = p.postArticle(ctx, art, file)
@@ -862,7 +854,6 @@ func TestPostIntegration(t *testing.T) {
 			cfg:      cfg,
 			checkCfg: checkCfg,
 			pool:     mockPool,
-			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
 			throttle: NewThrottle(1024*1024, time.Second),
 		}
@@ -904,7 +895,6 @@ func TestPostLoop_Basic(t *testing.T) {
 			cfg:      createTestConfig(),
 			checkCfg: createTestPostCheckConfig(),
 			pool:     mockPool,
-			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
 			throttle: NewThrottle(1024*1024, time.Second),
 		}
@@ -930,6 +920,7 @@ func TestPostLoop_Basic(t *testing.T) {
 			Date:         time.Now(),
 			Offset:       0,
 			Size:         uint64(len(content)),
+			FileSize:     int64(len(content)),
 		}
 
 		err = p.postArticle(ctx, art, file)
@@ -954,7 +945,6 @@ func TestPostLoop_Basic(t *testing.T) {
 
 		p := &poster{
 			pool:     mockPool,
-			encoder:  rapidyenc.NewEncoder(),
 			stats:    &Stats{StartTime: time.Now()},
 			throttle: NewThrottle(1024*1024, time.Second),
 		}
@@ -979,6 +969,7 @@ func TestPostLoop_Basic(t *testing.T) {
 			Date:         time.Now(),
 			Offset:       0,
 			Size:         uint64(len(content)),
+			FileSize:     int64(len(content)),
 		}
 
 		err = p.postArticle(ctx, art, file)

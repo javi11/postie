@@ -116,8 +116,12 @@ func (a *App) AddFilesToQueue() error {
 
 	slog.Info("Added files directly to queue", "added", addedCount, "total", len(files))
 
-	// Emit event to refresh queue in frontend
-	runtime.EventsEmit(a.ctx, "queue-updated")
+	// Emit event to refresh queue in frontend for both desktop and web modes
+	if !a.isWebMode {
+		runtime.EventsEmit(a.ctx, "queue-updated")
+	} else if a.webEventEmitter != nil {
+		a.webEventEmitter("queue-updated", nil)
+	}
 
 	return nil
 }
@@ -167,8 +171,12 @@ func (a *App) RemoveFromQueue(id string) error {
 		return err
 	}
 
-	// Emit event to refresh queue in frontend
-	runtime.EventsEmit(a.ctx, "queue-updated")
+	// Emit event to refresh queue in frontend for both desktop and web modes
+	if !a.isWebMode {
+		runtime.EventsEmit(a.ctx, "queue-updated")
+	} else if a.webEventEmitter != nil {
+		a.webEventEmitter("queue-updated", nil)
+	}
 	return nil
 }
 
@@ -192,8 +200,12 @@ func (a *App) ClearQueue() error {
 		return err
 	}
 
-	// Emit event to refresh queue in frontend
-	runtime.EventsEmit(a.ctx, "queue-updated")
+	// Emit event to refresh queue in frontend for both desktop and web modes
+	if !a.isWebMode {
+		runtime.EventsEmit(a.ctx, "queue-updated")
+	} else if a.webEventEmitter != nil {
+		a.webEventEmitter("queue-updated", nil)
+	}
 	return nil
 }
 
@@ -306,6 +318,11 @@ func (a *App) SetQueueItemPriority(id string, priority int) error {
 	if err := a.queue.SetQueueItemPriority(id, priority); err != nil {
 		return err
 	}
-	runtime.EventsEmit(a.ctx, "queue-updated")
+	// Emit event to refresh queue in frontend for both desktop and web modes
+	if !a.isWebMode {
+		runtime.EventsEmit(a.ctx, "queue-updated")
+	} else if a.webEventEmitter != nil {
+		a.webEventEmitter("queue-updated", nil)
+	}
 	return nil
 }

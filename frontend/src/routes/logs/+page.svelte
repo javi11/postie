@@ -1,7 +1,7 @@
 <script lang="ts">
 import { t } from "$lib/i18n";
 import { type LogEntry, frontendLogs } from "$lib/stores/logs";
-import { GetLogsPaginated } from "$lib/wailsjs/go/backend/App";
+import apiClient from "$lib/api/client";
 import { Button, Card, Spinner } from "flowbite-svelte";
 import {
 	ArrowsRepeatOutline,
@@ -45,8 +45,11 @@ let showFollowButton = false;
 async function loadInitialLogs() {
 	loading = true;
 	try {
+		// Initialize API client first
+		await apiClient.initialize();
+
 		// Load the most recent LINES_PER_PAGE lines (offset = 0)
-		const rawLogs = await GetLogsPaginated(LINES_PER_PAGE, 0);
+		const rawLogs = await apiClient.getLogsPaginated(LINES_PER_PAGE, 0);
 		const parsedLogs = parseLogLines(rawLogs);
 
 		backendLogs = parsedLogs;
@@ -72,7 +75,10 @@ async function loadOlderLogs() {
 	loadingOlder = true;
 	try {
 		// Load older logs starting from our current offset
-		const rawLogs = await GetLogsPaginated(LINES_PER_PAGE, loadedLines);
+		const rawLogs = await apiClient.getLogsPaginated(
+			LINES_PER_PAGE,
+			loadedLines,
+		);
 		const parsedLogs = parseLogLines(rawLogs);
 
 		if (parsedLogs.length === 0) {
@@ -115,7 +121,7 @@ async function refreshRecentLogs() {
 
 	try {
 		// Only refresh the most recent logs (same as initial load)
-		const rawLogs = await GetLogsPaginated(LINES_PER_PAGE, 0);
+		const rawLogs = await apiClient.getLogsPaginated(LINES_PER_PAGE, 0);
 		const parsedLogs = parseLogLines(rawLogs);
 
 		// Find how many new logs we have

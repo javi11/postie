@@ -5,7 +5,7 @@ import { t } from "$lib/i18n";
 import { advancedMode } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
-import * as App from "$lib/wailsjs/go/backend/App";
+import apiClient from "$lib/api/client";
 import {
 	Button,
 	Card,
@@ -127,12 +127,24 @@ function removeExtraOption(index: number) {
 	);
 }
 
+async function selectTempDirectory() {
+	try {
+		const selectedDir = await apiClient.selectTempDirectory();
+		if (selectedDir) {
+			config.par2.temp_dir = selectedDir;
+		}
+	} catch (error) {
+		console.error("Failed to select temp directory:", error);
+		toastStore.error($t("common.messages.error"), "Failed to select directory");
+	}
+}
+
 async function savePar2Settings() {
 	try {
 		saving = true;
 
 		// Get the current config from the server to avoid conflicts
-		const currentConfig = await App.GetConfig();
+		const currentConfig = await apiClient.getConfig();
 
 		// Only update the par2 fields with proper type conversion
 		currentConfig.par2 = {
@@ -141,7 +153,7 @@ async function savePar2Settings() {
 			max_input_slices: Number.parseInt(config.par2.max_input_slices) || 4000,
 		};
 
-		await App.SaveConfig(currentConfig);
+		await apiClient.saveConfig(currentConfig);
 
 		toastStore.success(
 			$t("settings.par2.saved_success"),
@@ -201,6 +213,28 @@ $: volumeSizeDisplay = config.par2.volume_size
               />
               <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
                 {$t('settings.par2.par2_path_description')}
+              </P>
+            </div>
+
+            <div>
+              <Label for="temp-dir" class="mb-2">{$t('settings.par2.temp_dir')}</Label>
+              <div class="flex gap-2">
+                <Input
+                  id="temp-dir"
+                  bind:value={config.par2.temp_dir}
+                  placeholder={$t('settings.par2.temp_dir_placeholder')}
+                  class="flex-1"
+                />
+                <Button
+                  color="alternative"
+                  onclick={selectTempDirectory}
+                  class="cursor-pointer"
+                >
+                  {$t('settings.general.browse')}
+                </Button>
+              </div>
+              <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                {$t('settings.par2.temp_dir_description')}
               </P>
             </div>
 

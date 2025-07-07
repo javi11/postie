@@ -63,6 +63,8 @@ export function SelectConfigFile():Promise<string>;
 
 export function SelectOutputDirectory():Promise<string>;
 
+export function SelectTempDirectory():Promise<string>;
+
 export function SelectWatchDirectory():Promise<string>;
 
 export function SetQueueItemPriority(arg1:string,arg2:number):Promise<void>;

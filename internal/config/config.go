@@ -113,6 +113,7 @@ type Par2Config struct {
 	VolumeSize       int       `yaml:"volume_size" json:"volume_size"`
 	MaxInputSlices   int       `yaml:"max_input_slices" json:"max_input_slices"`
 	ExtraPar2Options []string  `yaml:"extra_par2_options" json:"extra_par2_options"`
+	TempDir          string    `yaml:"temp_dir" json:"temp_dir"`
 	once             sync.Once `json:"-"`
 }
 
@@ -610,6 +611,7 @@ func GetDefaultConfig() ConfigData {
 			VolumeSize:       defaultVolumeSize,
 			MaxInputSlices:   defaultMaxInputSlices,
 			ExtraPar2Options: []string{},
+			TempDir:          os.TempDir(),
 		},
 		Watcher: WatcherConfig{
 			Enabled:        false,

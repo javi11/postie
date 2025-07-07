@@ -112,7 +112,17 @@ func (a *App) initializeWatcher() error {
 				}
 			}
 
-			runtime.EventsEmit(a.ctx, eventName, optionalData...)
+			// Emit events for both desktop and web modes
+			if !a.isWebMode {
+				runtime.EventsEmit(a.ctx, eventName, optionalData...)
+			} else if a.webEventEmitter != nil {
+				// For web mode, send the data appropriately
+				var data interface{}
+				if len(optionalData) > 0 {
+					data = optionalData[0]
+				}
+				a.webEventEmitter(eventName, data)
+			}
 		}
 	}
 

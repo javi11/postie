@@ -1,10 +1,9 @@
 <script lang="ts">
 import { t } from "$lib/i18n";
 import type { QueueStats } from "$lib/types";
-import * as App from "$lib/wailsjs/go/backend/App";
-import { EventsOn } from "$lib/wailsjs/runtime/runtime";
+import apiClient from "$lib/api/client";
 import { Badge, Card, Heading } from "flowbite-svelte";
-import { onMount } from "svelte";
+import { onMount, onDestroy } from "svelte";
 
 let queueStats: QueueStats = {
 	total: 0,
@@ -14,9 +13,11 @@ let queueStats: QueueStats = {
 	error: 0,
 };
 
-onMount(() => {
+let interval: NodeJS.Timeout | null = null;
+
+onMount(async () => {
 	// Listen for queue updates
-	EventsOn("queue-updated", () => {
+	await apiClient.on("queue-updated", () => {
 		loadQueueStats();
 	});
 
@@ -24,14 +25,23 @@ onMount(() => {
 	loadQueueStats();
 
 	// Set up periodic refresh
-	const interval = setInterval(loadQueueStats, 5000);
+	interval = setInterval(loadQueueStats, 5000);
+});
 
-	return () => clearInterval(interval);
+onDestroy(async () => {
+	// Clean up event listener
+	await apiClient.off("queue-updated");
+
+	// Clear interval
+	if (interval) {
+		clearInterval(interval);
+		interval = null;
+	}
 });
 
 async function loadQueueStats() {
 	try {
-		const stats = await App.GetQueueStats();
+		const stats = await apiClient.getQueueStats();
 		queueStats = stats as QueueStats;
 	} catch (error) {
 		console.error("Failed to load queue stats:", error);

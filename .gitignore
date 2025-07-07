@@ -20,3 +20,5 @@ frontend/build
 .svelte-kit
 !build/appicon.png
 !build/windows/icon.ico
+postie-web
+postie-cli

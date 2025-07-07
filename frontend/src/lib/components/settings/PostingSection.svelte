@@ -6,7 +6,7 @@ import { t } from "$lib/i18n";
 import { advancedMode } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
-import * as App from "$lib/wailsjs/go/backend/App";
+import apiClient from "$lib/api/client";
 import {
 	Button,
 	Card,
@@ -148,7 +148,7 @@ async function savePostingSettings() {
 		saving = true;
 
 		// Get the current config from the server to avoid conflicts
-		const currentConfig = await App.GetConfig();
+		const currentConfig = await apiClient.getConfig();
 
 		// Only update the posting fields with proper type conversion
 		currentConfig.posting = {
@@ -160,7 +160,7 @@ async function savePostingSettings() {
 			throttle_rate: config.posting.throttle_rate || 0,
 		};
 
-		await App.SaveConfig(currentConfig);
+		await apiClient.saveConfig(currentConfig);
 
 		toastStore.success(
 			$t("settings.posting.saved_success"),

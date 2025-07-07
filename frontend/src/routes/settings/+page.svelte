@@ -19,10 +19,8 @@ import {
 	settingsSaveFunction,
 } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
-import type { ConfigData } from "$lib/types";
-import { parseDuration, waitForWailsRuntime } from "$lib/utils";
-import * as App from "$lib/wailsjs/go/backend/App";
-import { config } from "$lib/wailsjs/go/models";
+import { parseDuration } from "$lib/utils";
+import apiClient, { type ConfigData } from "$lib/api/client";
 import {
 	Button,
 	DarkMode,
@@ -53,7 +51,7 @@ let criticalConfigErrorMessage = "";
 let loading = false;
 let loadError = false;
 onMount(async () => {
-	await waitForWailsRuntime();
+	await apiClient.initialize();
 	await loadConfig();
 
 	// Register save function with the store
@@ -73,7 +71,8 @@ async function loadConfig() {
 	try {
 		loading = true;
 		loadError = false;
-		const config = await App.GetConfig();
+		await apiClient.initialize();
+		const config = await apiClient.getConfig();
 		configData = config;
 		// Initialize localConfig with the loaded config
 		localConfig = JSON.parse(JSON.stringify(config));
@@ -213,13 +212,13 @@ async function handleSaveConfig() {
 			configToSave.output_dir = "./output";
 		}
 
-		await App.SaveConfig(configToSave);
+		await apiClient.saveConfig(configToSave);
 		configData = configToSave;
 		// Update localConfig to the saved config to maintain reactivity
 		localConfig = JSON.parse(JSON.stringify(configToSave));
 
 		// Update app status
-		const status = await App.GetAppStatus();
+		const status = await apiClient.getAppStatus();
 		appStatus.set(status);
 
 		toastStore.success(

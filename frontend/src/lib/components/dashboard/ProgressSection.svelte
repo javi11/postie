@@ -3,7 +3,7 @@ import { t } from "$lib/i18n";
 import { isUploading, progress } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import { formatSpeed, formatTime } from "$lib/utils";
-import { CancelJob, CancelUpload } from "$lib/wailsjs/go/backend/App";
+import apiClient from "$lib/api/client";
 import { Button, Card, Heading, P, Progressbar } from "flowbite-svelte";
 import { CloseCircleSolid } from "flowbite-svelte-icons";
 
@@ -11,7 +11,7 @@ $: jobs = Object.values($progress);
 
 async function cancelJob(jobID: string) {
 	try {
-		await CancelJob(jobID);
+		await apiClient.cancelJob(jobID);
 
 		// Immediately remove the job from progress store as a safety measure
 		progress.update((jobs) => {
@@ -32,7 +32,7 @@ async function cancelJob(jobID: string) {
 
 async function cancelDirectUpload() {
 	try {
-		await CancelUpload();
+		await apiClient.cancelUpload();
 		toastStore.success(
 			$t("common.messages.upload_cancelled"),
 			$t("common.messages.upload_cancelled_description"),

@@ -2,13 +2,12 @@
 import { goto } from "$app/navigation";
 import { page } from "$app/stores";
 import logo from "$lib/assets/images/logo.png";
+import EnvironmentBadge from "$lib/components/EnvironmentBadge.svelte";
 import ToastContainer from "$lib/components/ToastContainer.svelte";
 import { t } from "$lib/i18n";
 import { appStatus, settingsSaveFunction } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
-import { waitForWailsRuntime } from "$lib/utils";
-import * as App from "$lib/wailsjs/go/backend/App";
-import { EventsOn } from "$lib/wailsjs/runtime/runtime";
+import apiClient from "$lib/api/client";
 import {
 	Button,
 	DarkMode,
@@ -38,16 +37,16 @@ async function handleSaveSettings() {
 }
 
 onMount(async () => {
-	// Wait for Wails runtime to be ready
-	await waitForWailsRuntime();
+	// Initialize API client (detects environment and sets up appropriate client)
+	await apiClient.initialize();
 
 	// Listen for config updates
-	EventsOn("config-updated", async () => {
+	await apiClient.on("config-updated", async () => {
 		await loadAppStatus();
 	});
 
 	// Listen for par2 download events
-	EventsOn("par2-download-status", (data) => {
+	await apiClient.on("par2-download-status", (data) => {
 		if (data.status === "downloading") {
 			toastStore.info($t("common.common.loading"), data.message);
 		} else if (data.status === "completed") {
@@ -57,39 +56,41 @@ onMount(async () => {
 		}
 	});
 
-	// Listen for menu navigation events
-	EventsOn("navigate-to-settings", () => {
-		goto("/settings");
-	});
+	// Listen for menu navigation events (desktop only)
+	if (apiClient.environment === "wails") {
+		await apiClient.on("navigate-to-settings", () => {
+			goto("/settings");
+		});
 
-	EventsOn("navigate-to-dashboard", () => {
-		goto("/");
-	});
+		await apiClient.on("navigate-to-dashboard", () => {
+			goto("/");
+		});
 
-	// Listen for edit menu events
-	EventsOn("menu-cut", () => {
-		document.execCommand("cut");
-	});
+		// Listen for edit menu events (desktop only)
+		await apiClient.on("menu-cut", () => {
+			document.execCommand("cut");
+		});
 
-	EventsOn("menu-copy", () => {
-		document.execCommand("copy");
-	});
+		await apiClient.on("menu-copy", () => {
+			document.execCommand("copy");
+		});
 
-	EventsOn("menu-paste", () => {
-		document.execCommand("paste");
-	});
+		await apiClient.on("menu-paste", () => {
+			document.execCommand("paste");
+		});
 
-	EventsOn("menu-undo", () => {
-		document.execCommand("undo");
-	});
+		await apiClient.on("menu-undo", () => {
+			document.execCommand("undo");
+		});
 
-	EventsOn("menu-redo", () => {
-		document.execCommand("redo");
-	});
+		await apiClient.on("menu-redo", () => {
+			document.execCommand("redo");
+		});
 
-	EventsOn("menu-select-all", () => {
-		document.execCommand("selectAll");
-	});
+		await apiClient.on("menu-select-all", () => {
+			document.execCommand("selectAll");
+		});
+	}
 
 	// Load initial app status
 	await loadAppStatus();
@@ -97,7 +98,7 @@ onMount(async () => {
 
 async function loadAppStatus() {
 	try {
-		const status = await App.GetAppStatus();
+		const status = await apiClient.getAppStatus();
 		appStatus.set(status);
 		needsConfiguration = status.needsConfiguration || false;
 		criticalConfigError = status.criticalConfigError || false;
@@ -134,9 +135,12 @@ async function loadAppStatus() {
 				<div class="flex items-center gap-3">
 					<img src={logo} alt="Postie UI" class="w-8 h-8" loading="lazy" />
 					<div>
-						<h1 class="text-xl font-bold text-gray-900 dark:text-white">
-							Postie
-						</h1>
+						<div class="flex items-center gap-2">
+							<h1 class="text-xl font-bold text-gray-900 dark:text-white">
+								Postie
+							</h1>
+							<EnvironmentBadge />
+						</div>
 						<p class="text-xs text-gray-500 dark:text-gray-400">
 							Upload Manager
 						</p>

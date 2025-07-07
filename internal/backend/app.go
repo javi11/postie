@@ -41,6 +41,8 @@ type App struct {
 	procCtx              context.Context
 	procCancel           context.CancelFunc
 	criticalErrorMessage string
+	isWebMode            bool
+	webEventEmitter      func(eventType string, data interface{})
 }
 
 // NewApp creates a new App application struct
@@ -87,7 +89,19 @@ func NewApp() *App {
 		progress: &ProgressTracker{
 			Stage: "Ready",
 		},
+		isWebMode: false,
 	}
+}
+
+// SetWebMode sets the application to web mode
+func (a *App) SetWebMode(isWeb bool) {
+	slog.Info("Setting web mode", "isWeb", isWeb)
+	a.isWebMode = isWeb
+}
+
+// SetWebEventEmitter sets the event emitter function for web mode
+func (a *App) SetWebEventEmitter(emitter func(eventType string, data interface{})) {
+	a.webEventEmitter = emitter
 }
 
 // Startup is called when the app starts. The context is saved
@@ -228,7 +242,12 @@ func (a *App) RetryJob(id string) error {
 		return err
 	}
 
-	runtime.EventsEmit(a.ctx, "queue:updated")
+	// Emit events for both desktop and web modes
+	if !a.isWebMode {
+		runtime.EventsEmit(a.ctx, "queue:updated")
+	} else if a.webEventEmitter != nil {
+		a.webEventEmitter("queue:updated", nil)
+	}
 	return nil
 }
 
@@ -349,15 +368,19 @@ func (a *App) readLogLines(file *os.File, limit, offset int) (string, error) {
 
 // NavigateToSettings emits an event to navigate to the settings page
 func (a *App) NavigateToSettings() {
-	if a.ctx != nil {
+	if a.ctx != nil && !a.isWebMode {
 		runtime.EventsEmit(a.ctx, "navigate-to-settings")
+	} else if a.webEventEmitter != nil {
+		a.webEventEmitter("navigate-to-settings", nil)
 	}
 }
 
 // NavigateToDashboard emits an event to navigate to the dashboard page
 func (a *App) NavigateToDashboard() {
-	if a.ctx != nil {
+	if a.ctx != nil && !a.isWebMode {
 		runtime.EventsEmit(a.ctx, "navigate-to-dashboard")
+	} else if a.webEventEmitter != nil {
+		a.webEventEmitter("navigate-to-dashboard", nil)
 	}
 }
 
@@ -404,8 +427,12 @@ func (a *App) HandleDroppedFiles(filePaths []string) error {
 
 		if addedCount > 0 {
 			slog.Info("Added dropped files to queue", "added", addedCount, "total", len(filePaths))
-			// Emit event to refresh queue in frontend
-			runtime.EventsEmit(a.ctx, "queue-updated")
+			// Emit event to refresh queue in frontend for both desktop and web modes
+			if !a.isWebMode {
+				runtime.EventsEmit(a.ctx, "queue-updated")
+			} else if a.webEventEmitter != nil {
+				a.webEventEmitter("queue-updated", nil)
+			}
 		}
 
 		if addedCount == 0 {

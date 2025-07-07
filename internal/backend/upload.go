@@ -96,8 +96,12 @@ func (a *App) UploadFiles() error {
 			a.progress.ElapsedTime = elapsedTime
 			a.progressMux.Unlock()
 
-			// Emit progress event to frontend
-			runtime.EventsEmit(a.ctx, "progress", a.getProgress())
+			// Emit progress event to frontend for both desktop and web modes
+			if !a.isWebMode {
+				runtime.EventsEmit(a.ctx, "progress", a.getProgress())
+			} else if a.webEventEmitter != nil {
+				a.webEventEmitter("progress", a.getProgress())
+			}
 		}
 
 		// Set progress callback on postie instance

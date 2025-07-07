@@ -82,7 +82,19 @@ func (p *Par2CmdExecutor) Create(ctx context.Context, files []fileinfo.FileInfo)
 
 		parBlockSize := calculateParBlockSize(file.Size, p.articleSize)
 		par2FileName := filepath.Base(file.Path) + ".par2"
-		dirPath := filepath.Dir(file.Path)
+
+		// Use temp directory from config if set, otherwise use file's directory
+		var dirPath string
+		if p.cfg.TempDir != "" {
+			dirPath = p.cfg.TempDir
+			// Ensure temp directory exists
+			if err := os.MkdirAll(dirPath, 0755); err != nil {
+				slog.ErrorContext(ctx, "Failed to create temp directory", "path", dirPath, "error", err)
+				dirPath = filepath.Dir(file.Path) // fallback to original behavior
+			}
+		} else {
+			dirPath = filepath.Dir(file.Path)
+		}
 		par2Path := filepath.Join(dirPath, par2FileName)
 
 		// set parameters

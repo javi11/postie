@@ -3,9 +3,7 @@ import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import type { QueueItem } from "$lib/types";
 import { formatDate, formatFileSize, getStatusColor } from "$lib/utils";
-import * as App from "$lib/wailsjs/go/backend/App";
-import { SetQueueItemPriority } from "$lib/wailsjs/go/backend/App";
-import { EventsOn } from "$lib/wailsjs/runtime/runtime";
+import apiClient from "$lib/api/client";
 import {
 	Badge,
 	Button,
@@ -51,9 +49,12 @@ $: if (queueItems.length > 0 && currentPage > totalPages) {
 	currentPage = 1;
 }
 
-onMount(() => {
+onMount(async () => {
+	// Initialize API client
+	await apiClient.initialize();
+
 	// Listen for queue updates
-	EventsOn("queue-updated", () => {
+	await apiClient.on("queue-updated", () => {
 		loadQueue();
 	});
 
@@ -68,7 +69,7 @@ onMount(() => {
 
 async function loadQueue() {
 	try {
-		const items = await App.GetQueueItems();
+		const items = await apiClient.getQueueItems();
 		queueItems = items || [];
 	} catch (error) {
 		console.error("Failed to load queue:", error);
@@ -78,7 +79,7 @@ async function loadQueue() {
 
 async function removeFromQueue(id: string) {
 	try {
-		await App.RemoveFromQueue(id);
+		await apiClient.removeFromQueue(id);
 
 		queueItems = queueItems.filter((item) => item.id !== id);
 		// Immediately refresh the queue to ensure UI updates
@@ -98,7 +99,7 @@ async function removeFromQueue(id: string) {
 
 async function downloadNZB(id: string, fileName: string) {
 	try {
-		await App.DownloadNZB(id);
+		await apiClient.downloadNZB(id);
 	} catch (error) {
 		console.error("Failed to download NZB:", error);
 		toastStore.error(
@@ -110,7 +111,7 @@ async function downloadNZB(id: string, fileName: string) {
 
 async function retryJob(id: string) {
 	try {
-		await App.RetryJob(id);
+		await apiClient.retryJob(id);
 		await loadQueue();
 		toastStore.success($t("common.messages.item_retried"));
 	} catch (error) {
@@ -121,7 +122,7 @@ async function retryJob(id: string) {
 
 async function changePriority(id: string, newPriority: number) {
 	try {
-		await SetQueueItemPriority(id, newPriority);
+		await apiClient.setQueueItemPriority(id, newPriority);
 		await loadQueue();
 	} catch (error) {
 		console.error("Failed to update priority:", error);

@@ -4,7 +4,7 @@ import { loadTranslations, locale, t } from "$lib/i18n";
 import { availableLocales, setStoredLocale } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
-import * as App from "$lib/wailsjs/go/backend/App";
+import apiClient from "$lib/api/client";
 import {
 	Button,
 	Card,
@@ -59,11 +59,16 @@ async function changeLanguage(event: Event) {
 
 async function selectOutputDirectory() {
 	try {
-		const dir = await App.SelectOutputDirectory();
-		if (dir) {
-			config.output_dir = dir;
-			outputDirectory = dir;
+		// Check if we're in Wails environment
+		if (apiClient.environment === "wails") {
+			const { App } = await import("$lib/wailsjs/go/backend/App");
+			const dir = await App.SelectOutputDirectory();
+			if (dir) {
+				config.output_dir = dir;
+				outputDirectory = dir;
+			}
 		}
+		// In web mode, users can just type the path directly in the input field
 	} catch (error) {
 		console.error("Failed to select output directory:", error);
 	}
@@ -74,14 +79,14 @@ async function saveGeneralSettings() {
 		saving = true;
 
 		// Get the current config from the server to avoid conflicts
-		const currentConfig = await App.GetConfig();
+		const currentConfig = await apiClient.getConfig();
 
 		// Only update the general settings fields
 		currentConfig.output_dir = config.output_dir || "./output";
 		currentConfig.maintain_original_extension =
 			config.maintain_original_extension ?? true;
 
-		await App.SaveConfig(currentConfig);
+		await apiClient.saveConfig(currentConfig);
 
 		toastStore.success(
 			$t("settings.general.saved_success"),
@@ -124,17 +129,26 @@ $: selectedLanguage = $locale;
 							placeholder="./output"
 							class="flex-1"
 						/>
-						<Button
-							size="sm"
-							onclick={selectOutputDirectory}
-							class="cursor-pointer flex items-center gap-2"
-						>
-							<FolderOpenSolid class="w-4 h-4" />
-							{$t('settings.general.browse')}
-						</Button>
+						{#await apiClient.initialize() then}
+							{#if apiClient.environment === 'wails'}
+								<Button
+									size="sm"
+									onclick={selectOutputDirectory}
+									class="cursor-pointer flex items-center gap-2"
+								>
+									<FolderOpenSolid class="w-4 h-4" />
+									{$t('settings.general.browse')}
+								</Button>
+							{/if}
+						{/await}
 					</div>
 					<P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
 						{$t('settings.general.output_directory_description')}
+						{#await apiClient.initialize() then}
+							{#if apiClient.environment === 'web'}
+								<br /><span class="text-blue-600 dark:text-blue-400 text-xs">Enter the container path directly (e.g., /app/output)</span>
+							{/if}
+						{/await}
 					</P>
 				</div>
 

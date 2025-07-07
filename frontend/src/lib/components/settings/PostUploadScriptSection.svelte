@@ -2,7 +2,7 @@
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
-import * as App from "$lib/wailsjs/go/backend/App";
+import apiClient from "$lib/api/client";
 import {
 	Badge,
 	Button,
@@ -43,7 +43,7 @@ async function savePostUploadScriptSettings() {
 	try {
 		saving = true;
 
-		const currentConfig = await App.GetConfig();
+		const currentConfig = await apiClient.getConfig();
 
 		currentConfig.post_upload_script = {
 			enabled: config.post_upload_script.enabled,
@@ -51,7 +51,7 @@ async function savePostUploadScriptSettings() {
 			timeout: config.post_upload_script.timeout || "30s",
 		};
 
-		await App.SaveConfig(currentConfig);
+		await apiClient.saveConfig(currentConfig);
 
 		toastStore.success(
 			$t("settings.post_upload_script.saved_success"),

@@ -5,7 +5,7 @@ import { t } from "$lib/i18n";
 import { advancedMode } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
-import * as App from "$lib/wailsjs/go/backend/App";
+import apiClient from "$lib/api/client";
 import {
 	Button,
 	Card,
@@ -102,12 +102,19 @@ function updateCheckInterval(durationString: string) {
 
 onMount(async () => {
 	try {
-		watchDirectory = await App.GetWatchDirectory();
-		// Sync with config if it's not already set
-		if (!config.watcher.watch_directory && watchDirectory) {
-			config.watcher.watch_directory = watchDirectory;
-		} else if (config.watcher.watch_directory) {
-			watchDirectory = config.watcher.watch_directory;
+		// Check if we're in Wails environment
+		if (apiClient.environment === "wails") {
+			const { App } = await import("$lib/wailsjs/go/backend/App");
+			watchDirectory = await App.GetWatchDirectory();
+			// Sync with config if it's not already set
+			if (!config.watcher.watch_directory && watchDirectory) {
+				config.watcher.watch_directory = watchDirectory;
+			} else if (config.watcher.watch_directory) {
+				watchDirectory = config.watcher.watch_directory;
+			}
+		} else {
+			// In web mode, use the config value directly
+			watchDirectory = config.watcher.watch_directory || "";
 		}
 	} catch (error) {
 		console.error("Failed to get watch directory:", error);
@@ -116,11 +123,16 @@ onMount(async () => {
 
 async function selectWatchDirectory() {
 	try {
-		const dir = await App.SelectWatchDirectory();
-		if (dir) {
-			watchDirectory = dir;
-			config.watcher.watch_directory = dir;
+		// Check if we're in Wails environment
+		if (apiClient.environment === "wails") {
+			const { App } = await import("$lib/wailsjs/go/backend/App");
+			const dir = await App.SelectWatchDirectory();
+			if (dir) {
+				watchDirectory = dir;
+				config.watcher.watch_directory = dir;
+			}
 		}
+		// In web mode, users can just type the path directly in the input field
 	} catch (error) {
 		console.error("Failed to select directory:", error);
 	}
@@ -144,7 +156,7 @@ async function saveWatcherSettings() {
 		saving = true;
 
 		// Get the current config from the server to avoid conflicts
-		const currentConfig = await App.GetConfig();
+		const currentConfig = await apiClient.getConfig();
 
 		// Only update the watcher fields with proper type conversion
 		if (config.watcher) {
@@ -159,7 +171,7 @@ async function saveWatcherSettings() {
 			};
 		}
 
-		await App.SaveConfig(currentConfig);
+		await apiClient.saveConfig(currentConfig);
 
 		toastStore.success(
 			$t("settings.watcher.saved_success"),
@@ -222,23 +234,42 @@ async function saveWatcherSettings() {
               <div>
                 <Label class="mb-2">{$t('settings.watcher.watch_directory')}</Label>
                 <div class="flex items-center gap-2">
-                  <Input
-                    value={watchDirectory}
-                    readonly
-                    placeholder={$t('common.inputs.select_directory')}
-                    class="flex-1"
-                  />
-                  <Button
-                    size="sm"
-                    onclick={selectWatchDirectory}
-                    class="cursor-pointer flex items-center gap-2"
-                  >
-                    <FolderOpenSolid class="w-4 h-4" />
-                    {$t('common.inputs.browse')}
-                  </Button>
+                  {#await apiClient.initialize() then}
+                    {#if apiClient.environment === 'wails'}
+                      <Input
+                        value={watchDirectory}
+                        readonly
+                        placeholder={$t('common.inputs.select_directory')}
+                        class="flex-1"
+                      />
+                      <Button
+                        size="sm"
+                        onclick={selectWatchDirectory}
+                        class="cursor-pointer flex items-center gap-2"
+                      >
+                        <FolderOpenSolid class="w-4 h-4" />
+                        {$t('common.inputs.browse')}
+                      </Button>
+                    {:else}
+                      <Input
+                        bind:value={config.watcher.watch_directory}
+                        placeholder="/path/to/watch/directory"
+                        class="flex-1"
+                        oninput={() => {
+                          // Keep watchDirectory in sync for consistency
+                          watchDirectory = config.watcher.watch_directory;
+                        }}
+                      />
+                    {/if}
+                  {/await}
                 </div>
                 <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
                   {$t('settings.watcher.watch_directory_description')}
+                  {#await apiClient.initialize() then}
+                    {#if apiClient.environment === 'web'}
+                      <br /><span class="text-blue-600 dark:text-blue-400 text-xs">Enter the container path directly (e.g., /app/watch)</span>
+                    {/if}
+                  {/await}
                 </P>
               </div>
             </div>
