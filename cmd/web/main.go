@@ -20,8 +20,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-//go:embed all:frontend/build
-var assets embed.FS
+// For development, serve static files from disk
+// In production, these would be embedded
+var frontendBuildPath = "../../frontend/build"
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
@@ -235,13 +236,8 @@ func (ws *WebServer) setupRoutes() {
 	api.HandleFunc("/running-jobs", ws.handleGetRunningJobs).Methods("GET")
 	api.HandleFunc("/progress", ws.handleGetProgress).Methods("GET")
 
-	// Serve static files from embedded frontend (catch-all)
-	// Strip the embed prefix to serve files correctly
-	assetsFS, err := fs.Sub(assets, "frontend/build")
-	if err != nil {
-		log.Fatalf("Failed to create sub filesystem: %v", err)
-	}
-	ws.router.PathPrefix("/").Handler(http.FileServer(http.FS(assetsFS)))
+	// Serve static files from filesystem (catch-all)
+	ws.router.PathPrefix("/").Handler(http.StripPrefix("/", http.FileServer(http.Dir(frontendBuildPath))))
 }
 
 func (ws *WebServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
