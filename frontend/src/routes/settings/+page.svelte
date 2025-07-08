@@ -50,6 +50,7 @@ let criticalConfigError = false;
 let criticalConfigErrorMessage = "";
 let loading = false;
 let loadError = false;
+
 onMount(async () => {
 	await apiClient.initialize();
 	await loadConfig();

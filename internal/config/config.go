@@ -205,18 +205,6 @@ type QueueConfig struct {
 	DatabaseType string `yaml:"database_type" json:"database_type"`
 	// Database connection string or file path
 	DatabasePath string `yaml:"database_path" json:"database_path"`
-	// Maximum number of items to process in each batch
-	BatchSize int `yaml:"batch_size" json:"batch_size"`
-	// Maximum number of retry attempts for failed uploads
-	MaxRetries int `yaml:"max_retries" json:"max_retries"`
-	// Delay between retry attempts
-	RetryDelay time.Duration `yaml:"retry_delay" json:"retry_delay"`
-	// Maximum number of items to keep in queue (0 = unlimited)
-	MaxQueueSize int `yaml:"max_queue_size" json:"max_queue_size"`
-	// Auto-cleanup completed items after this duration (0 = keep forever)
-	CleanupAfter time.Duration `yaml:"cleanup_after" json:"cleanup_after"`
-	// Enable priority-based processing (larger files first)
-	PriorityProcessing bool `yaml:"priority_processing" json:"priority_processing"`
 	// Maximum concurrent uploads from queue
 	MaxConcurrentUploads int `yaml:"max_concurrent_uploads" json:"max_concurrent_uploads"`
 }
@@ -333,26 +321,6 @@ func Load(path string) (*ConfigData, error) {
 		cfg.Queue.DatabasePath = "./postie_queue.db"
 	}
 
-	if cfg.Queue.BatchSize <= 0 {
-		cfg.Queue.BatchSize = 10
-	}
-
-	if cfg.Queue.MaxRetries <= 0 {
-		cfg.Queue.MaxRetries = 3
-	}
-
-	if cfg.Queue.RetryDelay <= 0 {
-		cfg.Queue.RetryDelay = 5 * time.Minute
-	}
-
-	if cfg.Queue.MaxQueueSize <= 0 {
-		cfg.Queue.MaxQueueSize = 1000 // Default limit
-	}
-
-	if cfg.Queue.CleanupAfter <= 0 {
-		cfg.Queue.CleanupAfter = 24 * time.Hour // Clean up after 24 hours
-	}
-
 	if cfg.Queue.MaxConcurrentUploads <= 0 {
 		cfg.Queue.MaxConcurrentUploads = 1
 	}
@@ -424,14 +392,6 @@ func (c *ConfigData) validate() error {
 		// Valid database types
 	default:
 		return fmt.Errorf("invalid queue database type: %s (supported: sqlite, postgres, mysql)", c.Queue.DatabaseType)
-	}
-
-	if c.Queue.BatchSize <= 0 {
-		return fmt.Errorf("queue batch size must be positive")
-	}
-
-	if c.Queue.MaxRetries < 0 {
-		return fmt.Errorf("queue max retries cannot be negative")
 	}
 
 	if c.Queue.MaxConcurrentUploads <= 0 {
@@ -634,12 +594,6 @@ func GetDefaultConfig() ConfigData {
 		Queue: QueueConfig{
 			DatabaseType:         "sqlite",
 			DatabasePath:         "./postie_queue.db",
-			BatchSize:            10,
-			MaxRetries:           3,
-			RetryDelay:           5 * time.Minute,
-			MaxQueueSize:         1000,
-			CleanupAfter:         24 * time.Hour,
-			PriorityProcessing:   false,
 			MaxConcurrentUploads: 1,
 		},
 		OutputDir:                 "./output",

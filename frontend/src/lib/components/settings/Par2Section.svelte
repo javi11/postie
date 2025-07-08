@@ -225,13 +225,15 @@ $: volumeSizeDisplay = config.par2.volume_size
                   placeholder={$t('settings.par2.temp_dir_placeholder')}
                   class="flex-1"
                 />
-                <Button
-                  color="alternative"
-                  onclick={selectTempDirectory}
-                  class="cursor-pointer"
-                >
-                  {$t('settings.general.browse')}
-                </Button>
+                {#if apiClient.environment === 'wails'}
+                  <Button
+                    color="alternative"
+                    onclick={selectTempDirectory}
+                    class="cursor-pointer"
+                  >
+                    {$t('settings.general.browse')}
+                  </Button>
+                {/if}
               </div>
               <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
                 {$t('settings.par2.temp_dir_description')}
@@ -249,7 +251,8 @@ $: volumeSizeDisplay = config.par2.volume_size
             />
 
             <SizeInput
-              bind:value={config.par2.volume_size}
+              value={config.par2.volume_size}
+              onchange={(value) => config.par2.volume_size = value}
               label={$t('settings.par2.volume_size')}
               description={$t('settings.par2.volume_size_description')}
               presets={volumeSizePresets}

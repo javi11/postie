@@ -332,28 +332,12 @@
 		"database_path_description_network": "Chaîne de connexion pour la base de données",
 		"database_path_placeholder_sqlite": "./postie_queue.db",
 		"database_path_placeholder_network": "host=localhost user=postie dbname=postie",
-		"batch_size": "Taille de Lot",
-		"batch_size_description": "Nombre d'éléments à traiter dans chaque lot",
 		"max_concurrent_uploads": "Max. Téléchargements Concurrents",
 		"max_concurrent_uploads_description": "Nombre maximum de téléchargements simultanés depuis la file d'attente",
-		"max_retries": "Maximum de Tentatives",
-		"max_retries_description": "Nombre maximum de tentatives pour les téléchargements échoués",
-		"retry_delay": "Délai de Nouvelle Tentative",
-		"retry_delay_description": "Délai entre les tentatives (ex., 30s, 5m, 1h)",
-		"retry_delay_placeholder": "5m",
-		"max_queue_size": "Taille Maximale de File d'attente",
-		"max_queue_size_description": "Maximum d'éléments en file d'attente (0 = illimité)",
-		"cleanup_after": "Nettoyer Après",
-		"cleanup_after_description": "Auto-nettoyage des éléments terminés après la durée (0 = garder indéfiniment)",
-		"cleanup_after_placeholder": "24h",
-		"priority_processing": "Traitement Prioritaire",
-		"priority_processing_description": "Traiter les fichiers plus volumineux en premier pour optimiser l'efficacité de téléchargement",
 		"database_types": {
-			"sqlite": "SQLite - Base de données basée sur fichier",
-			"postgres": "PostgreSQL - Base de données réseau",
-			"mysql": "MySQL - Base de données réseau"
+			"sqlite": "SQLite - Base de données basée sur fichier"
 		},
-		"info": "<strong>File d'attente de Téléchargement :</strong> Gère les téléchargements de fichiers avec persistance, logique de nouvelle tentative et traitement concurrent. Utilisez SQLite pour les configurations simples ou PostgreSQL/MySQL pour les opérations à fort volume."
+		"info": "<strong>File d'attente de Téléchargement :</strong> Gère les téléchargements de fichiers avec persistance, logique de nouvelle tentative et traitement concurrent."
 	},
 	"server": {
 		"title": "Serveurs NNTP",

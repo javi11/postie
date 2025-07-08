@@ -332,28 +332,12 @@
 		"database_path_description_network": "Cadena de conexión para la base de datos",
 		"database_path_placeholder_sqlite": "./postie_queue.db",
 		"database_path_placeholder_network": "host=localhost user=postie dbname=postie",
-		"batch_size": "Tamaño de Lote",
-		"batch_size_description": "Número de elementos a procesar en cada lote",
 		"max_concurrent_uploads": "Máx. Cargas Concurrentes",
 		"max_concurrent_uploads_description": "Número máximo de cargas simultáneas desde la cola",
-		"max_retries": "Máximo de Reintentos",
-		"max_retries_description": "Máximo de intentos de reintento para cargas fallidas",
-		"retry_delay": "Retraso de Reintento",
-		"retry_delay_description": "Retraso entre intentos de reintento (ej., 30s, 5m, 1h)",
-		"retry_delay_placeholder": "5m",
-		"max_queue_size": "Tamaño Máximo de Cola",
-		"max_queue_size_description": "Máximo de elementos en cola (0 = ilimitado)",
-		"cleanup_after": "Limpiar Después",
-		"cleanup_after_description": "Auto-limpiar elementos completados después de la duración (0 = mantener para siempre)",
-		"cleanup_after_placeholder": "24h",
-		"priority_processing": "Procesamiento Prioritario",
-		"priority_processing_description": "Procesar archivos más grandes primero para optimizar la eficiencia de carga",
 		"database_types": {
-			"sqlite": "SQLite - Base de datos basada en archivo",
-			"postgres": "PostgreSQL - Base de datos de red",
-			"mysql": "MySQL - Base de datos de red"
+			"sqlite": "SQLite - Base de datos basada en archivo"
 		},
-		"info": "<strong>Cola de Carga:</strong> Gestiona las cargas de archivos con persistencia, lógica de reintento y procesamiento concurrente. Use SQLite para configuraciones simples o PostgreSQL/MySQL para operaciones de alto volumen."
+		"info": "<strong>Cola de Carga:</strong> Gestiona las cargas de archivos con persistencia, lógica de reintento y procesamiento concurrente."
 	},
 	"server": {
 		"title": "Servidores NNTP",

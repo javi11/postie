@@ -105,25 +105,6 @@ async function loadQueueStats() {
       {/if}
     </div>
 
-    <!-- Running -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm hover:shadow-md transition-all duration-200">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{$t('dashboard.stats.running')}</p>
-          <p class="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-1">{queueStats.running}</p>
-        </div>
-        <div class="p-3 rounded-full bg-blue-100 dark:bg-blue-900/20">
-          <PlaySolid class="w-6 h-6 text-blue-600 dark:text-blue-400" />
-        </div>
-      </div>
-      {#if queueStats.running > 0}
-        <div class="mt-3 flex items-center">
-          <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse mr-2"></div>
-          <span class="text-xs text-blue-600 dark:text-blue-400">{$t('dashboard.stats.queue_stats.currently_processing')}</span>
-        </div>
-      {/if}
-    </div>
-
     <!-- Complete -->
     <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm hover:shadow-md transition-all duration-200">
       <div class="flex items-center justify-between">
@@ -142,77 +123,24 @@ async function loadQueueStats() {
         </div>
       {/if}
     </div>
-  </div>
 
-  <!-- Error Section (only show if there are errors) -->
-  {#if queueStats.error > 0}
-    <div class="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-xl p-6">
+     <!-- Error Section -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm hover:shadow-md transition-all duration-200">
       <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="p-2 rounded-full bg-red-100 dark:bg-red-900/20">
-            <ExclamationCircleSolid class="w-5 h-5 text-red-600 dark:text-red-400" />
-          </div>
-          <div>
-            <p class="text-sm font-medium text-red-800 dark:text-red-200">{$t('dashboard.stats.queue_stats.errors_detected')}</p>
-            <p class="text-xs text-red-600 dark:text-red-400">{$t('dashboard.stats.queue_stats.failed_to_process')}</p>
-          </div>
+        <div>
+          <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{$t('dashboard.stats.errors')}</p>
+          <p class="text-2xl font-bold text-red-600 dark:text-red-400 mt-1">{queueStats.error}</p>
         </div>
-        <div class="text-right">
-          <p class="text-2xl font-bold text-red-600 dark:text-red-400">{queueStats.error}</p>
-          <p class="text-xs text-red-500 dark:text-red-500">{$t('dashboard.stats.queue_stats.failed_items')}</p>
+        <div class="p-3 rounded-full bg-red-100 dark:bg-red-900/20">
+          <ExclamationCircleSolid class="w-6 h-6 text-red-600 dark:text-red-400" />
         </div>
       </div>
+      {#if queueStats.error > 0}
+        <div class="mt-3 flex items-center">
+          <div class="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
+          <span class="text-xs text-red-600 dark:text-red-400">{$t('dashboard.stats.queue_stats.failed_to_process')}</span>
+        </div>
+      {/if}
     </div>
-  {/if}
-
-  <!-- Progress Overview -->
-  {#if queueStats.total > 0}
-    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 border border-blue-200 dark:border-blue-800 rounded-xl p-6">
-      <div class="flex items-center justify-between mb-4">
-        <div>
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{$t('dashboard.stats.queue_stats.queue_progress')}</h3>
-          <p class="text-sm text-gray-600 dark:text-gray-400">{$t('dashboard.stats.queue_stats.overall_completion')}</p>
-        </div>
-        <div class="text-right">
-          <p class="text-3xl font-bold text-blue-600 dark:text-blue-400">
-            {Math.round((queueStats.complete / queueStats.total) * 100)}%
-          </p>
-          <p class="text-sm text-gray-600 dark:text-gray-400">{$t('dashboard.stats.complete')}</p>
-        </div>
-      </div>
-      
-      <!-- Progress Bar -->
-      <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-4">
-        <div 
-          class="bg-gradient-to-r from-blue-500 to-indigo-600 h-3 rounded-full transition-all duration-500 ease-out"
-          style="width: {queueStats.total > 0 ? (queueStats.complete / queueStats.total) * 100 : 0}%"
-        ></div>
-      </div>
-
-      <!-- Summary Stats -->
-      <div class="grid grid-cols-3 gap-4 text-center">
-        <div>
-          <p class="text-xl font-bold text-gray-900 dark:text-white">{queueStats.complete}</p>
-          <p class="text-xs text-gray-600 dark:text-gray-400">{$t('dashboard.stats.completed')}</p>
-        </div>
-        <div>
-          <p class="text-xl font-bold text-amber-600 dark:text-amber-400">{queueStats.pending + queueStats.running}</p>
-          <p class="text-xs text-gray-600 dark:text-gray-400">{$t('dashboard.stats.in_progress')}</p>
-        </div>
-        <div>
-          <p class="text-xl font-bold text-red-600 dark:text-red-400">{queueStats.error}</p>
-          <p class="text-xs text-gray-600 dark:text-gray-400">{$t('dashboard.stats.failed')}</p>
-        </div>
-      </div>
-    </div>
-  {:else}
-    <!-- Empty State -->
-    <div class="text-center py-12">
-      <div class="w-16 h-16 mx-auto mb-4 p-4 rounded-full bg-gray-100 dark:bg-gray-800">
-        <RectangleListSolid class="w-8 h-8 text-gray-400 dark:text-gray-600" />
-      </div>
-      <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">{$t('dashboard.stats.queue_stats.no_items')}</h3>
-      <p class="text-gray-600 dark:text-gray-400">{$t('dashboard.stats.queue_stats.upload_files_prompt')}</p>
-    </div>
-  {/if}
+  </div>
 </div>

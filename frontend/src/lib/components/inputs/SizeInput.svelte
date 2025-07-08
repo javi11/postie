@@ -11,6 +11,7 @@ interface ComponentProps {
 	maxValue?: number;
 	id?: string;
 	showBytes?: boolean;
+	onchange?: (value: number) => void;
 }
 
 let {
@@ -20,9 +21,10 @@ let {
 	placeholder = "100",
 	presets = [],
 	minValue = 1,
-	maxValue = 10000,
+	maxValue = undefined,
 	id = "",
 	showBytes = false,
+	onchange,
 }: ComponentProps = $props();
 
 const sizeUnitOptions = [
@@ -32,7 +34,6 @@ const sizeUnitOptions = [
 
 let sizeValue = $state(100);
 let sizeUnit = $state("MB");
-let initialized = $state(false);
 
 // Helper functions for size conversion
 function bytesToUnit(bytes: number, unit: string): number {
@@ -57,39 +58,47 @@ function unitToBytes(val: number, unit: string): number {
 	}
 }
 
-// Initialize from value prop (only once to avoid cycles)
-$effect(() => {
-	if (!initialized && value !== undefined) {
-		if (value >= 1073741824 && value % 1073741824 === 0) {
-			sizeValue = value / 1073741824;
-			sizeUnit = "GB";
-		} else {
-			sizeValue = Math.round(value / 1048576);
-			sizeUnit = "MB";
-		}
-		initialized = true;
-	}
-});
-
 // Update maxValue based on unit
-let dynamicMaxValue = $derived(
-	sizeUnit === "GB" ? Math.ceil(maxValue / 1024) : maxValue,
+const dynamicMaxValue = $derived(
+	maxValue ? (sizeUnit === "GB" ? Math.ceil(maxValue / 1024) : maxValue) : undefined,
 );
-
-// Update value when user changes input
-$effect(() => {
-	if (sizeValue !== undefined && sizeUnit !== undefined && initialized) {
-		value = unitToBytes(sizeValue, sizeUnit);
-	}
-});
 
 function setPreset(presetValue: number, presetUnit: string) {
 	sizeValue = presetValue;
 	sizeUnit = presetUnit;
+	updateValue();
+}
+
+// Parse the bound value and sync with local state
+function parseAndSync() {
+	if (!value || typeof value !== "number") {
+		sizeValue = 100;
+		sizeUnit = "MB";
+		return;
+	}
+
+	if (value >= 1073741824 && value % 1073741824 === 0) {
+		sizeValue = value / 1073741824;
+		sizeUnit = "GB";
+	} else {
+		sizeValue = Math.round(value / 1048576);
+		sizeUnit = "MB";
+	}
+}
+
+// Sync local state when bound value changes
+$effect(() => {
+	parseAndSync();
+});
+
+// Update bound value when local state changes
+function updateValue() {
+	value = unitToBytes(sizeValue, sizeUnit);
+	onchange?.(value);
 }
 
 // Get byte display text
-let byteDisplay = $derived(
+const byteDisplay = $derived(
 	showBytes ? `(${value.toLocaleString()} bytes)` : "",
 );
 </script>
@@ -105,14 +114,16 @@ let byteDisplay = $derived(
 				type="number"
 				bind:value={sizeValue}
 				min={minValue}
-				max={dynamicMaxValue}
+				max={dynamicMaxValue || undefined}
 				{placeholder}
+				oninput={updateValue}
 			/>
 		</div>
 		<div class="w-20">
 			<Select
 				items={sizeUnitOptions}
 				bind:value={sizeUnit}
+				onchange={updateValue}
 			/>
 		</div>
 	</div>

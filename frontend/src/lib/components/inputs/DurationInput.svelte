@@ -11,6 +11,7 @@ interface ComponentProps {
 	minValue?: number;
 	maxValue?: number;
 	id?: string;
+	onchange?: (value: string) => void;
 }
 
 let {
@@ -22,6 +23,7 @@ let {
 	minValue = 1,
 	maxValue = 3600,
 	id = "",
+	onchange,
 }: ComponentProps = $props();
 
 const timeUnitOptions = [
@@ -61,6 +63,7 @@ $effect(() => {
 // Update bound value when local state changes
 function updateValue() {
 	value = `${numberValue}${unitValue}`;
+	onchange?.(value);
 }
 
 function setPreset(presetValue: number, presetUnit: string) {

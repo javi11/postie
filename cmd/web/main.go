@@ -193,8 +193,6 @@ func (ws *WebServer) setupRoutes() {
 	// Request logging middleware
 	ws.router.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			log.Printf("Request: %s %s", r.Method, r.URL.Path)
-
 			// CORS headers
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
@@ -240,9 +238,6 @@ func (ws *WebServer) setupRoutes() {
 }
 
 func (ws *WebServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	log.Printf("WebSocket request received from %s", r.RemoteAddr)
-	log.Printf("WebSocket headers: %+v", r.Header)
-
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("WebSocket upgrade error: %v", err)
@@ -378,8 +373,8 @@ func (ws *WebServer) handleUpload(w http.ResponseWriter, r *http.Request) {
 
 	// Emit initial upload progress
 	ws.wsHub.EmitEvent("upload-progress", map[string]interface{}{
-		"stage": "saving",
-		"progress": 0,
+		"stage":     "saving",
+		"progress":  0,
 		"fileCount": len(files),
 	})
 
@@ -420,17 +415,17 @@ func (ws *WebServer) handleUpload(w http.ResponseWriter, r *http.Request) {
 		// Emit progress for file saving
 		progress := float64(i+1) / float64(len(files)) * 50 // 50% for saving files
 		ws.wsHub.EmitEvent("upload-progress", map[string]interface{}{
-			"stage": "saving",
-			"progress": progress,
+			"stage":       "saving",
+			"progress":    progress,
 			"currentFile": fileHeader.Filename,
-			"fileCount": len(files),
+			"fileCount":   len(files),
 		})
 	}
 
 	// Emit progress for processing stage
 	ws.wsHub.EmitEvent("upload-progress", map[string]interface{}{
-		"stage": "processing",
-		"progress": 75,
+		"stage":     "processing",
+		"progress":  75,
 		"fileCount": len(files),
 	})
 
@@ -445,7 +440,7 @@ func (ws *WebServer) handleUpload(w http.ResponseWriter, r *http.Request) {
 	// Emit completion
 	ws.wsHub.EmitEvent("upload-complete", map[string]interface{}{
 		"fileCount": len(files),
-		"message": "Files successfully processed and added to queue",
+		"message":   "Files successfully processed and added to queue",
 	})
 
 	w.WriteHeader(http.StatusOK)

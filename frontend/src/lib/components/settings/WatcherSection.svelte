@@ -72,36 +72,52 @@ const minFileSizePresets = [
 	{ label: "100MB", value: 100, unit: "MB" },
 ];
 
+// Convert duration string to Go duration format (nanoseconds)
+function durationStringToNanos(durationStr: string): number {
+	const match = durationStr.match(/^(\d+)([smh])$/);
+	if (match) {
+		const value = Number.parseInt(match[1]);
+		const unit = match[2];
+		
+		let seconds = value;
+		if (unit === "m") seconds = value * 60;
+		if (unit === "h") seconds = value * 3600;
+		
+		return seconds * 1000000000; // Convert to nanoseconds
+	}
+	return 300000000000; // Default 5 minutes
+}
+
 // Convert nanoseconds to duration string for DurationInput
 function nanosToSeconds(nanos: number): number {
 	return Math.round(nanos / 1000000000);
 }
 
-function secondsToNanos(seconds: number): number {
-	return seconds * 1000000000;
-}
+function getCheckIntervalDuration(): string {
+	const totalSeconds = nanosToSeconds(
+		config.watcher.check_interval || 300000000000,
+	);
 
-// Convert check interval for display
-let checkIntervalSeconds: number;
-$: checkIntervalSeconds = nanosToSeconds(
-	config.watcher.check_interval || 300000000000,
-);
-
-// Convert duration string back to nanoseconds
-function updateCheckInterval(durationString: string) {
-	const match = durationString.match(/^(\d+)([smh])$/);
-	if (match) {
-		const value = Number.parseInt(match[1]);
-		const unit = match[2];
-		let seconds = value;
-		if (unit === "m") seconds = value * 60;
-		if (unit === "h") seconds = value * 3600;
-		config.watcher.check_interval = secondsToNanos(seconds);
+	if (totalSeconds >= 3600) {
+		return `${Math.round(totalSeconds / 3600)}h`;
 	}
+	if (totalSeconds >= 60) {
+		return `${Math.round(totalSeconds / 60)}m`;
+	}
+
+	return `${Math.round(totalSeconds)}s`;
 }
+
+function updateCheckIntervalFromDuration(durationStr: string) {
+	config.watcher.check_interval = durationStringToNanos(durationStr);
+}
+
+// Reactive duration value for DurationInput
+$: checkIntervalDuration = getCheckIntervalDuration();
 
 onMount(async () => {
 	try {
+		await apiClient.initialize();
 		// Check if we're in Wails environment
 		if (apiClient.environment === "wails") {
 			const { App } = await import("$lib/wailsjs/go/backend/App");
@@ -166,7 +182,7 @@ async function saveWatcherSettings() {
 				size_threshold:
 					Number.parseInt(config.watcher.size_threshold) || 104857600,
 				min_file_size: Number.parseInt(config.watcher.min_file_size) || 1048576,
-				check_interval: config.watcher.check_interval || "5m",
+				check_interval: config.watcher.check_interval || 300000000000,
 				delete_original_file: config.watcher.delete_original_file || false,
 			};
 		}
@@ -234,7 +250,6 @@ async function saveWatcherSettings() {
               <div>
                 <Label class="mb-2">{$t('settings.watcher.watch_directory')}</Label>
                 <div class="flex items-center gap-2">
-                  {#await apiClient.initialize() then}
                     {#if apiClient.environment === 'wails'}
                       <Input
                         value={watchDirectory}
@@ -261,115 +276,51 @@ async function saveWatcherSettings() {
                         }}
                       />
                     {/if}
-                  {/await}
                 </div>
                 <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
                   {$t('settings.watcher.watch_directory_description')}
-                  {#await apiClient.initialize() then}
                     {#if apiClient.environment === 'web'}
                       <br /><span class="text-blue-600 dark:text-blue-400 text-xs">Enter the container path directly (e.g., /app/watch)</span>
                     {/if}
-                  {/await}
                 </P>
               </div>
             </div>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Custom DurationInput for check interval since it needs nanosecond conversion -->
-            <div>
-              <Label for="check-interval" class="mb-2">{$t('settings.watcher.check_interval')}</Label>
-              <div class="flex gap-2">
-                <div class="flex-1">
-                  <Input
-                    id="check-interval"
-                    type="number"
-                    value={Math.round(checkIntervalSeconds >= 3600 ? checkIntervalSeconds / 3600 : checkIntervalSeconds >= 60 ? checkIntervalSeconds / 60 : checkIntervalSeconds)}
-                    min="1"
-                    max="3600"
-                    oninput={(e) => {
-                      const val = parseInt(e.target.value) || 5;
-                      const seconds = checkIntervalSeconds >= 3600 ? val * 3600 : checkIntervalSeconds >= 60 ? val * 60 : val;
-                      config.watcher.check_interval = secondsToNanos(seconds);
-                    }}
-                  />
-                </div>
-                <div class="w-24">
-                  <select
-                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
-                    value={checkIntervalSeconds >= 3600 ? 'h' : checkIntervalSeconds >= 60 ? 'm' : 's'}
-                    onchange={(e) => {
-                      const currentVal = Math.round(checkIntervalSeconds >= 3600 ? checkIntervalSeconds / 3600 : checkIntervalSeconds >= 60 ? checkIntervalSeconds / 60 : checkIntervalSeconds);
-                      const unit = e.target.value;
-                      let seconds = currentVal;
-                      if (unit === 'm') seconds = currentVal * 60;
-                      if (unit === 'h') seconds = currentVal * 3600;
-                      config.watcher.check_interval = secondsToNanos(seconds);
-                    }}
-                  >
-                    <option value="s">{$t('common.inputs.time_units.seconds')}</option>
-                    <option value="m">{$t('common.inputs.time_units.minutes')}</option>
-                    <option value="h">{$t('common.inputs.time_units.hours')}</option>
-                  </select>
-                </div>
-              </div>
-              <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                {$t('settings.watcher.check_interval_description')}
-              </P>
-              <div class="mt-2 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  class="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                  onclick={() => { config.watcher.check_interval = secondsToNanos(30); }}
-                >
-                  30s
-                </button>
-                <button
-                  type="button"
-                  class="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                  onclick={() => { config.watcher.check_interval = secondsToNanos(120); }}
-                >
-                  2m
-                </button>
-                <button
-                  type="button"
-                  class="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                  onclick={() => { config.watcher.check_interval = secondsToNanos(300); }}
-                >
-                  5m
-                </button>
-                <button
-                  type="button"
-                  class="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                  onclick={() => { config.watcher.check_interval = secondsToNanos(600); }}
-                >
-                  10m
-                </button>
-              </div>
-            </div>
+            <DurationInput
+              value={checkIntervalDuration}
+              label={$t('settings.watcher.check_interval')}
+              description={$t('settings.watcher.check_interval_description')}
+              presets={checkIntervalPresets}
+              minValue={1}
+              maxValue={3600}
+              id="check-interval"
+              onchange={(newValue) => updateCheckIntervalFromDuration(newValue)}
+            />
 
             <SizeInput
-              bind:value={config.watcher.size_threshold}
+              value={config.watcher.size_threshold}
+              onchange={(value) => config.watcher.size_threshold = value}
               label={$t('settings.watcher.size_threshold')}
               description={$t('settings.watcher.size_threshold_description')}
               presets={sizeThresholdPresets}
               minValue={1}
-              maxValue={10000}
               id="size-threshold"
             />
 
             <SizeInput
-              bind:value={config.watcher.min_file_size}
+              value={config.watcher.min_file_size}
+              onchange={(value) => config.watcher.min_file_size = value}
               label={$t('settings.watcher.min_file_size')}
               description={$t('settings.watcher.min_file_size_description')}
               presets={minFileSizePresets}
               minValue={0}
-              maxValue={1000}
               id="min-file-size"
             />
           </div>
 
-{#if $advancedMode}
+      {#if $advancedMode}
           <div class="space-y-4">
             <div>
               <Heading
@@ -397,7 +348,7 @@ async function saveWatcherSettings() {
               </div>
             </div>
           </div>
-{/if}
+      {/if}
 
           <div class="space-y-4">
             <div>
@@ -431,7 +382,7 @@ async function saveWatcherSettings() {
               </div>
             </div>
 
-{#if $advancedMode}
+          {#if $advancedMode}
             <div class="space-y-4">
               <div class="flex items-center justify-between">
                 <div>
@@ -486,7 +437,7 @@ async function saveWatcherSettings() {
                 </P>
               </div>
             </div>
-{/if}
+          {/if}
           </div>
         </div>
       {/if}

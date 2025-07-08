@@ -19,12 +19,6 @@ if (!config.queue) {
 	config.queue = {
 		database_type: "sqlite",
 		database_path: "./postie_queue.db",
-		batch_size: 10,
-		max_retries: 3,
-		retry_delay: "5m",
-		max_queue_size: 1000,
-		cleanup_after: "24h",
-		priority_processing: false,
 		max_concurrent_uploads: 3,
 	};
 }
@@ -32,8 +26,6 @@ if (!config.queue) {
 // Create reactive array for database types dropdown
 $: databaseTypes = [
 	{ value: "sqlite", name: $t("settings.queue.database_types.sqlite") },
-	{ value: "postgres", name: $t("settings.queue.database_types.postgres") },
-	{ value: "mysql", name: $t("settings.queue.database_types.mysql") },
 ];
 </script>
 
@@ -82,20 +74,6 @@ $: databaseTypes = [
         </div>
 
         <div>
-          <Label for="batch-size" class="mb-2">{$t('settings.queue.batch_size')}</Label>
-          <Input
-            id="batch-size"
-            type="number"
-            bind:value={config.queue.batch_size}
-            min="1"
-            max="100"
-          />
-          <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            {$t('settings.queue.batch_size_description')}
-          </P>
-        </div>
-
-        <div>
           <Label for="max-concurrent" class="mb-2">{$t('settings.queue.max_concurrent_uploads')}</Label>
           <Input
             id="max-concurrent"
@@ -108,67 +86,6 @@ $: databaseTypes = [
             {$t('settings.queue.max_concurrent_uploads_description')}
           </P>
         </div>
-
-        <div>
-          <Label for="queue-max-retries" class="mb-2">{$t('settings.queue.max_retries')}</Label>
-          <Input
-            id="queue-max-retries"
-            type="number"
-            bind:value={config.queue.max_retries}
-            min="0"
-            max="10"
-          />
-          <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            {$t('settings.queue.max_retries_description')}
-          </P>
-        </div>
-
-        <div>
-          <Label for="queue-retry-delay" class="mb-2">{$t('settings.queue.retry_delay')}</Label>
-          <Input
-            id="queue-retry-delay"
-            bind:value={config.queue.retry_delay}
-            placeholder={$t('settings.queue.retry_delay_placeholder')}
-          />
-          <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            {$t('settings.queue.retry_delay_description')}
-          </P>
-        </div>
-
-        <div>
-          <Label for="max-queue-size" class="mb-2">{$t('settings.queue.max_queue_size')}</Label>
-          <Input
-            id="max-queue-size"
-            type="number"
-            bind:value={config.queue.max_queue_size}
-            min="0"
-          />
-          <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            {$t('settings.queue.max_queue_size_description')}
-          </P>
-        </div>
-
-        <div>
-          <Label for="cleanup-after" class="mb-2">{$t('settings.queue.cleanup_after')}</Label>
-          <Input
-            id="cleanup-after"
-            bind:value={config.queue.cleanup_after}
-            placeholder={$t('settings.queue.cleanup_after_placeholder')}
-          />
-          <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            {$t('settings.queue.cleanup_after_description')}
-          </P>
-        </div>
-      </div>
-
-      <div class="space-y-3">
-        <div class="flex items-center gap-3">
-          <Checkbox bind:checked={config.queue.priority_processing} />
-          <Label class="text-sm font-medium">{$t('settings.queue.priority_processing')}</Label>
-        </div>
-        <P class="text-sm text-gray-600 dark:text-gray-400 ml-6">
-          {$t('settings.queue.priority_processing_description')}
-        </P>
       </div>
     </div>
 

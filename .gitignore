@@ -22,3 +22,6 @@ frontend/build
 !build/windows/icon.ico
 postie-web
 postie-cli
+
+# ClaudPoint checkpoint system
+.checkpoints/

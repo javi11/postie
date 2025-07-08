@@ -27,6 +27,8 @@ import {
 	PlaySolid,
 	TrashBinSolid,
 	XSolid,
+	RectangleListSolid,
+	ListOutline,
 } from "flowbite-svelte-icons";
 import { onMount } from "svelte";
 
@@ -159,21 +161,18 @@ function changeItemsPerPage(event: Event) {
 }
 </script>
 
-<Card
-  class="max-w-full p-5 backdrop-blur-sm bg-white/60 dark:bg-gray-800/60 border border-gray-200/60 dark:border-gray-700/60 shadow-lg shadow-gray-900/5 dark:shadow-gray-900/20"
->
-  <div class="space-y-6">
-    <div class="flex items-center justify-between">
-      <Heading
-        tag="h2"
-        class="text-xl font-semibold text-gray-900 dark:text-white"
-      >
+<div class="space-y-6">
+  <!-- Header -->
+  <div class="flex items-center gap-3 mb-6">
+    <div class="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600">
+      <ListOutline class="w-6 h-6 text-white" />
+    </div>
+    <div class="flex-1">
+      <Heading tag="h2" class="text-xl font-semibold text-gray-900 dark:text-white">
         {$t("dashboard.queue.title")}
       </Heading>
-      <div class="flex items-center gap-3">
-        <div
-          class="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-full border border-blue-200 dark:border-blue-800"
-        >
+      <div class="flex items-center gap-3 mt-1">
+        <div class="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-full border border-blue-200 dark:border-blue-800">
           <span class="text-sm font-medium text-blue-800 dark:text-blue-200">
             {queueItems.length} {$t("dashboard.queue.items")}
           </span>
@@ -198,37 +197,23 @@ function changeItemsPerPage(event: Event) {
         {/if}
       </div>
     </div>
+  </div>
 
-    {#if queueItems.length === 0}
-      <div class="text-center py-16">
-        <div
-          class="w-20 h-20 mx-auto mb-6 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center"
-        >
-          <svg
-            class="w-10 h-10 text-gray-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-            ></path>
-          </svg>
-        </div>
-        <P class="text-gray-600 dark:text-gray-400 text-lg mb-2 font-medium">
-          {$t("dashboard.queue.no_items")}
-        </P>
-        <P class="text-gray-500 dark:text-gray-500 text-sm">
-          {$t("dashboard.queue.no_items_description")}
-        </P>
+  {#if queueItems.length === 0}
+    <!-- Empty State -->
+    <div class="text-center py-12">
+      <div class="w-16 h-16 mx-auto mb-4 p-4 rounded-full bg-gray-100 dark:bg-gray-800">
+        <RectangleListSolid class="w-8 h-8 text-gray-400 dark:text-gray-600" />
       </div>
-    {:else}
-      <div
-        class="bg-white/40 dark:bg-gray-800/40 rounded-lg border border-gray-200/40 dark:border-gray-700/40 overflow-hidden"
-      >
+      <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+        {$t("dashboard.queue.no_items")}
+      </h3>
+      <p class="text-gray-600 dark:text-gray-400">
+        {$t("dashboard.queue.no_items_description")}
+      </p>
+    </div>
+  {:else}
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
         <div class="overflow-x-auto">
           <Table hoverable={true} striped={true} class="table-auto">
             <TableHead>
@@ -329,6 +314,7 @@ function changeItemsPerPage(event: Event) {
                       {#if item.status === "complete"}
                         <Button
                           size="xs"
+                          class="cursor-pointer"
                           color="blue"
                           onclick={() => downloadNZB(item.id, item.fileName)}
                           title={$t("dashboard.queue.download_nzb")}
@@ -367,7 +353,7 @@ function changeItemsPerPage(event: Event) {
 
         <!-- Pagination Controls -->
         {#if totalPages > 1}
-          <div class="px-6 py-4 bg-gray-50/80 dark:bg-gray-700/80 border-t border-gray-200/40 dark:border-gray-600/40">
+        <div class="px-6 py-4 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-600">
             <div class="flex items-center justify-between">
               <div class="text-sm text-gray-700 dark:text-gray-300">
                 {$t("dashboard.queue.showing")} {startItem} {$t("dashboard.queue.to")} {endItem} {$t("dashboard.queue.of")} {queueItems.length} {$t("dashboard.queue.entries")}
@@ -379,7 +365,7 @@ function changeItemsPerPage(event: Event) {
                   color="light"
                   disabled={currentPage === 1}
                   onclick={() => goToPage(currentPage - 1)}
-                  class="flex items-center gap-1"
+                  class="flex items-center gap-1 cursor-pointer"
                 >
                   <ChevronDoubleLeftOutline class="w-4 h-4" />
                   {$t("dashboard.queue.previous")}
@@ -396,7 +382,7 @@ function changeItemsPerPage(event: Event) {
                       size="sm"
                       color={currentPage === page ? "blue" : "light"}
                       onclick={() => goToPage(page)}
-                      class="w-8 h-8 p-0 flex items-center justify-center"
+                      class="w-8 h-8 p-0 flex items-center justify-center cursor-pointer"
                     >
                       {page}
                     </Button>
@@ -408,7 +394,7 @@ function changeItemsPerPage(event: Event) {
                       size="sm"
                       color="light"
                       onclick={() => goToPage(totalPages)}
-                      class="w-8 h-8 p-0 flex items-center justify-center"
+                      class="w-8 h-8 p-0 flex items-center justify-center cursor-pointer"
                     >
                       {totalPages}
                     </Button>
@@ -420,7 +406,7 @@ function changeItemsPerPage(event: Event) {
                   color="light"
                   disabled={currentPage === totalPages}
                   onclick={() => goToPage(currentPage + 1)}
-                  class="flex items-center gap-1"
+                  class="flex items-center gap-1 cursor-pointer"
                 >
                   {$t("dashboard.queue.next")}
                   <ChevronDoubleRightOutline class="w-4 h-4" />
@@ -429,7 +415,6 @@ function changeItemsPerPage(event: Event) {
             </div>
           </div>
         {/if}
-      </div>
-    {/if}
-  </div>
-</Card>
+    </div>
+  {/if}
+</div>

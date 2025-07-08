@@ -288,28 +288,12 @@
 		"database_path_description_network": "Connection string for database",
 		"database_path_placeholder_sqlite": "./postie_queue.db",
 		"database_path_placeholder_network": "host=localhost user=postie dbname=postie",
-		"batch_size": "Batch Size",
-		"batch_size_description": "Number of items to process in each batch",
 		"max_concurrent_uploads": "Max Concurrent Uploads",
 		"max_concurrent_uploads_description": "Maximum number of simultaneous uploads from queue",
-		"max_retries": "Max Retries",
-		"max_retries_description": "Maximum retry attempts for failed uploads",
-		"retry_delay": "Retry Delay",
-		"retry_delay_description": "Delay between retry attempts (e.g., 30s, 5m, 1h)",
-		"retry_delay_placeholder": "5m",
-		"max_queue_size": "Max Queue Size",
-		"max_queue_size_description": "Maximum items in queue (0 = unlimited)",
-		"cleanup_after": "Cleanup After",
-		"cleanup_after_description": "Auto-cleanup completed items after duration (0 = keep forever)",
-		"cleanup_after_placeholder": "24h",
-		"priority_processing": "Priority Processing",
-		"priority_processing_description": "Process larger files first to optimize upload efficiency",
 		"database_types": {
-			"sqlite": "SQLite - File-based database",
-			"postgres": "PostgreSQL - Network database",
-			"mysql": "MySQL - Network database"
+			"sqlite": "SQLite - File-based database"
 		},
-		"info": "<strong>Upload Queue:</strong> Manages file uploads with persistence, retry logic, and concurrent processing. Use SQLite for simple setups or PostgreSQL/MySQL for high-volume operations."
+		"info": "<strong>Upload Queue:</strong> Manages file uploads with persistence, retry logic, and concurrent processing."
 	},
 	"server": {
 		"title": "NNTP Servers",
