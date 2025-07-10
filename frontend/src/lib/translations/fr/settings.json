@@ -1,6 +1,7 @@
 {
 	"title": "Paramètres",
 	"no_configuration_available": "Aucune configuration disponible",
+	"retry": "Réessayer",
 	"tabs": {
 		"core_configuration": "Configuration de Base",
 		"upload_settings": "Paramètres de Téléchargement",
@@ -346,6 +347,7 @@
 		"no_servers_title": "Aucun serveur configuré",
 		"no_servers_description": "Ajoutez au moins un serveur NNTP pour commencer à télécharger.",
 		"server_number": "Serveur {{number}}",
+		"enabled": "Activé",
 		"remove": "Supprimer",
 		"host": "Hôte",
 		"host_required": "Hôte *",

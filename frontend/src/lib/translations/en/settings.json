@@ -1,6 +1,7 @@
 {
 	"title": "Settings",
 	"no_configuration_available": "No configuration available",
+	"retry": "Retry",
 	"tabs": {
 		"core_configuration": "Core Configuration",
 		"upload_settings": "Upload Settings",
@@ -302,6 +303,7 @@
 		"no_servers_title": "No servers configured",
 		"no_servers_description": "Add at least one NNTP server to start uploading.",
 		"server_number": "Server {{number}}",
+		"enabled": "Enabled",
 		"remove": "Remove",
 		"host": "Host",
 		"host_required": "Host *",

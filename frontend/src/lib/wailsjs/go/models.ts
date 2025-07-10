@@ -121,12 +121,6 @@ export namespace config {
 	export class QueueConfig {
 	    database_type: string;
 	    database_path: string;
-	    batch_size: number;
-	    max_retries: number;
-	    retry_delay: number;
-	    max_queue_size: number;
-	    cleanup_after: number;
-	    priority_processing: boolean;
 	    max_concurrent_uploads: number;
 	
 	    static createFrom(source: any = {}) {
@@ -137,12 +131,6 @@ export namespace config {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.database_type = source["database_type"];
 	        this.database_path = source["database_path"];
-	        this.batch_size = source["batch_size"];
-	        this.max_retries = source["max_retries"];
-	        this.retry_delay = source["retry_delay"];
-	        this.max_queue_size = source["max_queue_size"];
-	        this.cleanup_after = source["cleanup_after"];
-	        this.priority_processing = source["priority_processing"];
 	        this.max_concurrent_uploads = source["max_concurrent_uploads"];
 	    }
 	}
@@ -227,6 +215,7 @@ export namespace config {
 	    volume_size: number;
 	    max_input_slices: number;
 	    extra_par2_options: string[];
+	    temp_dir: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Par2Config(source);
@@ -240,6 +229,7 @@ export namespace config {
 	        this.volume_size = source["volume_size"];
 	        this.max_input_slices = source["max_input_slices"];
 	        this.extra_par2_options = source["extra_par2_options"];
+	        this.temp_dir = source["temp_dir"];
 	    }
 	}
 	export class PostCheck {

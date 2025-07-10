@@ -115,7 +115,7 @@ func (a *App) UploadFiles() error {
 			IsRunning:           true,
 			CompletedFiles:      0,
 			Percentage:          0.0,
-			CurrentFile:         stringPtr("Starting upload..."),
+			CurrentFile:         stringPtr("Adding files to queue..."),
 			TotalFiles:          intPtr(len(fileInfos)),
 			TotalBytes:          int64Ptr(totalBytes),
 			TransferredBytes:    int64Ptr(0),
@@ -153,7 +153,7 @@ func (a *App) UploadFiles() error {
 			a.updateProgress(ProgressUpdate{
 				CurrentFile:         stringPtr(fileName),
 				CompletedFiles:      i,
-				Stage:               "Preparing",
+				Stage:               "Adding to queue",
 				IsRunning:           true,
 				TransferredBytes:    int64Ptr(transferredBytes),
 				CurrentFileBytes:    int64Ptr(0),
@@ -162,59 +162,48 @@ func (a *App) UploadFiles() error {
 				ElapsedTime:         float64Ptr(0.0),
 			})
 
-			if a.postie != nil {
-				if err := a.postie.Post(a.uploadCtx, []fileinfo.FileInfo{f}, filepath.Dir(f.Path), "."); err != nil {
-					if a.uploadCtx.Err() != nil {
-						a.updateProgress(ProgressUpdate{
-							CurrentFile:    stringPtr("Upload cancelled"),
-							CompletedFiles: i,
-							Stage:          "Cancelled",
-							IsRunning:      false,
-						})
-						return
-					}
-					slog.Error("Error during upload", "error", err, "file", f.Path)
+			// Add file to queue instead of processing directly
+			if err := a.queue.AddFile(a.uploadCtx, f.Path, int64(f.Size)); err != nil {
+				if a.uploadCtx.Err() != nil {
 					a.updateProgress(ProgressUpdate{
-						CurrentFile:    stringPtr(fileName),
+						CurrentFile:    stringPtr("Upload cancelled"),
 						CompletedFiles: i,
-						Stage:          fmt.Sprintf("Error: %v", err),
+						Stage:          "Cancelled",
 						IsRunning:      false,
 					})
 					return
 				}
-				// File completed, add its size to transferred bytes
-				transferredBytes += currentFileSize
-
-				// Update progress for completed file
-				var percentage float64
-				if len(fileInfos) > 0 {
-					percentage = float64(i+1) / float64(len(fileInfos)) * 100
-				}
-				a.updateProgress(ProgressUpdate{
-					CompletedFiles:      i + 1,
-					TransferredBytes:    int64Ptr(transferredBytes),
-					CurrentFileProgress: float64Ptr(100.0),
-					CurrentFileBytes:    int64Ptr(currentFileSize),
-					Percentage:          percentage,
-				})
-			} else {
-				// This should not happen as we check configuration before starting upload
-				slog.Error("No postie instance available - configuration error")
+				slog.Error("Error adding file to queue", "error", err, "file", f.Path)
 				a.updateProgress(ProgressUpdate{
 					CurrentFile:    stringPtr(fileName),
 					CompletedFiles: i,
-					Stage:          "Configuration error: No postie instance available",
+					Stage:          fmt.Sprintf("Error: %v", err),
 					IsRunning:      false,
 				})
 				return
 			}
+
+			// File added to queue, add its size to transferred bytes
+			transferredBytes += currentFileSize
+
+			// Update progress for completed file
+			if len(fileInfos) > 0 {
+				percentage = float64(i+1) / float64(len(fileInfos)) * 100
+			}
+			a.updateProgress(ProgressUpdate{
+				CompletedFiles:      i + 1,
+				TransferredBytes:    int64Ptr(transferredBytes),
+				CurrentFileProgress: float64Ptr(100.0),
+				CurrentFileBytes:    int64Ptr(currentFileSize),
+				Percentage:          percentage,
+			})
 		}
 
 		if len(fileInfos) > 0 {
 			a.updateProgress(ProgressUpdate{
-				CurrentFile:      stringPtr("All files completed"),
+				CurrentFile:      stringPtr("All files added to queue"),
 				CompletedFiles:   len(fileInfos),
-				Stage:            "Finished",
+				Stage:            "Queued",
 				IsRunning:        false,
 				Percentage:       100.0,
 				TransferredBytes: int64Ptr(transferredBytes),

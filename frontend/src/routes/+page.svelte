@@ -74,7 +74,7 @@ onMount(async () => {
 	await apiClient.on("progress", (data) => {
 		progress.update((jobs) => {
 			// For direct uploads without jobID, use a default key
-			const jobKey = data.jobID || "direct-upload";
+			const jobKey = data.jobID;
 
 			// Remove job if not running (completed, cancelled, or error)
 			if (!data.isRunning) {

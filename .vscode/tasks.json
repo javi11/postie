@@ -39,23 +39,22 @@
 			"command": "go",
 			"args": ["run", "cmd/web/main.go", "-p", "8080"],
 			"group": "build",
-			"presentation": {
-				"echo": true,
-				"reveal": "always",
-				"focus": false,
-				"panel": "new",
-				"showReuseMessage": true,
-				"clear": false
-			},
 			"isBackground": true,
-			"problemMatcher": {
+			"problemMatcher": [{
 				"owner": "go-web-server",
+				"pattern": [{
+					"regexp": "^(.+):(\\d+):(\\d+):\\s+(.+)$",
+					"file": 1,
+					"line": 2,
+					"column": 3,
+					"message": 4
+				}],
 				"background": {
 					"activeOnStart": true,
 					"beginsPattern": "^.*Starting.*server.*$|^.*Listening.*$",
 					"endsPattern": "^.*Server.*started.*$|^.*Listening.*on.*$|^.*server.*running.*$"
 				}
-			},
+			}],
 			"runOptions": {
 				"instanceLimit": 1
 			}

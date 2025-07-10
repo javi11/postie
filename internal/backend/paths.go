@@ -15,32 +15,55 @@ type AppPaths struct {
 	Log      string
 }
 
+// isRunningInDocker checks if the application is running inside a Docker container
+func isRunningInDocker() bool {
+	// Check for .dockerenv file
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return true
+	}
+	
+	// Check for docker in cgroup
+	if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
+		if len(data) > 0 && (filepath.Base(string(data)) == "docker" || filepath.Base(string(data)) == "containerd") {
+			return true
+		}
+	}
+	
+	return false
+}
+
 // GetAppPaths returns the appropriate paths for the current operating system
 func GetAppPaths() (*AppPaths, error) {
 	var configDir, dataDir string
 	var err error
 
-	switch runtime.GOOS {
-	case "darwin": // macOS
-		configDir, err = getMacOSConfigDir()
-		if err != nil {
-			return nil, err
-		}
-		dataDir = configDir // On macOS, we use the same directory for both config and data
-	case "windows":
-		configDir, err = getWindowsConfigDir()
-		if err != nil {
-			return nil, err
-		}
-		dataDir = configDir // On Windows, we use the same directory for both config and data
-	default: // Linux and other Unix-like systems
-		configDir, err = getLinuxConfigDir()
-		if err != nil {
-			return nil, err
-		}
-		dataDir, err = getLinuxDataDir()
-		if err != nil {
-			return nil, err
+	// Check if running in Docker first
+	if isRunningInDocker() {
+		configDir = "/config"
+		dataDir = "/config"
+	} else {
+		switch runtime.GOOS {
+		case "darwin": // macOS
+			configDir, err = getMacOSConfigDir()
+			if err != nil {
+				return nil, err
+			}
+			dataDir = configDir // On macOS, we use the same directory for both config and data
+		case "windows":
+			configDir, err = getWindowsConfigDir()
+			if err != nil {
+				return nil, err
+			}
+			dataDir = configDir // On Windows, we use the same directory for both config and data
+		default: // Linux and other Unix-like systems
+			configDir, err = getLinuxConfigDir()
+			if err != nil {
+				return nil, err
+			}
+			dataDir, err = getLinuxDataDir()
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 

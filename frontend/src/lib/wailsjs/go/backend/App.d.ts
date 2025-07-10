@@ -69,6 +69,10 @@ export function SelectWatchDirectory():Promise<string>;
 
 export function SetQueueItemPriority(arg1:string,arg2:number):Promise<void>;
 
+export function SetWebEventEmitter(arg1:any):Promise<void>;
+
+export function SetWebMode(arg1:boolean):Promise<void>;
+
 export function Startup(arg1:context.Context):Promise<void>;
 
 export function UploadFiles():Promise<void>;

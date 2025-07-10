@@ -128,6 +128,7 @@ type ServerConfig struct {
 	MaxConnectionIdleTimeInSeconds int    `yaml:"max_connection_idle_time_in_seconds" json:"max_connection_idle_time_in_seconds"`
 	MaxConnectionTTLInSeconds      int    `yaml:"max_connection_ttl_in_seconds" json:"max_connection_ttl_in_seconds"`
 	InsecureSSL                    bool   `yaml:"insecure_ssl" json:"insecure_ssl"`
+	Enabled                        *bool  `yaml:"enabled" json:"enabled"`
 }
 
 type PostHeaders struct {
@@ -330,6 +331,13 @@ func Load(path string) (*ConfigData, error) {
 		cfg.MaintainOriginalExtension = &enabled
 	}
 
+	// Set default enabled state for servers
+	for i := range cfg.Servers {
+		if cfg.Servers[i].Enabled == nil {
+			cfg.Servers[i].Enabled = &enabled
+		}
+	}
+
 	// Validate configuration
 	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
@@ -338,7 +346,9 @@ func Load(path string) (*ConfigData, error) {
 	maxWorkers := 0
 
 	for _, s := range cfg.Servers {
-		maxWorkers += s.MaxConnections
+		if s.Enabled == nil || *s.Enabled {
+			maxWorkers += s.MaxConnections
+		}
 	}
 
 	cfg.Posting.MaxWorkers = maxWorkers
@@ -403,8 +413,16 @@ func (c *ConfigData) validate() error {
 
 // GetNNTPPool returns the NNTP connection pool
 func (c *ConfigData) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
-	providers := make([]nntppool.UsenetProviderConfig, len(c.Servers))
-	for i, s := range c.Servers {
+	// Filter enabled servers
+	var enabledServers []ServerConfig
+	for _, s := range c.Servers {
+		if s.Enabled == nil || *s.Enabled {
+			enabledServers = append(enabledServers, s)
+		}
+	}
+
+	providers := make([]nntppool.UsenetProviderConfig, len(enabledServers))
+	for i, s := range enabledServers {
 		maxConnections := s.MaxConnections
 		if maxConnections <= 0 {
 			maxConnections = 10 // default value if not specified

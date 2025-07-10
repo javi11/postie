@@ -2,7 +2,6 @@
 import { goto } from "$app/navigation";
 import { page } from "$app/stores";
 import logo from "$lib/assets/images/logo.png";
-import EnvironmentBadge from "$lib/components/EnvironmentBadge.svelte";
 import ToastContainer from "$lib/components/ToastContainer.svelte";
 import { t } from "$lib/i18n";
 import { appStatus, settingsSaveFunction } from "$lib/stores/app";
@@ -139,7 +138,6 @@ async function loadAppStatus() {
 							<h1 class="text-xl font-bold text-gray-900 dark:text-white">
 								Postie
 							</h1>
-							<EnvironmentBadge />
 						</div>
 						<p class="text-xs text-gray-500 dark:text-gray-400">
 							Upload Manager

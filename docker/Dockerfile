@@ -1,14 +1,11 @@
 # Multi-stage build for Postie Web
-FROM node:20-alpine AS frontend-builder
+FROM oven/bun AS frontend-builder
 
 # Set working directory for frontend
 WORKDIR /app/frontend
 
 # Copy frontend package files
 COPY frontend/package.json frontend/bun.lock* ./
-
-# Install Bun
-RUN npm install -g bun
 
 # Install dependencies
 RUN bun install
@@ -23,7 +20,7 @@ RUN bun run build
 FROM golang:1.24-alpine AS backend-builder
 
 # Install build dependencies
-RUN apk add --no-cache git gcc musl-dev sqlite-dev
+RUN apk add --no-cache git gcc g++ musl-dev libstdc++ sqlite-dev
 
 # Set working directory
 WORKDIR /app
@@ -35,7 +32,10 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy source code
-COPY . .
+COPY ./cmd ./cmd
+COPY ./internal ./internal
+COPY ./pkg ./pkg
+COPY ./frontend/embed.go ./frontend/embed.go
 
 # Copy built frontend from previous stage
 COPY --from=frontend-builder /app/frontend/build ./frontend/build

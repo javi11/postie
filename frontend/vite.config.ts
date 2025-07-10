@@ -10,7 +10,7 @@ export default defineConfig({
 		strictPort: true,
 		proxy: {
 			"/api": {
-				ws: true,
+				ws: process.env.VITE_WS_PROXY === 'true',
 				target: "http://localhost:8080",
 				changeOrigin: true,
 			},

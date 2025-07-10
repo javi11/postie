@@ -81,6 +81,7 @@ function addServer() {
 		max_connection_idle_time_in_seconds: 300,
 		max_connection_ttl_in_seconds: 3600,
 		insecure_ssl: false,
+		enabled: true,
 	};
 
 	config.servers = [...config.servers, newServer];
@@ -237,12 +238,18 @@ async function saveServerSettings() {
             class="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50"
           >
             <div class="flex items-center justify-between mb-4">
-              <Heading
-                tag="h3"
-                class="text-md font-medium text-gray-900 dark:text-white"
-              >
-                {$t('settings.server.server_number', { number: index + 1 })}
-              </Heading>
+              <div class="flex items-center gap-3">
+                <Heading
+                  tag="h3"
+                  class="text-md font-medium text-gray-900 dark:text-white"
+                >
+                  {$t('settings.server.server_number', { number: index + 1 })}
+                </Heading>
+                <div class="flex items-center gap-2">
+                  <Checkbox bind:checked={server.enabled} />
+                  <Label class="text-sm font-medium">{$t('settings.server.enabled')}</Label>
+                </div>
+              </div>
               <Button
                 size="xs"
                 color="red"

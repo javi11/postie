@@ -14,6 +14,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/javi11/postie/frontend"
 	"github.com/javi11/postie/internal/backend"
 	"github.com/javi11/postie/internal/config"
 	"github.com/spf13/cobra"
@@ -233,8 +234,26 @@ func (ws *WebServer) setupRoutes() {
 	api.HandleFunc("/running-jobs", ws.handleGetRunningJobs).Methods("GET")
 	api.HandleFunc("/progress", ws.handleGetProgress).Methods("GET")
 
-	// Serve static files from filesystem (catch-all)
-	ws.router.PathPrefix("/").Handler(http.StripPrefix("/", http.FileServer(http.Dir(frontendBuildPath))))
+	// Serve static files (catch-all)
+	ws.router.PathPrefix("/").Handler(ws.getStaticFileHandler())
+}
+
+func (ws *WebServer) getStaticFileHandler() http.Handler {
+	// Check if we should use embedded filesystem or development path
+	if _, err := os.Stat(frontendBuildPath); err == nil {
+		// Development mode - serve from disk
+		return http.StripPrefix("/", http.FileServer(http.Dir(frontendBuildPath)))
+	}
+
+	// Production mode - serve from embedded filesystem
+	buildFS, err := frontend.GetBuildFS()
+	if err != nil {
+		log.Printf("Failed to get embedded filesystem: %v", err)
+		// Fallback to disk if embedded fails
+		return http.StripPrefix("/", http.FileServer(http.Dir(frontendBuildPath)))
+	}
+
+	return http.StripPrefix("/", http.FileServer(http.FS(buildFS)))
 }
 
 func (ws *WebServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {

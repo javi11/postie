@@ -49,6 +49,7 @@ export interface ServerConfig {
 	max_connection_idle_time_in_seconds: number;
 	max_connection_ttl_in_seconds: number;
 	insecure_ssl: boolean;
+	enabled?: boolean;
 }
 
 export interface ConnectionPoolConfig {

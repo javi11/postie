@@ -85,7 +85,8 @@
 			"cwd": "${workspaceFolder}/frontend",
 			"console": "integratedTerminal",
 			"env": {
-				"NODE_ENV": "development"
+				"NODE_ENV": "development",
+				"VITE_WS_PROXY": "true"
 			},
 			"preLaunchTask": "Start Web Backend",
 			"postDebugTask": "Stop Web Backend"

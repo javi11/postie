@@ -118,12 +118,24 @@ export function SelectOutputDirectory() {
   return window['go']['backend']['App']['SelectOutputDirectory']();
 }
 
+export function SelectTempDirectory() {
+  return window['go']['backend']['App']['SelectTempDirectory']();
+}
+
 export function SelectWatchDirectory() {
   return window['go']['backend']['App']['SelectWatchDirectory']();
 }
 
 export function SetQueueItemPriority(arg1, arg2) {
   return window['go']['backend']['App']['SetQueueItemPriority'](arg1, arg2);
+}
+
+export function SetWebEventEmitter(arg1) {
+  return window['go']['backend']['App']['SetWebEventEmitter'](arg1);
+}
+
+export function SetWebMode(arg1) {
+  return window['go']['backend']['App']['SetWebMode'](arg1);
 }
 
 export function Startup(arg1) {

@@ -25,3 +25,4 @@ postie-cli
 
 # ClaudPoint checkpoint system
 .checkpoints/
+examples/
