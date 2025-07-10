@@ -23,39 +23,44 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/test
 
-  build-docker:
-    if: ${{ !contains(github.event.head_commit.message, 'docs:') }}
+  build-server:
     runs-on: ubuntu-latest
     needs: test
+    permissions:
+      contents: write
+      packages: write
     steps:
+      # dependencies
       - uses: actions/setup-go@v5
         with:
           go-version: 1.24.0
 
+      # checkout
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Determine Branch
-        id: branch
-        uses: transferwise/sanitize-branch-name@v1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      # build CLI snapshot
-      - name: Build CLI snapshot
-        uses: goreleaser/goreleaser-action@v5
+      # docker login
+      - name: Docker login
+        if: github.event.pull_request.head.repo.fork == false
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # build server and docker
+      - name: Build Server artifacts
+        uses: goreleaser/goreleaser-action@v6
         with:
           version: latest
-          args: release --snapshot --clean --config .gorelease-server.yml
+          args: release --clean --config .goreleaser-server.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH_NAME: ${{ steps.branch.outputs.sanitized-branch-name }}
-
-      - name: Upload CLI artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: cli-snapshot
-          path: dist/*
   
   build-cli:
     if: ${{ !contains(github.event.head_commit.message, 'docs:') }}
@@ -80,7 +85,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v5
         with:
           version: latest
-          args: release --snapshot --clean --config .gorelease-dev.yml
+          args: release --snapshot --clean --config .gorelease-cli.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH_NAME: ${{ steps.branch.outputs.sanitized-branch-name }}

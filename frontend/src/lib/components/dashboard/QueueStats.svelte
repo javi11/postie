@@ -1,17 +1,17 @@
 <script lang="ts">
+import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import type { QueueStats } from "$lib/types";
-import apiClient from "$lib/api/client";
 import { Badge, Card, Heading } from "flowbite-svelte";
 import {
-	ClockSolid,
-	PlaySolid,
-	CheckCircleSolid,
-	ExclamationCircleSolid,
-	RectangleListSolid,
 	ChartPieSolid,
+	CheckCircleSolid,
+	ClockSolid,
+	ExclamationCircleSolid,
+	PlaySolid,
+	RectangleListSolid,
 } from "flowbite-svelte-icons";
-import { onMount, onDestroy } from "svelte";
+import { onDestroy, onMount } from "svelte";
 
 let queueStats: QueueStats = {
 	total: 0,

@@ -1,5 +1,6 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
+import apiClient, { type ConfigData } from "$lib/api/client";
 import ConnectionPoolSection from "$lib/components/settings/ConnectionPoolSection.svelte";
 import GeneralSection from "$lib/components/settings/GeneralSection.svelte";
 import NzbCompressionSection from "$lib/components/settings/NzbCompressionSection.svelte";
@@ -20,7 +21,6 @@ import {
 } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import { parseDuration } from "$lib/utils";
-import apiClient, { type ConfigData } from "$lib/api/client";
 import {
 	Button,
 	DarkMode,

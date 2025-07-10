@@ -1,9 +1,9 @@
 <script lang="ts">
+import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import type { QueueItem } from "$lib/types";
 import { formatDate, formatFileSize, getStatusColor } from "$lib/utils";
-import apiClient from "$lib/api/client";
 import {
 	Badge,
 	Button,
@@ -24,11 +24,11 @@ import {
 	ClockSolid,
 	DownloadSolid,
 	ExclamationCircleSolid,
+	ListOutline,
 	PlaySolid,
+	RectangleListSolid,
 	TrashBinSolid,
 	XSolid,
-	RectangleListSolid,
-	ListOutline,
 } from "flowbite-svelte-icons";
 import { onMount } from "svelte";
 

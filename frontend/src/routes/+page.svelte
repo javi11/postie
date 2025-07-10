@@ -1,5 +1,6 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
+import apiClient from "$lib/api/client";
 import DashboardHeader from "$lib/components/dashboard/DashboardHeader.svelte";
 import ProgressSection from "$lib/components/dashboard/ProgressSection.svelte";
 import QueueSection from "$lib/components/dashboard/QueueSection.svelte";
@@ -8,7 +9,6 @@ import { t } from "$lib/i18n";
 import { appStatus, progress } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import { uploadActions } from "$lib/stores/upload";
-import apiClient from "$lib/api/client";
 import { PlusOutline } from "flowbite-svelte-icons";
 import { onDestroy, onMount } from "svelte";
 

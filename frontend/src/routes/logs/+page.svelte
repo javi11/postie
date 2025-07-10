@@ -1,7 +1,7 @@
 <script lang="ts">
+import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { type LogEntry, frontendLogs } from "$lib/stores/logs";
-import apiClient from "$lib/api/client";
 import { Button, Card, Spinner } from "flowbite-svelte";
 import {
 	ArrowsRepeatOutline,

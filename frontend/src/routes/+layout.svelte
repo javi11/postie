@@ -1,12 +1,12 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
 import { page } from "$app/stores";
+import apiClient from "$lib/api/client";
 import logo from "$lib/assets/images/logo.png";
 import ToastContainer from "$lib/components/ToastContainer.svelte";
 import { t } from "$lib/i18n";
 import { appStatus, settingsSaveFunction } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
-import apiClient from "$lib/api/client";
 import {
 	Button,
 	DarkMode,

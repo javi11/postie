@@ -1,10 +1,10 @@
 <script lang="ts">
 import { page } from "$app/stores";
+import apiClient from "$lib/api/client";
 import { loadTranslations, locale, t } from "$lib/i18n";
 import { availableLocales, setStoredLocale } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
-import apiClient from "$lib/api/client";
 import {
 	Button,
 	Card,

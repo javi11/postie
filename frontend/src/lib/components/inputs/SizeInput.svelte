@@ -60,7 +60,11 @@ function unitToBytes(val: number, unit: string): number {
 
 // Update maxValue based on unit
 const dynamicMaxValue = $derived(
-	maxValue ? (sizeUnit === "GB" ? Math.ceil(maxValue / 1024) : maxValue) : undefined,
+	maxValue
+		? sizeUnit === "GB"
+			? Math.ceil(maxValue / 1024)
+			: maxValue
+		: undefined,
 );
 
 function setPreset(presetValue: number, presetUnit: string) {

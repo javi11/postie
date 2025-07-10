@@ -1,8 +1,8 @@
 <script lang="ts">
+import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
-import { uploadStore, uploadActions } from "$lib/stores/upload";
-import apiClient from "$lib/api/client";
+import { uploadActions, uploadStore } from "$lib/stores/upload";
 import { Alert, Button, Card, Heading, P } from "flowbite-svelte";
 import {
 	CirclePlusSolid,
@@ -61,7 +61,6 @@ async function clearQueue() {
 		);
 	}
 }
-
 </script>
 
 <Card

@@ -1,11 +1,11 @@
 <script lang="ts">
+import apiClient from "$lib/api/client";
 import PercentageInput from "$lib/components/inputs/PercentageInput.svelte";
 import SizeInput from "$lib/components/inputs/SizeInput.svelte";
 import { t } from "$lib/i18n";
 import { advancedMode } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
-import apiClient from "$lib/api/client";
 import {
 	Button,
 	Card,

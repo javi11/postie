@@ -1,11 +1,11 @@
 <script lang="ts">
+import apiClient from "$lib/api/client";
 import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 import SizeInput from "$lib/components/inputs/SizeInput.svelte";
 import { t } from "$lib/i18n";
 import { advancedMode } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
-import apiClient from "$lib/api/client";
 import {
 	Button,
 	Card,
@@ -78,11 +78,11 @@ function durationStringToNanos(durationStr: string): number {
 	if (match) {
 		const value = Number.parseInt(match[1]);
 		const unit = match[2];
-		
+
 		let seconds = value;
 		if (unit === "m") seconds = value * 60;
 		if (unit === "h") seconds = value * 3600;
-		
+
 		return seconds * 1000000000; // Convert to nanoseconds
 	}
 	return 300000000000; // Default 5 minutes

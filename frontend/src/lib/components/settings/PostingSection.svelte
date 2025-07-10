@@ -1,4 +1,5 @@
 <script lang="ts">
+import apiClient from "$lib/api/client";
 import ByteSizeInput from "$lib/components/inputs/ByteSizeInput.svelte";
 import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 import ThrottleRateInput from "$lib/components/inputs/ThrottleRateInput.svelte";
@@ -6,7 +7,6 @@ import { t } from "$lib/i18n";
 import { advancedMode } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
-import apiClient from "$lib/api/client";
 import {
 	Button,
 	Card,

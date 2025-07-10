@@ -1,7 +1,7 @@
 // Web API client for browser environment (replaces Wails bindings)
 
-import type { ConfigData } from './client';
-import type { ProgressTracker } from '../types';
+import type { ProgressTracker } from "../types";
+import type { ConfigData } from "./client";
 
 export interface AppStatus {
 	hasPostie: boolean;
@@ -40,7 +40,7 @@ export interface RunningJob {
 	progress: number;
 }
 
-const API_BASE = '/api';
+const API_BASE = "/api";
 
 export class WebClient {
 	private ws: WebSocket | null = null;
@@ -61,8 +61,11 @@ export class WebClient {
 			const checkConnection = () => {
 				if (this.ws?.readyState === WebSocket.OPEN) {
 					resolve();
-				} else if (this.ws?.readyState === WebSocket.CLOSED || this.ws?.readyState === WebSocket.CLOSING) {
-					reject(new Error('WebSocket connection failed'));
+				} else if (
+					this.ws?.readyState === WebSocket.CLOSED ||
+					this.ws?.readyState === WebSocket.CLOSING
+				) {
+					reject(new Error("WebSocket connection failed"));
 				} else {
 					setTimeout(checkConnection, 100);
 				}
@@ -73,21 +76,21 @@ export class WebClient {
 	}
 
 	private initWebSocket() {
-		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+		const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 		const wsUrl = `${protocol}//${window.location.host}/api/ws`;
 		console.log("WebSocket URL:", wsUrl);
 		console.log("Attempting WebSocket connection...");
-		
+
 		this.ws = new WebSocket(wsUrl);
-		
+
 		this.ws.onopen = (event) => {
-			console.log('WebSocket connected successfully', event);
+			console.log("WebSocket connected successfully", event);
 		};
-		
+
 		this.ws.onmessage = (event) => {
 			try {
 				const message = JSON.parse(event.data);
-				
+
 				// Check if this is a structured message with type and data
 				if (message.type && message.data !== undefined) {
 					// Dispatch to specific event listener
@@ -102,19 +105,19 @@ export class WebClient {
 					}
 				}
 			} catch (error) {
-				console.error('Error parsing WebSocket message:', error);
+				console.error("Error parsing WebSocket message:", error);
 			}
 		};
-		
+
 		this.ws.onclose = (event) => {
-			console.log('WebSocket disconnected:', event.code, event.reason);
-			console.log('Attempting to reconnect in 3 seconds...');
+			console.log("WebSocket disconnected:", event.code, event.reason);
+			console.log("Attempting to reconnect in 3 seconds...");
 			setTimeout(() => this.initWebSocket(), 3000);
 		};
-		
+
 		this.ws.onerror = (error) => {
-			console.error('WebSocket error:', error);
-			console.log('WebSocket state:', this.ws?.readyState);
+			console.error("WebSocket error:", error);
+			console.log("WebSocket state:", this.ws?.readyState);
 		};
 	}
 
@@ -124,9 +127,12 @@ export class WebClient {
 		try {
 			await this.waitForConnection();
 		} catch (error) {
-			console.error('Failed to connect WebSocket before registering listener:', error);
+			console.error(
+				"Failed to connect WebSocket before registering listener:",
+				error,
+			);
 		}
-		
+
 		this.wsListeners.set(event, callback);
 	}
 
@@ -145,55 +151,67 @@ export class WebClient {
 
 	async post<T>(endpoint: string, data?: unknown): Promise<T> {
 		const response = await fetch(`${API_BASE}${endpoint}`, {
-			method: 'POST',
+			method: "POST",
 			headers: {
-				'Content-Type': 'application/json',
+				"Content-Type": "application/json",
 			},
 			body: data ? JSON.stringify(data) : undefined,
 		});
-		
+
 		if (!response.ok) {
 			throw new Error(`HTTP error! status: ${response.status}`);
 		}
-		
+
 		// Handle empty responses
 		const text = await response.text();
-		return text ? JSON.parse(text) : {} as T;
+		return text ? JSON.parse(text) : ({} as T);
 	}
 
 	async delete<T>(endpoint: string): Promise<T> {
 		const response = await fetch(`${API_BASE}${endpoint}`, {
-			method: 'DELETE',
+			method: "DELETE",
 		});
-		
+
 		if (!response.ok) {
 			throw new Error(`HTTP error! status: ${response.status}`);
 		}
-		
+
 		const text = await response.text();
-		return text ? JSON.parse(text) : {} as T;
+		return text ? JSON.parse(text) : ({} as T);
 	}
 
 	// App methods
 	async getStatus(): Promise<AppStatus> {
-		return this.get<AppStatus>('/status');
+		return this.get<AppStatus>("/status");
 	}
 
 	async getConfig(): Promise<ConfigData> {
-		return this.get<ConfigData>('/config');
+		return this.get<ConfigData>("/config");
 	}
 
 	async saveConfig(config: ConfigData): Promise<void> {
-		return this.post<void>('/config', config);
+		return this.post<void>("/config", config);
 	}
 
 	// Queue methods
 	async getQueueItems(): Promise<QueueItem[]> {
-		return this.get<QueueItem[]>('/queue');
+		return this.get<QueueItem[]>("/queue");
 	}
 
-	async getQueueStats(): Promise<{ total: number; pending: number; running: number; complete: number; error: number }> {
-		return this.get<{ total: number; pending: number; running: number; complete: number; error: number }>('/queue/stats');
+	async getQueueStats(): Promise<{
+		total: number;
+		pending: number;
+		running: number;
+		complete: number;
+		error: number;
+	}> {
+		return this.get<{
+			total: number;
+			pending: number;
+			running: number;
+			complete: number;
+			error: number;
+		}>("/queue/stats");
 	}
 
 	async retryJob(id: string): Promise<void> {
@@ -206,30 +224,30 @@ export class WebClient {
 
 	// Processor methods
 	async getProcessorStatus(): Promise<ProcessorStatus> {
-		return this.get<ProcessorStatus>('/processor/status');
+		return this.get<ProcessorStatus>("/processor/status");
 	}
 
 	async getRunningJobs(): Promise<RunningJob[]> {
-		return this.get<RunningJob[]>('/running-jobs');
+		return this.get<RunningJob[]>("/running-jobs");
 	}
 
 	async getProgress(): Promise<ProgressTracker> {
-		return this.get<ProgressTracker>('/progress');
+		return this.get<ProgressTracker>("/progress");
 	}
 
 	// Logs
 	async getLogs(limit?: number, offset?: number): Promise<string> {
 		const params = new URLSearchParams();
-		if (limit) params.append('limit', limit.toString());
-		if (offset) params.append('offset', offset.toString());
-		
-		const endpoint = `/logs${params.toString() ? `?${params.toString()}` : ''}`;
+		if (limit) params.append("limit", limit.toString());
+		if (offset) params.append("offset", offset.toString());
+
+		const endpoint = `/logs${params.toString() ? `?${params.toString()}` : ""}`;
 		const response = await fetch(`${API_BASE}${endpoint}`);
-		
+
 		if (!response.ok) {
 			throw new Error(`HTTP error! status: ${response.status}`);
 		}
-		
+
 		return response.text();
 	}
 
@@ -243,69 +261,73 @@ export class WebClient {
 	}
 
 	async clearQueue(): Promise<void> {
-		return this.delete<void>('/queue');
+		return this.delete<void>("/queue");
 	}
 
 	async addFilesToQueue(): Promise<void> {
 		// This triggers a file picker dialog in the browser
 		// The actual file selection is handled by the frontend
-		return this.post<void>('/queue/add-files');
+		return this.post<void>("/queue/add-files");
 	}
 
 	// Upload management
-	async uploadFiles(files: FileList, onProgress?: (progress: number) => void, setRequest?: (xhr: XMLHttpRequest) => void): Promise<void> {
+	async uploadFiles(
+		files: FileList,
+		onProgress?: (progress: number) => void,
+		setRequest?: (xhr: XMLHttpRequest) => void,
+	): Promise<void> {
 		const formData = new FormData();
 		for (let i = 0; i < files.length; i++) {
-			formData.append('files', files[i]);
+			formData.append("files", files[i]);
 		}
-		
+
 		return new Promise((resolve, reject) => {
 			const xhr = new XMLHttpRequest();
-			
+
 			// Store the request reference for cancellation
 			if (setRequest) {
 				setRequest(xhr);
 			}
-			
+
 			// Track upload progress
 			if (onProgress) {
-				xhr.upload.addEventListener('progress', (event) => {
+				xhr.upload.addEventListener("progress", (event) => {
 					if (event.lengthComputable) {
 						const progress = (event.loaded / event.total) * 100;
 						onProgress(progress);
 					}
 				});
 			}
-			
-			xhr.addEventListener('load', () => {
+
+			xhr.addEventListener("load", () => {
 				if (xhr.status >= 200 && xhr.status < 300) {
 					resolve();
 				} else {
 					reject(new Error(`HTTP error! status: ${xhr.status}`));
 				}
 			});
-			
-			xhr.addEventListener('error', () => {
-				reject(new Error('Upload failed'));
+
+			xhr.addEventListener("error", () => {
+				reject(new Error("Upload failed"));
 			});
-			
-			xhr.addEventListener('abort', () => {
-				reject(new Error('Upload cancelled'));
+
+			xhr.addEventListener("abort", () => {
+				reject(new Error("Upload cancelled"));
 			});
-			
-			xhr.open('POST', `${API_BASE}/upload`);
+
+			xhr.open("POST", `${API_BASE}/upload`);
 			xhr.send(formData);
 		});
 	}
 
 	async cancelUpload(): Promise<void> {
-		return this.post<void>('/upload/cancel');
+		return this.post<void>("/upload/cancel");
 	}
 
 	// NZB operations
 	async downloadNZB(id: string): Promise<void> {
 		const response = await fetch(`${API_BASE}/nzb/${id}/download`);
-		
+
 		if (!response.ok) {
 			throw new Error(`HTTP error! status: ${response.status}`);
 		}
@@ -313,7 +335,7 @@ export class WebClient {
 		// Create a blob from the response and trigger download
 		const blob = await response.blob();
 		const url = window.URL.createObjectURL(blob);
-		const a = document.createElement('a');
+		const a = document.createElement("a");
 		a.href = url;
 		a.download = `${id}.nzb`;
 		document.body.appendChild(a);
@@ -327,9 +349,9 @@ export class WebClient {
 let webClientInstance: WebClient | null = null;
 
 export function getWebClient(): WebClient {
-    if (!webClientInstance) {
+	if (!webClientInstance) {
 		console.log("Initializing web client");
-        webClientInstance = new WebClient();
-    }
-    return webClientInstance;
+		webClientInstance = new WebClient();
+	}
+	return webClientInstance;
 }

@@ -1,16 +1,16 @@
 <script lang="ts">
+import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { isUploading, progress } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import { formatSpeed, formatTime } from "$lib/utils";
-import apiClient from "$lib/api/client";
 import { Button, Card, Heading, P, Progressbar } from "flowbite-svelte";
 import {
-	CloseCircleSolid,
 	ChartPieSolid,
-	PlaySolid,
+	CheckCircleSolid,
 	ClockSolid,
-	CheckCircleSolid
+	CloseCircleSolid,
+	PlaySolid,
 } from "flowbite-svelte-icons";
 
 $: jobs = Object.values($progress);
