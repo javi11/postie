@@ -5,6 +5,10 @@ checksum:
   name_template: 'checksums-server.txt'
   algorithm: sha512
 
+# Skip building binaries
+builds:
+  - skip: true
+
 changelog:
   filters:
     exclude:
@@ -48,4 +52,4 @@ docker_manifests:
   - name_template: '{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:{{ if .IsSnapshot }}{{ .Branch }}{{ else }}latest{{ end }}'
     image_templates:
       - '{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:v{{ .Version }}-amd64'
-      - '{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:v{{ .Version }}-arm64' 
+      - '{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:v{{ .Version }}-arm64'

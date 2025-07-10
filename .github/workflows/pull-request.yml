@@ -67,6 +67,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     steps:
+      - uses: mlugg/setup-zig@v1
       - uses: actions/setup-go@v5
         with:
           go-version: 1.24.0
