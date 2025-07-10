@@ -32,10 +32,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy source code
-COPY ./cmd ./cmd
-COPY ./internal ./internal
-COPY ./pkg ./pkg
-COPY ./frontend/embed.go ./frontend/embed.go
+COPY ./ ./
 
 # Copy built frontend from previous stage
 COPY --from=frontend-builder /app/frontend/build ./frontend/build
@@ -94,6 +91,9 @@ VOLUME ["/config", "/watch", "/output"]
 
 # Default command for web mode
 CMD ["/app/postie-web"]
+
+# Set the entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
 
 LABEL org.opencontainers.image.source="https://github.com/javi11/postie"
 LABEL build_version="version: Build-date:- ${VERSION}  ${BUILD_DATE}"
