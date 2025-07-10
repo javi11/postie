@@ -43,13 +43,13 @@ universal_binaries:
 
 archives:
   - id: cli
-    builds:
+    ids:
       - cli
-    format: tar.gz
+    formats: tar.gz
     name_template: '{{ .ProjectName }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
     format_overrides:
       - goos: windows
-        format: zip
+        formats: zip
 
 checksum:
   name_template: 'checksums-cli.txt'

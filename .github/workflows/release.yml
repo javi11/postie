@@ -159,10 +159,10 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # build server and docker
-      - name: Build Server artifacts
+      - name: Build Image artifacts
         uses: goreleaser/goreleaser-action@v6
         with:
           version: latest
-          args: release --clean --config .goreleaser-server.yml
+          args: release --clean --config .goreleaser-docker.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
