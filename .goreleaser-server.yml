@@ -1,8 +1,6 @@
 # https://goreleaser.com
+version: 2
 project_name: postie-server
-
-
-
 checksum:
   name_template: 'checksums-server.txt'
   algorithm: sha512

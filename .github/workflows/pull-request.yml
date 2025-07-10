@@ -23,7 +23,7 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/test
 
-  build-server:
+  build-images:
     runs-on: ubuntu-latest
     needs: test
     permissions:
@@ -85,7 +85,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v5
         with:
           version: latest
-          args: release --snapshot --clean --config .gorelease-cli.yml
+          args: release --snapshot --clean --config .goreleaser-cli.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH_NAME: ${{ steps.branch.outputs.sanitized-branch-name }}

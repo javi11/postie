@@ -1,4 +1,5 @@
 # https://goreleaser.com
+version: 2
 project_name: postie-cli
 
 builds:
