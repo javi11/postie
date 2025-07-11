@@ -374,6 +374,7 @@ export namespace config {
 	    max_connection_idle_time_in_seconds: number;
 	    max_connection_ttl_in_seconds: number;
 	    insecure_ssl: boolean;
+	    enabled?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ServerConfig(source);
@@ -390,6 +391,7 @@ export namespace config {
 	        this.max_connection_idle_time_in_seconds = source["max_connection_idle_time_in_seconds"];
 	        this.max_connection_ttl_in_seconds = source["max_connection_ttl_in_seconds"];
 	        this.insecure_ssl = source["insecure_ssl"];
+	        this.enabled = source["enabled"];
 	    }
 	}
 	export class ConfigData {

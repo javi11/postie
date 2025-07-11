@@ -26,6 +26,12 @@ dockers:
       - --platform=linux/amd64
     extra_files:
       - docker
+      - go.mod
+      - go.sum
+      - frontend
+      - cmd
+      - internal
+      - pkg
   - image_templates:
       - '{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:v{{ .Version }}-arm64'
     use: buildx
@@ -35,6 +41,12 @@ dockers:
       - --platform=linux/arm64
     extra_files:
       - docker
+      - go.mod
+      - go.sum
+      - frontend
+      - cmd
+      - internal
+      - pkg
 
 docker_manifests:
   - name_template: '{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:v{{ .Version }}'
