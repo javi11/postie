@@ -166,3 +166,50 @@ jobs:
           args: release --clean --config .goreleaser-docker.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-gui:
+    runs-on: ubuntu-latest
+    needs: [build-gui-windows, build-gui-macos]
+    permissions:
+      contents: write
+    steps:
+      # checkout
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Download Windows GUI artifact
+      - name: Download Windows GUI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: postie-gui-windows-amd64
+          path: ./windows-gui
+
+      # Download macOS GUI artifact
+      - name: Download macOS GUI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: postie-gui-macos-universal
+          path: ./macos-gui
+
+      # Create archives for GUI artifacts
+      - name: Create Windows GUI archive
+        run: |
+          cd windows-gui
+          zip -r ../postie-gui-windows-amd64.zip .
+
+      - name: Create macOS GUI archive
+        run: |
+          cd macos-gui
+           zip -r ../postie-gui-macos-universal.zip .
+
+      # Upload GUI artifacts to release
+      - name: Upload GUI artifacts to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            postie-gui-windows-amd64.zip
+            postie-gui-macos-universal.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

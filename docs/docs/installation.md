@@ -12,10 +12,10 @@ There are several ways to install and run Postie. Choose the method that best su
 
 Download the latest release for your platform:
 
-<a href="https://github.com/javi11/postie/releases/latest/download/postie-gui-windows-amd64">
+<a href="https://github.com/javi11/postie/releases/latest/download/postie-gui-windows-amd64.zip">
   <img src="/img/download-for-windows.webp" alt="Download for Windows" width="200" height="60" />
 </a>
-<a href="https://github.com/javi11/postie/releases/latest/download/postie-gui-macos-universal">
+<a href="https://github.com/javi11/postie/releases/latest/download/postie-gui-macos-universal.zip">
   <img src="/img/download-for-mac.png" alt="Download for macOS" width="200" height="60" />
 </a>
 
