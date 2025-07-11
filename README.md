@@ -27,6 +27,32 @@ A high-performance Usenet binary poster written in Go, inspired by Nyuu-Obfuscat
 - File watching and automatic posting
 - Configurable posting schedules
 
+## Quick Start
+
+### Docker (Recommended)
+
+```bash
+# Create docker-compose.yml
+curl -o docker-compose.yml https://raw.githubusercontent.com/javi11/postie/main/docker-compose.yml
+
+# Start Postie
+docker-compose up -d
+
+# Access web interface at http://localhost:8080
+```
+
+### Binary Download
+
+[![Download for Windows](https://img.shields.io/badge/Windows-Download-0078d4?style=for-the-badge&logo=windows)](https://github.com/javi11/postie/releases/latest/download/postie_windows_amd64.zip)
+[![Download for macOS](https://img.shields.io/badge/macOS-Download-0078d4?style=for-the-badge&logo=apple)](https://github.com/javi11/postie/releases/latest/download/postie_darwin_amd64.tar.gz)
+[![Download for Linux](https://img.shields.io/badge/Linux-Download-0078d4?style=for-the-badge&logo=linux)](https://github.com/javi11/postie/releases/latest/download/postie_linux_amd64.tar.gz)
+
+## Screenshots
+
+![Postie Dashboard](./docs/static/examples/dashboard.png)
+
+Web interface dashboard showing upload progress and queue management
+
 ## Documentation
 
 For detailed documentation, installation instructions, configuration options, and usage examples, please visit the [Postie Documentation Site](https://postie.nzbtools.top).

@@ -17,6 +17,7 @@ Postie is designed to efficiently upload binary files to Usenet with a focus on:
 
 ## Key Features
 
+- **Modern Web Interface**: Intuitive web UI for configuration, uploading, and monitoring
 - Multi-server support with automatic failover
 - Yenc encoding using rapidyenc for high performance
 - Post checking with multiple attempts
@@ -30,20 +31,47 @@ Postie is designed to efficiently upload binary files to Usenet with a focus on:
 - File watching and automatic posting
 - Configurable posting schedules
 - Robust file hashing for integrity verification
+- Upload queue management with pause/resume functionality
+- Real-time upload progress monitoring
+
+## Screenshots
+
+Postie comes with a modern web interface that makes it easy to manage your uploads and monitor progress. **We recommend using the web UI for the best user experience.**
+
+### Dashboard
+
+![Dashboard](/img/examples/dashboard.png)
+*Main dashboard showing upload queue and progress with real-time updates*
+
+### Queue Management
+
+![Queue](/img/examples/queue.png)
+*Queue management interface for monitoring and controlling uploads with detailed progress tracking*
+
+### Settings
+
+![Settings](/img/examples/settings.png)
+*Comprehensive configuration interface with organized tabs and real-time validation*
 
 ## Why Use Postie?
 
 Postie provides a robust solution for uploading content to Usenet with features that ensure your posts are:
 
-1. **Fast**: Optimized for high-throughput posting
+1. **Fast**: Optimized for high-throughput posting with efficient connection management
 2. **Reliable**: Post verification and automatic reposting of failed segments
 3. **Secure**: Multiple obfuscation options to protect your content
 4. **Flexible**: Extensive configuration options to meet your specific needs
+5. **User-Friendly**: Modern web interface with real-time monitoring and intuitive controls
 
 ## Getting Started
 
-To get started with Postie, check out the [Installation Guide](./installation) and [Quick Start](./quick-start) sections.
+**We recommend starting with the web interface for the easiest setup experience:**
 
-For detailed configuration options, see the [Configuration Guide](./configuration).
+1. Follow the [Installation Guide](./installation) to get Postie running
+2. Open the web interface at `http://localhost:8080`
+3. Use the Settings page to configure your servers and preferences
+4. Start uploading files through the intuitive web interface
+
+For command-line usage and detailed configuration options, see the [Quick Start](./quick-start) and [Configuration Guide](./configuration) sections.
 
 For information about file hashing and verification, see the [File Hash and Verification](./file-hash) guide.

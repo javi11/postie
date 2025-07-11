@@ -30,6 +30,33 @@ function HomepageHeader() {
             GitHub
           </Link>
         </div>
+        <div className={styles.buttons} style={{ marginTop: '20px' }}>
+          <Link
+            to="https://github.com/javi11/postie/releases/latest/download/postie-gui-windows-amd64"
+            style={{ margin: '5px', display: 'inline-block' }}>
+            <img 
+              src="/img/download-for-windows.webp" 
+              alt="Download for Windows" 
+              style={{ height: '60px', cursor: 'pointer' }}
+            />
+          </Link>
+          <Link
+            to="https://github.com/javi11/postie/releases/latest/download/postie-gui-macos-universal"
+            style={{ margin: '5px', display: 'inline-block' }}>
+            <img 
+              src="/img/download-for-mac.png" 
+              alt="Download for macOS" 
+              style={{ height: '60px', cursor: 'pointer' }}
+            />
+          </Link>
+        </div>
+        <div style={{ marginTop: '15px', textAlign: 'center' }}>
+          <Link
+            to="https://github.com/javi11/postie/releases/latest"
+            style={{ color: 'var(--ifm-hero-text-color)', textDecoration: 'underline' }}>
+            View all releases
+          </Link>
+        </div>
       </div>
     </header>
   );
@@ -43,6 +70,69 @@ export default function Home(): ReactNode {
       description="A high-performance Usenet binary poster written in Go, inspired by Nyuu-Obfuscation">
       <HomepageHeader />
       <main>
+        <section style={{ padding: '2rem 0', backgroundColor: 'var(--ifm-background-color)' }}>
+          <div className="container">
+            <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+              <Heading as="h2">Screenshots</Heading>
+              <p>Modern interface for easy upload management</p>
+            </div>
+            <div className="row">
+              <div className="col col--4">
+                <div style={{ textAlign: 'center' }}>
+                  <img src="/img/examples/dashboard.png" alt="Dashboard" style={{ width: '100%', borderRadius: '8px', boxShadow: '0 4px 8px rgba(0,0,0,0.1)' }} />
+                  <h4>Dashboard</h4>
+                  <p>Monitor upload progress and queue status</p>
+                </div>
+              </div>
+              <div className="col col--4">
+                <div style={{ textAlign: 'center' }}>
+                  <img src="/img/examples/queue.png" alt="Queue Management" style={{ width: '100%', borderRadius: '8px', boxShadow: '0 4px 8px rgba(0,0,0,0.1)' }} />
+                  <h4>Queue Management</h4>
+                  <p>Control and prioritize your uploads</p>
+                </div>
+              </div>
+              <div className="col col--4">
+                <div style={{ textAlign: 'center' }}>
+                  <img src="/img/examples/settings.png" alt="Settings" style={{ width: '100%', borderRadius: '8px', boxShadow: '0 4px 8px rgba(0,0,0,0.1)' }} />
+                  <h4>Settings</h4>
+                  <p>Configure servers and posting options</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section style={{ padding: '2rem 0', backgroundColor: 'var(--ifm-color-emphasis-100)' }}>
+          <div className="container">
+            <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+              <Heading as="h2">Quick Start with Docker</Heading>
+              <p>Get Postie running in seconds with Docker</p>
+            </div>
+            <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+              <pre style={{ 
+                backgroundColor: 'var(--ifm-code-background)', 
+                padding: '1rem', 
+                borderRadius: '8px',
+                overflow: 'auto'
+              }}>
+                <code>{`docker run -d \\
+  --name postie \\
+  -p 8080:8080 \\
+  -v ./config:/config \\
+  -v ./watch:/watch \\
+  -v ./output:/output \\
+  ghcr.io/javi11/postie:latest`}</code>
+              </pre>
+              <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+                <p>Then open <strong>http://localhost:8080</strong> in your browser</p>
+                <Link
+                  className="button button--primary button--lg"
+                  to="/docs/installation#docker-installation">
+                  Full Docker Setup Guide
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
         <HomepageFeatures />
       </main>
     </Layout>
