@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
-	"hash/crc32"
 	"io"
 	"math/big"
 	mrand "math/rand"
 	"strings"
 	"time"
+
+	"github.com/mnightingale/rapidyenc"
 )
 
 type Encoder interface {
@@ -70,7 +71,7 @@ func New(
 }
 
 // EncodeBytes encodes the article body using the provided encoder
-func (a *Article) EncodeBytes(encoder Encoder, body []byte) (io.Reader, error) {
+func (a *Article) Encode(body []byte) (io.Reader, error) {
 	headers := make(map[string]string)
 
 	if a.CustomHeaders != nil {
@@ -94,37 +95,32 @@ func (a *Article) EncodeBytes(encoder Encoder, body []byte) (io.Reader, error) {
 		header += fmt.Sprintf("%s: %s\r\n", k, v)
 	}
 
-	header += fmt.Sprintf("\r\n=ybegin part=%d total=%d line=128 size=%d name=%s\r\n=ypart begin=%d end=%d\r\n",
-		a.PartNumber, a.TotalParts, a.FileSize, a.FileName, a.Offset+1, a.Offset+int64(a.Size))
+	buff := bytes.NewBuffer(nil)
+	buff.WriteString(header + "\r\n")
 
-	// Encoded data
-	encoded := encoder.Encode(body)
-
-	// yEnc end line
-	h := crc32.NewIEEE()
-	_, err := h.Write(body)
+	encoder, err := rapidyenc.NewEncoder(buff, rapidyenc.Meta{
+		FileName:   a.FileName,
+		FileSize:   a.FileSize,
+		PartNumber: int64(a.PartNumber),
+		TotalParts: int64(a.TotalParts),
+		Offset:     int64(a.Offset),
+		PartSize:   int64(a.Size),
+	})
 	if err != nil {
-		return nil, err
-	}
-	footer := fmt.Sprintf("\r\n=yend size=%d part=%d pcrc32=%08X\r\n", a.Size, a.PartNumber, h.Sum32())
-
-	size := len(header) + len(encoded) + len(footer)
-	buf := bytes.NewBuffer(make([]byte, 0, size))
-
-	_, err = buf.WriteString(header)
-	if err != nil {
-		return nil, err
-	}
-	_, err = buf.Write(encoded)
-	if err != nil {
-		return nil, err
-	}
-	_, err = buf.WriteString(footer)
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating encoder: %w", err)
 	}
 
-	return buf, nil
+	_, errWrite := encoder.Write(body)
+
+	if err := encoder.Close(); err != nil {
+		return nil, fmt.Errorf("error closing encoder: %w", err)
+	}
+
+	if errWrite != nil {
+		return nil, fmt.Errorf("error writing article body: %w", errWrite)
+	}
+
+	return buff, nil
 }
 
 // generateRandomString generates a random string of specified length

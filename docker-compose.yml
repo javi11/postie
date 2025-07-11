@@ -1,15 +1,32 @@
 services:
   postie:
     container_name: postie
-    platform: linux/amd64
     build:
-      context: ./dist/postie_linux_amd64_v1
-      dockerfile: ../../docker/Dockerfile
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8080:8080"
     volumes:
       - ./example/config:/config
       - ./example/watch:/watch
       - ./example/output:/output
     environment:
+      - PORT=8080
+      - HOST=0.0.0.0
       - PUID=1000
       - PGID=1000
     restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8080/api/status",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

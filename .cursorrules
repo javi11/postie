@@ -1,0 +1,252 @@
+# Cursor Rules for Svelte 5 + SvelteKit Project
+
+## General Guidelines
+
+- Always follow TypeScript best practices and ensure type safety
+- Prefer functional programming patterns over object-oriented when possible
+- Use modern ES6+ syntax (const/let, arrow functions, destructuring, etc.)
+- Write self-documenting code with clear variable and function names
+- Follow semantic versioning for dependencies
+
+## Svelte 5 Specific Rules
+
+### Event Handlers
+
+- ❌ DON'T use deprecated `on:` directive: `on:click={handler}`
+- ✅ DO use new event handler syntax: `onclick={handler}`
+- ✅ DO use event handler props for all DOM events: `onclick`, `onchange`, `oninput`, `onsubmit`, etc.
+
+### Reactivity
+
+- ✅ DO use `$:` for reactive statements and computed values
+- ✅ DO use `bind:value` for two-way data binding on form inputs
+- ❌ DON'T create manual event handlers when `bind:value` is sufficient
+- ✅ DO use `$state()` rune for local component state in Svelte 5
+- ✅ DO use `$derived()` rune for computed values in Svelte 5
+- ✅ DO use `$effect()` rune for side effects in Svelte 5
+
+### Component Props
+
+- ✅ DO use `export let` for component props (legacy syntax still supported)
+- ✅ DO prefer `$props()` rune in Svelte 5 for better type safety
+- ✅ DO provide default values for optional props
+- ✅ DO use TypeScript interfaces for complex prop types
+
+### Component Structure
+
+```svelte
+<script lang="ts">
+  // 1. Imports first
+  import { Component } from 'library';
+
+  // 2. Props/state
+  export let value: string = '';
+
+  // 3. Local state
+  let localState = $state(false);
+
+  // 4. Derived/computed values
+  let computed = $derived(value.toUpperCase());
+
+  // 5. Functions
+  function handleClick() {
+    // implementation
+  }
+
+  // 6. Effects
+  $effect(() => {
+    // side effects
+  });
+</script>
+
+<!-- Template -->
+<div>
+  <button onclick={handleClick}>
+    {computed}
+  </button>
+</div>
+
+<!-- Styles -->
+<style>
+  /* component styles */
+</style>
+```
+
+## SvelteKit Best Practices
+
+### File Organization
+
+- Use `+page.svelte` for route pages
+- Use `+layout.svelte` for layout components
+- Use `+page.ts` for page load functions
+- Use `+layout.ts` for layout load functions
+- Store reusable components in `src/lib/components/`
+- Store utilities in `src/lib/utils/`
+- Store types in `src/lib/types.ts`
+
+### Loading Data
+
+- ✅ DO use `load` functions for data fetching
+- ✅ DO return properly typed data from load functions
+- ✅ DO handle loading and error states appropriately
+- ❌ DON'T fetch data in component `onMount` when `load` functions are available
+
+### Forms
+
+- ✅ DO use SvelteKit's form actions for form handling
+- ✅ DO use progressive enhancement with `use:enhance`
+- ✅ DO validate form data both client and server-side
+- ✅ DO handle form submission states (loading, success, error)
+
+## TypeScript Guidelines
+
+### Type Definitions
+
+- ✅ DO define interfaces for all data structures
+- ✅ DO use union types for controlled values
+- ✅ DO use generic types for reusable components
+- ❌ DON'T use `any` type (use `unknown` if needed)
+
+### Component Types
+
+```typescript
+interface ComponentProps {
+  value: string;
+  label?: string;
+  disabled?: boolean;
+  onchange?: (value: string) => void;
+}
+
+// Svelte 5 runes approach
+let {
+  value,
+  label = "",
+  disabled = false,
+  onchange,
+}: ComponentProps = $props();
+```
+
+## Performance Guidelines
+
+### Reactivity
+
+- ✅ DO minimize reactive statement dependencies
+- ✅ DO use `$derived()` for expensive computations
+- ❌ DON'T create unnecessary reactive cycles
+- ✅ DO debounce expensive operations
+
+### Bundle Size
+
+- ✅ DO use dynamic imports for code splitting
+- ✅ DO tree-shake unused dependencies
+- ✅ DO optimize images and assets
+- ❌ DON'T import entire libraries when only specific functions are needed
+
+## Styling Guidelines
+
+### CSS Organization
+
+- ✅ DO use component-scoped styles when possible
+- ✅ DO use CSS custom properties for theming
+- ✅ DO follow BEM or similar naming conventions for global styles
+- ✅ DO use Tailwind CSS utility classes consistently
+
+### Responsive Design
+
+- ✅ DO use mobile-first approach
+- ✅ DO test across different screen sizes
+- ✅ DO use semantic HTML elements
+- ✅ DO ensure proper accessibility (ARIA labels, keyboard navigation)
+
+## Error Handling
+
+### Component Errors
+
+- ✅ DO use error boundaries with `+error.svelte`
+- ✅ DO provide meaningful error messages
+- ✅ DO log errors appropriately
+- ✅ DO gracefully degrade functionality when possible
+
+### Form Validation
+
+- ✅ DO validate inputs client-side for UX
+- ✅ DO validate inputs server-side for security
+- ✅ DO provide clear validation feedback
+- ✅ DO use proper input types and constraints
+
+## Testing Guidelines
+
+### Unit Testing
+
+- ✅ DO write tests for utility functions
+- ✅ DO test component behavior and interactions
+- ✅ DO mock external dependencies
+- ✅ DO aim for good test coverage
+
+### Integration Testing
+
+- ✅ DO test critical user flows
+- ✅ DO test form submissions and data flow
+- ✅ DO test error scenarios
+
+## Security Guidelines
+
+### Data Handling
+
+- ✅ DO sanitize user inputs
+- ✅ DO validate data on the server
+- ✅ DO use HTTPS in production
+- ❌ DON'T expose sensitive data in client-side code
+
+### Authentication
+
+- ✅ DO use secure session management
+- ✅ DO implement proper CSRF protection
+- ✅ DO handle authentication errors gracefully
+
+## Code Quality
+
+### Linting
+
+- ✅ DO use ESLint with Svelte plugin
+- ✅ DO use Prettier for code formatting
+- ✅ DO configure TypeScript strict mode
+- ✅ DO fix all linter warnings
+
+### Documentation
+
+- ✅ DO document complex functions and components
+- ✅ DO use JSDoc comments for public APIs
+- ✅ DO keep README files up to date
+- ✅ DO document deployment and setup procedures
+
+## Development Workflow
+
+### Git Practices
+
+- ✅ DO use conventional commit messages
+- ✅ DO create feature branches for new work
+- ✅ DO review code before merging
+- ✅ DO keep commits focused and atomic
+
+### Dependencies
+
+- ✅ DO keep dependencies up to date
+- ✅ DO audit for security vulnerabilities
+- ✅ DO use exact versions for critical dependencies
+- ❌ DON'T commit package-lock.json conflicts
+
+## Svelte 5 Migration Notes
+
+### Breaking Changes
+
+- Event handlers: `on:click` → `onclick`
+- Reactivity: Consider migrating to runes (`$state`, `$derived`, `$effect`)
+- Props: Consider migrating from `export let` to `$props()`
+- Stores: Consider migrating to runes for better performance
+
+### New Features
+
+- ✅ DO explore Svelte 5 runes for better performance
+- ✅ DO use new snippet syntax for reusable template parts
+- ✅ DO leverage improved TypeScript integration

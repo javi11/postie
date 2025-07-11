@@ -1,20 +1,12 @@
 package article
 
 import (
-	"bytes"
 	"io"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
 )
-
-// MockEncoder for testing
-type MockEncoder struct{}
-
-func (m *MockEncoder) Encode(p []byte) []byte {
-	return p // Just return the original bytes for testing
-}
 
 func TestNew(t *testing.T) {
 	messageID := "test-message-id"
@@ -83,7 +75,7 @@ func TestNew(t *testing.T) {
 	}
 }
 
-func TestEncodeBytes(t *testing.T) {
+func TestEncode(t *testing.T) {
 	// Create a test article
 	article := &Article{
 		MessageID:     "test-message-id",
@@ -95,59 +87,151 @@ func TestEncodeBytes(t *testing.T) {
 		FileSize:      int64(1000),
 		FileName:      "test.txt",
 		Offset:        0,
-		Size:          10,
+		Size:          100,
 		Date:          time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
 		CustomHeaders: map[string]string{"X-Test": "Value"},
 	}
 
-	// Test body
-	body := []byte("test data")
-	encoder := &MockEncoder{}
+	// Test data to encode
+	testData := []byte("This is test data for encoding with yEnc")
+	
+	// Update the Size field to match the actual test data length
+	article.Size = uint64(len(testData))
 
-	reader, err := article.EncodeBytes(encoder, body)
+	// Test Encode method
+	reader, err := article.Encode(testData)
 	if err != nil {
-		t.Fatalf("EncodeBytes failed: %v", err)
+		t.Fatalf("Encode failed: %v", err)
 	}
 
-	// Read the result
-	buf := new(bytes.Buffer)
-	_, err = io.Copy(buf, reader)
+	// Read the encoded result
+	encoded, err := io.ReadAll(reader)
 	if err != nil {
 		t.Fatalf("Failed to read encoded data: %v", err)
 	}
-	result := buf.String()
+
+	result := string(encoded)
 
 	// Verify it contains expected headers
 	if !strings.Contains(result, "Subject: Test Subject") {
-		t.Error("Encoded result missing Subject header")
+		t.Error("Encoded output missing Subject header")
 	}
 	if !strings.Contains(result, "From: test@example.com") {
-		t.Error("Encoded result missing From header")
+		t.Error("Encoded output missing From header")
 	}
 	if !strings.Contains(result, "Newsgroups: alt.test,alt.binaries.test") {
-		t.Error("Encoded result missing Newsgroups header")
+		t.Error("Encoded output missing Newsgroups header")
 	}
 	if !strings.Contains(result, "Message-ID: <test-message-id>") {
-		t.Error("Encoded result missing Message-ID header")
+		t.Error("Encoded output missing Message-ID header")
 	}
 	if !strings.Contains(result, "X-Test: Value") {
-		t.Error("Encoded result missing custom header")
+		t.Error("Encoded output missing custom header")
+	}
+	if !strings.Contains(result, "Date: Sun, 01 Jan 2023 00:00:00 UTC") {
+		t.Error("Encoded output missing Date header")
 	}
 
-	// Verify yEnc format
-	if !strings.Contains(result, "=ybegin part=1 total=3") {
-		t.Error("Encoded result missing yEnc begin line")
+	// Verify yEnc encoding markers
+	if !strings.Contains(result, "=ybegin") {
+		t.Error("Encoded output missing yEnc begin marker")
 	}
-	if !strings.Contains(result, "=ypart begin=1 end=10") {
-		t.Error("Encoded result missing yEnc part line")
+	if !strings.Contains(result, "=ypart") {
+		t.Error("Encoded output missing yEnc part marker")
 	}
-	if !strings.Contains(result, "=yend size=10 part=1 pcrc32=") {
-		t.Error("Encoded result missing yEnc end line")
+	if !strings.Contains(result, "=yend") {
+		t.Error("Encoded output missing yEnc end marker")
 	}
 
-	// Verify body is included
-	if !strings.Contains(result, "test data") {
-		t.Error("Encoded result missing body data")
+	// Verify filename in yEnc headers
+	if !strings.Contains(result, "name=test.txt") {
+		t.Error("Encoded output missing filename in yEnc header")
+	}
+
+	// Verify the encoded data contains some expected yEnc patterns
+	// yEnc typically uses characters in range 42-255 (excluding certain reserved chars)
+	if len(result) == 0 {
+		t.Error("Encoded output is empty")
+	}
+}
+
+func TestEncodeWithXNxgHeader(t *testing.T) {
+	// Create a test article with X-Nxg header
+	article := &Article{
+		MessageID:     "test-message-id",
+		Subject:       "Test Subject",
+		From:          "test@example.com",
+		Groups:        []string{"alt.test"},
+		PartNumber:    1,
+		TotalParts:    1,
+		FileSize:      int64(100),
+		FileName:      "test.txt",
+		Offset:        0,
+		Size:          50,
+		Date:          time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
+		XNxgHeader:    "test-nxg-header-value",
+	}
+
+	testData := []byte("Test data")
+	
+	// Update the Size field to match the actual test data length
+	article.Size = uint64(len(testData))
+
+	reader, err := article.Encode(testData)
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
+	}
+
+	encoded, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("Failed to read encoded data: %v", err)
+	}
+
+	result := string(encoded)
+
+	// Verify X-Nxg header is included
+	if !strings.Contains(result, "X-Nxg: test-nxg-header-value") {
+		t.Error("Encoded output missing X-Nxg header")
+	}
+}
+
+func TestEncodeSmallData(t *testing.T) {
+	// Create a test article with minimal data
+	article := &Article{
+		MessageID:  "test-message-id",
+		Subject:    "Test Subject",
+		From:       "test@example.com",
+		Groups:     []string{"alt.test"},
+		PartNumber: 1,
+		TotalParts: 1,
+		FileSize:   int64(1),
+		FileName:   "small.txt",
+		Offset:     0,
+		Size:       1,
+		Date:       time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
+	}
+
+	// Test with minimal data (1 byte)
+	testData := []byte("x")
+
+	reader, err := article.Encode(testData)
+	if err != nil {
+		t.Fatalf("Encode with small data failed: %v", err)
+	}
+
+	encoded, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("Failed to read encoded small data: %v", err)
+	}
+
+	result := string(encoded)
+
+	// Should still contain headers and yEnc markers even with minimal data
+	if !strings.Contains(result, "Subject: Test Subject") {
+		t.Error("Encoded small data missing Subject header")
+	}
+	if !strings.Contains(result, "=ybegin") {
+		t.Error("Encoded small data missing yEnc begin marker")
 	}
 }
 

@@ -2,188 +2,198 @@ package watcher
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/javi11/postie/internal/config"
-	"github.com/javi11/postie/pkg/fileinfo"
-	"github.com/javi11/postie/pkg/postie"
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/javi11/postie/internal/queue"
+	"github.com/opencontainers/selinux/pkg/pwalkdir"
 )
+
+// ProcessorInterface defines the interface for checking running jobs
+type ProcessorInterface interface {
+	IsPathBeingProcessed(path string) bool
+}
 
 type Watcher struct {
 	cfg          config.WatcherConfig
-	postie       *postie.Postie
-	db           *sql.DB
-	isRunning    bool
-	runningMux   sync.Mutex
+	queue        *queue.Queue
+	processor    ProcessorInterface
 	watchFolder  string
-	outputFolder string
-}
-
-type QueueItem struct {
-	ID        int64
-	Path      string
-	Size      int64
-	Status    string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	eventEmitter func(eventName string, optionalData ...interface{})
 }
 
 func New(
-	ctx context.Context,
 	cfg config.WatcherConfig,
-	configPath string,
-	postie *postie.Postie,
+	queue *queue.Queue,
+	processor ProcessorInterface,
 	watchFolder string,
-	outputFolder string,
-) (*Watcher, error) {
-	dbPath := filepath.Join(filepath.Dir(configPath), "postie_queue.db")
-
-	slog.InfoContext(ctx, fmt.Sprintf("Using database at %s", dbPath))
-
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := initDB(db); err != nil {
-		return nil, err
-	}
-
+	eventEmitter func(eventName string, optionalData ...interface{}),
+) *Watcher {
 	return &Watcher{
 		cfg:          cfg,
-		postie:       postie,
-		db:           db,
+		queue:        queue,
+		processor:    processor,
 		watchFolder:  watchFolder,
-		outputFolder: outputFolder,
-	}, nil
-}
-
-func initDB(db *sql.DB) error {
-	_, err := db.Exec(`
-		CREATE TABLE IF NOT EXISTS queue_items (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			path TEXT NOT NULL,
-			size INTEGER NOT NULL,
-			status TEXT NOT NULL,
-			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)
-	`)
-	return err
-}
-
-func (w *Watcher) resetRunningItems(ctx context.Context) error {
-	_, err := w.db.ExecContext(ctx, `
-		UPDATE queue_items 
-		SET status = ?, updated_at = CURRENT_TIMESTAMP 
-		WHERE status = ?`, StatusPending, StatusRunning)
-	return err
+		eventEmitter: eventEmitter,
+	}
 }
 
 func (w *Watcher) Start(ctx context.Context) error {
-	// Reset any running items to pending
-	if err := w.resetRunningItems(ctx); err != nil {
-		return fmt.Errorf("error resetting running items: %w", err)
-	}
+	slog.InfoContext(ctx, fmt.Sprintf("Starting directory watching %s with interval %s", w.watchFolder, w.cfg.CheckInterval))
 
-	ticker := time.NewTicker(w.cfg.CheckInterval)
-	defer ticker.Stop()
+	scanTicker := time.NewTicker(w.cfg.CheckInterval)
+	defer scanTicker.Stop()
 
-	slog.InfoContext(ctx, fmt.Sprintf("Starting watching %s with interval %s", w.watchFolder, w.cfg.CheckInterval))
-
+	// Start continuous directory scanning
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-ticker.C:
-			if err := w.processQueue(ctx); err != nil {
-				return err
+		case <-scanTicker.C:
+			if w.isWithinSchedule() {
+				if err := w.scanDirectory(ctx); err != nil {
+					slog.ErrorContext(ctx, "Error scanning directory", "error", err)
+				}
+			} else {
+				slog.Info("Not within schedule, skipping scan")
 			}
 		}
 	}
 }
 
-func (w *Watcher) processQueue(ctx context.Context) error {
-	if !w.isWithinSchedule() || w.isRunning {
-		slog.InfoContext(ctx, "Not within schedule or already running")
+func (w *Watcher) isWithinSchedule() bool {
+	if w.cfg.Schedule.StartTime == "" || w.cfg.Schedule.EndTime == "" {
+		return true
+	}
+
+	now := time.Now()
+	currentTime := now.Format("15:04")
+
+	startTime := w.cfg.Schedule.StartTime
+	endTime := w.cfg.Schedule.EndTime
+
+	// Handle crossing midnight
+	if startTime <= endTime {
+		return currentTime >= startTime && currentTime <= endTime
+	} else {
+		return currentTime >= startTime || currentTime <= endTime
+	}
+}
+
+func (w *Watcher) scanDirectory(ctx context.Context) error {
+	return pwalkdir.Walk(w.watchFolder, func(path string, dir fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip directories
+		if dir.IsDir() {
+			return nil
+		}
+
+		info, err := dir.Info()
+		if err != nil {
+			return err
+		}
+
+		// Skip files that don't meet criteria
+		if !w.shouldProcessFile(path, info) {
+			return nil
+		}
+
+		// Check if file is currently being processed
+		if w.processor != nil && w.processor.IsPathBeingProcessed(path) {
+			slog.InfoContext(ctx, "File is currently being processed, ignoring", "path", path)
+			return nil
+		}
+
+		// Add file to queue
+		// If delete original file is enabled, skip duplicate check since files are deleted after processing
+		if w.cfg.DeleteOriginalFile {
+			err = w.queue.AddFileWithoutDuplicateCheck(ctx, path, info.Size())
+		} else {
+			err = w.queue.AddFile(ctx, path, info.Size())
+		}
+
+		if err != nil {
+			slog.ErrorContext(ctx, "Error adding file to queue", "path", path, "error", err)
+			return nil // Continue processing other files
+		}
+
+		slog.InfoContext(ctx, "Added file to queue", "path", filepath.Base(path), "size", info.Size())
+
+		// Emit queue update event
+		if w.eventEmitter != nil {
+			w.eventEmitter("queue-updated")
+		}
 
 		return nil
+	})
+}
+
+func (w *Watcher) shouldProcessFile(path string, info os.FileInfo) bool {
+	// Check file size threshold
+	if info.Size() < int64(w.cfg.MinFileSize) {
+		return false
 	}
 
-	w.runningMux.Lock()
-	defer w.runningMux.Unlock()
-
-	w.isRunning = true
-	defer func() {
-		w.isRunning = false
-	}()
-
-	// Scan directory for new files
-	if err := w.scanDirectory(ctx); err != nil {
-		return fmt.Errorf("error scanning directory: %w", err)
-	}
-
-	// Get next batch of items to process
-	items, err := w.getNextBatch(ctx)
-	if err != nil {
-		return fmt.Errorf("error getting next batch: %w", err)
-	}
-
-	if len(items) == 0 {
-		return nil
-	}
-
-	// Process each item
-	for _, item := range items {
-		if err := w.processItem(ctx, item); err != nil {
-			slog.ErrorContext(ctx, "Error processing item", "error", err, "path", item.Path)
-			if err := w.updateItemStatus(ctx, item.ID, StatusError); err != nil {
-				slog.ErrorContext(ctx, "Error updating item status", "error", err)
-			}
+	// Check ignore patterns
+	for _, pattern := range w.cfg.IgnorePatterns {
+		matched, err := filepath.Match(pattern, filepath.Base(path))
+		if err != nil {
+			slog.Warn("Invalid pattern", "pattern", pattern, "error", err)
 			continue
 		}
-
-		// Delete the item from queue after successful processing
-		if err := w.deleteItem(ctx, item.ID); err != nil {
-			slog.ErrorContext(ctx, "Error deleting item from queue", "error", err)
+		if matched {
+			return false
 		}
 	}
 
-	return nil
+	// Check size threshold
+	if info.Size() < int64(w.cfg.SizeThreshold) {
+		return false
+	}
+
+	return true
 }
 
-func (w *Watcher) processItem(ctx context.Context, item QueueItem) error {
-	// Update status to running
-	if err := w.updateItemStatus(ctx, item.ID, StatusRunning); err != nil {
-		return err
-	}
-
-	// Create file info
-	fileInfo := fileinfo.FileInfo{
-		Path: item.Path,
-		Size: uint64(item.Size),
-	}
-
-	// Post the file
-	if err := w.postie.Post(ctx, []fileinfo.FileInfo{fileInfo}, w.watchFolder, w.outputFolder); err != nil {
-		return err
-	}
-
-	// Delete the original file
-	if err := os.Remove(item.Path); err != nil {
-		return fmt.Errorf("error deleting original file: %w", err)
-	}
-
-	return nil
+// TriggerScan triggers an immediate directory scan
+func (w *Watcher) TriggerScan(ctx context.Context) {
+	go func() {
+		if w.isWithinSchedule() {
+			if err := w.scanDirectory(ctx); err != nil {
+				slog.ErrorContext(ctx, "Error in triggered directory scan", "error", err)
+			}
+		}
+	}()
 }
 
+// GetQueueItems returns queue items via the queue
+func (w *Watcher) GetQueueItems() ([]queue.QueueItem, error) {
+	return w.queue.GetQueueItems()
+}
+
+// RemoveFromQueue removes an item from the queue via queue
+func (w *Watcher) RemoveFromQueue(id string) error {
+	return w.queue.RemoveFromQueue(id)
+}
+
+// ClearQueue removes all completed and failed items from the queue via queue
+func (w *Watcher) ClearQueue() error {
+	return w.queue.ClearQueue()
+}
+
+// GetQueueStats returns statistics about the queue via queue
+func (w *Watcher) GetQueueStats() (map[string]interface{}, error) {
+	return w.queue.GetQueueStats()
+}
+
+// Close does nothing for the simple watcher (queue is managed separately)
 func (w *Watcher) Close() error {
-	return w.db.Close()
+	return nil
 }

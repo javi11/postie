@@ -21,6 +21,12 @@ runs:
         go version
         go env
       # test
+
+    # Install Bun
+    - name: Install Bun
+      shell: bash
+      run: npm install -g bun
+
     - name: Tests
       shell: bash
       run: |

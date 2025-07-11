@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/rand"
@@ -19,7 +20,6 @@ import (
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/nzb"
 	"github.com/javi11/postie/internal/par2"
-	"github.com/mnightingale/rapidyenc"
 	"github.com/sourcegraph/conc/pool"
 )
 
@@ -29,6 +29,10 @@ type Poster interface {
 	Post(ctx context.Context, files []string, rootDir string, nzbGen nzb.NZBGenerator) error
 	// Stats returns posting statistics
 	Stats() Stats
+	// SetProgressCallback sets the progress callback function
+	SetProgressCallback(callback ProgressCallback)
+	// Close closes the poster
+	Close()
 }
 
 // PostStatus represents the status of a post
@@ -39,6 +43,7 @@ const (
 	PostStatusPosted
 	PostStatusVerified
 	PostStatusFailed
+	PostStatusCancelled
 )
 
 // Post represents a file to be posted
@@ -70,9 +75,9 @@ type poster struct {
 	cfg      config.PostingConfig
 	checkCfg config.PostCheck
 	pool     nntppool.UsenetConnectionPool
-	encoder  *rapidyenc.Encoder
 	stats    *Stats
 	throttle *Throttle
+	callback ProgressCallback
 }
 
 // New creates a new poster
@@ -82,27 +87,44 @@ func New(ctx context.Context, cfg config.Config) (Poster, error) {
 		return nil, fmt.Errorf("error getting NNTP pool: %w", err)
 	}
 
-	yenc := rapidyenc.NewEncoder()
-
 	stats := &Stats{
 		StartTime: time.Now(),
-	}
-
-	throttle := &Throttle{
-		rate:     cfg.GetPostingConfig().ThrottleRate,
-		interval: time.Second,
 	}
 
 	p := &poster{
 		cfg:      cfg.GetPostingConfig(),
 		checkCfg: cfg.GetPostCheckConfig(),
 		pool:     pool,
-		encoder:  yenc,
 		stats:    stats,
-		throttle: throttle,
+	}
+
+	throttleRate := p.cfg.ThrottleRate
+	if throttleRate > 0 {
+		p.throttle = NewThrottle(throttleRate, time.Second)
 	}
 
 	return p, nil
+}
+
+func (p *poster) Close() {
+	slog.Info("Closing poster")
+
+	if p.pool != nil {
+		done := make(chan struct{})
+		go func() {
+			p.pool.Quit()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			// Quit completed successfully
+		case <-time.After(5 * time.Second):
+			// Timeout occurred, ignore and set pool to nil
+			slog.Warn("Pool quit timed out after 5 seconds, setting pool to nil")
+		}
+		p.pool = nil
+	}
 }
 
 // Post posts files from a directory to Usenet
@@ -181,7 +203,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			if post.Retries > 0 {
 				progressText = "Retrying %s (attempt %d)..."
 			}
-			progress := NewFileProgress(fmt.Sprintf(progressText, post.FilePath, post.Retries+1), post.filesize, int64(len(post.Articles)))
+			progress := NewFileProgressWithCallback(fmt.Sprintf(progressText, post.FilePath, post.Retries+1), post.filesize, int64(len(post.Articles)), p.callback)
 
 			var combinedHash string
 
@@ -210,15 +232,20 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			}
 
 			// Wait for all workers to complete and collect errors
-			errors := pool.Wait()
+			errs := pool.Wait()
 
-			if errors != nil {
+			if errs != nil {
 				post.mu.Lock()
-				post.Status = PostStatusFailed
-				post.Error = fmt.Errorf("failed to post articles: %v", errors)
+				if errors.Is(errs, context.Canceled) {
+					post.Status = PostStatusCancelled
+					post.Error = fmt.Errorf("posting cancelled: %v", errs)
+				} else {
+					post.Status = PostStatusFailed
+					post.Error = fmt.Errorf("failed to post articles: %v", errs)
+				}
 				post.mu.Unlock()
 
-				errChan <- fmt.Errorf("failed to post file %s after %d retries: %v", post.FilePath, p.cfg.MaxRetries, errors)
+				errChan <- fmt.Errorf("failed to post file %s after %d retries: %v", post.FilePath, p.cfg.MaxRetries, errs)
 				return
 			}
 
@@ -264,7 +291,7 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 			var mu sync.Mutex
 
 			// Create progress bar for this file
-			progress := NewFileProgress(fmt.Sprintf("Verifying %s...", post.FilePath), post.filesize, int64(len(post.Articles)))
+			progress := NewFileProgressWithCallback(fmt.Sprintf("Verifying %s...", post.FilePath), post.filesize, int64(len(post.Articles)), p.callback)
 
 			// Submit all articles to the pool
 			for _, art := range post.Articles {
@@ -562,14 +589,19 @@ func (p *poster) postArticle(ctx context.Context, article *article.Article, file
 	article.Hash = articleHash
 
 	// Create article
-	art, err := article.EncodeBytes(p.encoder, body)
+	buff, err := article.Encode(body)
 	if err != nil {
 		return fmt.Errorf("error encoding article: %w", err)
 	}
 
 	// Post article
-	if err := p.pool.Post(ctx, art); err != nil {
+	if err := p.pool.Post(ctx, buff); err != nil {
 		return fmt.Errorf("error posting article: %w", err)
+	}
+
+	// Apply throttling after posting
+	if p.throttle != nil {
+		p.throttle.Wait(int64(article.Size))
 	}
 
 	// Update stats
@@ -608,6 +640,11 @@ func (p *poster) Stats() Stats {
 		ArticleErrors:   p.stats.ArticleErrors,
 		StartTime:       p.stats.StartTime,
 	}
+}
+
+// SetProgressCallback sets the progress callback function
+func (p *poster) SetProgressCallback(callback ProgressCallback) {
+	p.callback = callback
 }
 
 func CalculateHash(buff []byte) string {
