@@ -22,7 +22,7 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/test
   build-cli:
-    runs-on: ubuntu-latest
+    runs-on: macos-13
     needs: test
     permissions:
       contents: write
