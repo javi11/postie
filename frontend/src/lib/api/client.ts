@@ -577,6 +577,39 @@ export class UnifiedClient {
 
 		throw new Error("No client available");
 	}
+
+	// Setup Wizard
+	async validateNNTPServer(serverData: any): Promise<{ valid: boolean; error: string }> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			return client.App.ValidateNNTPServer(serverData);
+		}
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.validateNNTPServer(serverData);
+		}
+
+		throw new Error("No client available");
+	}
+
+	async setupWizardComplete(wizardData: any): Promise<void> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			return client.App.SetupWizardComplete(wizardData);
+		}
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.setupWizardComplete(wizardData);
+		}
+
+		throw new Error("No client available");
+	}
 }
 
 // Export singleton instance

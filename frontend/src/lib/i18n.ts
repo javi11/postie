@@ -12,6 +12,12 @@ const config = {
 		},
 		{
 			locale: "en",
+			key: "setup",
+			loader: async () =>
+				(await import("./translations/en/setup.json")).default,
+		},
+		{
+			locale: "en",
 			key: "dashboard",
 			routes: ["/"],
 			loader: async () =>
@@ -33,6 +39,12 @@ const config = {
 		},
 		{
 			locale: "es",
+			key: "setup",
+			loader: async () =>
+				(await import("./translations/es/setup.json")).default,
+		},
+		{
+			locale: "es",
 			key: "dashboard",
 			routes: ["/"],
 			loader: async () =>
@@ -51,6 +63,12 @@ const config = {
 			key: "common",
 			loader: async () =>
 				(await import("./translations/fr/common.json")).default,
+		},
+		{
+			locale: "fr",
+			key: "setup",
+			loader: async () =>
+				(await import("./translations/fr/setup.json")).default,
 		},
 		{
 			locale: "fr",

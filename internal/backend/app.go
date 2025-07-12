@@ -20,6 +20,29 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
+// ServerData represents the server configuration data from the frontend
+type ServerData struct {
+	Host           string `json:"host"`
+	Port           int    `json:"port"`
+	Username       string `json:"username"`
+	Password       string `json:"password"`
+	SSL            bool   `json:"ssl"`
+	MaxConnections int    `json:"maxConnections"`
+}
+
+// SetupWizardData represents the complete setup wizard data from the frontend
+type SetupWizardData struct {
+	Servers         []ServerData `json:"servers"`
+	OutputDirectory string       `json:"outputDirectory"`
+	WatchDirectory  string       `json:"watchDirectory"`
+}
+
+// ValidationResult represents the result of server validation
+type ValidationResult struct {
+	Valid bool   `json:"valid"`
+	Error string `json:"error"`
+}
+
 // App struct for the Wails application
 type App struct {
 	ctx                  context.Context
@@ -163,6 +186,7 @@ func (a *App) GetAppStatus() map[string]interface{} {
 		"uploading":           a.IsUploading(),
 		"criticalConfigError": false, // Default to false
 		"error":               "",
+		"isFirstStart":        a.isFirstStart(),
 	}
 
 	if a.config != nil {
@@ -194,6 +218,8 @@ func (a *App) GetAppStatus() map[string]interface{} {
 		status["configValid"] = false
 		status["needsConfiguration"] = true
 	}
+
+	slog.Debug("Current application status", "status", status)
 
 	return status
 }
@@ -443,4 +469,121 @@ func (a *App) HandleDroppedFiles(filePaths []string) error {
 	}
 
 	return fmt.Errorf("queue not initialized")
+}
+
+// isFirstStart checks if this is the first time the application is being run
+func (a *App) isFirstStart() bool {
+	// Check if config file exists
+	if _, err := os.Stat(a.configPath); os.IsNotExist(err) {
+		return true
+	}
+
+	// Check if config has any configured servers
+	if a.config == nil {
+		return true
+	}
+
+	return false
+}
+
+// SetupWizardComplete saves the configuration from the setup wizard
+func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
+	slog.Info("Completing setup wizard", "data", wizardData)
+
+	// Create new config based on wizard data
+	cfg := config.GetDefaultConfig()
+
+	// Set servers from wizard
+	cfg.Servers = make([]config.ServerConfig, len(wizardData.Servers))
+	for i, serverData := range wizardData.Servers {
+		enabled := true
+		server := config.ServerConfig{
+			Host:           serverData.Host,
+			Port:           serverData.Port,
+			Username:       serverData.Username,
+			Password:       serverData.Password,
+			SSL:            serverData.SSL,
+			MaxConnections: serverData.MaxConnections,
+			Enabled:        &enabled,
+		}
+		cfg.Servers[i] = server
+	}
+
+	// Set output directory
+	if wizardData.OutputDirectory != "" {
+		cfg.OutputDir = wizardData.OutputDirectory
+	}
+
+	// Set watch directory if provided
+	if wizardData.WatchDirectory != "" {
+		cfg.Watcher.WatchDirectory = wizardData.WatchDirectory
+		cfg.Watcher.Enabled = true
+	}
+
+	// Set the par2 path to the OS-specific location
+	cfg.Par2.Par2Path = a.appPaths.Par2
+
+	// Set the database path to the OS-specific location
+	cfg.Queue.DatabasePath = a.appPaths.Database
+
+	// Save configuration
+	if err := a.SaveConfig(&cfg); err != nil {
+		return fmt.Errorf("failed to save wizard configuration: %w", err)
+	}
+
+	slog.Info("Setup wizard completed successfully")
+	return nil
+}
+
+// ValidateNNTPServer validates an NNTP server configuration by attempting to connect
+func (a *App) ValidateNNTPServer(serverData ServerData) ValidationResult {
+	// Basic validation
+	if serverData.Host == "" {
+		return ValidationResult{
+			Valid: false,
+			Error: "Host is required",
+		}
+	}
+	if serverData.Port <= 0 || serverData.Port > 65535 {
+		return ValidationResult{
+			Valid: false,
+			Error: "Port must be between 1 and 65535",
+		}
+	}
+
+	// Create temporary server config for validation
+	enabled := true
+	serverConfig := config.ServerConfig{
+		Host:                           serverData.Host,
+		Port:                           serverData.Port,
+		Username:                       serverData.Username,
+		Password:                       serverData.Password,
+		SSL:                            serverData.SSL,
+		MaxConnections:                 1, // Use single connection for validation
+		Enabled:                        &enabled,
+		MaxConnectionIdleTimeInSeconds: 300,
+		MaxConnectionTTLInSeconds:      3600,
+	}
+
+	// Create minimal config with just this server
+	cfg := config.ConfigData{
+		Servers: []config.ServerConfig{serverConfig},
+	}
+
+	// Attempt to create NNTP pool - this validates the connection parameters
+	pool, err := cfg.GetNNTPPool()
+	if err != nil {
+		return ValidationResult{
+			Valid: false,
+			Error: fmt.Sprintf("Failed to connect to server: %v", err),
+		}
+	}
+	defer pool.Quit()
+
+	// If we got here, the connection was successful
+	slog.Info("NNTP server validation successful", "host", serverData.Host, "port", serverData.Port)
+	return ValidationResult{
+		Valid: true,
+		Error: "",
+	}
 }

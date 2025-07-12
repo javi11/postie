@@ -73,6 +73,10 @@ export function SetWebEventEmitter(arg1:any):Promise<void>;
 
 export function SetWebMode(arg1:boolean):Promise<void>;
 
+export function SetupWizardComplete(arg1:backend.SetupWizardData):Promise<void>;
+
 export function Startup(arg1:context.Context):Promise<void>;
 
 export function UploadFiles():Promise<void>;
+
+export function ValidateNNTPServer(arg1:backend.ServerData):Promise<backend.ValidationResult>;

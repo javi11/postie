@@ -94,6 +94,12 @@ onMount(async () => {
 		needsConfiguration = status.needsConfiguration;
 		criticalConfigError = status.criticalConfigError;
 
+		// Redirect to setup wizard if this is first start
+		if (status.isFirstStart) {
+			goto("/setup");
+			return;
+		}
+
 		// Redirect to settings if configuration is needed or there's a critical error
 		if (needsConfiguration || criticalConfigError) {
 			goto("/settings");

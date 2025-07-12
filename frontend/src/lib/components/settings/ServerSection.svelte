@@ -5,6 +5,7 @@ import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData, ServerConfig } from "$lib/types";
 import {
+	Badge,
 	Button,
 	ButtonGroup,
 	Card,
@@ -14,8 +15,10 @@ import {
 	Label,
 	P,
 	Select,
+	Spinner,
 } from "flowbite-svelte";
 import {
+	CheckOutline,
 	CirclePlusSolid,
 	FloppyDiskSolid,
 	ServerSolid,
@@ -26,6 +29,24 @@ import {
 export let config: ConfigData;
 
 let saving = false;
+// Track validation state for each server
+let validationStates = {};
+// Track original server state to detect modifications
+let originalServers: ServerConfig[] = [];
+// Track which servers have been modified
+let modifiedServers: Set<number>;
+
+// Initialize original servers state when component loads
+$: if (config.servers && originalServers.length === 0) {
+	originalServers = JSON.parse(JSON.stringify(config.servers));
+	modifiedServers = new Set<number>();
+	// Mark previously saved servers as valid if they have required fields
+	config.servers.forEach((server, index) => {
+		if (server.host && server.port) {
+			validationStates = { ...validationStates, [index]: { status: "valid", error: "" } };
+		}
+	});
+}
 
 const timeUnitOptions = [
 	{ value: "s", name: "Seconds" },
@@ -85,6 +106,8 @@ function addServer() {
 	};
 
 	config.servers = [...config.servers, newServer];
+	// Mark new server as modified
+	modifiedServers.add(config.servers.length - 1);
 }
 
 function removeServer(index: number) {
@@ -137,9 +160,114 @@ function updateTTL(serverIndex: number, duration: string) {
 		durationToSeconds(duration);
 }
 
+function getServerValidationState(index: number) {
+	const state = validationStates[index];
+	if (!state) return { status: "pending", error: "" };
+	return state;
+}
+
+function isServerModified(index: number): boolean {
+	if (index >= originalServers.length) return true; // New server
+	const current = config.servers[index];
+	const original = originalServers[index];
+	
+	// Compare key fields that would affect server validation
+	return (
+		current.host !== original.host ||
+		current.port !== original.port ||
+		current.username !== original.username ||
+		current.password !== original.password ||
+		current.ssl !== original.ssl ||
+		current.insecure_ssl !== original.insecure_ssl
+	);
+}
+
+function onServerFieldChange(index: number) {
+	// Mark server as modified
+	modifiedServers.add(index);
+	
+	// Clear validation state only if server was modified
+	if (isServerModified(index)) {
+		validationStates = { ...validationStates, [index]: { status: "pending", error: "" } };
+	}
+}
+
+async function validateServer(index: number) {
+	const server = config.servers[index];
+	
+	// Basic validation first
+	if (!server.host || !server.port) {
+		validationStates = { ...validationStates, [index]: { status: "incomplete", error: "Host and port are required" } };
+		return;
+	}
+
+	validationStates = { ...validationStates, [index]: { status: "validating", error: "" } };
+	
+	try {
+		const result = await apiClient.validateNNTPServer({
+			host: server.host,
+			port: server.port,
+			username: server.username,
+			password: server.password,
+			ssl: server.ssl,
+			maxConnections: server.max_connections
+		});
+
+		if (result.valid) {
+			console.log("Setting server", index, "as valid");
+			validationStates = { ...validationStates, [index]: { status: "valid", error: "" } };
+			toastStore.success($t("setup.servers.valid"));
+		} else {
+			console.log("Setting server", index, "as invalid:", result.error);
+			validationStates = { ...validationStates, [index]: { status: "invalid", error: result.error } };
+			toastStore.error($t("setup.servers.invalid"), String(result.error));
+		}
+	} catch (error) {
+		validationStates = { ...validationStates, [index]: { status: "invalid", error: `Validation failed: ${error.message}` } };
+		toastStore.error($t("setup.servers.invalid"), String(error));
+		console.error("Server validation error:", error);
+	}
+}
+
+function areAllServersValid(): boolean {
+	return config.servers.every((_, index) => {
+		const validationState = getServerValidationState(index);
+		// Consider unmodified servers with required fields as valid
+		if (!isServerModified(index) && config.servers[index].host && config.servers[index].port) {
+			return true;
+		}
+		return validationState.status === "valid";
+	});
+}
+
 async function saveServerSettings() {
 	try {
 		saving = true;
+
+		// Check if all servers have been validated successfully
+		if (!areAllServersValid()) {
+			const invalidServers = config.servers
+				.map((_, index) => {
+					const validationState = getServerValidationState(index);
+					const isModified = isServerModified(index);
+					const hasRequiredFields = config.servers[index].host && config.servers[index].port;
+					
+					if (isModified && validationState.status !== "valid") {
+						return index + 1;
+					}
+					if (!hasRequiredFields) {
+						return index + 1;
+					}
+					return null;
+				})
+				.filter(Boolean);
+				
+			toastStore.error(
+				"Validation Required",
+				`Please test server connections for server(s): ${invalidServers.join(", ")}. All modified servers must pass validation before saving.`
+			);
+			return;
+		}
 
 		// Validate that all servers have required fields
 		for (let i = 0; i < config.servers.length; i++) {
@@ -179,6 +307,10 @@ async function saveServerSettings() {
 		}));
 
 		await apiClient.saveConfig(currentConfig);
+
+		// Reset tracking after successful save
+		originalServers = JSON.parse(JSON.stringify(config.servers));
+		modifiedServers.clear();
 
 		toastStore.success(
 			$t("settings.server.saved_success"),
@@ -234,6 +366,7 @@ async function saveServerSettings() {
     {:else}
       <div class="space-y-6">
         {#each config.servers as server, index (index)}
+          {@const validationState = getServerValidationState(index)}
           <div
             class="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50"
           >
@@ -245,21 +378,54 @@ async function saveServerSettings() {
                 >
                   {$t('settings.server.server_number', { number: index + 1 })}
                 </Heading>
+                {#if validationState.status === "validating"}
+                  <Badge color="blue">
+                    <Spinner class="w-3 h-3 mr-1" />
+                    {$t("setup.servers.validating")}
+                  </Badge>
+                {:else if validationState.status === "valid"}
+                  <Badge color="green">
+                    <CheckOutline class="w-3 h-3 mr-1" />
+                    {$t("setup.servers.valid")}
+                  </Badge>
+                {:else if !isServerModified(index) && server.host && server.port}
+                  <Badge color="green">
+                    <CheckOutline class="w-3 h-3 mr-1" />
+                    {$t("setup.servers.valid")} (Saved)
+                  </Badge>
+                {:else if validationState.status === "invalid"}
+                  <Badge color="red">{$t("setup.servers.invalid")}</Badge>
+                {:else}
+                  <Badge color="red">{$t("setup.servers.incomplete")}</Badge>
+                {/if}
                 <div class="flex items-center gap-2">
                   <Checkbox bind:checked={server.enabled} />
                   <Label class="text-sm font-medium">{$t('settings.server.enabled')}</Label>
                 </div>
               </div>
-              <Button
-                size="xs"
-                color="red"
-                variant="outline"
-                onclick={() => removeServer(index)}
-                class="cursor-pointer flex items-center gap-1"
-              >
-                <TrashBinSolid class="w-3 h-3" />
-                {$t('settings.server.remove')}
-              </Button>
+              <div class="flex items-center gap-2">
+                {#if validationState.status !== "validating"}
+                  <Button
+                    size="xs"
+                    color="primary"
+                    variant="outline"
+                    onclick={() => validateServer(index)}
+                    class="cursor-pointer flex items-center gap-1"
+                  >
+                    {$t("setup.servers.testConnection")}
+                  </Button>
+                {/if}
+                <Button
+                  size="xs"
+                  color="red"
+                  variant="outline"
+                  onclick={() => removeServer(index)}
+                  class="cursor-pointer flex items-center gap-1"
+                >
+                  <TrashBinSolid class="w-3 h-3" />
+                  {$t('settings.server.remove')}
+                </Button>
+              </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -270,6 +436,7 @@ async function saveServerSettings() {
                   bind:value={server.host}
                   placeholder={$t('settings.server.host_placeholder')}
                   required
+                  oninput={() => onServerFieldChange(index)}
                 />
               </div>
 
@@ -281,6 +448,7 @@ async function saveServerSettings() {
                   bind:value={server.port}
                   min="1"
                   max="65535"
+                  oninput={() => onServerFieldChange(index)}
                 />
               </div>
 
@@ -291,6 +459,7 @@ async function saveServerSettings() {
                   bind:value={server.username}
                   placeholder={$t('settings.server.username_placeholder')}
                   autocomplete="username"
+                  oninput={() => onServerFieldChange(index)}
                 />
               </div>
 
@@ -302,6 +471,7 @@ async function saveServerSettings() {
                   bind:value={server.password}
                   placeholder={$t('settings.server.password_placeholder')}
                   autocomplete="current-password"
+                  oninput={() => onServerFieldChange(index)}
                 />
               </div>
 
@@ -315,6 +485,7 @@ async function saveServerSettings() {
                   bind:value={server.max_connections}
                   min="1"
                   max="50"
+                  oninput={() => onServerFieldChange(index)}
                 />
               </div>
 
@@ -339,7 +510,7 @@ async function saveServerSettings() {
 
             <div class="mt-4 space-y-3">
               <div class="flex items-center gap-3">
-                <Checkbox bind:checked={server.ssl} />
+                <Checkbox bind:checked={server.ssl} onchange={() => onServerFieldChange(index)} />
                 <div class="flex items-center gap-2">
                   <ShieldCheckSolid
                     class="w-4 h-4 text-green-600 dark:text-green-400"
@@ -359,6 +530,15 @@ async function saveServerSettings() {
                 </div>
               {/if}
             </div>
+
+            <!-- Validation Error Display -->
+            {#if validationState.error}
+              <div class="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                <P class="text-sm text-red-600 dark:text-red-400">
+                  {validationState.error}
+                </P>
+              </div>
+            {/if}
 
             {#if !server.host || !server.port}
               <div
