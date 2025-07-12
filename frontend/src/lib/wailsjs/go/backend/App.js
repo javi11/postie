@@ -138,10 +138,18 @@ export function SetWebMode(arg1) {
   return window['go']['backend']['App']['SetWebMode'](arg1);
 }
 
+export function SetupWizardComplete(arg1) {
+  return window['go']['backend']['App']['SetupWizardComplete'](arg1);
+}
+
 export function Startup(arg1) {
   return window['go']['backend']['App']['Startup'](arg1);
 }
 
 export function UploadFiles() {
   return window['go']['backend']['App']['UploadFiles']();
+}
+
+export function ValidateNNTPServer(arg1) {
+  return window['go']['backend']['App']['ValidateNNTPServer'](arg1);
 }

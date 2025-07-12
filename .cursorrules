@@ -12,7 +12,7 @@
 
 ### Event Handlers
 
-- ❌ DON'T use deprecated `on:` directive: `on:click={handler}`
+- ❌ DON'T use deprecated `on:` directive: `onclick={handler}`
 - ✅ DO use new event handler syntax: `onclick={handler}`
 - ✅ DO use event handler props for all DOM events: `onclick`, `onchange`, `oninput`, `onsubmit`, etc.
 
@@ -240,7 +240,7 @@ let {
 
 ### Breaking Changes
 
-- Event handlers: `on:click` → `onclick`
+- Event handlers: `onclick` → `onclick`
 - Reactivity: Consider migrating to runes (`$state`, `$derived`, `$effect`)
 - Props: Consider migrating from `export let` to `$props()`
 - Stores: Consider migrating to runes for better performance

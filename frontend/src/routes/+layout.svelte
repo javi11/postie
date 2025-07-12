@@ -102,8 +102,14 @@ async function loadAppStatus() {
 		needsConfiguration = status.needsConfiguration || false;
 		criticalConfigError = status.criticalConfigError || false;
 
+		// Force redirect to setup wizard if this is first start and not already on setup page
+		if (status.isFirstStart && $page.route.id !== "/setup") {
+			goto("/setup");
+			return;
+		}
+
 		// Auto-redirect to settings if there's a critical configuration error
-		if (criticalConfigError && $page.route.id !== "/settings") {
+		if (criticalConfigError && $page.route.id !== "/settings" && $page.route.id !== "/setup") {
 			toastStore.error(
 				$t("common.common.error"),
 				$t("common.messages.error_saving"),
@@ -112,9 +118,10 @@ async function loadAppStatus() {
 		}
 	} catch (error) {
 		console.error("Failed to load app status:", error);
-		// If we can't load app status, assume we need configuration
-		needsConfiguration = true;
-		criticalConfigError = false;
+		// If we can't load app status, redirect to setup to be safe
+		if ($page.route.id !== "/setup") {
+			goto("/setup");
+		}
 	}
 }
 </script>
@@ -124,66 +131,72 @@ async function loadAppStatus() {
 >
 	<DarkMode class="hidden" />
 
-	<!-- Header/Navigation -->
-	<header
-		class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200/60 dark:border-gray-700/60 sticky top-0 z-50"
-	>
-		<div class="max-w-7xl mx-auto px-6 py-4">
-			<div class="flex items-center justify-between">
-				<!-- Logo and Brand -->
-				<div class="flex items-center gap-3">
-					<img src={logo} alt="Postie UI" class="w-8 h-8" loading="lazy" />
-					<div>
-						<div class="flex items-center gap-2">
-							<h1 class="text-xl font-bold text-gray-900 dark:text-white">
-								Postie
-							</h1>
+	<!-- Show navbar only if not on setup page -->
+	{#if $page.route.id !== "/setup"}
+		<!-- Header/Navigation -->
+		<header
+			class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200/60 dark:border-gray-700/60 sticky top-0 z-50"
+		>
+			<div class="max-w-7xl mx-auto px-6 py-4">
+				<div class="flex items-center justify-between">
+					<!-- Logo and Brand -->
+					<div class="flex items-center gap-3">
+						<img src={logo} alt="Postie UI" class="w-8 h-8" loading="lazy" />
+						<div>
+							<div class="flex items-center gap-2">
+								<h1 class="text-xl font-bold text-gray-900 dark:text-white">
+									Postie
+								</h1>
+							</div>
+							<p class="text-xs text-gray-500 dark:text-gray-400">
+								Upload Manager
+							</p>
 						</div>
-						<p class="text-xs text-gray-500 dark:text-gray-400">
-							Upload Manager
-						</p>
 					</div>
+
+					<!-- Navigation -->
+					<nav class="flex items-center gap-2">
+						<Button
+							color={$page.route.id === "/" ? "primary" : "alternative"}
+							onclick={() => goto("/")}
+							class="cursor-pointer flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all"
+							disabled={needsConfiguration || criticalConfigError}
+							aria-current={$page.route.id === "/" ? "page" : undefined}
+						>
+							<ChartPieSolid class="w-4 h-4" />
+							{$t('common.nav.dashboard')}
+						</Button>
+						<Button
+							color={$page.route.id === "/settings" ? "secondary" : "gray"}
+							onclick={() => goto("/settings")}
+							class="cursor-pointer flex items-center text-sm font-medium transition-all"
+							aria-current={$page.route.id === "/settings" ? "page" : undefined}
+						>
+							<CogSolid class="w-4 h-4" />
+							<span class="hidden md:inline ml-2">{$t('common.nav.settings')}</span>
+						</Button>
+						<Button
+							color={$page.route.id === "/logs" ? "secondary" : "gray"}
+							onclick={() => goto("/logs")}
+							class="cursor-pointer flex items-center text-sm font-medium transition-all"
+							aria-current={$page.route.id === "/logs" ? "page" : undefined}
+						>
+							<FileDocOutline class="w-4 h-4" />
+							<span class="hidden md:inline ml-2">{$t('common.nav.logs')}</span>
+						</Button>
+					</nav>
 				</div>
-
-				<!-- Navigation -->
-				<nav class="flex items-center gap-2">
-					<Button
-						color={$page.route.id === "/" ? "primary" : "alternative"}
-						onclick={() => goto("/")}
-						class="cursor-pointer flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all"
-						disabled={needsConfiguration || criticalConfigError}
-						aria-current={$page.route.id === "/" ? "page" : undefined}
-					>
-						<ChartPieSolid class="w-4 h-4" />
-						{$t('common.nav.dashboard')}
-					</Button>
-					<Button
-						color={$page.route.id === "/settings" ? "secondary" : "gray"}
-						onclick={() => goto("/settings")}
-						class="cursor-pointer flex items-center text-sm font-medium transition-all"
-						aria-current={$page.route.id === "/settings" ? "page" : undefined}
-					>
-						<CogSolid class="w-4 h-4" />
-						<span class="hidden md:inline ml-2">{$t('common.nav.settings')}</span>
-					</Button>
-					<Button
-						color={$page.route.id === "/logs" ? "secondary" : "gray"}
-						onclick={() => goto("/logs")}
-						class="cursor-pointer flex items-center text-sm font-medium transition-all"
-						aria-current={$page.route.id === "/logs" ? "page" : undefined}
-					>
-						<FileDocOutline class="w-4 h-4" />
-						<span class="hidden md:inline ml-2">{$t('common.nav.logs')}</span>
-					</Button>
-				</nav>
 			</div>
-		</div>
-	</header>
+		</header>
 
-	<!-- Page Content -->
-	<main class="max-w-7xl mx-auto px-6 py-8">
+		<!-- Page Content -->
+		<main class="max-w-7xl mx-auto px-6 py-8">
+			<slot />
+		</main>
+	{:else}
+		<!-- Setup page takes full screen -->
 		<slot />
-	</main>
+	{/if}
 
 	<!-- Toast notifications -->
 	<ToastContainer />

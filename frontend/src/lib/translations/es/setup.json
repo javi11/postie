@@ -1,0 +1,90 @@
+{
+	"title": "Bienvenido a Postie",
+	"description": "Configuremos tus servidores NNTP y directorios para comenzar.",
+	"wizard_title": "Configuración de Postie",
+	"wizard_subtitle": "Te ayudaremos a comenzar con Postie",
+	"steps": {
+		"welcome": "Bienvenida",
+		"servers": "Servidores NNTP",
+		"directories": "Directorios"
+	},
+	"welcome": {
+		"title": "¡Bienvenido a Postie!",
+		"subtitle": "Tu gestor de cargas NNTP confiable. Te ayudaremos a configurarlo en unos pocos pasos simples.",
+		"preferences_title": "Elige Tus Preferencias",
+		"language_title": "Idioma",
+		"language_description": "Selecciona tu idioma preferido",
+		"theme_title": "Tema",
+		"theme_description": "Elige modo claro u oscuro",
+		"features": {
+			"upload": {
+				"title": "Cargas Fáciles",
+				"description": "Arrastra y suelta archivos o navega para cargar a tus servidores NNTP"
+			},
+			"reliable": {
+				"title": "Confiable y Seguro",
+				"description": "Verificación integrada, soporte PAR2 y recuperación de errores"
+			},
+			"fast": {
+				"title": "Alto Rendimiento",
+				"description": "Cargas multi-hilo con agrupación de conexiones"
+			}
+		},
+		"gettingStarted": {
+			"title": "Lo que configuraremos:",
+			"step1": "Configurar las conexiones de tu servidor NNTP",
+			"step2": "Establecer tus directorios de salida",
+			"step3": "¡Comenzar a cargar tus archivos!"
+		}
+	},
+	"servers": {
+		"title": "Configurar Servidores NNTP",
+		"description": "Agrega al menos un servidor NNTP para subir tus archivos. Puedes agregar múltiples servidores para mejor rendimiento.",
+		"server": "Servidor",
+		"host": "Host",
+		"port": "Puerto",
+		"username": "Usuario",
+		"password": "Contraseña",
+		"maxConnections": "Conexiones Máximas",
+		"ssl": "Usar SSL/TLS",
+		"addServer": "Agregar Otro Servidor",
+		"valid": "Válido",
+		"incomplete": "Incompleto",
+		"validating": "Validando...",
+		"invalid": "Conexión Fallida",
+		"testConnection": "Probar Conexión",
+		"requiredFields": "Campos requeridos"
+	},
+	"directories": {
+		"title": "Configurar Directorios",
+		"description": "Configura dónde se guardarán tus archivos y opcionalmente un directorio para monitoreo automático.",
+		"outputDirectory": "Directorio de Salida",
+		"outputDescription": "Donde se guardarán los archivos NZB generados y el contenido subido.",
+		"outputPath": "Ruta de Salida",
+		"watchDirectory": "Directorio de Monitoreo",
+		"watchDescription": "Opcional: Directorio para monitorear nuevos archivos para subida automática.",
+		"watchPath": "Ruta de Monitoreo",
+		"browse": "Explorar",
+		"optional": "Opcional",
+		"requiredFields": "Campos requeridos"
+	},
+	"summary": {
+		"title": "Revisar Configuración",
+		"description": "Revisa tu configuración antes de finalizar la instalación.",
+		"servers": "Servidores NNTP",
+		"directories": "Directorios",
+		"outputDirectory": "Directorio de Salida",
+		"watchDirectory": "Directorio de Monitoreo",
+		"connections": "conexiones",
+		"notConfigured": "No configurado",
+		"readyMessage": "¡Tu configuración se ve bien! Haz clic en Finalizar para guardar y comenzar a usar Postie."
+	},
+	"buttons": {
+		"previous": "Anterior",
+		"next": "Siguiente",
+		"finish": "Finalizar Configuración"
+	},
+	"messages": {
+		"setupRequired": "Se requiere configuración para usar Postie. Por favor completa el asistente de configuración."
+	}
+}

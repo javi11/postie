@@ -1,0 +1,90 @@
+{
+	"title": "Welcome to Postie",
+	"description": "Let's set up your NNTP servers and directories to get started.",
+	"wizard_title": "Postie Setup",
+	"wizard_subtitle": "Let's get you started with Postie",
+	"steps": {
+		"welcome": "Welcome",
+		"servers": "NNTP Servers",
+		"directories": "Directories"
+	},
+	"welcome": {
+		"title": "Welcome to Postie!",
+		"subtitle": "Your reliable NNTP upload manager. Let's get you set up in just a few simple steps.",
+		"preferences_title": "Choose Your Preferences",
+		"language_title": "Language",
+		"language_description": "Select your preferred language",
+		"theme_title": "Theme",
+		"theme_description": "Choose light or dark mode",
+		"features": {
+			"upload": {
+				"title": "Easy Uploads",
+				"description": "Drag & drop files or browse to upload to your NNTP servers"
+			},
+			"reliable": {
+				"title": "Reliable & Secure",
+				"description": "Built-in verification, PAR2 support, and error recovery"
+			},
+			"fast": {
+				"title": "High Performance",
+				"description": "Multi-threaded uploads with connection pooling"
+			}
+		},
+		"gettingStarted": {
+			"title": "What we'll set up:",
+			"step1": "Configure your NNTP server connections",
+			"step2": "Set up your output directories",
+			"step3": "Start uploading your files!"
+		}
+	},
+	"servers": {
+		"title": "Configure NNTP Servers",
+		"description": "Add at least one NNTP server to upload your files. You can add multiple servers for better performance.",
+		"server": "Server",
+		"host": "Host",
+		"port": "Port",
+		"username": "Username",
+		"password": "Password",
+		"maxConnections": "Max Connections",
+		"ssl": "Use SSL/TLS",
+		"addServer": "Add Another Server",
+		"valid": "Valid",
+		"incomplete": "Incomplete",
+		"validating": "Validating...",
+		"invalid": "Connection Failed",
+		"testConnection": "Test Connection",
+		"requiredFields": "Required fields"
+	},
+	"directories": {
+		"title": "Configure Directories",
+		"description": "Set up where your files will be output and optionally watched for automatic processing.",
+		"outputDirectory": "Output Directory",
+		"outputDescription": "Where generated NZB files and uploaded content will be saved.",
+		"outputPath": "Output Path",
+		"watchDirectory": "Watch Directory",
+		"watchDescription": "Optional: Directory to monitor for new files to automatically upload.",
+		"watchPath": "Watch Path",
+		"browse": "Browse",
+		"optional": "Optional",
+		"requiredFields": "Required fields"
+	},
+	"summary": {
+		"title": "Review Configuration",
+		"description": "Review your settings before finishing the setup.",
+		"servers": "NNTP Servers",
+		"directories": "Directories",
+		"outputDirectory": "Output Directory",
+		"watchDirectory": "Watch Directory",
+		"connections": "connections",
+		"notConfigured": "Not configured",
+		"readyMessage": "Your configuration looks good! Click Finish to save and start using Postie."
+	},
+	"buttons": {
+		"previous": "Previous",
+		"next": "Next",
+		"finish": "Finish Setup"
+	},
+	"messages": {
+		"setupRequired": "Setup is required to use Postie. Please complete the setup wizard."
+	}
+}

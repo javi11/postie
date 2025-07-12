@@ -15,6 +15,7 @@ export interface AppStatus {
 	validServerCount: number;
 	configValid: boolean;
 	needsConfiguration: boolean;
+	isFirstStart: boolean;
 }
 
 export interface QueueItem {
@@ -342,6 +343,11 @@ export class WebClient {
 		a.click();
 		window.URL.revokeObjectURL(url);
 		document.body.removeChild(a);
+	}
+
+	// Setup Wizard
+	async setupWizardComplete(wizardData: any): Promise<void> {
+		return this.post<void>("/setup/complete", wizardData);
 	}
 }
 
