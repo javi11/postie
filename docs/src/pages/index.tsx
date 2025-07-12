@@ -57,6 +57,12 @@ function HomepageHeader() {
             View all releases
           </Link>
         </div>
+        <div style={{ marginTop: '20px', textAlign: 'center' }}>
+          <p>Support the project:</p>
+          <a href="https://www.buymeacoffee.com/qbt52hh7sjd">
+           <img alt='Buy me a coffe' src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=☕&slug=qbt52hh7sjd&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" />
+          </a>
+        </div>
       </div>
     </header>
   );
