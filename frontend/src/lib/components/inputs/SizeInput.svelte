@@ -1,6 +1,4 @@
 <script lang="ts">
-import { Button, Input, Label, P, Select } from "flowbite-svelte";
-
 interface ComponentProps {
 	value?: number;
 	label?: string;
@@ -107,15 +105,18 @@ const byteDisplay = $derived(
 );
 </script>
 
-<div>
+<div class="form-control w-full">
 	{#if label}
-		<Label for={id} class="mb-2">{label}</Label>
+		<label class="label" for={id}>
+			<span class="label-text">{label}</span>
+		</label>
 	{/if}
 	<div class="flex gap-2">
 		<div class="flex-1">
-			<Input
+			<input
 				{id}
 				type="number"
+				class="input input-bordered w-full"
 				bind:value={sizeValue}
 				min={minValue}
 				max={dynamicMaxValue || undefined}
@@ -124,28 +125,32 @@ const byteDisplay = $derived(
 			/>
 		</div>
 		<div class="w-20">
-			<Select
-				items={sizeUnitOptions}
+			<select
+				class="select select-bordered"
 				bind:value={sizeUnit}
 				onchange={updateValue}
-			/>
+			>
+				{#each sizeUnitOptions as option}
+					<option value={option.value}>{option.name}</option>
+				{/each}
+			</select>
 		</div>
 	</div>
 	{#if description || byteDisplay}
-		<P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+		<p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
 			{description} {byteDisplay}
-		</P>
+		</p>
 	{/if}
 	{#if presets.length > 0}
 		<div class="mt-2 flex flex-wrap gap-2">
 			{#each presets as preset}
-				<Button
+				<button
 					type="button"
-					class="cursor-pointer px-2 py-1 text-xs"
+					class="btn btn-xs btn-outline"
 					onclick={() => setPreset(preset.value, preset.unit)}
 				>
 					{preset.label}
-				</Button>
+				</button>
 			{/each}
 		</div>
 	{/if}

@@ -1,11 +1,5 @@
 <script lang="ts">
-import { Toast } from "flowbite-svelte";
-import {
-	CheckCircleSolid,
-	CloseCircleSolid,
-	ExclamationCircleSolid,
-	InfoCircleSolid,
-} from "flowbite-svelte-icons";
+import { AlertTriangle, CheckCircle, Info, X } from "lucide-svelte";
 import { onMount } from "svelte";
 import { slide } from "svelte/transition";
 import { type ToastMessage, toastStore } from "../stores/toast";
@@ -20,33 +14,33 @@ onMount(() => {
 	return unsubscribe;
 });
 
-function getToastColor(type: ToastMessage["type"]) {
+function getToastClass(type: ToastMessage["type"]) {
 	switch (type) {
 		case "success":
-			return "green";
+			return "alert-success";
 		case "error":
-			return "red";
+			return "alert-error";
 		case "warning":
-			return "yellow";
+			return "alert-warning";
 		case "info":
-			return "blue";
+			return "alert-info";
 		default:
-			return "blue";
+			return "alert-info";
 	}
 }
 
 function getToastIcon(type: ToastMessage["type"]) {
 	switch (type) {
 		case "success":
-			return CheckCircleSolid;
+			return CheckCircle;
 		case "error":
-			return CloseCircleSolid;
+			return X;
 		case "warning":
-			return ExclamationCircleSolid;
+			return AlertTriangle;
 		case "info":
-			return InfoCircleSolid;
+			return Info;
 		default:
-			return InfoCircleSolid;
+			return Info;
 	}
 }
 
@@ -56,25 +50,27 @@ function dismissToast(id: string) {
 </script>
 
 <!-- Toast Container positioned at top-right -->
-<div class="fixed top-20 right-5 z-50 space-y-3 max-w-sm w-full">
+<div class="toast toast-top toast-end z-50">
   {#each toasts as toast (toast.id)}
-    <Toast
-      transition={slide}
-      params={{ duration: 300 }}
-      color={getToastColor(toast.type)}
-      onclick={() => dismissToast(toast.id)}
-      class="shadow-lg"
-    >
-      {#snippet icon()}
-        <svelte:component this={getToastIcon(toast.type)} class="h-5 w-5" />
-        <span class="sr-only">{toast.type} icon</span>
-      {/snippet}
-      <div class="flex-1">
-        <div class="text-sm font-semibold">{toast.title}</div>
-        {#if toast.message}
-          <div class="text-sm">{toast.message}</div>
-        {/if}
-      </div>
-    </Toast>
+	<div
+	  transition:slide={{ duration: 300 }}
+	  class="alert {getToastClass(toast.type)} shadow-lg"
+	  role="alert"
+	>
+	  <svelte:component this={getToastIcon(toast.type)} class="h-5 w-5" />
+	  <div class="flex-1">
+		<div class="font-semibold">{toast.title}</div>
+		{#if toast.message}
+		  <div class="text-sm opacity-90">{toast.message}</div>
+		{/if}
+	  </div>
+	  <button
+		class="btn btn-ghost btn-sm btn-circle"
+		onclick={() => dismissToast(toast.id)}
+		aria-label="Close notification"
+	  >
+		<X class="h-4 w-4" />
+	  </button>
+	</div>
   {/each}
 </div>

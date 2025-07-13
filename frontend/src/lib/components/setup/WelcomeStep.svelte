@@ -1,9 +1,22 @@
 <script lang="ts">
-import { t } from "$lib/i18n";
-import { Button, Select, DarkMode } from "flowbite-svelte";
-import { MoonSolid, SunSolid, GlobeSolid } from "flowbite-svelte-icons";
-import LanguageSwitcher from "$lib/components/LanguageSwitcher.svelte";
 import logo from "$lib/assets/images/logo.png";
+import LanguageSwitcher from "$lib/components/LanguageSwitcher.svelte";
+import { t } from "$lib/i18n";
+import { Globe, Moon, Sun } from "lucide-svelte";
+
+let isDarkMode = false;
+
+function toggleDarkMode() {
+	isDarkMode = !isDarkMode;
+	if (isDarkMode) {
+		document.documentElement.classList.add("dark");
+		document.documentElement.setAttribute("data-theme", "dark");
+	} else {
+		document.documentElement.classList.remove("dark");
+		document.documentElement.setAttribute("data-theme", "light");
+	}
+	localStorage.setItem("theme", isDarkMode ? "dark" : "light");
+}
 </script>
 
 <div class="w-full h-full flex flex-col items-center justify-center space-y-16 px-4">
@@ -51,7 +64,16 @@ import logo from "$lib/assets/images/logo.png";
 					<h4 class="font-semibold text-gray-900 dark:text-white text-lg">{$t("setup.welcome.theme_title")}</h4>
 					<p class="text-sm text-gray-600 dark:text-gray-400 mb-4">{$t("setup.welcome.theme_description")}</p>
 					<div class="flex justify-center">
-						<DarkMode btnClass="text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-3" />
+						<button 
+							class="btn btn-ghost text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+							onclick={toggleDarkMode}
+						>
+							{#if isDarkMode}
+								<Sun class="w-5 h-5" />
+							{:else}
+								<Moon class="w-5 h-5" />
+							{/if}
+						</button>
 					</div>
 				</div>
 			</div>

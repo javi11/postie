@@ -1,6 +1,4 @@
 <script lang="ts">
-import { Button, Input, Label, P } from "flowbite-svelte";
-
 interface ComponentProps {
 	value?: number;
 	label?: string;
@@ -30,13 +28,16 @@ function setPreset(presetValue: number) {
 }
 </script>
 
-<div>
-	<Label for={id} class="mb-2">{label}</Label>
+<div class="form-control w-full">
+	<label class="label" for={id}>
+		<span class="label-text">{label}</span>
+	</label>
 	<div class="flex gap-2">
 		<div class="flex-1">
-			<Input
+			<input
 				{id}
 				type="number"
+				class="input input-bordered w-full"
 				bind:value
 				min={minValue}
 				max={maxValue}
@@ -47,19 +48,19 @@ function setPreset(presetValue: number) {
 			{unitLabel}
 		</div>
 	</div>
-	<P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+	<p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
 		{description}
-	</P>
+	</p>
 	{#if presets.length > 0}
 		<div class="mt-2 flex flex-wrap gap-2">
 			{#each presets as preset}
-				<Button
+				<button
 					type="button"
-					class="cursor-pointer px-2 py-1 text-xs"
+					class="btn btn-xs btn-outline"
 					onclick={() => setPreset(preset.value)}
 				>
 					{preset.label}
-				</Button>
+				</button>
 			{/each}
 		</div>
 	{/if}

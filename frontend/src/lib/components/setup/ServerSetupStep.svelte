@@ -1,10 +1,9 @@
 <script lang="ts">
-import { createEventDispatcher } from "svelte";
+import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
-import { Button, Input, Label, Checkbox, Card, Badge, Spinner, toast } from "flowbite-svelte";
-import { PlusOutline, TrashBinSolid, CheckOutline } from "flowbite-svelte-icons";
-import apiClient from "$lib/api/client";
+import { Check, Loader2, Plus, Trash2 } from "lucide-svelte";
+import { createEventDispatcher } from "svelte";
 
 const dispatch = createEventDispatcher();
 
@@ -15,16 +14,22 @@ let validationStates = {};
 
 function addServer() {
 	const serverIndex = servers.length;
-	servers = [...servers, {
-		host: "",
-		port: 563,
-		username: "",
-		password: "",
-		ssl: true,
-		maxConnections: 10,
-		enabled: true
-	}];
-	validationStates = { ...validationStates, [serverIndex]: { status: "pending", error: "" } };
+	servers = [
+		...servers,
+		{
+			host: "",
+			port: 563,
+			username: "",
+			password: "",
+			ssl: true,
+			maxConnections: 10,
+			enabled: true,
+		},
+	];
+	validationStates = {
+		...validationStates,
+		[serverIndex]: { status: "pending", error: "" },
+	};
 	updateServers();
 }
 
@@ -50,7 +55,10 @@ function updateServers() {
 function onServerFieldChange(index) {
 	// Clear validation state when server data changes
 	if (validationStates[index] && validationStates[index].status !== "pending") {
-		validationStates = { ...validationStates, [index]: { status: "pending", error: "" } };
+		validationStates = {
+			...validationStates,
+			[index]: { status: "pending", error: "" },
+		};
 	}
 	updateServers();
 }
@@ -63,27 +71,35 @@ function getServerValidationState(index) {
 
 function isServerComplete(server, index) {
 	const validationState = getServerValidationState(index);
-	return  validationState.status === "valid";
+	return validationState.status === "valid";
 }
 
 // Check if any servers are valid and emit validation state
 function checkValidationState() {
-	const hasValid = servers.some((server, index) => isServerComplete(server, index));
+	const hasValid = servers.some((server, index) =>
+		isServerComplete(server, index),
+	);
 	dispatch("validationChange", { hasValidServers: hasValid });
 	return hasValid;
 }
 
 async function validateServer(index) {
 	const server = servers[index];
-	
+
 	// Basic validation first
 	if (!server.host || !server.port) {
-		validationStates = { ...validationStates, [index]: { status: "incomplete", error: "Host and port are required" } };
+		validationStates = {
+			...validationStates,
+			[index]: { status: "incomplete", error: "Host and port are required" },
+		};
 		return;
 	}
 
-	validationStates = { ...validationStates, [index]: { status: "validating", error: "" } };
-	
+	validationStates = {
+		...validationStates,
+		[index]: { status: "validating", error: "" },
+	};
+
 	try {
 		const result = await apiClient.validateNNTPServer({
 			host: server.host,
@@ -91,25 +107,37 @@ async function validateServer(index) {
 			username: server.username,
 			password: server.password,
 			ssl: server.ssl,
-			maxConnections: server.maxConnections
+			maxConnections: server.maxConnections,
 		});
 
 		if (result.valid) {
-			validationStates = { ...validationStates, [index]: { status: "valid", error: "" } };
+			validationStates = {
+				...validationStates,
+				[index]: { status: "valid", error: "" },
+			};
 			toastStore.success($t("setup.servers.valid"));
 		} else {
 			console.log("Setting server", index, "as invalid:", result.error);
-			validationStates = { ...validationStates, [index]: { status: "invalid", error: result.error } };
+			validationStates = {
+				...validationStates,
+				[index]: { status: "invalid", error: result.error },
+			};
 			toastStore.error($t("setup.servers.invalid"), String(result.error));
 		}
-		
+
 		// Emit validation state change
 		checkValidationState();
 	} catch (error) {
-		validationStates = { ...validationStates, [index]: { status: "invalid", error: `Validation failed: ${error.message}` } };
+		validationStates = {
+			...validationStates,
+			[index]: {
+				status: "invalid",
+				error: `Validation failed: ${error.message}`,
+			},
+		};
 		toastStore.error($t("setup.servers.invalid"), String(error));
 		console.error("Server validation error:", error);
-		
+
 		// Emit validation state change
 		checkValidationState();
 	}
@@ -123,10 +151,10 @@ if (servers.length === 0) {
 
 <div class="space-y-6">
 	<div>
-		<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+		<h3 class="text-lg font-semibold text-base-content mb-2">
 			{$t("setup.servers.title")}
 		</h3>
-		<p class="text-gray-600 dark:text-gray-400 mb-4">
+		<p class="text-base-content/70 mb-4">
 			{$t("setup.servers.description")}
 		</p>
 	</div>
@@ -134,55 +162,52 @@ if (servers.length === 0) {
 	<div class="space-y-4">
 		{#each servers as server, index}
 			{@const validationState = getServerValidationState(index)}
-			<Card class="p-4 max-w-full">
-				<div class="flex justify-between items-start mb-4">
-					<div class="flex items-center gap-2">
-						<h4 class="font-medium text-gray-900 dark:text-white">
-							{$t("setup.servers.server")} {index + 1}
-						</h4>
-						{#if validationState.status === "validating"}
-							<Badge color="blue">
-								<Spinner class="w-3 h-3 mr-1" />
-								{$t("setup.servers.validating")}
-							</Badge>
-						{:else if validationState.status === "valid"}
-							<Badge color="green">
-								<CheckOutline class="w-3 h-3 mr-1" />
-								{$t("setup.servers.valid")}
-							</Badge>
-						{:else if validationState.status === "invalid"}
-							<Badge color="red">{$t("setup.servers.invalid")}</Badge>
-						{:else}
-							<Badge color="red">{$t("setup.servers.incomplete")}</Badge>
-						{/if}
+			<div class="card bg-base-100 shadow-lg">
+				<div class="card-body p-4">
+					<div class="flex justify-between items-start mb-4">
+						<div class="flex items-center gap-2">
+							<h4 class="font-medium text-base-content">
+								{$t("setup.servers.server")} {index + 1}
+							</h4>
+							{#if validationState.status === "validating"}
+								<div class="badge badge-primary gap-1">
+									<Loader2 class="w-3 h-3 animate-spin" />
+									{$t("setup.servers.validating")}
+								</div>
+							{:else if validationState.status === "valid"}
+								<div class="badge badge-success gap-1">
+									<Check class="w-3 h-3" />
+									{$t("setup.servers.valid")}
+								</div>
+							{:else if validationState.status === "invalid"}
+								<div class="badge badge-error">{$t("setup.servers.invalid")}</div>
+							{:else}
+								<div class="badge badge-error">{$t("setup.servers.incomplete")}</div>
+							{/if}
+						</div>
+						<div class="flex items-center gap-2">
+							{#if validationState.status !== "validating"}
+								<button
+									class="btn btn-primary btn-outline btn-sm"
+									onclick={() => validateServer(index)}
+								>
+									{$t("setup.servers.testConnection")}
+								</button>
+							{/if}
+							{#if servers.length > 1}
+								<button
+									class="btn btn-error btn-outline btn-sm"
+									onclick={() => removeServer(index)}
+								>
+									<Trash2 class="w-4 h-4" />
+								</button>
+							{/if}
+						</div>
 					</div>
-					<div class="flex items-center gap-2">
-						{#if validationState.status !== "validating"}
-							<Button
-								size="sm"
-								color="primary"
-								outline
-								onclick={() => validateServer(index)}
-							>
-								{$t("setup.servers.testConnection")}
-							</Button>
-						{/if}
-						{#if servers.length > 1}
-							<Button
-								size="sm"
-								color="red"
-								outline
-								onclick={() => removeServer(index)}
-							>
-								<TrashBinSolid class="w-4 h-4" />
-							</Button>
-						{/if}
-					</div>
-				</div>
 				
 				{#if validationState.error}
-					<div class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
-						<p class="text-sm text-red-600 dark:text-red-400">
+					<div class="alert alert-error mb-4">
+						<p class="text-sm">
 							{validationState.error}
 						</p>
 					</div>
@@ -190,11 +215,12 @@ if (servers.length === 0) {
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<div>
-						<Label for="host-{index}" class="mb-2">
-							{$t("setup.servers.host")} *
-						</Label>
-						<Input
+						<label for="host-{index}" class="label">
+							<span class="label-text">{$t("setup.servers.host")} *</span>
+						</label>
+						<input
 							id="host-{index}"
+							class="input input-bordered w-full"
 							bind:value={server.host}
 							placeholder="news.example.com"
 							required
@@ -203,11 +229,12 @@ if (servers.length === 0) {
 					</div>
 
 					<div>
-						<Label for="port-{index}" class="mb-2">
-							{$t("setup.servers.port")} *
-						</Label>
-						<Input
+						<label for="port-{index}" class="label">
+							<span class="label-text">{$t("setup.servers.port")} *</span>
+						</label>
+						<input
 							id="port-{index}"
+							class="input input-bordered w-full"
 							type="number"
 							bind:value={server.port}
 							min="1"
@@ -218,22 +245,24 @@ if (servers.length === 0) {
 					</div>
 
 					<div>
-						<Label for="username-{index}" class="mb-2">
-							{$t("setup.servers.username")}
-						</Label>
-						<Input
+						<label for="username-{index}" class="label">
+							<span class="label-text">{$t("setup.servers.username")}</span>
+						</label>
+						<input
 							id="username-{index}"
+							class="input input-bordered w-full"
 							bind:value={server.username}
 							oninput={() => onServerFieldChange(index)}
 						/>
 					</div>
 
 					<div>
-						<Label for="password-{index}" class="mb-2">
-							{$t("setup.servers.password")}
-						</Label>
-						<Input
+						<label for="password-{index}" class="label">
+							<span class="label-text">{$t("setup.servers.password")}</span>
+						</label>
+						<input
 							id="password-{index}"
+							class="input input-bordered w-full"
 							type="password"
 							bind:value={server.password}
 							oninput={() => onServerFieldChange(index)}
@@ -241,11 +270,12 @@ if (servers.length === 0) {
 					</div>
 
 					<div>
-						<Label for="maxConnections-{index}" class="mb-2">
-							{$t("setup.servers.maxConnections")}
-						</Label>
-						<Input
+						<label for="maxConnections-{index}" class="label">
+							<span class="label-text">{$t("setup.servers.maxConnections")}</span>
+						</label>
+						<input
 							id="maxConnections-{index}"
+							class="input input-bordered w-full"
 							type="number"
 							bind:value={server.maxConnections}
 							min="1"
@@ -255,31 +285,31 @@ if (servers.length === 0) {
 					</div>
 
 					<div class="flex items-center pt-6">
-						<Checkbox
+						<input
+							type="checkbox"
+							class="checkbox mr-2"
 							bind:checked={server.ssl}
-							class="mr-2"
 							onchange={() => onServerFieldChange(index)}
 						/>
-						<Label for="ssl-{index}">
+						<label for="ssl-{index}" class="label-text cursor-pointer">
 							{$t("setup.servers.ssl")}
-						</Label>
+						</label>
 					</div>
 				</div>
-			</Card>
+				</div>
+			</div>
 		{/each}
 	</div>
 
-	<Button
-		color="alternative"
-		outline
+	<button
+		class="btn btn-outline w-full"
 		onclick={addServer}
-		class="w-full"
 	>
-		<PlusOutline class="w-4 h-4 mr-2" />
+		<Plus class="w-4 h-4 mr-2" />
 		{$t("setup.servers.addServer")}
-	</Button>
+	</button>
 
-	<div class="text-sm text-gray-500 dark:text-gray-400">
+	<div class="text-sm text-base-content/70">
 		<p>* {$t("setup.servers.requiredFields")}</p>
 	</div>
 </div>

@@ -7,25 +7,14 @@ import { advancedMode } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
 import {
-	Button,
-	Card,
-	Heading,
-	Input,
-	Label,
-	P,
-	Select,
-	Textarea,
-	Timepicker,
-	Toggle,
-} from "flowbite-svelte";
-import {
-	CirclePlusSolid,
-	EyeSolid,
-	FloppyDiskSolid,
-	FolderOpenSolid,
-	FolderSolid,
-	TrashBinSolid,
-} from "flowbite-svelte-icons";
+	CirclePlus,
+	Clock,
+	Eye,
+	Folder,
+	FolderOpen,
+	Save,
+	Trash2,
+} from "lucide-svelte";
 import { onMount } from "svelte";
 
 export let config: ConfigData;
@@ -117,7 +106,6 @@ $: checkIntervalDuration = getCheckIntervalDuration();
 
 onMount(async () => {
 	try {
-		await apiClient.initialize();
 		// Check if we're in Wails environment
 		if (apiClient.environment === "wails") {
 			const { App } = await import("$lib/wailsjs/go/backend/App");
@@ -202,74 +190,67 @@ async function saveWatcherSettings() {
 }
 </script>
 
-<Card class="max-w-full shadow-sm p-5">
-  <div class="space-y-6">
+<div class="card bg-base-100 shadow-sm">
+  <div class="card-body space-y-6">
     <div class="flex items-center gap-3">
-      <EyeSolid class="w-5 h-5 text-purple-600 dark:text-purple-400" />
-      <Heading
-        tag="h2"
-        class="text-lg font-semibold text-gray-900 dark:text-white"
-      >
+      <Eye class="w-5 h-5 text-purple-600 dark:text-purple-400" />
+      <h2 class="text-lg font-semibold text-base-content">
         {$t('settings.watcher.title')}
-      </Heading>
+      </h2>
     </div>
 
     <div class="space-y-4">
       <div class="flex items-center gap-3">
-        <Toggle bind:checked={config.watcher.enabled} />
+        <input type="checkbox" class="toggle toggle-primary" bind:checked={config.watcher.enabled} id="watcher-enabled" />
         <div class="flex items-center gap-2">
-          <FolderSolid class="w-4 h-4 text-purple-600 dark:text-purple-400" />
-          <Label class="text-sm font-medium">{$t('settings.watcher.enable')}</Label>
+          <Folder class="w-4 h-4 text-purple-600 dark:text-purple-400" />
+          <label class="label-text text-sm font-medium" for="watcher-enabled">{$t('settings.watcher.enable')}</label>
         </div>
       </div>
 
-      <div
-        class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded"
-      >
-        <P class="text-sm text-blue-800 dark:text-blue-200">
+      <div class="alert alert-info">
+        <p class="text-sm">
           <strong>{$t('settings.watcher.title')}:</strong> {$t('settings.watcher.description')}
-        </P>
+        </p>
       </div>
 
       {#if config.watcher.enabled}
-        <div
-          class="pl-4 border-l-2 border-purple-200 dark:border-purple-800 space-y-6"
-        >
+        <div class="pl-4 border-l-2 border-purple-200 dark:border-purple-800 space-y-6">
           <div class="space-y-4">
             <div>
-              <Heading
-                tag="h3"
-                class="text-md font-medium text-gray-900 dark:text-white mb-2"
-              >
+              <h3 class="text-md font-medium text-base-content mb-2">
                 {$t('settings.watcher.directories')}
-              </Heading>
-              <P class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              </h3>
+              <p class="text-sm text-base-content/70 mb-4">
                 {$t('settings.watcher.directories_description')}
-              </P>
+              </p>
 
               <div>
-                <Label class="mb-2">{$t('settings.watcher.watch_directory')}</Label>
+                <label class="label" for="watch-directory">
+                  <span class="label-text">{$t('settings.watcher.watch_directory')}</span>
+                </label>
                 <div class="flex items-center gap-2">
                     {#if apiClient.environment === 'wails'}
-                      <Input
+                      <input
+                        id="watch-directory"
+                        class="input input-bordered flex-1"
                         value={watchDirectory}
                         readonly
                         placeholder={$t('common.inputs.select_directory')}
-                        class="flex-1"
                       />
-                      <Button
-                        size="sm"
+                      <button
+                        class="btn btn-sm btn-outline"
                         onclick={selectWatchDirectory}
-                        class="cursor-pointer flex items-center gap-2"
                       >
-                        <FolderOpenSolid class="w-4 h-4" />
+                        <FolderOpen class="w-4 h-4" />
                         {$t('common.inputs.browse')}
-                      </Button>
+                      </button>
                     {:else}
-                      <Input
+                      <input
+                        id="watch-directory"
+                        class="input input-bordered flex-1"
                         bind:value={config.watcher.watch_directory}
                         placeholder="/path/to/watch/directory"
-                        class="flex-1"
                         oninput={() => {
                           // Keep watchDirectory in sync for consistency
                           watchDirectory = config.watcher.watch_directory;
@@ -277,12 +258,12 @@ async function saveWatcherSettings() {
                       />
                     {/if}
                 </div>
-                <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                <p class="text-sm text-base-content/70 mt-1">
                   {$t('settings.watcher.watch_directory_description')}
                     {#if apiClient.environment === 'web'}
-                      <br /><span class="text-blue-600 dark:text-blue-400 text-xs">Enter the container path directly (e.g., /app/watch)</span>
+                      <br /><span class="text-primary text-xs">Enter the container path directly (e.g., /app/watch)</span>
                     {/if}
-                </P>
+                </p>
               </div>
             </div>
           </div>
@@ -323,27 +304,24 @@ async function saveWatcherSettings() {
       {#if $advancedMode}
           <div class="space-y-4">
             <div>
-              <Heading
-                tag="h3"
-                class="text-md font-medium text-gray-900 dark:text-white mb-2"
-              >
+              <h3 class="text-md font-medium text-base-content mb-2">
                 {$t('settings.watcher.behavior')}
-              </Heading>
-              <P class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              </h3>
+              <p class="text-sm text-base-content/70 mb-4">
                 {$t('settings.watcher.behavior_description')}
-              </P>
+              </p>
 
               <div class="space-y-4">
                 <div>
-                  <Toggle
-                    bind:checked={config.watcher.delete_original_file}
-                    class="mb-2"
-                  >
-                    {$t('settings.watcher.delete_original_file')}
-                  </Toggle>
-                  <P class="text-sm text-gray-600 dark:text-gray-400">
+                  <div class="form-control">
+                    <label class="label cursor-pointer justify-start gap-3">
+                      <input type="checkbox" class="toggle toggle-primary" bind:checked={config.watcher.delete_original_file} />
+                      <span class="label-text">{$t('settings.watcher.delete_original_file')}</span>
+                    </label>
+                  </div>
+                  <p class="text-sm text-base-content/70">
                     {$t('settings.watcher.delete_original_file_description')}
-                  </P>
+                  </p>
                 </div>
               </div>
             </div>
@@ -352,32 +330,33 @@ async function saveWatcherSettings() {
 
           <div class="space-y-4">
             <div>
-              <Heading
-                tag="h3"
-                class="text-md font-medium text-gray-900 dark:text-white mb-2"
-              >
+              <h3 class="text-md font-medium text-base-content mb-2">
                 {$t('settings.watcher.posting_schedule')}
-              </Heading>
-              <P class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              </h3>
+              <p class="text-sm text-base-content/70 mb-4">
                 {$t('settings.watcher.posting_schedule_description')}
-              </P>
+              </p>
 
               <div class="space-y-4">
                 <div>
-                  <Label class="mb-2">{$t('settings.watcher.time_range')}</Label>
-                  <Timepicker
-                    type="range"
-                    value={config.watcher.schedule.start_time}
-                    endValue={config.watcher.schedule.end_time}
-                    onselect={(data) => {
-                      if (data.time) config.watcher.schedule.start_time = data.time;
-                      if (data.endTime) config.watcher.schedule.end_time = data.endTime;
-                    }}
-                    divClass="shadow-none"
-                  />
-                  <P class="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                  <div class="form-control">
+                    <div class="mb-2">
+                      <span class="text-sm font-medium text-base-content">{$t('settings.watcher.time_range')}</span>
+                    </div>
+                    <Timepicker
+                      type="range"
+                      value={config.watcher.schedule.start_time}
+                      endValue={config.watcher.schedule.end_time}
+                      onselect={(data) => {
+                        if (data.time) config.watcher.schedule.start_time = data.time;
+                        if (data.endTime) config.watcher.schedule.end_time = data.endTime;
+                      }}
+                      divClass="shadow-none"
+                    />
+                  </div>
+                  <p class="text-sm text-base-content/70 mt-2">
                     {$t('settings.watcher.time_range_description')}
-                  </P>
+                  </p>
                 </div>
               </div>
             </div>
@@ -386,55 +365,47 @@ async function saveWatcherSettings() {
             <div class="space-y-4">
               <div class="flex items-center justify-between">
                 <div>
-                  <Heading
-                    tag="h3"
-                    class="text-md font-medium text-gray-900 dark:text-white"
-                  >
+                  <h3 class="text-md font-medium text-base-content">
                     {$t('settings.watcher.ignore_patterns')}
-                  </Heading>
-                  <P class="text-sm text-gray-600 dark:text-gray-400">
+                  </h3>
+                  <p class="text-sm text-base-content/70">
                     {$t('settings.watcher.ignore_patterns_description')}
-                  </P>
+                  </p>
                 </div>
-                <Button
-                  size="sm"
+                <button
+                  class="btn btn-sm btn-outline"
                   onclick={addIgnorePattern}
-                  class="cursor-pointer flex items-center gap-2"
                 >
-                  <CirclePlusSolid class="w-4 h-4" />
+                  <CirclePlus class="w-4 h-4" />
                   {$t('settings.watcher.add_pattern')}
-                </Button>
+                </button>
               </div>
 
               <div class="space-y-3">
                 {#each config.watcher.ignore_patterns as pattern, index (index)}
                   <div class="flex items-center gap-3">
                     <div class="flex-1">
-                      <Input
+                      <input
+                        class="input input-bordered w-full"
                         bind:value={config.watcher.ignore_patterns[index]}
                         placeholder={$t('settings.watcher.pattern_placeholder')}
                       />
                     </div>
-                    <Button
-                      size="sm"
-                      color="red"
-                      variant="outline"
+                    <button
+                      class="btn btn-sm btn-error btn-outline"
                       onclick={() => removeIgnorePattern(index)}
-                      class="cursor-pointer flex items-center gap-1"
                     >
-                      <TrashBinSolid class="w-3 h-3" />
+                      <Trash2 class="w-3 h-3" />
                       {$t('settings.watcher.remove')}
-                    </Button>
+                    </button>
                   </div>
                 {/each}
               </div>
 
-              <div
-                class="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded"
-              >
-                <P class="text-sm text-gray-700 dark:text-gray-300">
+              <div class="alert">
+                <p class="text-sm">
                   {@html $t('settings.watcher.common_patterns')}
-                </P>
+                </p>
               </div>
             </div>
           {/if}
@@ -444,16 +415,15 @@ async function saveWatcherSettings() {
     </div>
 
     <!-- Save Button -->
-    <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
-      <Button
-        color="green"
+    <div class="pt-4 border-t border-base-300">
+      <button
+        class="btn btn-success"
         onclick={saveWatcherSettings}
         disabled={saving}
-        class="cursor-pointer flex items-center gap-2"
       >
-        <FloppyDiskSolid class="w-4 h-4" />
+        <Save class="w-4 h-4" />
         {saving ? $t('settings.watcher.saving') : $t('settings.watcher.save_button')}
-      </Button>
+      </button>
     </div>
   </div>
-</Card>
+</div>

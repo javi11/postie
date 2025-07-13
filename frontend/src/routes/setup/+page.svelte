@@ -1,28 +1,25 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
-import { onMount } from "svelte";
 import apiClient from "$lib/api/client";
 import SetupWizard from "$lib/components/setup/SetupWizard.svelte";
-import { toastStore } from "$lib/stores/toast";
 import { t } from "$lib/i18n";
+import { toastStore } from "$lib/stores/toast";
+import { onMount } from "svelte";
 
 let appStatus = null;
 let isLoading = true;
 
 onMount(async () => {
-	// Initialize API client
-	await apiClient.initialize();
-	
 	// Check app status to see if setup is needed
 	try {
 		appStatus = await apiClient.getAppStatus();
-		
+
 		// If not first start and not needing configuration, redirect to dashboard
 		if (!appStatus.isFirstStart && !appStatus.needsConfiguration) {
 			goto("/");
 			return;
 		}
-		
+
 		isLoading = false;
 	} catch (error) {
 		console.error("Failed to load app status:", error);
@@ -34,19 +31,19 @@ onMount(async () => {
 async function handleWizardComplete(event) {
 	try {
 		await apiClient.setupWizardComplete(event.detail);
-		
+
 		toastStore.success(
 			$t("common.common.success"),
-			$t("common.messages.configuration_saved_description")
+			$t("common.messages.configuration_saved_description"),
 		);
-		
+
 		// Redirect to dashboard
 		goto("/");
 	} catch (error) {
 		console.error("Setup wizard failed:", error);
 		toastStore.error(
 			$t("common.common.error"),
-			$t("common.messages.configuration_save_failed")
+			$t("common.messages.configuration_save_failed"),
 		);
 	}
 }
@@ -56,11 +53,11 @@ function handleWizardClose() {
 	if (appStatus?.isFirstStart) {
 		toastStore.warning(
 			$t("common.common.warning"),
-			$t("setup.messages.setupRequired")
+			$t("setup.messages.setupRequired"),
 		);
 		return;
 	}
-	
+
 	// Otherwise redirect to dashboard or settings
 	goto(appStatus?.needsConfiguration ? "/settings" : "/");
 }

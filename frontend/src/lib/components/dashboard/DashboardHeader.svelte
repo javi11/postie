@@ -3,13 +3,7 @@ import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import { uploadActions, uploadStore } from "$lib/stores/upload";
-import { Alert, Button, Card, Heading, P } from "flowbite-svelte";
-import {
-	CirclePlusSolid,
-	CloseCircleSolid,
-	ExclamationCircleSolid,
-	TrashBinSolid,
-} from "flowbite-svelte-icons";
+import { AlertTriangle, Plus, Trash2, X } from "lucide-svelte";
 
 export let needsConfiguration: boolean;
 export let criticalConfigError: boolean;
@@ -63,99 +57,93 @@ async function clearQueue() {
 }
 </script>
 
-<Card
-  class="max-w-full p-5 backdrop-blur-sm bg-white/60 dark:bg-gray-800/60 border border-gray-200/60 dark:border-gray-700/60 shadow-lg shadow-gray-900/5 dark:shadow-gray-900/20"
->
-  <div
-    class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6"
-  >
-    <div class="space-y-2">
-      <Heading
-        tag="h1"
-        class="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300 bg-clip-text text-transparent"
-      >
-        {$t("dashboard.header.title")}
-      </Heading>
-      <P class="text-lg text-gray-600 dark:text-gray-400">
-        {$t("dashboard.header.description")}
-      </P>
-    </div>
+<div class="card bg-base-100/60 backdrop-blur-sm border border-base-300/60 shadow-lg max-w-full">
+  <div class="card-body">
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+      <div class="space-y-2">
+        <h1 class="text-3xl font-bold bg-gradient-to-r from-base-content to-base-content/60 bg-clip-text text-transparent">
+          {$t("dashboard.header.title")}
+        </h1>
+        <p class="text-lg text-base-content/70">
+          {$t("dashboard.header.description")}
+        </p>
+      </div>
 
-    <div class="flex flex-wrap gap-3">
-      {#if $uploadStore.isUploading}
-        <!-- Upload Progress Indicator -->
-        <div class="bg-white rounded-lg border border-gray-200 p-4 min-w-[300px]">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-sm font-medium text-gray-900">
-              Uploading {$uploadStore.files.length} file{$uploadStore.files.length !== 1 ? 's' : ''}
-            </span>
-            <div class="flex items-center gap-2">
-              <span class="text-sm text-gray-500">
-                {Math.round($uploadStore.totalProgress)}%
+      <div class="flex flex-wrap gap-3">
+        {#if $uploadStore.isUploading}
+          <!-- Upload Progress Indicator -->
+          <div class="bg-base-100 rounded-lg border border-base-300 p-4 min-w-[300px]">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-sm font-medium">
+                Uploading {$uploadStore.files.length} file{$uploadStore.files.length !== 1 ? 's' : ''}
               </span>
-              <Button
-                size="xs"
-                color="red"
-                onclick={cancelCurrentUpload}
-                class="cursor-pointer h-6 w-6 flex items-center justify-center"
-              >
-                <CloseCircleSolid class="w-3 h-3" />
-              </Button>
+              <div class="flex items-center gap-2">
+                <span class="text-sm text-base-content/70">
+                  {Math.round($uploadStore.totalProgress)}%
+                </span>
+                <button
+                  class="btn btn-error btn-xs w-6 h-6"
+                  onclick={cancelCurrentUpload}
+                >
+                  <X class="w-3 h-3" />
+                </button>
+              </div>
             </div>
-          </div>
-          
-          <!-- Overall Progress Bar -->
-          <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
-            <div
-              class="bg-blue-500 h-2 rounded-full transition-all duration-300"
-              style="width: {$uploadStore.totalProgress}%"
-            ></div>
-          </div>
+            
+            <!-- Overall Progress Bar -->
+            <div class="w-full bg-base-300 rounded-full h-2 mb-2">
+              <div
+                class="bg-primary h-2 rounded-full transition-all duration-300"
+                style="width: {$uploadStore.totalProgress}%"
+              ></div>
+            </div>
 
-          <!-- Current File Info -->
-          {#if $uploadStore.files.length > 0}
-            {@const currentFile = $uploadStore.files.find(f => f.status === 'uploading' || f.status === 'processing') || $uploadStore.files[0]}
-            <div class="text-xs text-gray-600 truncate">
-              {currentFile.name} ({formatFileSize(currentFile.size)})
-            </div>
-          {/if}
-        </div>
-      {:else}
-        <!-- Add Files Button -->
-        <Button
-          color="primary"
-          onclick={handleUpload}
-          disabled={needsConfiguration}
-          class="cursor-pointer flex items-center gap-2 px-6 py-3 text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200 border-gray-300 dark:border-gray-600"
+            <!-- Current File Info -->
+            {#if $uploadStore.files.length > 0}
+              {@const currentFile = $uploadStore.files.find(f => f.status === 'uploading' || f.status === 'processing') || $uploadStore.files[0]}
+              <div class="text-xs text-base-content/70 truncate">
+                {currentFile.name} ({formatFileSize(currentFile.size)})
+              </div>
+            {/if}
+          </div>
+        {:else}
+          <!-- Add Files Button -->
+          <button
+            class="btn btn-primary"
+            onclick={handleUpload}
+            disabled={needsConfiguration}
+          >
+            <Plus class="w-4 h-4" />
+            {$t("dashboard.header.add_files")}
+          </button>
+        {/if}
+
+        <button
+          class="btn btn-error btn-outline"
+          onclick={clearQueue}
         >
-          <CirclePlusSolid class="w-4 h-4" />
-          {$t("dashboard.header.add_files")}
-        </Button>
-      {/if}
-
-      <Button
-        color="red"
-        variant="outline"
-        onclick={clearQueue}
-        class="cursor-pointer flex items-center gap-2 px-6 py-3 text-sm font-medium shadow-sm"
-      >
-        <TrashBinSolid class="w-4 h-4" />
-        {$t("dashboard.header.clear_completed")}
-      </Button>
+          <Trash2 class="w-4 h-4" />
+          {$t("dashboard.header.clear_completed")}
+        </button>
+      </div>
     </div>
-  </div>
 
-  {#if criticalConfigError}
-    <Alert color="red" class="mt-6">
-      <ExclamationCircleSolid slot="icon" class="w-5 h-5" />
-      <span class="font-semibold">{$t("dashboard.alerts.config_error")}</span>
-      {$t("dashboard.alerts.config_error_description", { settingsLink: `<a href="/settings" class="font-medium underline hover:no-underline transition-all">${$t("dashboard.alerts.settings_link")}</a>` })}
-    </Alert>
-  {:else if needsConfiguration}
-    <Alert color="yellow" class="mt-6">
-      <ExclamationCircleSolid slot="icon" class="w-5 h-5" />
-      <span class="font-semibold">{$t("dashboard.alerts.config_required")}</span>
-      {$t("dashboard.alerts.config_required_description", { settingsLink: `<a href="/settings" class="font-medium underline hover:no-underline transition-all">${$t("dashboard.alerts.settings_link")}</a>` })}
-    </Alert>
-  {/if}
-</Card>
+    {#if criticalConfigError}
+      <div class="alert alert-error mt-6">
+        <AlertTriangle class="w-5 h-5" />
+        <span>
+          <span class="font-semibold">{$t("dashboard.alerts.config_error")}</span>
+          {@html $t("dashboard.alerts.config_error_description", { settingsLink: `<a href="/settings" class="font-medium underline hover:no-underline transition-all">${$t("dashboard.alerts.settings_link")}</a>` })}
+        </span>
+      </div>
+    {:else if needsConfiguration}
+      <div class="alert alert-warning mt-6">
+        <AlertTriangle class="w-5 h-5" />
+        <span>
+          <span class="font-semibold">{$t("dashboard.alerts.config_required")}</span>
+          {@html $t("dashboard.alerts.config_required_description", { settingsLink: `<a href="/settings" class="font-medium underline hover:no-underline transition-all">${$t("dashboard.alerts.settings_link")}</a>` })}
+        </span>
+      </div>
+    {/if}
+  </div>
+</div>

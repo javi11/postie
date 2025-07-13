@@ -2,15 +2,14 @@
 import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import type { QueueStats } from "$lib/types";
-import { Badge, Card, Heading } from "flowbite-svelte";
 import {
-	ChartPieSolid,
-	CheckCircleSolid,
-	ClockSolid,
-	ExclamationCircleSolid,
-	PlaySolid,
-	RectangleListSolid,
-} from "flowbite-svelte-icons";
+	AlertTriangle,
+	CheckCircle,
+	Clock,
+	List,
+	PieChart,
+	Play,
+} from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
 
 let queueStats: QueueStats = {
@@ -61,12 +60,12 @@ async function loadQueueStats() {
   <!-- Header -->
   <div class="flex items-center gap-3 mb-6">
     <div class="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600">
-      <ChartPieSolid class="w-6 h-6 text-white" />
+      <PieChart class="w-6 h-6 text-white" />
     </div>
     <div>
-      <Heading tag="h2" class="text-xl font-semibold text-gray-900 dark:text-white">
+      <h2 class="text-xl font-semibold">
         {$t('dashboard.stats.queue_stats.title')}
-      </Heading>
+      </h2>
       <p class="text-sm text-gray-500 dark:text-gray-400">{$t('dashboard.stats.queue_stats.overview')}</p>
     </div>
   </div>
@@ -81,7 +80,7 @@ async function loadQueueStats() {
           <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{queueStats.total}</p>
         </div>
         <div class="p-3 rounded-full bg-gray-100 dark:bg-gray-700">
-          <RectangleListSolid class="w-6 h-6 text-gray-600 dark:text-gray-400" />
+          <List class="w-6 h-6 text-gray-600 dark:text-gray-400" />
         </div>
       </div>
     </div>
@@ -94,7 +93,7 @@ async function loadQueueStats() {
           <p class="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">{queueStats.pending}</p>
         </div>
         <div class="p-3 rounded-full bg-amber-100 dark:bg-amber-900/20">
-          <ClockSolid class="w-6 h-6 text-amber-600 dark:text-amber-400" />
+          <Clock class="w-6 h-6 text-amber-600 dark:text-amber-400" />
         </div>
       </div>
       {#if queueStats.pending > 0}
@@ -113,7 +112,7 @@ async function loadQueueStats() {
           <p class="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">{queueStats.complete}</p>
         </div>
         <div class="p-3 rounded-full bg-green-100 dark:bg-green-900/20">
-          <CheckCircleSolid class="w-6 h-6 text-green-600 dark:text-green-400" />
+          <CheckCircle class="w-6 h-6 text-green-600 dark:text-green-400" />
         </div>
       </div>
       {#if queueStats.complete > 0}
@@ -132,7 +131,7 @@ async function loadQueueStats() {
           <p class="text-2xl font-bold text-red-600 dark:text-red-400 mt-1">{queueStats.error}</p>
         </div>
         <div class="p-3 rounded-full bg-red-100 dark:bg-red-900/20">
-          <ExclamationCircleSolid class="w-6 h-6 text-red-600 dark:text-red-400" />
+          <AlertTriangle class="w-6 h-6 text-red-600 dark:text-red-400" />
         </div>
       </div>
       {#if queueStats.error > 0}

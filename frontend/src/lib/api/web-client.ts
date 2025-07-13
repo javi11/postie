@@ -34,6 +34,24 @@ export interface ProcessorStatus {
 	runningJobIDs: string[];
 }
 
+export interface ServerValidationData {
+	host: string;
+	port: number;
+	username: string;
+	password: string;
+	ssl: boolean;
+	maxConnections: number;
+}
+
+export interface ServerValidationResult {
+	valid: boolean;
+	error: string;
+}
+
+export interface SetupWizardData {
+	[key: string]: unknown;
+}
+
 export interface RunningJob {
 	id: string;
 	name: string;
@@ -346,7 +364,13 @@ export class WebClient {
 	}
 
 	// Setup Wizard
-	async setupWizardComplete(wizardData: any): Promise<void> {
+	async validateNNTPServer(
+		serverData: ServerValidationData,
+	): Promise<ServerValidationResult> {
+		return this.post<ServerValidationResult>("/validate-server", serverData);
+	}
+
+	async setupWizardComplete(wizardData: SetupWizardData): Promise<void> {
 		return this.post<void>("/setup/complete", wizardData);
 	}
 }

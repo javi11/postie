@@ -5,28 +5,12 @@ import { loadTranslations, locale, t } from "$lib/i18n";
 import { availableLocales, setStoredLocale } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
-import {
-	Button,
-	Card,
-	DarkMode,
-	Heading,
-	Input,
-	Label,
-	P,
-	Select,
-} from "flowbite-svelte";
-import {
-	CogSolid,
-	FloppyDiskSolid,
-	FolderOpenSolid,
-} from "flowbite-svelte-icons";
+import { Cog, FolderOpen, Save } from "lucide-svelte";
 import { onMount } from "svelte";
 
 export let config: ConfigData;
 
-let outputDirectory = "";
 let saving = false;
-let selectedLanguage = $locale;
 
 // Initialize config defaults if they don't exist
 if (!config.output_dir) {
@@ -53,8 +37,6 @@ async function changeLanguage(event: Event) {
 	// The sveltekit-i18n library should automatically handle loading the new translations
 	// when the locale store is updated.
 	locale.set(newLocale);
-
-	selectedLanguage = newLocale;
 }
 
 async function selectOutputDirectory() {
@@ -65,7 +47,6 @@ async function selectOutputDirectory() {
 			const dir = await App.SelectOutputDirectory();
 			if (dir) {
 				config.output_dir = dir;
-				outputDirectory = dir;
 			}
 		}
 		// In web mode, users can just type the path directly in the input field
@@ -99,167 +80,144 @@ async function saveGeneralSettings() {
 		saving = false;
 	}
 }
-
-// Update display when config changes
-$: if (config.output_dir) {
-	outputDirectory = config.output_dir;
-}
-
-// Keep selectedLanguage in sync with locale store
-$: selectedLanguage = $locale;
 </script>
 
 <div class="space-y-6">
-	<Card class="max-w-full shadow-sm p-5">
-		<div class="space-y-6">
+	<div class="card bg-base-100 shadow-xl">
+		<div class="card-body space-y-6">
 			<div class="flex items-center gap-3">
-				<CogSolid class="w-5 h-5 text-gray-600 dark:text-gray-400" />
-				<Heading tag="h2" class="text-lg font-semibold text-gray-900 dark:text-white">
+				<Cog class="w-5 h-5 text-gray-600 dark:text-gray-400" />
+				<h2 class="card-title text-lg">
 					{$t('settings.general.title')}
-				</Heading>
+				</h2>
 			</div>
 
 			<div class="space-y-4">
-				<div>
-					<Label for="output-dir" class="mb-2">{$t('settings.general.output_directory')}</Label>
+				<div class="form-control">
+					<label class="label" for="output-dir">
+						<span class="label-text">{$t('settings.general.output_directory')}</span>
+					</label>
 					<div class="flex items-center gap-2">
-						<Input
+						<input
 							id="output-dir"
-							bind:value={config.output_dir}
+							class="input input-bordered flex-1"
+							value={config.output_dir}
+							onchange={(e) => {
+								config.output_dir = (e.target as HTMLInputElement).value;
+							}}
 							placeholder="./output"
-							class="flex-1"
 						/>
-						{#await apiClient.initialize() then}
-							{#if apiClient.environment === 'wails'}
-								<Button
-									size="sm"
-									onclick={selectOutputDirectory}
-									class="cursor-pointer flex items-center gap-2"
-								>
-									<FolderOpenSolid class="w-4 h-4" />
-									{$t('settings.general.browse')}
-								</Button>
-							{/if}
-						{/await}
+						{#if apiClient.environment === 'wails'}
+							<button
+								class="btn btn-outline btn-sm"
+								onclick={selectOutputDirectory}
+							>
+								<FolderOpen class="w-4 h-4" />
+								{$t('settings.general.browse')}
+							</button>
+						{/if}
 					</div>
-					<P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-						{$t('settings.general.output_directory_description')}
-						{#await apiClient.initialize() then}
-							{#if apiClient.environment === 'web'}
-								<br /><span class="text-blue-600 dark:text-blue-400 text-xs">Enter the container path directly (e.g., /app/output)</span>
-							{/if}
-						{/await}
-					</P>
 				</div>
 
-				<div
-					class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded"
-				>
-					<P class="text-sm text-blue-800 dark:text-blue-200">
+				<div class="alert alert-info">
+					<span class="text-sm">
 						<strong>{$t('settings.general.info_title')}</strong>
 						{$t('settings.general.info_description')}
-					</P>
+					</span>
 				</div>
 
-				<div>
-					<Label for="maintain-extension" class="mb-2">
-						{$t('settings.general.maintain_original_extension')}
-					</Label>
+				<div class="form-control">
+					<label class="label" for="maintain-extension">
+						<span class="label-text">{$t('settings.general.maintain_original_extension')}</span>
+					</label>
 					<div class="flex items-center gap-2">
 						<input
 							id="maintain-extension"
 							type="checkbox"
+							class="checkbox"
 							bind:checked={config.maintain_original_extension}
-							class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
 						/>
-						<span class="text-sm text-gray-700 dark:text-gray-300">
+						<span class="text-sm">
 							{config.maintain_original_extension ? $t('settings.general.maintain_extension_enabled') : $t('settings.general.maintain_extension_disabled')}
 						</span>
 					</div>
-					<P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-						{$t('settings.general.maintain_original_extension_description')}
-					</P>
-				</div>
-
-				{#if outputDirectory && outputDirectory !== config.output_dir}
-					<div
-						class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded"
-					>
-						<P class="text-sm text-amber-800 dark:text-amber-200">
-							<strong>{$t('settings.general.current_active_directory')}</strong>
-							{outputDirectory}<br />
-							<strong>{$t('settings.general.new_directory_after_save')}</strong>
-							{config.output_dir}
-						</P>
+					<div class="label">
+						<span class="label-text-alt">
+							{$t('settings.general.maintain_original_extension_description')}
+						</span>
 					</div>
-				{/if}
+				</div>
 			</div>
 
 			<!-- Save Button -->
-			<div class="pt-4 border-t border-gray-200 dark:border-gray-700">
-				<Button
-					color="green"
+			<div class="card-actions pt-4 border-t border-base-300">
+				<button
+					class="btn btn-success"
 					onclick={saveGeneralSettings}
 					disabled={saving}
-					class="cursor-pointer flex items-center gap-2"
 				>
-					<FloppyDiskSolid class="w-4 h-4" />
+					<Save class="w-4 h-4" />
 					{saving ? $t('settings.general.saving') : $t('settings.general.save_button')}
-				</Button>
+				</button>
 			</div>
 		</div>
-	</Card>
+	</div>
 
-	<Card class="max-w-full shadow-sm p-5">
-		<div class="space-y-6">
+	<div class="card bg-base-100 shadow-xl">
+		<div class="card-body space-y-6">
 			<div class="flex items-center gap-3">
-				<CogSolid class="w-5 h-5 text-gray-600 dark:text-gray-400" />
-				<Heading tag="h2" class="text-lg font-semibold text-gray-900 dark:text-white">
+				<Cog class="w-5 h-5 text-gray-600 dark:text-gray-400" />
+				<h2 class="card-title text-lg">
 					{$t('settings.general.ui_preferences')}
-				</Heading>
+				</h2>
 			</div>
 			<div class="space-y-4">
-				<P class="text-sm text-gray-600 dark:text-gray-400 -mt-4">
+				<p class="text-sm text-base-content/70 -mt-4">
 					{$t('settings.general.ui_preferences_description')}
-				</P>
+				</p>
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<!-- Language Selection -->
-					<div>
-						<Label for="language-select" class="mb-2">
-							{$t('settings.general.language')}
-						</Label>
-						<Select
+					<div class="form-control">
+						<label class="label" for="language-select">
+							<span class="label-text">{$t('settings.general.language')}</span>
+						</label>
+						<select
 							id="language-select"
-							bind:value={selectedLanguage}
+							class="select select-bordered w-full"
+							value={$locale}
 							onchange={changeLanguage}
-							items={languageOptions}
-							class="w-full"
-						/>
-						<P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-							{$t('settings.general.language_description')}
-						</P>
+						>
+							{#each languageOptions as option}
+								<option value={option.value}>{option.name}</option>
+							{/each}
+						</select>
+						<div class="label">
+							<span class="label-text-alt">
+								{$t('settings.general.language_description')}
+							</span>
+						</div>
 					</div>
 
 					<!-- Theme Selection -->
-					<div>
-						<Label class="mb-2">
-							{$t('settings.general.theme')}
-						</Label>
+					<div class="form-control">
+						<div class="label">
+							<span class="label-text">{$t('settings.general.theme')}</span>
+						</div>
 						<div class="flex items-center gap-2 mt-2">
-							<span class="text-sm text-gray-700 dark:text-gray-300">
+							<span class="text-sm">
 								{$t('settings.general.theme_toggle')}
 							</span>
-							<DarkMode
-								class="cursor-pointer text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-2.5 transition-all"
-							/>
+							<input type="checkbox" class="toggle" checked />
 						</div>
-						<P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-							{$t('settings.general.theme_description')}
-						</P>
+						<div class="label">
+							<span class="label-text-alt">
+								{$t('settings.general.theme_description')}
+							</span>
+						</div>
 					</div>
 				</div>
 			</div>
 		</div>
-	</Card>
+	</div>
 </div>

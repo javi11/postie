@@ -7,22 +7,7 @@ import { t } from "$lib/i18n";
 import { advancedMode } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData } from "$lib/types";
-import {
-	Button,
-	Card,
-	Checkbox,
-	Heading,
-	Input,
-	Label,
-	P,
-	Select,
-} from "flowbite-svelte";
-import {
-	CirclePlusSolid,
-	CloudArrowUpSolid,
-	FloppyDiskSolid,
-	TrashBinSolid,
-} from "flowbite-svelte-icons";
+import { CloudUpload, Plus, Save, Trash2 } from "lucide-svelte";
 
 export let config: ConfigData;
 
@@ -175,31 +160,31 @@ async function savePostingSettings() {
 }
 </script>
 
-<Card class="max-w-full shadow-sm p-5">
-  <div class="space-y-6">
+<div class="card bg-base-100 shadow-sm">
+  <div class="card-body space-y-6">
     <div class="flex items-center gap-3">
-      <CloudArrowUpSolid class="w-5 h-5 text-green-600 dark:text-green-400" />
-      <Heading
-        tag="h2"
-        class="text-lg font-semibold text-gray-900 dark:text-white"
-      >
+      <CloudUpload class="w-5 h-5 text-green-600 dark:text-green-400" />
+      <h2 class="text-lg font-semibold text-base-content">
         {$t('settings.posting.title')}
-      </Heading>
+      </h2>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div>
-        <Label for="max-retries" class="mb-2">{$t('settings.posting.max_retries')}</Label>
-        <Input
+        <label for="max-retries" class="label">
+          <span class="label-text">{$t('settings.posting.max_retries')}</span>
+        </label>
+        <input
           id="max-retries"
           type="number"
+          class="input input-bordered w-full"
           bind:value={config.posting.max_retries}
           min="0"
           max="10"
         />
-        <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+        <p class="text-sm text-base-content/70 mt-1">
           {$t('settings.posting.max_retries_description')}
-        </P>
+        </p>
       </div>
 
       <DurationInput
@@ -230,117 +215,139 @@ async function savePostingSettings() {
       />
 
       <div>
-        <Label for="obfuscation" class="mb-2">{$t('settings.posting.obfuscation_policy')}</Label>
-        <Select
+        <label for="obfuscation" class="label">
+          <span class="label-text">{$t('settings.posting.obfuscation_policy')}</span>
+        </label>
+        <select
           id="obfuscation"
-          items={obfuscationOptions}
+          class="select select-bordered w-full"
           bind:value={config.posting.obfuscation_policy}
-        />
-        <div class="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded text-xs">
+        >
+          {#each obfuscationOptions as option}
+            <option value={option.value}>{option.name}</option>
+          {/each}
+        </select>
+        <div class="mt-2 p-3 bg-base-200 rounded text-xs">
           {#if config.posting.obfuscation_policy === "none"}
-            <P class="text-gray-700 dark:text-gray-300">
+            <p class="text-base-content/70">
               {@html $t('settings.posting.obfuscation.none_description')}
-            </P>
+            </p>
           {:else if config.posting.obfuscation_policy === "partial"}
-            <P class="text-gray-700 dark:text-gray-300">
+            <p class="text-base-content/70">
               {@html $t('settings.posting.obfuscation.partial_description')}
-            </P>
+            </p>
           {:else if config.posting.obfuscation_policy === "full"}
-            <P class="text-gray-700 dark:text-gray-300">
+            <p class="text-base-content/70">
               {@html $t('settings.posting.obfuscation.full_description')}
-            </P>
+            </p>
           {/if}
         </div>
       </div>
 
       <div>
-        <Label for="par2-obfuscation" class="mb-2">
-          {$t('settings.posting.par2_obfuscation_policy')}
-        </Label>
-        <Select
+        <label for="par2-obfuscation" class="label">
+          <span class="label-text">{$t('settings.posting.par2_obfuscation_policy')}</span>
+        </label>
+        <select
           id="par2-obfuscation"
-          items={obfuscationOptions}
+          class="select select-bordered w-full"
           bind:value={config.posting.par2_obfuscation_policy}
-        />
-        <div class="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded text-xs">
+        >
+          {#each obfuscationOptions as option}
+            <option value={option.value}>{option.name}</option>
+          {/each}
+        </select>
+        <div class="mt-2 p-3 bg-base-200 rounded text-xs">
           {#if config.posting.par2_obfuscation_policy === "none"}
-            <P class="text-gray-700 dark:text-gray-300">
+            <p class="text-base-content/70">
               {@html $t('settings.posting.par2_obfuscation.none_description')}
-            </P>
+            </p>
           {:else if config.posting.par2_obfuscation_policy === "partial"}
-            <P class="text-gray-700 dark:text-gray-300">
+            <p class="text-base-content/70">
               {@html $t('settings.posting.par2_obfuscation.partial_description')}
-            </P>
+            </p>
           {:else if config.posting.par2_obfuscation_policy === "full"}
-            <P class="text-gray-700 dark:text-gray-300">
+            <p class="text-base-content/70">
               {@html $t('settings.posting.par2_obfuscation.full_description')}
-            </P>
+            </p>
           {/if}
         </div>
       </div>
 
       <div>
-        <Label for="message-id-format" class="mb-2">{$t('settings.posting.message_id_format')}</Label>
-        <Select
+        <label for="message-id-format" class="label">
+          <span class="label-text">{$t('settings.posting.message_id_format')}</span>
+        </label>
+        <select
           id="message-id-format"
-          items={messageIdOptions}
+          class="select select-bordered w-full"
           bind:value={config.posting.message_id_format}
-        />
-        <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+        >
+          {#each messageIdOptions as option}
+            <option value={option.value}>{option.name}</option>
+          {/each}
+        </select>
+        <p class="text-sm text-base-content/70 mt-1">
           {$t('settings.posting.message_id_format_description')}
-        </P>
+        </p>
       </div>
 
       <div>
-        <Label for="group-policy" class="mb-2">{$t('settings.posting.group_policy')}</Label>
-        <Select
+        <label for="group-policy" class="label">
+          <span class="label-text">{$t('settings.posting.group_policy')}</span>
+        </label>
+        <select
           id="group-policy"
-          items={groupPolicyOptions}
+          class="select select-bordered w-full"
           bind:value={config.posting.group_policy}
-        />
-        <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+        >
+          {#each groupPolicyOptions as option}
+            <option value={option.value}>{option.name}</option>
+          {/each}
+        </select>
+        <p class="text-sm text-base-content/70 mt-1">
           {$t('settings.posting.group_policy_description')}
-        </P>
+        </p>
       </div>
 {/if}
     </div>
 
     <div class="space-y-4">
       <div class="flex items-center gap-3">
-        <Checkbox bind:checked={config.posting.wait_for_par2} />
-        <Label class="text-sm font-medium">{$t('settings.posting.wait_for_par2')}</Label>
+        <input type="checkbox" class="checkbox" bind:checked={config.posting.wait_for_par2} />
+        <label class="text-sm font-medium text-base-content">{$t('settings.posting.wait_for_par2')}</label>
       </div>
-      <P class="text-sm text-gray-600 dark:text-gray-400 ml-6">
+      <p class="text-sm text-base-content/70 ml-6">
         {$t('settings.posting.wait_for_par2_description')}
-      </P>
+      </p>
     </div>
 
 {#if $advancedMode}
     <!-- Post Headers Section -->
     <div class="space-y-4">
-      <Heading
-        tag="h3"
-        class="text-md font-medium text-gray-900 dark:text-white"
-      >
+      <h3 class="text-md font-medium">
         {$t('settings.posting.headers.title')}
-      </Heading>
+      </h3>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <Label for="default-from" class="mb-2">{$t('settings.posting.headers.default_from')}</Label>
-          <Input
+          <label for="default-from" class="label mb-2">
+            <span class="label-text">{$t('settings.posting.headers.default_from')}</span>
+          </label>
+          <input
             id="default-from"
+            class="input input-bordered w-full"
             bind:value={config.posting.post_headers.default_from}
             placeholder="poster@example.com"
           />
-          <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+          <p class="text-sm text-base-content/70 mt-1">
             {$t('settings.posting.headers.default_from_description')}
-          </P>
+          </p>
         </div>
 
         <div class="flex items-center gap-3 mt-6">
-          <Checkbox bind:checked={config.posting.post_headers.add_ngx_header} />
-          <Label class="text-sm font-medium">{$t('settings.posting.headers.add_ngx_header')}</Label>
+          <input type="checkbox" class="checkbox checkbox-primary" bind:checked={config.posting.post_headers.add_ngx_header} />
+          <label class="label-text text-sm font-medium">{$t('settings.posting.headers.add_ngx_header')}</label>
         </div>
       </div>
 
@@ -348,24 +355,20 @@ async function savePostingSettings() {
       <div class="space-y-4">
         <div class="flex items-center justify-between">
           <div>
-            <Heading
-              tag="h4"
-              class="text-sm font-medium text-gray-900 dark:text-white"
-            >
+            <h4 class="text-sm font-medium">
               {$t('settings.posting.headers.custom_headers.title')}
-            </Heading>
-            <P class="text-sm text-gray-600 dark:text-gray-400">
+            </h4>
+            <p class="text-sm text-base-content/70">
               {$t('settings.posting.headers.custom_headers.description')}
-            </P>
+            </p>
           </div>
-          <Button
-            size="sm"
+          <button
+            class="btn btn-sm btn-primary flex items-center gap-2"
             onclick={addCustomHeader}
-            class="cursor-pointer flex items-center gap-2"
           >
-            <CirclePlusSolid class="w-4 h-4" />
+            <Plus class="w-4 h-4" />
             {$t('settings.posting.headers.custom_headers.add_header')}
-          </Button>
+          </button>
         </div>
 
         {#if config.posting.post_headers.custom_headers && config.posting.post_headers.custom_headers.length > 0}
@@ -373,21 +376,18 @@ async function savePostingSettings() {
             {#each config.posting.post_headers.custom_headers as header, index (index)}
               <div class="flex items-center gap-3">
                 <div class="flex-1">
-                  <Input bind:value={header.name} placeholder={$t('settings.posting.headers.custom_headers.header_name_placeholder')} />
+                  <input class="input input-bordered w-full" bind:value={header.name} placeholder={$t('settings.posting.headers.custom_headers.header_name_placeholder')} />
                 </div>
                 <div class="flex-1">
-                  <Input bind:value={header.value} placeholder={$t('settings.posting.headers.custom_headers.header_value_placeholder')} />
+                  <input class="input input-bordered w-full" bind:value={header.value} placeholder={$t('settings.posting.headers.custom_headers.header_value_placeholder')} />
                 </div>
-                <Button
-                  size="sm"
-                  color="red"
-                  variant="outline"
+                <button
+                  class="btn btn-sm btn-error btn-outline flex items-center gap-1"
                   onclick={() => removeCustomHeader(index)}
-                  class="cursor-pointer flex items-center gap-1"
                 >
-                  <TrashBinSolid class="w-3 h-3" />
+                  <Trash2 class="w-3 h-3" />
                   {$t('settings.posting.headers.custom_headers.remove')}
-                </Button>
+                </button>
               </div>
             {/each}
           </div>
@@ -400,72 +400,65 @@ async function savePostingSettings() {
     <div class="space-y-4">
       <div class="flex items-center justify-between">
         <div>
-          <Heading
-            tag="h3"
-            class="text-md font-medium text-gray-900 dark:text-white"
-          >
+          <h3 class="text-md font-medium">
             {$t('settings.posting.newsgroups.title')}
-          </Heading>
-          <P class="text-sm text-gray-600 dark:text-gray-400">
+          </h3>
+          <p class="text-sm text-base-content/70">
             {$t('settings.posting.newsgroups.description')}
-          </P>
+          </p>
         </div>
-        <Button
-          size="sm"
+        <button
+          class="btn btn-sm btn-primary flex items-center gap-2"
           onclick={addGroup}
-          class="cursor-pointer flex items-center gap-2"
         >
-          <CirclePlusSolid class="w-4 h-4" />
+          <Plus class="w-4 h-4" />
           {$t('settings.posting.newsgroups.add_group')}
-        </Button>
+        </button>
       </div>
 
       <div class="space-y-3">
         {#each config.posting.groups as group, index (index)}
           <div class="flex items-center gap-3">
             <div class="flex-1">
-              <Input
+              <input
+                class="input input-bordered w-full"
                 bind:value={config.posting.groups[index]}
                 placeholder={$t('settings.posting.newsgroups.placeholder')}
                 required
               />
             </div>
             {#if config.posting.groups.length > 1}
-              <Button
-                size="sm"
-                color="red"
-                variant="outline"
+              <button
+                class="btn btn-sm btn-error btn-outline flex items-center gap-1"
                 onclick={() => removeGroup(index)}
-                class="cursor-pointer flex items-center gap-1"
               >
-                <TrashBinSolid class="w-3 h-3" />
+                <Trash2 class="w-3 h-3" />
                 {$t('settings.posting.newsgroups.remove')}
-              </Button>
+              </button>
             {/if}
           </div>
         {/each}
       </div>
 
       <div
-        class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded"
+        class="alert alert-info"
       >
-        <P class="text-sm text-blue-800 dark:text-blue-200">
+        <p class="text-sm">
           {@html $t('settings.posting.newsgroups.info')}
-        </P>
+        </p>
       </div>
     </div>
 
     <!-- Save Button -->
-    <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
-      <Button
-        color="green"
+    <div class="pt-4 border-t border-base-300">
+      <button
+        class="btn btn-success"
         onclick={savePostingSettings}
         disabled={saving}
-        class="cursor-pointer flex items-center gap-2"
       >
-        <FloppyDiskSolid class="w-4 h-4" />
+        <Save class="w-4 h-4" />
         {saving ? $t('settings.posting.saving') : $t('settings.posting.save_button')}
-      </Button>
+      </button>
     </div>
   </div>
-</Card>
+</div>

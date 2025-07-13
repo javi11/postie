@@ -22,25 +22,16 @@ import {
 import { toastStore } from "$lib/stores/toast";
 import { parseDuration } from "$lib/utils";
 import {
-	Button,
-	DarkMode,
-	Heading,
-	P,
-	Spinner,
-	TabItem,
-	Tabs,
-	Toggle,
-} from "flowbite-svelte";
-import {
-	CheckCircleSolid,
-	CloudArrowUpSolid,
-	CogSolid,
-	ExclamationCircleOutline,
-	EyeSolid,
-	FileSolid,
-	FloppyDiskSolid,
-	RefreshOutline,
-} from "flowbite-svelte-icons";
+	AlertCircle,
+	CheckCircle,
+	CloudUpload,
+	Eye,
+	File,
+	Loader2,
+	RefreshCw,
+	Save,
+	Settings,
+} from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
 
 let configData: ConfigData | null = null;
@@ -52,7 +43,6 @@ let loading = false;
 let loadError = false;
 
 onMount(async () => {
-	await apiClient.initialize();
 	await loadConfig();
 
 	// Register save function with the store
@@ -257,58 +247,58 @@ onDestroy(() => {
     <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
       <div class="flex-1">
         <div class="flex items-center gap-3 mb-2">
-          <CogSolid class="w-6 h-6 text-gray-600 dark:text-gray-400" />
-          <Heading tag="h1" class="text-2xl font-bold text-gray-900 dark:text-white">
+          <Settings class="w-6 h-6 text-gray-600 dark:text-gray-400" />
+          <h1 class="text-2xl font-bold">
             {$t('settings.title')}
-          </Heading>
+          </h1>
           {#if criticalConfigError}
             <div class="flex items-center gap-2 px-3 py-1 bg-red-100 dark:bg-red-900/30 rounded-full">
-              <ExclamationCircleOutline class="w-4 h-4 text-red-600 dark:text-red-400" />
+              <AlertCircle class="w-4 h-4 text-red-600 dark:text-red-400" />
               <span class="text-sm font-medium text-red-800 dark:text-red-200">{$t('settings.header.status.configuration_error')}</span>
             </div>
           {:else if needsConfiguration}
             <div class="flex items-center gap-2 px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 rounded-full">
-              <ExclamationCircleOutline class="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
+              <AlertCircle class="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
               <span class="text-sm font-medium text-yellow-800 dark:text-yellow-200">{$t('settings.header.status.configuration_required')}</span>
             </div>
           {:else}
             <div class="flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/30 rounded-full">
-              <CheckCircleSolid class="w-4 h-4 text-green-600 dark:text-green-400" />
+              <CheckCircle class="w-4 h-4 text-green-600 dark:text-green-400" />
               <span class="text-sm font-medium text-green-800 dark:text-green-200">{$t('settings.header.status.configured')}</span>
             </div>
           {/if}
         </div>
 
-        <P class="text-gray-600 dark:text-gray-400">
+        <p class="text-base-content/70">
           {$t('settings.header.description')}
-        </P>
+        </p>
 
         {#if criticalConfigError}
           <div class="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-            <P class="text-red-800 dark:text-red-200">
+            <p class="text-error">
               <strong>{$t('settings.header.status.configuration_error')}:</strong>
               {criticalConfigErrorMessage}
-            </P>
+            </p>
           </div>
         {:else if needsConfiguration}
           <div class="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-            <P class="text-yellow-800 dark:text-yellow-200">
+            <p class="text-warning">
               <strong>{$t('settings.header.alerts.setup_required')}</strong> {$t('settings.header.alerts.setup_required_description')}
-            </P>
+            </p>
           </div>
         {/if}
       </div>
       
       <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
         <div class="flex items-center gap-3">
-          <Toggle class="cursor-pointer" bind:checked={$advancedMode} />
+          <input type="checkbox" class="toggle toggle-primary" bind:checked={$advancedMode} />
           <div>
-            <P class="text-sm font-medium text-gray-900 dark:text-white">
+            <p class="text-sm font-medium">
               {$t('settings.header.advanced_mode')}
-            </P>
-            <P class="text-xs text-gray-600 dark:text-gray-400">
+            </p>
+            <p class="text-xs text-base-content/70">
               {$t('settings.header.advanced_mode_description')}
-            </P>
+            </p>
           </div>
         </div>
       </div>
@@ -318,49 +308,39 @@ onDestroy(() => {
   {#if loading === true}
     <div class="flex items-center justify-center py-12">
       <div class="text-center">
-        <Spinner class="mb-4 w-8 h-8 mx-auto" />
-        <P class="text-gray-600 dark:text-gray-400">{$t('common.common.loading')}</P>
+        <div class="loading loading-spinner w-8 h-8 mb-4 mx-auto"></div>
+        <p class="text-base-content/70">{$t('common.common.loading')}</p>
       </div>
     </div>
   {:else if loadError}
     <div class="flex items-center justify-center py-12">
       <div class="text-center max-w-md">
-        <ExclamationCircleOutline class="mb-4 w-12 h-12 mx-auto text-red-500 dark:text-red-400" />
-        <Heading tag="h3" class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+        <AlertCircle class="mb-4 w-12 h-12 mx-auto text-red-500 dark:text-red-400" />
+        <h3 class="mb-2 text-lg font-semibold">
           {$t('settings.header.status.failed_to_load_configuration')}
-        </Heading>
-        <P class="mb-4 text-gray-600 dark:text-gray-400">
+        </h3>
+        <p class="mb-4 text-base-content/70">
           {$t('settings.header.status.failed_to_load_configuration_description')}
-        </P>
-        <Button color="primary" onclick={loadConfig}>
-          <RefreshOutline class="w-4 h-4 mr-2" />
+        </p>
+        <button class="btn btn-primary" onclick={loadConfig}>
+          <RefreshCw class="w-4 h-4 mr-2" />
           {$t('settings.retry')}
-        </Button>
+        </button>
       </div>
     </div>
       {:else if localConfig}
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-        <Tabs style="underline" defaultClass="flex rounded-t-lg overflow-hidden bg-gray-50 dark:bg-gray-700" contentClass="p-6 bg-white dark:bg-gray-800 rounded-b-lg">
-          <TabItem open title="{$t('settings.tabs.core_configuration')}">
-            <svelte:fragment slot="title">
-              <div class="flex items-center gap-2">
-                <CogSolid class="w-4 h-4" />
-                {$t('settings.tabs.core_configuration')}
-              </div>
-            </svelte:fragment>
+        <div role="tablist" class="tabs tabs-bordered">
+          <input type="radio" name="settings_tabs" role="tab" class="tab" aria-label="Core Configuration" checked />
+          <div role="tabpanel" class="tab-content p-6">
             <div class="space-y-6">
               <GeneralSection bind:config={localConfig} />
               <ServerSection bind:config={localConfig} />
             </div>
-          </TabItem>
+          </div>
 
-          <TabItem title="{$t('settings.tabs.upload_settings')}">
-            <svelte:fragment slot="title">
-              <div class="flex items-center gap-2">
-                <CloudArrowUpSolid class="w-4 h-4" />
-                {$t('settings.tabs.upload_settings')}
-              </div>
-            </svelte:fragment>
+          <input type="radio" name="settings_tabs" role="tab" class="tab" aria-label="Upload Settings" />
+          <div role="tabpanel" class="tab-content p-6">
             <div class="space-y-6">
               <PostingSection bind:config={localConfig} />
               <PostCheckSection bind:config={localConfig} />
@@ -369,39 +349,29 @@ onDestroy(() => {
                 <ConnectionPoolSection bind:config={localConfig} />
               {/if}
             </div>
-          </TabItem>
+          </div>
 
-          <TabItem title="{$t('settings.tabs.file_processing')}">
-            <svelte:fragment slot="title">
-              <div class="flex items-center gap-2">
-                <FileSolid class="w-4 h-4" />
-                {$t('settings.tabs.file_processing')}
-              </div>
-            </svelte:fragment>
+          <input type="radio" name="settings_tabs" role="tab" class="tab" aria-label="File Processing" />
+          <div role="tabpanel" class="tab-content p-6">
             <div class="space-y-6">
               <Par2Section bind:config={localConfig} />
               <NzbCompressionSection bind:config={localConfig} />
             </div>
-          </TabItem>
+          </div>
 
-          <TabItem title="{$t('settings.tabs.automation')}">
-            <svelte:fragment slot="title">
-              <div class="flex items-center gap-2">
-                <EyeSolid class="w-4 h-4" />
-                {$t('settings.tabs.automation')}
-              </div>
-            </svelte:fragment>
+          <input type="radio" name="settings_tabs" role="tab" class="tab" aria-label="Automation" />
+          <div role="tabpanel" class="tab-content p-6">
             <div class="space-y-6">
               <WatcherSection bind:config={localConfig} />
               <PostUploadScriptSection bind:config={localConfig} />
             </div>
-          </TabItem>
-        </Tabs>
+          </div>
+        </div>
       </div>
   {:else}
     <div class="flex items-center justify-center py-12">
       <div class="text-center">
-        <P class="text-gray-600 dark:text-gray-400">{$t('settings.no_configuration_available')}</P>
+        <p class="text-gray-600 dark:text-gray-400">{$t('settings.no_configuration_available')}</p>
       </div>
     </div>
   {/if}

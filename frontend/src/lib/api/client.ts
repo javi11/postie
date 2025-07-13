@@ -3,7 +3,12 @@
 import { browser } from "$app/environment";
 import type * as wailsApp from "$lib/wailsjs/go/backend/App";
 import type * as wailsRuntime from "$lib/wailsjs/runtime/runtime";
-import type { WebClient } from "./web-client";
+import type {
+	ServerValidationData,
+	ServerValidationResult,
+	SetupWizardData,
+	WebClient,
+} from "./web-client";
 
 // Types that match both Wails and web client interfaces
 export interface AppStatus {
@@ -157,6 +162,8 @@ export class UnifiedClient {
 			this._environment = "unknown";
 			console.warn("Unable to detect environment, some features may not work");
 		}
+
+		console.log(`API Client initialized in ${this._environment} mode`);
 
 		this._isReady = true;
 	}
@@ -579,7 +586,9 @@ export class UnifiedClient {
 	}
 
 	// Setup Wizard
-	async validateNNTPServer(serverData: any): Promise<{ valid: boolean; error: string }> {
+	async validateNNTPServer(
+		serverData: ServerValidationData,
+	): Promise<ServerValidationResult> {
 		await this.initialize();
 
 		if (this._environment === "wails") {
@@ -595,7 +604,7 @@ export class UnifiedClient {
 		throw new Error("No client available");
 	}
 
-	async setupWizardComplete(wizardData: any): Promise<void> {
+	async setupWizardComplete(wizardData: SetupWizardData): Promise<void> {
 		await this.initialize();
 
 		if (this._environment === "wails") {

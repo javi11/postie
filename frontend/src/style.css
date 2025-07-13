@@ -1,35 +1,6 @@
 @import "tailwindcss";
-
-@plugin 'flowbite/plugin';
-
-@custom-variant dark (&:where(.dark, .dark *));
-
-@theme {
-	--color-primary-50: #f0fdf4;
-	--color-primary-100: #dcfce7;
-	--color-primary-200: #bbf7d0;
-	--color-primary-300: #86efac;
-	--color-primary-400: #4ade80;
-	--color-primary-500: #22c55e;
-	--color-primary-600: #16a34a;
-	--color-primary-700: #15803d;
-	--color-primary-800: #166534;
-	--color-primary-900: #14532d;
-
-	--color-secondary-50: #f0fdfa;
-	--color-secondary-100: #ccfbf1;
-	--color-secondary-200: #99f6e4;
-	--color-secondary-300: #5eead4;
-	--color-secondary-400: #2dd4bf;
-	--color-secondary-500: #14b8a6;
-	--color-secondary-600: #0d9488;
-	--color-secondary-700: #0f766e;
-	--color-secondary-800: #115e59;
-	--color-secondary-900: #134e4a;
-}
-
-@source "../node_modules/flowbite-svelte/dist";
-@source "../node_modules/flowbite-svelte-icons/dist";
+@plugin "daisyui";
+@plugin "@tailwindcss/typography";
 
 @layer base {
 	/* disable chrome cancel button */

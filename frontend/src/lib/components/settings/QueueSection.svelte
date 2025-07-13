@@ -1,16 +1,7 @@
 <script lang="ts">
 import { t } from "$lib/i18n";
 import type { ConfigData } from "$lib/types";
-import {
-	Card,
-	Checkbox,
-	Heading,
-	Input,
-	Label,
-	P,
-	Select,
-} from "flowbite-svelte";
-import { QuoteOutline } from "flowbite-svelte-icons";
+import { Quote } from "lucide-svelte";
 
 export let config: ConfigData;
 
@@ -29,72 +20,83 @@ $: databaseTypes = [
 ];
 </script>
 
-<Card class="max-w-full shadow-sm p-5">
-  <div class="space-y-6">
+<div class="card bg-base-100 shadow-xl">
+  <div class="card-body space-y-6">
     <div class="flex items-center gap-3">
-      <QuoteOutline class="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
-      <Heading
-        tag="h2"
-        class="text-lg font-semibold text-gray-900 dark:text-white"
-      >
+      <Quote class="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
+      <h2 class="card-title text-lg">
         {$t('settings.queue.title')}
-      </Heading>
+      </h2>
     </div>
 
     <div class="space-y-6">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <Label for="database-type" class="mb-2">{$t('settings.queue.database_type')}</Label>
-          <Select
+        <div class="form-control">
+          <label class="label" for="database-type">
+            <span class="label-text">{$t('settings.queue.database_type')}</span>
+          </label>
+          <select
             id="database-type"
-            items={databaseTypes}
+            class="select select-bordered"
             bind:value={config.queue.database_type}
-          />
-          <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            {$t('settings.queue.database_type_description')}
-          </P>
+          >
+            {#each databaseTypes as type}
+              <option value={type.value}>{type.name}</option>
+            {/each}
+          </select>
+          <div class="label">
+            <span class="label-text-alt">
+              {$t('settings.queue.database_type_description')}
+            </span>
+          </div>
         </div>
 
-        <div>
-          <Label for="database-path" class="mb-2">
-            {$t('settings.queue.database_path')}
-          </Label>
-          <Input
+        <div class="form-control">
+          <label class="label" for="database-path">
+            <span class="label-text">{$t('settings.queue.database_path')}</span>
+          </label>
+          <input
             id="database-path"
+            class="input input-bordered"
             bind:value={config.queue.database_path}
             placeholder={config.queue.database_type === "sqlite"
               ? $t('settings.queue.database_path_placeholder_sqlite')
               : $t('settings.queue.database_path_placeholder_network')}
           />
-          <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            {config.queue.database_type === "sqlite"
-              ? $t('settings.queue.database_path_description_sqlite')
-              : $t('settings.queue.database_path_description_network')}
-          </P>
+          <div class="label">
+            <span class="label-text-alt">
+              {config.queue.database_type === "sqlite"
+                ? $t('settings.queue.database_path_description_sqlite')
+                : $t('settings.queue.database_path_description_network')}
+            </span>
+          </div>
         </div>
 
-        <div>
-          <Label for="max-concurrent" class="mb-2">{$t('settings.queue.max_concurrent_uploads')}</Label>
-          <Input
+        <div class="form-control">
+          <label class="label" for="max-concurrent">
+            <span class="label-text">{$t('settings.queue.max_concurrent_uploads')}</span>
+          </label>
+          <input
             id="max-concurrent"
             type="number"
+            class="input input-bordered"
             bind:value={config.queue.max_concurrent_uploads}
             min="1"
             max="20"
           />
-          <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            {$t('settings.queue.max_concurrent_uploads_description')}
-          </P>
+          <div class="label">
+            <span class="label-text-alt">
+              {$t('settings.queue.max_concurrent_uploads_description')}
+            </span>
+          </div>
         </div>
       </div>
     </div>
 
-    <div
-      class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded"
-    >
-      <P class="text-sm text-blue-800 dark:text-blue-200">
+    <div class="alert alert-info">
+      <span class="text-sm">
         {@html $t('settings.queue.info')}
-      </P>
+      </span>
     </div>
   </div>
-</Card>
+</div>

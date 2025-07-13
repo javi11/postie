@@ -2,13 +2,7 @@
 import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { type LogEntry, frontendLogs } from "$lib/stores/logs";
-import { Button, Card, Spinner } from "flowbite-svelte";
-import {
-	ArrowsRepeatOutline,
-	ChevronDownOutline,
-	PauseOutline,
-	PlayOutline,
-} from "flowbite-svelte-icons";
+import { ChevronDown, Pause, Play, RotateCcw } from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
 
 type BackendLogEntry = {
@@ -45,8 +39,6 @@ let showFollowButton = false;
 async function loadInitialLogs() {
 	loading = true;
 	try {
-		// Initialize API client first
-		await apiClient.initialize();
 
 		// Load the most recent LINES_PER_PAGE lines (offset = 0)
 		const rawLogs = await apiClient.getLogsPaginated(LINES_PER_PAGE, 0);
@@ -281,88 +273,90 @@ $: if (autoScroll && logContainer) {
 </script>
 
 <div class="w-full space-y-4">
-	<Card class="flex min-w-full flex-col p-10">
-		<div class="mb-4 flex items-center justify-between">
-			<h5 class="text-xl font-bold leading-none text-gray-900 dark:text-white">
-				{$t('common.nav.logs')}
-			</h5>
-			<div class="flex items-center space-x-2">
-				<span class="text-sm text-gray-500">
-					{combinedLogs.length} logs loaded
-					{#if hasMoreLogs}(more available){/if}
-				</span>
-				<Button
-					class="cursor-pointer"
-					onclick={autoRefreshEnabled ? stopAutoRefresh : startAutoRefresh}
-				>
-					{#if autoRefreshEnabled}
-						<PauseOutline class="mr-2 h-4 w-4" />
-						{$t('common.common.stop_auto_refresh')}
-					{:else}
-						<PlayOutline class="mr-2 h-4 w-4" />
-						{$t('common.common.start_auto_refresh')}
-					{/if}
-				</Button>
-				<Button 
-					class="cursor-pointer" 
-					onclick={handleRefresh} 
-					disabled={loading || autoRefreshEnabled}
-				>
-					<ArrowsRepeatOutline class="mr-2 h-4 w-4" />
-					{$t('common.common.refresh')}
-				</Button>
-			</div>
-		</div>
-		<div class="relative">
-			{#if showFollowButton}
-				<button
-					class="cursor-pointer absolute right-4 top-4 z-10 rounded-full bg-blue-600 p-2 text-white shadow hover:bg-blue-700 transition flex items-center justify-center"
-					onclick={followLogs}
-					title="Follow logs"
-				>
-					<ChevronDownOutline class="h-5 w-5" />
-				</button>
-			{/if}
-			
-			{#if loadingOlder}
-				<div class="absolute left-1/2 top-4 z-10 -translate-x-1/2 rounded bg-gray-700 px-3 py-1 text-sm text-white shadow">
-					<Spinner class="mr-2 h-4 w-4" />
-					Loading older logs...
+	<div class="card bg-base-100 shadow-xl">
+		<div class="card-body">
+			<div class="flex items-center justify-between mb-4">
+				<h2 class="card-title text-xl">
+					{$t('common.nav.logs')}
+				</h2>
+				<div class="flex items-center space-x-2">
+					<span class="text-sm text-base-content/70">
+						{combinedLogs.length} logs loaded
+						{#if hasMoreLogs}(more available){/if}
+					</span>
+					<button
+						class="btn btn-sm"
+						onclick={autoRefreshEnabled ? stopAutoRefresh : startAutoRefresh}
+					>
+						{#if autoRefreshEnabled}
+							<Pause class="w-4 h-4" />
+							{$t('common.common.stop_auto_refresh')}
+						{:else}
+							<Play class="w-4 h-4" />
+							{$t('common.common.start_auto_refresh')}
+						{/if}
+					</button>
+					<button 
+						class="btn btn-sm" 
+						onclick={handleRefresh} 
+						disabled={loading || autoRefreshEnabled}
+					>
+						<RotateCcw class="w-4 h-4" />
+						{$t('common.common.refresh')}
+					</button>
 				</div>
-			{/if}
-			
-			<div
-				bind:this={logContainer}
-				class="h-[400px] overflow-y-auto rounded-lg bg-gray-800 p-2 font-mono"
-				onscroll={handleScroll}
-			>
-				{#if !hasMoreLogs && backendLogs.length > 0}
-					<div class="text-center text-gray-500 text-sm py-2 border-b border-gray-600 mb-2">
-						— Beginning of logs —
+			</div>
+			<div class="relative">
+				{#if showFollowButton}
+					<button
+						class="btn btn-circle btn-primary absolute right-4 top-4 z-10"
+						onclick={followLogs}
+						title="Follow logs"
+					>
+						<ChevronDown class="w-5 h-5" />
+					</button>
+				{/if}
+				
+				{#if loadingOlder}
+					<div class="absolute left-1/2 top-4 z-10 -translate-x-1/2 badge badge-neutral">
+						<span class="loading loading-spinner loading-xs mr-2"></span>
+						Loading older logs...
 					</div>
 				{/if}
 				
-				{#each combinedLogs as log, i (i)}
-					<div class="flex items-start gap-2">
-						<span class="w-48 flex-shrink-0 text-gray-500">
-							{log.timestamp.toLocaleTimeString()}
-						</span>
-						<span
-							class="w-16 flex-shrink-0 font-bold uppercase {getLevelColor(log.level)}"
-						>
-							[{log.level}]
-						</span>
-						<span class="min-w-0 flex-1 whitespace-pre-wrap text-gray-200">{log.message}</span>
-					</div>
-				{/each}
-				
-				{#if loading}
-					<div class="flex items-center justify-center py-4">
-						<Spinner class="mr-2 h-6 w-6" />
-						Loading logs...
-					</div>
-				{/if}
+				<div
+					bind:this={logContainer}
+					class="h-[400px] overflow-y-auto rounded-lg bg-base-300 p-2 font-mono"
+					onscroll={handleScroll}
+				>
+					{#if !hasMoreLogs && backendLogs.length > 0}
+						<div class="text-center text-base-content/50 text-sm py-2 border-b border-base-content/20 mb-2">
+							— Beginning of logs —
+						</div>
+					{/if}
+					
+					{#each combinedLogs as log, i (i)}
+						<div class="flex items-start gap-2">
+							<span class="w-48 flex-shrink-0 text-base-content/50">
+								{log.timestamp.toLocaleTimeString()}
+							</span>
+							<span
+								class="w-16 flex-shrink-0 font-bold uppercase {getLevelColor(log.level)}"
+							>
+								[{log.level}]
+							</span>
+							<span class="min-w-0 flex-1 whitespace-pre-wrap">{log.message}</span>
+						</div>
+					{/each}
+					
+					{#if loading}
+						<div class="flex items-center justify-center py-4">
+							<span class="loading loading-spinner loading-md mr-2"></span>
+							Loading logs...
+						</div>
+					{/if}
+				</div>
 			</div>
 		</div>
-	</Card>
+	</div>
 </div>

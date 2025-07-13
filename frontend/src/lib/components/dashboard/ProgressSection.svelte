@@ -4,14 +4,7 @@ import { t } from "$lib/i18n";
 import { isUploading, progress } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import { formatSpeed, formatTime } from "$lib/utils";
-import { Button, Card, Heading, P, Progressbar } from "flowbite-svelte";
-import {
-	ChartPieSolid,
-	CheckCircleSolid,
-	ClockSolid,
-	CloseCircleSolid,
-	PlaySolid,
-} from "flowbite-svelte-icons";
+import { CheckCircle, Clock, PieChart, Play, X } from "lucide-svelte";
 
 $: jobs = Object.values($progress);
 
@@ -65,12 +58,12 @@ function cancelUpload(jobID: string) {
   <!-- Header -->
   <div class="flex items-center gap-3 mb-6">
     <div class="p-2 rounded-lg bg-gradient-to-br from-green-500 to-blue-600">
-      <ChartPieSolid class="w-6 h-6 text-white" />
+      <PieChart class="w-6 h-6 text-white" />
     </div>
     <div>
-      <Heading tag="h2" class="text-xl font-semibold text-gray-900 dark:text-white">
+      <h2 class="text-xl font-semibold">
         {$t("dashboard.progress.title")}
-      </Heading>
+      </h2>
       <div class="flex items-center gap-3 mt-1">
         <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-50 dark:bg-gray-700">
           <div
@@ -93,7 +86,7 @@ function cancelUpload(jobID: string) {
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
               <div class="p-2 rounded-full bg-blue-100 dark:bg-blue-900/20">
-                <PlaySolid class="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                <Play class="w-5 h-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
@@ -102,16 +95,15 @@ function cancelUpload(jobID: string) {
                 <p class="text-sm text-gray-600 dark:text-gray-400">Active upload in progress</p>
               </div>
             </div>
-            <Button
-              size="sm"
-              color="red"
+            <button
+              type="button"
               variant="outline"
               onclick={() => cancelUpload(job.jobID)}
-              class="cursor-pointer flex items-center gap-2 px-3 py-1.5 text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200"
+              class="btn btn-outline flex items-center gap-2 px-3 py-1.5 text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200"
             >
-              <CloseCircleSolid class="w-4 h-4" />
+              <CheckCircle class="w-4 h-4" />
               {$t("dashboard.progress.cancel_upload")}
-            </Button>
+            </button>
           </div>
           <!-- Overall Progress -->
           <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
@@ -167,7 +159,7 @@ function cancelUpload(jobID: string) {
                   <p class="text-lg font-bold text-green-600 dark:text-green-400 mt-1">{formatTime(job.elapsedTime * 1000)}</p>
                 </div>
                 <div class="p-3 rounded-full bg-green-100 dark:bg-green-900/20">
-                  <ClockSolid class="w-5 h-5 text-green-600 dark:text-green-400" />
+                  <Clock class="w-5 h-5 text-green-600 dark:text-green-400" />
                 </div>
               </div>
             </div>
@@ -179,7 +171,7 @@ function cancelUpload(jobID: string) {
                   <p class="text-lg font-bold text-blue-600 dark:text-blue-400 mt-1">{formatSpeed(job.speed * 1024)}</p>
                 </div>
                 <div class="p-3 rounded-full bg-blue-100 dark:bg-blue-900/20">
-                  <PlaySolid class="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  <Play class="w-5 h-5 text-blue-600 dark:text-blue-400" />
                 </div>
               </div>
             </div>
@@ -191,7 +183,7 @@ function cancelUpload(jobID: string) {
                   <p class="text-lg font-bold text-orange-600 dark:text-orange-400 mt-1">{formatTime(job.secondsLeft * 1000)}</p>
                 </div>
                 <div class="p-3 rounded-full bg-orange-100 dark:bg-orange-900/20">
-                  <ClockSolid class="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                  <Clock class="w-5 h-5 text-orange-600 dark:text-orange-400" />
                 </div>
               </div>
             </div>
@@ -234,7 +226,7 @@ function cancelUpload(jobID: string) {
     <!-- Empty State -->
     <div class="text-center py-12">
       <div class="w-16 h-16 mx-auto mb-4 p-4 rounded-full bg-gray-100 dark:bg-gray-800">
-        <CheckCircleSolid class="w-8 h-8 text-gray-400 dark:text-gray-600" />
+        <CheckCircle class="w-8 h-8 text-gray-400 dark:text-gray-600" />
       </div>
       <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
         {$t("dashboard.progress.no_upload_title")}

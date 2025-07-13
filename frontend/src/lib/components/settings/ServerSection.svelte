@@ -5,26 +5,14 @@ import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import type { ConfigData, ServerConfig } from "$lib/types";
 import {
-	Badge,
-	Button,
-	ButtonGroup,
-	Card,
-	Checkbox,
-	Heading,
-	Input,
-	Label,
-	P,
-	Select,
-	Spinner,
-} from "flowbite-svelte";
-import {
-	CheckOutline,
-	CirclePlusSolid,
-	FloppyDiskSolid,
-	ServerSolid,
-	ShieldCheckSolid,
-	TrashBinSolid,
-} from "flowbite-svelte-icons";
+	Check,
+	CirclePlus,
+	Loader2,
+	Save,
+	Server,
+	ShieldCheck,
+	Trash2,
+} from "lucide-svelte";
 
 export let config: ConfigData;
 
@@ -43,7 +31,10 @@ $: if (config.servers && originalServers.length === 0) {
 	// Mark previously saved servers as valid if they have required fields
 	config.servers.forEach((server, index) => {
 		if (server.host && server.port) {
-			validationStates = { ...validationStates, [index]: { status: "valid", error: "" } };
+			validationStates = {
+				...validationStates,
+				[index]: { status: "valid", error: "" },
+			};
 		}
 	});
 }
@@ -170,7 +161,7 @@ function isServerModified(index: number): boolean {
 	if (index >= originalServers.length) return true; // New server
 	const current = config.servers[index];
 	const original = originalServers[index];
-	
+
 	// Compare key fields that would affect server validation
 	return (
 		current.host !== original.host ||
@@ -185,24 +176,33 @@ function isServerModified(index: number): boolean {
 function onServerFieldChange(index: number) {
 	// Mark server as modified
 	modifiedServers.add(index);
-	
+
 	// Clear validation state only if server was modified
 	if (isServerModified(index)) {
-		validationStates = { ...validationStates, [index]: { status: "pending", error: "" } };
+		validationStates = {
+			...validationStates,
+			[index]: { status: "pending", error: "" },
+		};
 	}
 }
 
 async function validateServer(index: number) {
 	const server = config.servers[index];
-	
+
 	// Basic validation first
 	if (!server.host || !server.port) {
-		validationStates = { ...validationStates, [index]: { status: "incomplete", error: "Host and port are required" } };
+		validationStates = {
+			...validationStates,
+			[index]: { status: "incomplete", error: "Host and port are required" },
+		};
 		return;
 	}
 
-	validationStates = { ...validationStates, [index]: { status: "validating", error: "" } };
-	
+	validationStates = {
+		...validationStates,
+		[index]: { status: "validating", error: "" },
+	};
+
 	try {
 		const result = await apiClient.validateNNTPServer({
 			host: server.host,
@@ -210,20 +210,32 @@ async function validateServer(index: number) {
 			username: server.username,
 			password: server.password,
 			ssl: server.ssl,
-			maxConnections: server.max_connections
+			maxConnections: server.max_connections,
 		});
 
 		if (result.valid) {
 			console.log("Setting server", index, "as valid");
-			validationStates = { ...validationStates, [index]: { status: "valid", error: "" } };
+			validationStates = {
+				...validationStates,
+				[index]: { status: "valid", error: "" },
+			};
 			toastStore.success($t("setup.servers.valid"));
 		} else {
 			console.log("Setting server", index, "as invalid:", result.error);
-			validationStates = { ...validationStates, [index]: { status: "invalid", error: result.error } };
+			validationStates = {
+				...validationStates,
+				[index]: { status: "invalid", error: result.error },
+			};
 			toastStore.error($t("setup.servers.invalid"), String(result.error));
 		}
 	} catch (error) {
-		validationStates = { ...validationStates, [index]: { status: "invalid", error: `Validation failed: ${error.message}` } };
+		validationStates = {
+			...validationStates,
+			[index]: {
+				status: "invalid",
+				error: `Validation failed: ${error.message}`,
+			},
+		};
 		toastStore.error($t("setup.servers.invalid"), String(error));
 		console.error("Server validation error:", error);
 	}
@@ -233,7 +245,11 @@ function areAllServersValid(): boolean {
 	return config.servers.every((_, index) => {
 		const validationState = getServerValidationState(index);
 		// Consider unmodified servers with required fields as valid
-		if (!isServerModified(index) && config.servers[index].host && config.servers[index].port) {
+		if (
+			!isServerModified(index) &&
+			config.servers[index].host &&
+			config.servers[index].port
+		) {
 			return true;
 		}
 		return validationState.status === "valid";
@@ -250,8 +266,9 @@ async function saveServerSettings() {
 				.map((_, index) => {
 					const validationState = getServerValidationState(index);
 					const isModified = isServerModified(index);
-					const hasRequiredFields = config.servers[index].host && config.servers[index].port;
-					
+					const hasRequiredFields =
+						config.servers[index].host && config.servers[index].port;
+
 					if (isModified && validationState.status !== "valid") {
 						return index + 1;
 					}
@@ -261,10 +278,10 @@ async function saveServerSettings() {
 					return null;
 				})
 				.filter(Boolean);
-				
+
 			toastStore.error(
 				"Validation Required",
-				`Please test server connections for server(s): ${invalidServers.join(", ")}. All modified servers must pass validation before saving.`
+				`Please test server connections for server(s): ${invalidServers.join(", ")}. All modified servers must pass validation before saving.`,
 			);
 			return;
 		}
@@ -325,114 +342,104 @@ async function saveServerSettings() {
 }
 </script>
 
-<Card class="max-w-full shadow-sm p-5">
-  <div class="space-y-6">
+<div class="card bg-base-100 shadow-sm">
+  <div class="card-body space-y-6">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <ServerSolid class="w-5 h-5 text-blue-600 dark:text-blue-400" />
-        <Heading
-          tag="h2"
-          class="text-lg font-semibold text-gray-900 dark:text-white"
-        >
+        <Server class="w-5 h-5 text-blue-600 dark:text-blue-400" />
+        <h2 class="text-lg font-semibold text-base-content">
           {$t('settings.server.title')}
-        </Heading>
+        </h2>
       </div>
-      <Button
-        size="sm"
+      <button
+        class="btn btn-sm btn-outline"
         onclick={addServer}
-        class="cursor-pointer flex items-center gap-2"
       >
-        <CirclePlusSolid class="w-4 h-4" />
+        <CirclePlus class="w-4 h-4" />
         {$t('settings.server.add_server')}
-      </Button>
+      </button>
     </div>
 
     {#if config.servers.length === 0}
       <div
-        class="text-center py-8 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg"
+        class="text-center py-8 border-2 border-dashed border-base-300 rounded-lg"
       >
-        <ServerSolid class="w-12 h-12 text-gray-400 mx-auto mb-4" />
-        <P class="text-gray-600 dark:text-gray-400 mb-4">
+        <Server class="w-12 h-12 text-base-content/40 mx-auto mb-4" />
+        <p class="text-base-content/70 mb-4">
           {$t('settings.server.no_servers_description')}
-        </P>
-        <Button
+        </p>
+        <button
+          class="btn btn-outline"
           onclick={addServer}
-          class="cursor-pointer flex items-center gap-2 mx-auto"
         >
-          <CirclePlusSolid class="w-4 h-4" />
+          <CirclePlus class="w-4 h-4" />
           {$t('settings.server.add_first_server')}
-        </Button>
+        </button>
       </div>
     {:else}
       <div class="space-y-6">
         {#each config.servers as server, index (index)}
           {@const validationState = getServerValidationState(index)}
           <div
-            class="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50"
+            class="p-4 border border-base-300 rounded-lg bg-base-200"
           >
             <div class="flex items-center justify-between mb-4">
               <div class="flex items-center gap-3">
-                <Heading
-                  tag="h3"
-                  class="text-md font-medium text-gray-900 dark:text-white"
-                >
+                <h3 class="text-md font-medium text-base-content">
                   {$t('settings.server.server_number', { number: index + 1 })}
-                </Heading>
+                </h3>
                 {#if validationState.status === "validating"}
-                  <Badge color="blue">
-                    <Spinner class="w-3 h-3 mr-1" />
+                  <div class="badge badge-info gap-1">
+                    <Loader2 class="w-3 h-3 animate-spin" />
                     {$t("setup.servers.validating")}
-                  </Badge>
+                  </div>
                 {:else if validationState.status === "valid"}
-                  <Badge color="green">
-                    <CheckOutline class="w-3 h-3 mr-1" />
+                  <div class="badge badge-success gap-1">
+                    <Check class="w-3 h-3" />
                     {$t("setup.servers.valid")}
-                  </Badge>
+                  </div>
                 {:else if !isServerModified(index) && server.host && server.port}
-                  <Badge color="green">
-                    <CheckOutline class="w-3 h-3 mr-1" />
+                  <div class="badge badge-success gap-1">
+                    <Check class="w-3 h-3" />
                     {$t("setup.servers.valid")} (Saved)
-                  </Badge>
+                  </div>
                 {:else if validationState.status === "invalid"}
-                  <Badge color="red">{$t("setup.servers.invalid")}</Badge>
+                  <div class="badge badge-error">{$t("setup.servers.invalid")}</div>
                 {:else}
-                  <Badge color="red">{$t("setup.servers.incomplete")}</Badge>
+                  <div class="badge badge-error">{$t("setup.servers.incomplete")}</div>
                 {/if}
                 <div class="flex items-center gap-2">
-                  <Checkbox bind:checked={server.enabled} />
-                  <Label class="text-sm font-medium">{$t('settings.server.enabled')}</Label>
+                  <input type="checkbox" class="checkbox checkbox-sm" bind:checked={server.enabled} id="enabled-{index}" />
+                  <label class="label-text text-sm font-medium" for="enabled-{index}">{$t('settings.server.enabled')}</label>
                 </div>
               </div>
               <div class="flex items-center gap-2">
                 {#if validationState.status !== "validating"}
-                  <Button
-                    size="xs"
-                    color="primary"
-                    variant="outline"
+                  <button
+                    class="btn btn-xs btn-primary btn-outline"
                     onclick={() => validateServer(index)}
-                    class="cursor-pointer flex items-center gap-1"
                   >
                     {$t("setup.servers.testConnection")}
-                  </Button>
+                  </button>
                 {/if}
-                <Button
-                  size="xs"
-                  color="red"
-                  variant="outline"
+                <button
+                  class="btn btn-xs btn-error btn-outline"
                   onclick={() => removeServer(index)}
-                  class="cursor-pointer flex items-center gap-1"
                 >
-                  <TrashBinSolid class="w-3 h-3" />
+                  <Trash2 class="w-3 h-3" />
                   {$t('settings.server.remove')}
-                </Button>
+                </button>
               </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label for="host-{index}" class="mb-2">{$t('settings.server.host_required')}</Label>
-                <Input
+                <label class="label" for="host-{index}">
+                  <span class="label-text">{$t('settings.server.host_required')}</span>
+                </label>
+                <input
                   id="host-{index}"
+                  class="input input-bordered w-full"
                   bind:value={server.host}
                   placeholder={$t('settings.server.host_placeholder')}
                   required
@@ -441,9 +448,12 @@ async function saveServerSettings() {
               </div>
 
               <div>
-                <Label for="port-{index}" class="mb-2">{$t('settings.server.port')}</Label>
-                <Input
+                <label class="label" for="port-{index}">
+                  <span class="label-text">{$t('settings.server.port')}</span>
+                </label>
+                <input
                   id="port-{index}"
+                  class="input input-bordered w-full"
                   type="number"
                   bind:value={server.port}
                   min="1"
@@ -453,9 +463,12 @@ async function saveServerSettings() {
               </div>
 
               <div>
-                <Label for="username-{index}" class="mb-2">{$t('settings.server.username')}</Label>
-                <Input
+                <label class="label" for="username-{index}">
+                  <span class="label-text">{$t('settings.server.username')}</span>
+                </label>
+                <input
                   id="username-{index}"
+                  class="input input-bordered w-full"
                   bind:value={server.username}
                   placeholder={$t('settings.server.username_placeholder')}
                   autocomplete="username"
@@ -464,9 +477,12 @@ async function saveServerSettings() {
               </div>
 
               <div>
-                <Label for="password-{index}" class="mb-2">{$t('settings.server.password')}</Label>
-                <Input
+                <label class="label" for="password-{index}">
+                  <span class="label-text">{$t('settings.server.password')}</span>
+                </label>
+                <input
                   id="password-{index}"
+                  class="input input-bordered w-full"
                   type="password"
                   bind:value={server.password}
                   placeholder={$t('settings.server.password_placeholder')}
@@ -476,11 +492,12 @@ async function saveServerSettings() {
               </div>
 
               <div>
-                <Label for="max-connections-{index}" class="mb-2">
-                  {$t('settings.server.max_connections')}
-                </Label>
-                <Input
+                <label class="label" for="max-connections-{index}">
+                  <span class="label-text">{$t('settings.server.max_connections')}</span>
+                </label>
+                <input
                   id="max-connections-{index}"
+                  class="input input-bordered w-full"
                   type="number"
                   bind:value={server.max_connections}
                   min="1"
@@ -510,22 +527,20 @@ async function saveServerSettings() {
 
             <div class="mt-4 space-y-3">
               <div class="flex items-center gap-3">
-                <Checkbox bind:checked={server.ssl} onchange={() => onServerFieldChange(index)} />
+                <input type="checkbox" class="checkbox" bind:checked={server.ssl} onchange={() => onServerFieldChange(index)} id="ssl-{index}" />
                 <div class="flex items-center gap-2">
-                  <ShieldCheckSolid
-                    class="w-4 h-4 text-green-600 dark:text-green-400"
-                  />
-                  <Label class="text-sm font-medium">{$t('settings.server.use_ssl_tls')}</Label>
+                  <ShieldCheck class="w-4 h-4 text-success" />
+                  <label class="label-text text-sm font-medium" for="ssl-{index}">{$t('settings.server.use_ssl_tls')}</label>
                 </div>
               </div>
 
               {#if server.ssl}
                 <div class="ml-6">
                   <div class="flex items-center gap-3">
-                    <Checkbox bind:checked={server.insecure_ssl} />
-                    <Label class="text-sm">
+                    <input type="checkbox" class="checkbox" bind:checked={server.insecure_ssl} id="insecure-ssl-{index}" />
+                    <label class="label-text text-sm" for="insecure-ssl-{index}">
                       {$t('settings.server.allow_insecure_ssl')}
-                    </Label>
+                    </label>
                   </div>
                 </div>
               {/if}
@@ -533,20 +548,18 @@ async function saveServerSettings() {
 
             <!-- Validation Error Display -->
             {#if validationState.error}
-              <div class="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
-                <P class="text-sm text-red-600 dark:text-red-400">
+              <div class="alert alert-error mt-3">
+                <p class="text-sm">
                   {validationState.error}
-                </P>
+                </p>
               </div>
             {/if}
 
             {#if !server.host || !server.port}
-              <div
-                class="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded"
-              >
-                <P class="text-sm text-yellow-800 dark:text-yellow-200">
+              <div class="alert alert-warning mt-3">
+                <p class="text-sm">
                   {$t('settings.server.validation_warning')}
-                </P>
+                </p>
               </div>
             {/if}
           </div>
@@ -555,20 +568,19 @@ async function saveServerSettings() {
     {/if}
 
     <!-- Save Button -->
-    <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
-      <Button
-        color="green"
+    <div class="pt-4 border-t border-base-300">
+      <button
+        class="btn btn-success mb-4"
         onclick={saveServerSettings}
         disabled={saving}
-        class="cursor-pointer flex items-center gap-2 mb-4"
       >
-        <FloppyDiskSolid class="w-4 h-4" />
+        <Save class="w-4 h-4" />
         {saving ? $t('settings.server.saving') : $t('settings.server.save_button')}
-      </Button>
+      </button>
       
-      <P class="text-sm text-gray-600 dark:text-gray-400">
+      <p class="text-sm text-base-content/70">
         {@html $t('settings.server.tip')}
-      </P>
+      </p>
     </div>
   </div>
-</Card>
+</div>

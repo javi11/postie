@@ -9,7 +9,7 @@ import { t } from "$lib/i18n";
 import { appStatus, progress } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import { uploadActions } from "$lib/stores/upload";
-import { PlusOutline } from "flowbite-svelte-icons";
+import { Plus } from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
 
 let needsConfiguration = false;
@@ -18,8 +18,6 @@ let isDragOver = false;
 let dragCounter = 0;
 
 onMount(async () => {
-	// Initialize API client
-	await apiClient.initialize();
 
 	// Set up drag over detection for UI feedback
 	window.addEventListener("dragenter", handleDragEnter);
@@ -271,7 +269,7 @@ async function handleUpload() {
     <div class="drag-overlay">
       <div class="drag-overlay-content">
         <div class="drag-icon">
-          <PlusOutline class="w-16 h-16 text-white" />
+          <Plus class="w-16 h-16 text-white" />
         </div>
         <h2 class="text-2xl font-bold text-white mb-2">Drop Files Here</h2>
         <p class="text-white/80">Release to add files to queue</p>

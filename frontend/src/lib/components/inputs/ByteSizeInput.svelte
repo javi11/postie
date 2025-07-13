@@ -1,6 +1,5 @@
 <script lang="ts">
 import { t } from "$lib/i18n";
-import { Button, Input, Label, P } from "flowbite-svelte";
 
 interface ComponentProps {
 	value?: number;
@@ -24,47 +23,50 @@ let {
 	id = "",
 }: ComponentProps = $props();
 
-let unitLabel = $derived($t("common.inputs.bytes"));
+const unitLabel = $derived($t("common.inputs.bytes"));
 
 function setPreset(presetValue: number) {
 	value = presetValue;
 }
 </script>
 
-<div>
+<div class="form-control w-full">
 	{#if label}
-		<Label for={id} class="mb-2">{label}</Label>
+		<label class="label" for={id}>
+			<span class="label-text">{label}</span>
+		</label>
 	{/if}
 	<div class="flex gap-2">
 		<div class="flex-1">
-			<Input
+			<input
 				{id}
 				type="number"
+				class="input input-bordered w-full"
 				bind:value
 				min={minValue}
 				max={maxValue}
 				{placeholder}
 			/>
 		</div>
-		<div class="w-20 flex items-center justify-center text-sm font-medium text-gray-600 dark:text-gray-400">
+		<div class="w-20 flex items-center justify-center text-sm font-medium opacity-60">
 			{unitLabel}
 		</div>
 	</div>
 	{#if description}
-		<P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-			{description}
-		</P>
+		<div class="label">
+			<span class="label-text-alt opacity-70">{description}</span>
+		</div>
 	{/if}
 	{#if presets.length > 0}
 		<div class="mt-2 flex flex-wrap gap-2">
 			{#each presets as preset}
-				<Button
+				<button
 					type="button"
-					class="cursor-pointer px-2 py-1 text-xs"
+					class="btn btn-xs btn-outline"
 					onclick={() => setPreset(preset.value)}
 				>
 					{preset.label}
-				</Button>
+				</button>
 			{/each}
 		</div>
 	{/if}
