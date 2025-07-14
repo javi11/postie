@@ -1,39 +1,29 @@
+import type { backend } from "$lib/wailsjs/go/models";
 import { derived, writable } from "svelte/store";
 
-export interface AppStatus {
-	needsConfiguration: boolean;
-	criticalConfigError: boolean;
-	[key: string]: unknown;
-}
-
 // Create app status store
-export const appStatus = writable<AppStatus>({
+export const appStatus = writable<backend.AppStatus>({
 	needsConfiguration: false,
 	criticalConfigError: false,
+	configPath: "",
+	configValid: false,
+	error: "",
+	hasConfig: false,
+	hasPostie: false,
+	hasServers: false,
+	isFirstStart: false,
+	serverCount: 0,
+	uploading: false,
+	validServerCount: 0,
 });
 
-// Create progress store (map of jobID -> progress object)
-export interface JobProgress {
-	jobID: string;
-	currentFile: string;
-	totalFiles: number;
-	completedFiles: number;
-	stage: string;
-	details: string;
-	isRunning: boolean;
-	lastUpdate: number;
-	percentage: number;
-	currentFileProgress: number;
-	elapsedTime?: number;
-	speed?: number;
-	secondsLeft?: number;
-}
-
-export const progress = writable<Record<string, JobProgress>>({});
+export const progress = writable<Record<string, backend.ProgressTracker>>({});
 
 // Create upload state store
 export const isUploading = derived(progress, (progress) => {
-	return Object.values(progress).some((job: JobProgress) => job.isRunning);
+	return Object.values(progress).some(
+		(job: backend.ProgressTracker) => job.isRunning,
+	);
 });
 
 // Create settings store for save functionality

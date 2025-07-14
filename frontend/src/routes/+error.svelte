@@ -1,10 +1,10 @@
 <script lang="ts">
-import { page } from "$app/stores";
+import { page } from "$app/state";
 import { AlertCircle, ArrowLeft } from "lucide-svelte";
 </script>
 
 <svelte:head>
-  <title>Error {$page.status} - Postie</title>
+  <title>Error {page.status} - Postie</title>
 </svelte:head>
 
 <div class="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6">
@@ -14,10 +14,10 @@ import { AlertCircle, ArrowLeft } from "lucide-svelte";
 
   <div class="space-y-2">
     <h1 class="text-4xl font-bold">
-      {$page.status}
+      {page.status}
     </h1>
     <p class="text-xl text-base-content/70">
-      {$page.error?.message || "Something went wrong"}
+      {page.error?.message || "Something went wrong"}
     </p>
   </div>
 

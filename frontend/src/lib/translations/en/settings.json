@@ -213,7 +213,7 @@
 			"full": "Full",
 			"none_description": "<strong>None:</strong> Nothing will be obfuscated - all original filenames, subjects, and metadata preserved",
 			"partial_description": "<strong>Partial:</strong> Subject & filename obfuscated, same Yenc filename for all articles, real posted date, consistent poster",
-			"full_description": "<strong>Full:</strong> Subject & filename obfuscated, randomized Yenc filenames per article, randomized dates (within 6 hours), random poster per article, no NGX header"
+			"full_description": "<strong>Full:</strong> Subject & filename obfuscated, randomized Yenc filenames per article, randomized dates (within 6 hours), random poster per article, no NXG header"
 		},
 		"par2_obfuscation": {
 			"none_description": "<strong>None:</strong> PAR2 files will use original filenames and metadata",
@@ -222,7 +222,7 @@
 		},
 		"message_id": {
 			"random": "Random - Random message IDs",
-			"ngx": "NGX - NGX format message IDs"
+			"nxg": "NXG - NXG format message IDs"
 		},
 		"group_policy_options": {
 			"all": "All - Post to all groups",
@@ -232,7 +232,7 @@
 			"title": "Post Headers",
 			"default_from": "Default From",
 			"default_from_description": "Default From header (leave empty for random)",
-			"add_ngx_header": "Add NGX Header",
+			"add_nxg_header": "Add NXG Header",
 			"custom_headers": {
 				"title": "Custom Headers",
 				"description": "Additional headers to include in posts",

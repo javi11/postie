@@ -1,7 +1,13 @@
+import type { Config } from 'sveltekit-i18n';
 import i18n from "sveltekit-i18n";
+interface Params {
+  settingsLink?: string;
+  jobId?: string;
+  number?: number;
+}
 
 /** @type {import('sveltekit-i18n').Config} */
-const config = {
+const config: Config<Params> = {
 	loaders: [
 		// English translations
 		{

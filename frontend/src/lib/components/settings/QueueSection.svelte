@@ -1,9 +1,9 @@
 <script lang="ts">
 import { t } from "$lib/i18n";
-import type { ConfigData } from "$lib/types";
+import type { config as configType } from "$lib/wailsjs/go/models";
 import { Quote } from "lucide-svelte";
 
-export let config: ConfigData;
+export let config: configType.ConfigData;
 
 // Ensure queue exists with defaults
 if (!config.queue) {

@@ -1,5 +1,16 @@
 @import "tailwindcss";
-@plugin "daisyui";
+@plugin "daisyui" {
+	/* biome-ignore lint/correctness/noUnknownProperty: wrong error */
+	themes:
+		cupcake --default,
+		dim --prefersdark,
+		cupcake,
+		bumblebee,
+		emerald,
+		corporate,
+		dim,
+		dracula;
+}
 @plugin "@tailwindcss/typography";
 
 @layer base {
@@ -169,13 +180,17 @@
 
 	/* Modern shadows */
 	.shadow-modern {
-		box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px
-			rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.05);
+		box-shadow:
+			0 4px 6px -1px rgba(0, 0, 0, 0.1),
+			0 2px 4px -1px rgba(0, 0, 0, 0.06),
+			0 0 0 1px rgba(0, 0, 0, 0.05);
 	}
 
 	.shadow-modern-dark {
-		box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px
-			rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.05);
+		box-shadow:
+			0 4px 6px -1px rgba(0, 0, 0, 0.3),
+			0 2px 4px -1px rgba(0, 0, 0, 0.2),
+			0 0 0 1px rgba(255, 255, 255, 0.05);
 	}
 }
 

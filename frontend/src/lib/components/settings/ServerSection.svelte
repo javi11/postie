@@ -3,7 +3,7 @@ import apiClient from "$lib/api/client";
 import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
-import type { ConfigData, ServerConfig } from "$lib/types";
+import { config as configType } from "$lib/wailsjs/go/models";
 import {
 	Check,
 	CirclePlus,
@@ -14,13 +14,13 @@ import {
 	Trash2,
 } from "lucide-svelte";
 
-export let config: ConfigData;
+export let config: configType.ConfigData;
 
 let saving = false;
 // Track validation state for each server
-let validationStates = {};
+let validationStates: Record<number, { status: string; error: string }> = {};
 // Track original server state to detect modifications
-let originalServers: ServerConfig[] = [];
+let originalServers: configType.ServerConfig[] = [];
 // Track which servers have been modified
 let modifiedServers: Set<number>;
 
@@ -38,12 +38,6 @@ $: if (config.servers && originalServers.length === 0) {
 		}
 	});
 }
-
-const timeUnitOptions = [
-	{ value: "s", name: "Seconds" },
-	{ value: "m", name: "Minutes" },
-	{ value: "h", name: "Hours" },
-];
 
 // Duration preset definitions
 const idleTimePresets = [
@@ -69,32 +63,8 @@ function secondsToTimeUnit(seconds: number): { value: number; unit: string } {
 	return { value: seconds, unit: "s" };
 }
 
-function timeUnitToSeconds(value: number, unit: string): number {
-	switch (unit) {
-		case "h":
-			return value * 3600;
-		case "m":
-			return value * 60;
-		case "s":
-			return value;
-		default:
-			return value;
-	}
-}
-
 function addServer() {
-	const newServer: ServerConfig = {
-		host: "",
-		port: 119,
-		username: "",
-		password: "",
-		ssl: false,
-		max_connections: 10,
-		max_connection_idle_time_in_seconds: 300,
-		max_connection_ttl_in_seconds: 3600,
-		insecure_ssl: false,
-		enabled: true,
-	};
+	const newServer: configType.ServerConfig = new configType.ServerConfig();
 
 	config.servers = [...config.servers, newServer];
 	// Mark new server as modified
@@ -229,14 +199,15 @@ async function validateServer(index: number) {
 			toastStore.error($t("setup.servers.invalid"), String(result.error));
 		}
 	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
 		validationStates = {
 			...validationStates,
 			[index]: {
 				status: "invalid",
-				error: `Validation failed: ${error.message}`,
+				error: `Validation failed: ${errorMessage}`,
 			},
 		};
-		toastStore.error($t("setup.servers.invalid"), String(error));
+		toastStore.error($t("setup.servers.invalid"), String(errorMessage));
 		console.error("Server validation error:", error);
 	}
 }
@@ -293,7 +264,7 @@ async function saveServerSettings() {
 				toastStore.error(
 					"Configuration Error",
 					$t("settings.server.validation_errors.host_required", {
-						number: i + 1,
+							number: i + 1,
 					}),
 				);
 				return;
@@ -302,7 +273,7 @@ async function saveServerSettings() {
 				toastStore.error(
 					"Configuration Error",
 					$t("settings.server.validation_errors.port_invalid", {
-						number: i + 1,
+							number: i + 1,
 					}),
 				);
 				return;
@@ -313,15 +284,17 @@ async function saveServerSettings() {
 		const currentConfig = await apiClient.getConfig();
 
 		// Only update the server fields with proper type conversion
-		currentConfig.servers = config.servers.map((server: ServerConfig) => ({
-			...server,
-			port: Number.parseInt(server.port) || 119,
-			max_connections: Number.parseInt(server.max_connections) || 10,
-			max_connection_idle_time_in_seconds:
-				Number.parseInt(server.max_connection_idle_time_in_seconds) || 300,
-			max_connection_ttl_in_seconds:
-				Number.parseInt(server.max_connection_ttl_in_seconds) || 3600,
-		}));
+		currentConfig.servers = config.servers.map(
+			(server: configType.ServerConfig) => ({
+				...server,
+				port: server.port || 119,
+				max_connections: server.max_connections || 10,
+				max_connection_idle_time_in_seconds:
+					server.max_connection_idle_time_in_seconds || 300,
+				max_connection_ttl_in_seconds:
+					server.max_connection_ttl_in_seconds || 3600,
+			}),
+		);
 
 		await apiClient.saveConfig(currentConfig);
 
@@ -512,7 +485,7 @@ async function saveServerSettings() {
                 description={$t('settings.server.connection_idle_timeout_description')}
                 presets={idleTimePresets}
                 id="idle-time-{index}"
-                onchange={(e) => updateIdleTime(index, e.detail)}
+                onchange={(e) => updateIdleTime(index, e)}
               />
 
               <DurationInput
@@ -521,7 +494,7 @@ async function saveServerSettings() {
                 description={$t('settings.server.connection_ttl_description')}
                 presets={ttlPresets}
                 id="ttl-{index}"
-                onchange={(e) => updateTTL(index, e.detail)}
+                onchange={(e) => updateTTL(index, e)}
               />
             </div>
 

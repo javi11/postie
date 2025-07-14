@@ -5,7 +5,7 @@ import "../../style.css";
 import apiClient from "$lib/api/client";
 import { onMount } from "svelte";
 
-onMount(async() => {
+onMount(async () => {
 	// Initialize API client
 	await apiClient.initialize();
 });

@@ -2,15 +2,20 @@
 import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { FolderOpen } from "lucide-svelte";
-import { createEventDispatcher } from "svelte";
 
-const dispatch = createEventDispatcher();
+interface Props {
+	outputDirectory?: string;
+	watchDirectory?: string;
+	onupdate?: (data: {
+		outputDirectory: string;
+		watchDirectory: string;
+	}) => void;
+}
 
-export let outputDirectory = "";
-export let watchDirectory = "";
+let { outputDirectory = "", watchDirectory = "", onupdate }: Props = $props();
 
 function updateDirectories() {
-	dispatch("update", { outputDirectory, watchDirectory });
+	onupdate?.({ outputDirectory, watchDirectory });
 }
 
 async function selectOutputDirectory() {
@@ -22,18 +27,6 @@ async function selectOutputDirectory() {
 		}
 	} catch (error) {
 		console.error("Failed to select output directory:", error);
-	}
-}
-
-async function selectWatchDirectory() {
-	try {
-		const dir = await apiClient.selectWatchDirectory();
-		if (dir) {
-			watchDirectory = dir;
-			updateDirectories();
-		}
-	} catch (error) {
-		console.error("Failed to select watch directory:", error);
 	}
 }
 

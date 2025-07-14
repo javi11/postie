@@ -94,7 +94,7 @@ func TestEncode(t *testing.T) {
 
 	// Test data to encode
 	testData := []byte("This is test data for encoding with yEnc")
-	
+
 	// Update the Size field to match the actual test data length
 	article.Size = uint64(len(testData))
 
@@ -158,22 +158,22 @@ func TestEncode(t *testing.T) {
 func TestEncodeWithXNxgHeader(t *testing.T) {
 	// Create a test article with X-Nxg header
 	article := &Article{
-		MessageID:     "test-message-id",
-		Subject:       "Test Subject",
-		From:          "test@example.com",
-		Groups:        []string{"alt.test"},
-		PartNumber:    1,
-		TotalParts:    1,
-		FileSize:      int64(100),
-		FileName:      "test.txt",
-		Offset:        0,
-		Size:          50,
-		Date:          time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
-		XNxgHeader:    "test-nxg-header-value",
+		MessageID:  "test-message-id",
+		Subject:    "Test Subject",
+		From:       "test@example.com",
+		Groups:     []string{"alt.test"},
+		PartNumber: 1,
+		TotalParts: 1,
+		FileSize:   int64(100),
+		FileName:   "test.txt",
+		Offset:     0,
+		Size:       50,
+		Date:       time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
+		XNxgHeader: "test-nxg-header-value",
 	}
 
 	testData := []byte("Test data")
-	
+
 	// Update the Size field to match the actual test data length
 	article.Size = uint64(len(testData))
 

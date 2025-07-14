@@ -1,8 +1,10 @@
 <script lang="ts">
+// Imports
 import { t } from "$lib/i18n";
 
+// Types
 interface ComponentProps {
-	value?: string;
+	value?: string | undefined;
 	label?: string;
 	description?: string;
 	placeholder?: string;
@@ -13,8 +15,9 @@ interface ComponentProps {
 	onchange?: (value: string) => void;
 }
 
+// Props
 let {
-	value = $bindable("5s"),
+	value = $bindable(),
 	label = "",
 	description = "",
 	placeholder = "5",
@@ -25,77 +28,83 @@ let {
 	onchange,
 }: ComponentProps = $props();
 
-const timeUnitOptions = [
+// State - local state for form inputs (following best practices)
+function parseValue(val: string | undefined): { number: number; unit: string } {
+	if (!val || typeof val !== "string" || val.trim() === "") {
+		return { number: 5, unit: "s" };
+	}
+	const match = val.match(/^(\d+)([smh])$/);
+	return match
+		? { number: Number.parseInt(match[1]), unit: match[2] }
+		: { number: 5, unit: "s" };
+}
+
+// Initialize with current value
+const initial = parseValue(value);
+let numberValue = $state(initial.number);
+let unitValue = $state(initial.unit);
+let lastUpdatedValue = $state(value);
+
+// Effects - sync local state back to bound value when user changes inputs
+$effect(() => {
+	const newValue = `${numberValue}${unitValue}`;
+	if (newValue !== lastUpdatedValue) {
+		lastUpdatedValue = newValue;
+		value = newValue;
+		onchange?.(newValue);
+	}
+});
+
+// Effect to update local state when value prop changes externally (avoid infinite loop)
+$effect(() => {
+	if (value !== lastUpdatedValue) {
+		const parsed = parseValue(value);
+		numberValue = parsed.number;
+		unitValue = parsed.unit;
+		lastUpdatedValue = value;
+	}
+});
+
+// Derived state - reactive dropdown options
+const timeUnitOptions = $derived([
 	{ value: "s", name: $t("common.inputs.time_units.seconds") },
 	{ value: "m", name: $t("common.inputs.time_units.minutes") },
 	{ value: "h", name: $t("common.inputs.time_units.hours") },
-];
+]);
 
-// Local state for the inputs
-let numberValue = $state(5);
-let unitValue = $state("s");
-
-// Parse the bound value and sync with local state
-function parseAndSync() {
-	if (!value || typeof value !== "string") {
-		numberValue = 5;
-		unitValue = "s";
-		return;
-	}
-
-	const match = value.match(/^(\d+)([smh])$/);
-	if (match) {
-		numberValue = Number.parseInt(match[1]);
-		unitValue = match[2];
-	} else {
-		// Fallback for invalid format
-		numberValue = 5;
-		unitValue = "s";
-	}
-}
-
-// Sync local state when bound value changes
-$effect(() => {
-	parseAndSync();
-});
-
-// Update bound value when local state changes
-function updateValue() {
-	value = `${numberValue}${unitValue}`;
-	onchange?.(value);
-}
-
+// Functions
 function setPreset(presetValue: number, presetUnit: string) {
 	numberValue = presetValue;
 	unitValue = presetUnit;
-	updateValue();
 }
 </script>
 
+<!-- Duration Input Component -->
 <div class="form-control w-full">
+	<!-- Label -->
 	{#if label}
 		<label class="label" for={id}>
-			<span class="label-text">{label}</span>
+			<span class="label-text font-medium text-base-content">{label}</span>
 		</label>
 	{/if}
+	
+	<!-- Input with Unit Selector -->
 	<div class="flex gap-2">
 		<div class="flex-1">
 			<input
 				{id}
 				type="number"
-				class="input input-bordered w-full"
+				class="input input-bordered w-full focus:input-primary transition-colors"
 				bind:value={numberValue}
 				min={minValue}
 				max={maxValue}
 				{placeholder}
-				oninput={updateValue}
 			/>
 		</div>
 		<div class="w-24">
 			<select
-				class="select select-bordered"
+				class="select select-bordered focus:select-primary transition-colors"
 				bind:value={unitValue}
-				onchange={updateValue}
 			>
 				{#each timeUnitOptions as option}
 					<option value={option.value}>{option.name}</option>
@@ -103,17 +112,21 @@ function setPreset(presetValue: number, presetUnit: string) {
 			</select>
 		</div>
 	</div>
+	
+	<!-- Description -->
 	{#if description}
-		<p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+		<p class="text-sm text-base-content/70 mt-1">
 			{description}
 		</p>
 	{/if}
+	
+	<!-- Preset Buttons -->
 	{#if presets.length > 0}
 		<div class="mt-2 flex flex-wrap gap-2">
 			{#each presets as preset}
 				<button
 					type="button"
-					class="btn btn-xs btn-outline"
+					class="btn btn-xs btn-outline hover:btn-primary transition-colors"
 					onclick={() => setPreset(preset.value, preset.unit)}
 				>
 					{preset.label}

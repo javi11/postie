@@ -26,7 +26,7 @@ posting:
   par2_obfuscation_policy: 'full'
   group_policy: 'each_file'
   post_headers:
-    add_ngx_header: false
+    add_nxg_header: false
     default_from: ''
     custom_headers: []
 

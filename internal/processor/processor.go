@@ -210,18 +210,19 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 
 	// Emit progress start event
 	if p.eventEmitter != nil {
-		p.eventEmitter("progress", map[string]interface{}{
-			"currentFile":         fileName,
-			"totalFiles":          1,
-			"completedFiles":      0,
-			"stage":               "Processing",
-			"details":             fmt.Sprintf("Processing %s", fileName),
-			"isRunning":           true,
-			"lastUpdate":          time.Now().Unix(),
-			"percentage":          0,
-			"currentFileProgress": 0,
-			"jobID":               jobID,
-		})
+		progressStatus := config.ProgressStatus{
+			CurrentFile:         fileName,
+			TotalFiles:          1,
+			CompletedFiles:      0,
+			Stage:               "Processing",
+			Details:             fmt.Sprintf("Processing %s", fileName),
+			IsRunning:           true,
+			LastUpdate:          time.Now().Unix(),
+			Percentage:          0,
+			CurrentFileProgress: 0,
+			JobID:               jobID,
+		}
+		p.eventEmitter("progress", progressStatus)
 	}
 
 	// Create file info
@@ -246,21 +247,22 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 		p.jobsMux.Unlock()
 
 		if p.eventEmitter != nil {
-			p.eventEmitter("progress", map[string]interface{}{
-				"currentFile":         fileName,
-				"totalFiles":          1,
-				"completedFiles":      0,
-				"stage":               stage,
-				"details":             details,
-				"isRunning":           true,
-				"lastUpdate":          time.Now().Unix(),
-				"percentage":          fileProgress,
-				"currentFileProgress": fileProgress,
-				"jobID":               jobID,
-				"speed":               speed,
-				"secondsLeft":         secondsLeft,
-				"elapsedTime":         elapsedTime,
-			})
+			progressStatus := config.ProgressStatus{
+				CurrentFile:         fileName,
+				TotalFiles:          1,
+				CompletedFiles:      0,
+				Stage:               stage,
+				Details:             details,
+				IsRunning:           true,
+				LastUpdate:          time.Now().Unix(),
+				Percentage:          fileProgress,
+				CurrentFileProgress: fileProgress,
+				JobID:               jobID,
+				Speed:               speed,
+				SecondsLeft:         secondsLeft,
+				ElapsedTime:         elapsedTime,
+			}
+			p.eventEmitter("progress", progressStatus)
 		}
 
 		// Extend timeout for long-running operations
@@ -285,42 +287,44 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 		if err == context.Canceled {
 			// Emit cancellation event
 			if p.eventEmitter != nil {
-				p.eventEmitter("progress", map[string]interface{}{
-					"currentFile":         fileName,
-					"totalFiles":          1,
-					"completedFiles":      0,
-					"stage":               "Cancelled",
-					"details":             fmt.Sprintf("Cancelled %s", fileName),
-					"isRunning":           false,
-					"lastUpdate":          time.Now().Unix(),
-					"percentage":          0,
-					"currentFileProgress": 0,
-					"jobID":               jobID,
-					"speed":               0,
-					"secondsLeft":         0,
-					"elapsedTime":         0,
-				})
+				progressStatus := config.ProgressStatus{
+					CurrentFile:         fileName,
+					TotalFiles:          1,
+					CompletedFiles:      0,
+					Stage:               "Cancelled",
+					Details:             fmt.Sprintf("Cancelled %s", fileName),
+					IsRunning:           false,
+					LastUpdate:          time.Now().Unix(),
+					Percentage:          0,
+					CurrentFileProgress: 0,
+					JobID:               jobID,
+					Speed:               0,
+					SecondsLeft:         0,
+					ElapsedTime:         0,
+				}
+				p.eventEmitter("progress", progressStatus)
 			}
 			return context.Canceled
 		}
 
 		// Emit error progress event
 		if p.eventEmitter != nil {
-			p.eventEmitter("progress", map[string]interface{}{
-				"currentFile":         fileName,
-				"totalFiles":          1,
-				"completedFiles":      0,
-				"stage":               "Error",
-				"details":             fmt.Sprintf("Error processing %s: %v", fileName, err),
-				"isRunning":           false,
-				"lastUpdate":          time.Now().Unix(),
-				"percentage":          0,
-				"currentFileProgress": 0,
-				"jobID":               jobID,
-				"speed":               0,
-				"secondsLeft":         0,
-				"elapsedTime":         0,
-			})
+			progressStatus := config.ProgressStatus{
+				CurrentFile:         fileName,
+				TotalFiles:          1,
+				CompletedFiles:      0,
+				Stage:               "Error",
+				Details:             fmt.Sprintf("Error processing %s: %v", fileName, err),
+				IsRunning:           false,
+				LastUpdate:          time.Now().Unix(),
+				Percentage:          0,
+				CurrentFileProgress: 0,
+				JobID:               jobID,
+				Speed:               0,
+				SecondsLeft:         0,
+				ElapsedTime:         0,
+			}
+			p.eventEmitter("progress", progressStatus)
 		}
 
 		return err
@@ -328,21 +332,22 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 
 	// Emit completion progress event
 	if p.eventEmitter != nil {
-		p.eventEmitter("progress", map[string]interface{}{
-			"currentFile":         fileName,
-			"totalFiles":          1,
-			"completedFiles":      1,
-			"stage":               "Completed",
-			"details":             fmt.Sprintf("Completed %s", fileName),
-			"isRunning":           false,
-			"lastUpdate":          time.Now().Unix(),
-			"percentage":          100,
-			"currentFileProgress": 100,
-			"jobID":               jobID,
-			"speed":               0,
-			"secondsLeft":         0,
-			"elapsedTime":         0,
-		})
+		progressStatus := config.ProgressStatus{
+			CurrentFile:         fileName,
+			TotalFiles:          1,
+			CompletedFiles:      1,
+			Stage:               "Completed",
+			Details:             fmt.Sprintf("Completed %s", fileName),
+			IsRunning:           false,
+			LastUpdate:          time.Now().Unix(),
+			Percentage:          100,
+			CurrentFileProgress: 100,
+			JobID:               jobID,
+			Speed:               0,
+			SecondsLeft:         0,
+			ElapsedTime:         0,
+		}
+		p.eventEmitter("progress", progressStatus)
 	}
 
 	// Delete the original file
@@ -378,18 +383,19 @@ func (p *Processor) handleProcessingError(ctx context.Context, msg *goqite.Messa
 
 	// Emit error event
 	if p.eventEmitter != nil {
-		p.eventEmitter("progress", map[string]interface{}{
-			"currentFile":         getFileName(job.Path),
-			"totalFiles":          1,
-			"completedFiles":      0,
-			"stage":               "Error",
-			"details":             fmt.Sprintf("Error processing %s: %v", getFileName(job.Path), err),
-			"isRunning":           false,
-			"lastUpdate":          time.Now().Unix(),
-			"percentage":          0,
-			"currentFileProgress": 0,
-			"jobID":               jobID,
-		})
+		progressStatus := config.ProgressStatus{
+			CurrentFile:         getFileName(job.Path),
+			TotalFiles:          1,
+			CompletedFiles:      0,
+			Stage:               "Error",
+			Details:             fmt.Sprintf("Error processing %s: %v", getFileName(job.Path), err),
+			IsRunning:           false,
+			LastUpdate:          time.Now().Unix(),
+			Percentage:          0,
+			CurrentFileProgress: 0,
+			JobID:               jobID,
+		}
+		p.eventEmitter("progress", progressStatus)
 	}
 
 	return nil
@@ -425,21 +431,22 @@ func (p *Processor) CancelJob(jobID string) error {
 
 	// Emit immediate cancellation event to frontend
 	if p.eventEmitter != nil {
-		p.eventEmitter("progress", map[string]interface{}{
-			"currentFile":         fileName,
-			"totalFiles":          1,
-			"completedFiles":      0,
-			"stage":               "Cancelled",
-			"details":             fmt.Sprintf("Cancelled %s", fileName),
-			"isRunning":           false,
-			"lastUpdate":          time.Now().Unix(),
-			"percentage":          0,
-			"currentFileProgress": 0,
-			"jobID":               jobID,
-			"speed":               0,
-			"secondsLeft":         0,
-			"elapsedTime":         0,
-		})
+		progressStatus := config.ProgressStatus{
+			CurrentFile:         fileName,
+			TotalFiles:          1,
+			CompletedFiles:      0,
+			Stage:               "Cancelled",
+			Details:             fmt.Sprintf("Cancelled %s", fileName),
+			IsRunning:           false,
+			LastUpdate:          time.Now().Unix(),
+			Percentage:          0,
+			CurrentFileProgress: 0,
+			JobID:               jobID,
+			Speed:               0,
+			SecondsLeft:         0,
+			ElapsedTime:         0,
+		}
+		p.eventEmitter("progress", progressStatus)
 	}
 
 	slog.Info("Job cancelled", "jobID", jobID)

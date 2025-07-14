@@ -41,7 +41,7 @@ func (a *App) UploadFiles() error {
 
 	// Check if configuration is valid before proceeding with upload
 	status := a.GetAppStatus()
-	if needsConfig, ok := status["needsConfiguration"].(bool); ok && needsConfig {
+	if status.NeedsConfiguration {
 		a.uploadingMux.Lock()
 		a.uploading = false
 		a.uploadingMux.Unlock()

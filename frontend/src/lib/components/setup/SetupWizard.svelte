@@ -1,22 +1,22 @@
 <script lang="ts">
 import logo from "$lib/assets/images/logo.png";
 import { t } from "$lib/i18n";
+import { backend, type config } from "$lib/wailsjs/go/models";
 import { Check } from "lucide-svelte";
-import { createEventDispatcher } from "svelte";
 import DirectorySetupStep from "./DirectorySetupStep.svelte";
 import ServerSetupStep from "./ServerSetupStep.svelte";
 import WelcomeStep from "./WelcomeStep.svelte";
 
-const dispatch = createEventDispatcher();
+interface Props {
+	oncomplete?: (data: backend.SetupWizardData) => void;
+}
+
+let { oncomplete }: Props = $props();
 
 let currentStep = 1;
 let hasValidServers = false;
 
-const stepData = {
-	servers: [],
-	outputDirectory: "",
-	watchDirectory: "",
-};
+const stepData = new backend.SetupWizardData();
 
 const steps = [
 	{ id: 1, name: $t("setup.steps.welcome"), completed: false },
@@ -38,39 +38,40 @@ function prevStep() {
 }
 
 // Reactive statement that updates when dependencies change
-$: canProceed = (() => {
-	switch (currentStep) {
-		case 1:
-			return true; // Welcome step can always proceed
-		case 2:
-			// For servers step, require at least one server with successful validation
-			return hasValidServers;
-		case 3:
-			return stepData.outputDirectory !== "";
-		default:
-			return false;
-	}
-})();
+const canProceed = $derived(
+	(() => {
+		switch (currentStep) {
+			case 1:
+				return true; // Welcome step can always proceed
+			case 2:
+				// For servers step, require at least one server with successful validation
+				return hasValidServers;
+			case 3:
+				return stepData.outputDirectory !== "";
+			default:
+				return false;
+		}
+	})(),
+);
 
-function handleServerUpdate(event) {
-	stepData.servers = event.detail.servers;
+function handleServerUpdate(event: { servers: backend.ServerData[] }) {
+	stepData.servers = event.servers;
 }
 
-function handleValidationChange(event) {
-	hasValidServers = event.detail.hasValidServers;
+function handleValidationChange(event: { hasValidServers: boolean }) {
+	hasValidServers = event.hasValidServers;
 }
 
-function handleDirectoryUpdate(event) {
-	stepData.outputDirectory = event.detail.outputDirectory;
-	stepData.watchDirectory = event.detail.watchDirectory;
+function handleDirectoryUpdate(event: {
+	outputDirectory: string;
+	watchDirectory: string;
+}) {
+	stepData.outputDirectory = event.outputDirectory;
+	stepData.watchDirectory = event.watchDirectory;
 }
 
 async function finishSetup() {
-	dispatch("complete", stepData);
-}
-
-function closeWizard() {
-	dispatch("close");
+	oncomplete?.(stepData);
 }
 </script>
 
@@ -136,15 +137,15 @@ function closeWizard() {
 						<WelcomeStep />
 					{:else if currentStep === 2}
 						<ServerSetupStep 
-							bind:servers={stepData.servers}
-							on:update={handleServerUpdate}
-							on:validationChange={handleValidationChange}
+							servers={stepData.servers}
+							onupdate={handleServerUpdate}
+							onvalidationchange={handleValidationChange}
 						/>
 					{:else if currentStep === 3}
 						<DirectorySetupStep 
-							bind:outputDirectory={stepData.outputDirectory}
-							bind:watchDirectory={stepData.watchDirectory}
-							on:update={handleDirectoryUpdate}
+							outputDirectory={stepData.outputDirectory}
+							watchDirectory={stepData.watchDirectory}
+							onupdate={handleDirectoryUpdate}
 						/>
 					{/if}
 				</div>

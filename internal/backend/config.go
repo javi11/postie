@@ -233,47 +233,41 @@ func (a *App) ensurePar2Executable(ctx context.Context) {
 	slog.Info("Par2 executable not found, downloading...")
 
 	// Emit progress event to frontend for both desktop and web modes
+	status := config.Par2DownloadStatus{
+		Status:  "downloading",
+		Message: "Downloading par2 executable...",
+	}
 	if !a.isWebMode {
-		runtime.EventsEmit(a.ctx, "par2-download-status", map[string]interface{}{
-			"status":  "downloading",
-			"message": "Downloading par2 executable...",
-		})
+		runtime.EventsEmit(a.ctx, "par2-download-status", status)
 	} else if a.webEventEmitter != nil {
-		a.webEventEmitter("par2-download-status", map[string]interface{}{
-			"status":  "downloading",
-			"message": "Downloading par2 executable...",
-		})
+		a.webEventEmitter("par2-download-status", status)
 	}
 
 	// Download par2 executable
 	execPath, err := parpardownloader.DownloadParParCmd(par2Path)
 	if err != nil {
 		slog.Error("Failed to download par2 executable", "error", err)
+		errorStatus := config.Par2DownloadStatus{
+			Status:  "error",
+			Message: fmt.Sprintf("Failed to download par2 executable: %v", err),
+		}
 		if !a.isWebMode {
-			runtime.EventsEmit(a.ctx, "par2-download-status", map[string]interface{}{
-				"status":  "error",
-				"message": fmt.Sprintf("Failed to download par2 executable: %v", err),
-			})
+			runtime.EventsEmit(a.ctx, "par2-download-status", errorStatus)
 		} else if a.webEventEmitter != nil {
-			a.webEventEmitter("par2-download-status", map[string]interface{}{
-				"status":  "error",
-				"message": fmt.Sprintf("Failed to download par2 executable: %v", err),
-			})
+			a.webEventEmitter("par2-download-status", errorStatus)
 		}
 		return
 	}
 
 	slog.Info("Par2 executable downloaded successfully", "path", execPath)
+	completedStatus := config.Par2DownloadStatus{
+		Status:  "completed",
+		Message: "Par2 executable downloaded successfully",
+	}
 	if !a.isWebMode {
-		runtime.EventsEmit(a.ctx, "par2-download-status", map[string]interface{}{
-			"status":  "completed",
-			"message": "Par2 executable downloaded successfully",
-		})
+		runtime.EventsEmit(a.ctx, "par2-download-status", completedStatus)
 	} else if a.webEventEmitter != nil {
-		a.webEventEmitter("par2-download-status", map[string]interface{}{
-			"status":  "completed",
-			"message": "Par2 executable downloaded successfully",
-		})
+		a.webEventEmitter("par2-download-status", completedStatus)
 	}
 }
 

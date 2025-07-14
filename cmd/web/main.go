@@ -126,7 +126,7 @@ func (h *WebSocketHub) EmitEvent(eventType string, data interface{}) {
 func (c *WebSocketClient) readPump() {
 	defer func() {
 		c.hub.unregister <- c
-		c.conn.Close()
+		_ = c.conn.Close()
 	}()
 
 	for {
@@ -142,7 +142,9 @@ func (c *WebSocketClient) readPump() {
 
 // writePump handles writing to the WebSocket connection
 func (c *WebSocketClient) writePump() {
-	defer c.conn.Close()
+	defer func() {
+		_ = c.conn.Close()
+	}()
 
 	for message := range c.send {
 		if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
@@ -284,7 +286,7 @@ func (ws *WebServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 func (ws *WebServer) handleGetStatus(w http.ResponseWriter, r *http.Request) {
 	status := ws.app.GetAppStatus()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(status)
+	_ = json.NewEncoder(w).Encode(status)
 }
 
 func (ws *WebServer) handleGetConfig(w http.ResponseWriter, r *http.Request) {
@@ -294,7 +296,7 @@ func (ws *WebServer) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(config)
+	_ = json.NewEncoder(w).Encode(config)
 }
 
 func (ws *WebServer) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
@@ -320,7 +322,7 @@ func (ws *WebServer) handleGetQueueItems(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(queueItems)
+	_ = json.NewEncoder(w).Encode(queueItems)
 }
 
 func (ws *WebServer) handleRetryJob(w http.ResponseWriter, r *http.Request) {
@@ -373,7 +375,7 @@ func (ws *WebServer) handleGetLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte(logs))
+	_, _ = w.Write([]byte(logs))
 }
 
 func (ws *WebServer) handleUpload(w http.ResponseWriter, r *http.Request) {
@@ -412,7 +414,9 @@ func (ws *WebServer) handleUpload(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to open uploaded file", http.StatusInternalServerError)
 			return
 		}
-		defer file.Close()
+		defer func() {
+			_ = file.Close()
+		}()
 
 		// Create temporary file
 		tempFilePath := filepath.Join(tempDir, fileHeader.Filename)
@@ -421,7 +425,9 @@ func (ws *WebServer) handleUpload(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to create temporary file", http.StatusInternalServerError)
 			return
 		}
-		defer tempFile.Close()
+		defer func() {
+			_ = tempFile.Close()
+		}()
 
 		// Copy uploaded file content to temporary file
 		if _, err := io.Copy(tempFile, file); err != nil {
@@ -449,9 +455,7 @@ func (ws *WebServer) handleUpload(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err := ws.app.HandleDroppedFiles(filePaths); err != nil {
-		ws.wsHub.EmitEvent("upload-error", map[string]interface{}{
-			"error": err.Error(),
-		})
+		ws.wsHub.EmitEvent("upload-error", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -468,7 +472,7 @@ func (ws *WebServer) handleUpload(w http.ResponseWriter, r *http.Request) {
 func (ws *WebServer) handleGetProcessorStatus(w http.ResponseWriter, r *http.Request) {
 	status := ws.app.GetProcessorStatus()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(status)
+	_ = json.NewEncoder(w).Encode(status)
 }
 
 func (ws *WebServer) handleGetRunningJobs(w http.ResponseWriter, r *http.Request) {
@@ -479,7 +483,7 @@ func (ws *WebServer) handleGetRunningJobs(w http.ResponseWriter, r *http.Request
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(jobs)
+	_ = json.NewEncoder(w).Encode(jobs)
 }
 
 func (ws *WebServer) handleClearQueue(w http.ResponseWriter, r *http.Request) {
@@ -557,7 +561,7 @@ func (ws *WebServer) handleDownloadNZB(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(nzbContent)))
 
 	// Write the NZB content
-	w.Write([]byte(nzbContent))
+	_, _ = w.Write([]byte(nzbContent))
 }
 
 func (ws *WebServer) handleGetQueueStats(w http.ResponseWriter, r *http.Request) {
@@ -568,13 +572,13 @@ func (ws *WebServer) handleGetQueueStats(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	_ = json.NewEncoder(w).Encode(stats)
 }
 
 func (ws *WebServer) handleGetProgress(w http.ResponseWriter, r *http.Request) {
 	progress := ws.app.GetProgress()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(progress)
+	_ = json.NewEncoder(w).Encode(progress)
 }
 
 func main() {

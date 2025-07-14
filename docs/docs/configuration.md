@@ -64,12 +64,12 @@ posting:
   groups:
     - alt.bin.test
   throttle_rate: 0 # unlimited (bytes per second)
-  message_id_format: random # Options: random, ngx
+  message_id_format: random # Options: random, nxg
   obfuscation_policy: full # Options: full, partial, none
   par2_obfuscation_policy: full # Options: full, partial, none
   group_policy: each_file # Options: all, each_file
   post_headers:
-    add_ngx_header: false
+    add_nxg_header: false
     default_from: ""
     custom_headers:
       - name: "X-Custom-Header"
@@ -172,12 +172,12 @@ posting:
   groups: # Newsgroups to post to
     - alt.bin.test
   throttle_rate: 0 # Upload speed limit in bytes/sec (0 = unlimited)
-  message_id_format: random # Format of message IDs ("random" or "[ngx](https://github.com/javi11/nxg)")
+  message_id_format: random # Format of message IDs ("random" or "[nxg](https://github.com/javi11/nxg)")
   obfuscation_policy: full # Level of obfuscation ("full", "partial", or "none")
   par2_obfuscation_policy: full # Obfuscation for PAR2 files
   group_policy: each_file # How to distribute posts ("all" or "each_file")
   post_headers: # Additional headers configuration
-    add_ngx_header: false # Whether to add [X-NXG](https://github.com/javi11/nxg) header
+    add_nxg_header: false # Whether to add [X-NXG](https://github.com/javi11/nxg) header
     default_from: "" # Default poster name
     custom_headers: # Custom headers to add to the post
       - name: "X-Custom-Header"

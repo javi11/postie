@@ -1,9 +1,9 @@
 <script lang="ts">
 import { t } from "$lib/i18n";
-import type { ConfigData } from "$lib/types";
+import type { config as configType } from "$lib/wailsjs/go/models";
 import { Archive } from "lucide-svelte";
 
-export let config: ConfigData;
+export let config: configType.ConfigData;
 
 // Ensure nzb_compression exists with defaults
 if (!config.nzb_compression) {
@@ -128,7 +128,7 @@ $: if (config.nzb_compression.type === "none") {
             />
             <div class="label">
               <span class="label-text-alt">
-                {$t('settings.nzb_compression.compression_level_description', { min: compressionLimits.min, max: compressionLimits.max })}
+                {$t('settings.nzb_compression.compression_level_description', { default:{ min: compressionLimits.min, max: compressionLimits.max } })}
               </span>
             </div>
           </div>

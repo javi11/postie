@@ -44,9 +44,9 @@ func New(
 }
 
 func (w *Watcher) Start(ctx context.Context) error {
-	slog.InfoContext(ctx, fmt.Sprintf("Starting directory watching %s with interval %s", w.watchFolder, w.cfg.CheckInterval))
+	slog.InfoContext(ctx, fmt.Sprintf("Starting directory watching %s with interval %v", w.watchFolder, w.cfg.CheckInterval))
 
-	scanTicker := time.NewTicker(w.cfg.CheckInterval)
+	scanTicker := time.NewTicker(w.cfg.CheckInterval.ToDuration())
 	defer scanTicker.Stop()
 
 	// Start continuous directory scanning

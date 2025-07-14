@@ -27,7 +27,7 @@ This is the highest level of obfuscation:
 - **Filename**: Obfuscated in yEnc headers
 - **yEnc Header Filename**: Randomized for every article
 - **Date**: Randomized within the last 6 hours
-- **NGX Header**: Not added
+- **NXG Header**: Not added
 - **Poster**: Random for each article
 
 Example configuration:

@@ -1,23 +1,21 @@
 <script lang="ts">
 import { t } from "$lib/i18n";
-import type { ConfigData } from "$lib/types";
-import { AlertCircle, CheckCircle, Cog, FolderOpen, Save } from "lucide-svelte";
-import { createEventDispatcher } from "svelte";
+import { AlertCircle, CheckCircle, Cog, Save } from "lucide-svelte";
 
-export const needsConfiguration = false;
-export const criticalConfigError = false;
-
-const dispatch = createEventDispatcher<{
-	save: undefined;
-	selectFile: undefined;
-}>();
-
-function handleSave() {
-	dispatch("save");
+interface Props {
+	needsConfiguration?: boolean;
+	criticalConfigError?: boolean;
+	onsave?: () => void;
 }
 
-function handleSelectFile() {
-	dispatch("selectFile");
+let {
+	needsConfiguration = false,
+	criticalConfigError = false,
+	onsave,
+}: Props = $props();
+
+function handleSave() {
+	onsave?.();
 }
 </script>
 

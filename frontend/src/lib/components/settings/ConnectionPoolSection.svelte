@@ -1,10 +1,10 @@
 <script lang="ts">
 import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 import { t } from "$lib/i18n";
-import type { ConfigData } from "$lib/types";
+import type { config as configType } from "$lib/wailsjs/go/models";
 import { Link } from "lucide-svelte";
 
-export let config: ConfigData;
+export let config: configType.ConfigData;
 
 // Ensure connection_pool exists with defaults
 if (!config.connection_pool) {

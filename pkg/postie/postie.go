@@ -276,7 +276,7 @@ func (p *Postie) executePostUploadScript(ctx context.Context, nzbPath string) er
 	slog.InfoContext(ctx, "Executing post upload script", "command", p.postUploadScriptCfg.Command, "nzbPath", nzbPath)
 
 	// Create timeout context
-	timeoutCtx, cancel := context.WithTimeout(ctx, p.postUploadScriptCfg.Timeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, p.postUploadScriptCfg.Timeout.ToDuration())
 	defer cancel()
 
 	// Replace {{nzb_path}} placeholder with actual NZB path

@@ -5,10 +5,10 @@ import SizeInput from "$lib/components/inputs/SizeInput.svelte";
 import { t } from "$lib/i18n";
 import { advancedMode } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
-import type { ConfigData } from "$lib/types";
+import type { config as configType } from "$lib/wailsjs/go/models";
 import { CirclePlus, Info, Save, ShieldCheck, Trash2 } from "lucide-svelte";
 
-export let config: ConfigData;
+export let config: configType.ConfigData;
 
 let saving = false;
 
@@ -133,8 +133,8 @@ async function savePar2Settings() {
 		// Only update the par2 fields with proper type conversion
 		currentConfig.par2 = {
 			...config.par2,
-			volume_size: Number.parseInt(config.par2.volume_size) || 153600000,
-			max_input_slices: Number.parseInt(config.par2.max_input_slices) || 4000,
+			volume_size: config.par2.volume_size || 153600000,
+			max_input_slices: config.par2.max_input_slices || 4000,
 		};
 
 		await apiClient.saveConfig(currentConfig);
@@ -171,9 +171,9 @@ $: volumeSizeDisplay = config.par2.volume_size
 
     <div class="space-y-4">
       <div class="flex items-center gap-3">
-        <input type="checkbox" class="checkbox" bind:checked={config.par2.enabled} />
+        <input name="par2enable" type="checkbox" class="checkbox" bind:checked={config.par2.enabled} />
         <div>
-          <label class="text-base font-medium text-base-content">{$t('settings.par2.enable')}</label>
+          <label for="par2enable" class="text-base font-medium text-base-content">{$t('settings.par2.enable')}</label>
           <p class="text-sm text-base-content/70">
             {$t('settings.par2.enable_description')}
           </p>

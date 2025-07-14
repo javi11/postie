@@ -1,10 +1,10 @@
 <script lang="ts">
 import apiClient from "$lib/api/client";
+import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
-import type { ConfigData } from "$lib/types";
+import type { config as configType } from "$lib/wailsjs/go/models";
 import { CheckCircle, Save } from "lucide-svelte";
-import DurationInput from "../inputs/DurationInput.svelte";
 
 const presets = [
 	{ label: "5s", value: 5, unit: "s" },
@@ -13,7 +13,7 @@ const presets = [
 	{ label: "1m", value: 1, unit: "m" },
 ];
 
-export let config: ConfigData;
+export let config: configType.ConfigData;
 
 let saving = false;
 
@@ -37,7 +37,7 @@ async function savePostCheckSettings() {
 		currentConfig.post_check = {
 			enabled: config.post_check.enabled || false,
 			delay: config.post_check.delay || "10s",
-			max_reposts: Number.parseInt(config.post_check.max_reposts) || 1,
+			max_reposts: config.post_check.max_reposts || 1,
 		};
 
 		await apiClient.saveConfig(currentConfig);

@@ -2,8 +2,8 @@
 import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
-import type { QueueItem } from "$lib/types";
 import { formatDate, formatFileSize, getStatusColor } from "$lib/utils";
+import type { backend } from "$lib/wailsjs/go/models";
 import {
 	AlertCircle,
 	CheckCircle,
@@ -15,11 +15,10 @@ import {
 	List,
 	Play,
 	Trash2,
-	X,
 } from "lucide-svelte";
-import { onMount } from "svelte";
+import { onDestroy, onMount } from "svelte";
 
-let queueItems: QueueItem[] = [];
+let queueItems: backend.QueueItem[] = [];
 
 // Pagination state
 let currentPage = 1;
@@ -38,19 +37,19 @@ $: if (queueItems.length > 0 && currentPage > totalPages) {
 	currentPage = 1;
 }
 
-onMount(async () => {
+onMount(() => {
 	// Listen for queue updates
-	await apiClient.on("queue-updated", () => {
+	apiClient.on("queue-updated", () => {
 		loadQueue();
 	});
 
 	// Load initial queue
 	loadQueue();
+});
 
-	// Set up periodic refresh
-	const interval = setInterval(loadQueue, 2000);
-
-	return () => clearInterval(interval);
+onDestroy(() => {
+	// Clean up event listener
+	apiClient.off("queue-updated");
 });
 
 async function loadQueue() {
@@ -83,7 +82,7 @@ async function removeFromQueue(id: string) {
 	}
 }
 
-async function downloadNZB(id: string, fileName: string) {
+async function downloadNZB(id: string) {
 	try {
 		await apiClient.downloadNZB(id);
 	} catch (error) {
@@ -283,7 +282,7 @@ function changeItemsPerPage(event: Event) {
                       {#if item.status === "complete"}
                         <button
                           class="btn btn-primary btn-xs"
-                          onclick={() => downloadNZB(item.id, item.fileName)}
+                          onclick={() => downloadNZB(item.id)}
                           title={$t("dashboard.queue.download_nzb")}
                         >
                           <Download class="w-4 h-4" />

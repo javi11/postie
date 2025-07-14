@@ -4,33 +4,40 @@ import apiClient from "$lib/api/client";
 import SetupWizard from "$lib/components/setup/SetupWizard.svelte";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
-import { onMount } from "svelte";
+import type { backend } from "$lib/wailsjs/go/models";
 
-let appStatus = null;
-let isLoading = true;
+let appStatus = $state<backend.AppStatus | null>(null);
+let isLoading = $state(true);
 
-onMount(async () => {
-	// Check app status to see if setup is needed
-	try {
-		appStatus = await apiClient.getAppStatus();
+// Check app status on mount
+$effect(() => {
+	async function checkAppStatus() {
+		try {
+			const status = await apiClient.getAppStatus();
+			appStatus = status;
 
-		// If not first start and not needing configuration, redirect to dashboard
-		if (!appStatus.isFirstStart && !appStatus.needsConfiguration) {
-			goto("/");
+			// If not first start and not needing configuration, redirect to dashboard
+			if (!status.isFirstStart && !status.needsConfiguration) {
+				goto("/");
+				return;
+			}
+
+			isLoading = false;
 			return;
+		} catch (error) {
+			console.error("Failed to load app status:", error);
+			// Assume setup is needed if we can't get status
+			isLoading = false;
 		}
-
-		isLoading = false;
-	} catch (error) {
-		console.error("Failed to load app status:", error);
-		// Assume setup is needed if we can't get status
-		isLoading = false;
 	}
+	checkAppStatus();
 });
 
-async function handleWizardComplete(event) {
+async function handleWizardComplete(
+	data: backend.SetupWizardData,
+): Promise<void> {
 	try {
-		await apiClient.setupWizardComplete(event.detail);
+		await apiClient.setupWizardComplete(data);
 
 		toastStore.success(
 			$t("common.common.success"),
@@ -39,6 +46,7 @@ async function handleWizardComplete(event) {
 
 		// Redirect to dashboard
 		goto("/");
+		return;
 	} catch (error) {
 		console.error("Setup wizard failed:", error);
 		toastStore.error(
@@ -48,19 +56,7 @@ async function handleWizardComplete(event) {
 	}
 }
 
-function handleWizardClose() {
-	// For first start, don't allow closing without completing setup
-	if (appStatus?.isFirstStart) {
-		toastStore.warning(
-			$t("common.common.warning"),
-			$t("setup.messages.setupRequired"),
-		);
-		return;
-	}
-
-	// Otherwise redirect to dashboard or settings
-	goto(appStatus?.needsConfiguration ? "/settings" : "/");
-}
+// handleWizardClose was removed since SetupWizard no longer has onclose prop
 </script>
 
 <svelte:head>
@@ -71,13 +67,12 @@ function handleWizardClose() {
 {#if isLoading}
 	<div class="min-h-screen flex items-center justify-center p-4">
 		<div class="text-center">
-			<div class="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-			<p class="text-gray-600 dark:text-gray-400">{$t("common.common.loading")}</p>
+			<div class="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+			<p class="text-base-content/70">{$t("common.common.loading")}</p>
 		</div>
 	</div>
 {:else}
 	<SetupWizard 
-		on:complete={handleWizardComplete}
-		on:close={handleWizardClose}
+		oncomplete={handleWizardComplete}
 	/>
 {/if}

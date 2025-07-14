@@ -2,30 +2,29 @@
 import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
+import { backend } from "$lib/wailsjs/go/models";
 import { Check, Loader2, Plus, Trash2 } from "lucide-svelte";
-import { createEventDispatcher } from "svelte";
 
-const dispatch = createEventDispatcher();
+interface ValidationState {
+	status: "pending" | "validating" | "valid" | "invalid" | "incomplete";
+	error: string;
+}
 
-export let servers = [];
+interface Props {
+	servers?: backend.ServerData[];
+	onupdate?: (data: { servers: backend.ServerData[] }) => void;
+	onvalidationchange?: (data: { hasValidServers: boolean }) => void;
+}
+
+let { servers = $bindable([]), onupdate, onvalidationchange }: Props = $props();
 
 // Track validation state for each server
-let validationStates = {};
+let validationStates = $state<Record<number, ValidationState>>({});
 
-function addServer() {
+function addServer(): void {
 	const serverIndex = servers.length;
-	servers = [
-		...servers,
-		{
-			host: "",
-			port: 563,
-			username: "",
-			password: "",
-			ssl: true,
-			maxConnections: 10,
-			enabled: true,
-		},
-	];
+	const newServer = new backend.ServerData();
+	servers = [...servers, newServer];
 	validationStates = {
 		...validationStates,
 		[serverIndex]: { status: "pending", error: "" },
@@ -33,28 +32,30 @@ function addServer() {
 	updateServers();
 }
 
-function removeServer(index) {
+function removeServer(index: number): void {
 	servers = servers.filter((_, i) => i !== index);
 	// Rebuild validation states with new indices
-	const newValidationStates = {};
+	const newValidationStates: Record<number, ValidationState> = {};
 	let newIndex = 0;
 	for (let i = 0; i < servers.length + 1; i++) {
-		if (i !== index && validationStates[i]) {
-			newValidationStates[newIndex] = validationStates[i];
-			newIndex++;
+		if (i === index || !validationStates[i]) {
+			continue;
 		}
+		newValidationStates[newIndex] = validationStates[i];
+		newIndex++;
 	}
 	validationStates = newValidationStates;
 	updateServers();
 }
 
-function updateServers() {
-	dispatch("update", { servers });
+function updateServers(): void {
+	onupdate?.({ servers });
 }
 
-function onServerFieldChange(index) {
+function onServerFieldChange(index: number): void {
 	// Clear validation state when server data changes
-	if (validationStates[index] && validationStates[index].status !== "pending") {
+	const currentState = validationStates[index];
+	if (currentState && currentState.status !== "pending") {
 		validationStates = {
 			...validationStates,
 			[index]: { status: "pending", error: "" },
@@ -63,28 +64,31 @@ function onServerFieldChange(index) {
 	updateServers();
 }
 
-function getServerValidationState(index) {
+function getServerValidationState(index: number): ValidationState {
 	const state = validationStates[index];
-	if (!state) return { status: "pending", error: "" };
+	if (!state) {
+		return { status: "pending", error: "" };
+	}
 	return state;
 }
 
-function isServerComplete(server, index) {
+function isServerComplete(index: number): boolean {
 	const validationState = getServerValidationState(index);
 	return validationState.status === "valid";
 }
 
 // Check if any servers are valid and emit validation state
-function checkValidationState() {
-	const hasValid = servers.some((server, index) =>
-		isServerComplete(server, index),
-	);
-	dispatch("validationChange", { hasValidServers: hasValid });
+function checkValidationState(): boolean {
+	const hasValid = servers.some((_, index) => isServerComplete(index));
+	onvalidationchange?.({ hasValidServers: hasValid });
 	return hasValid;
 }
 
-async function validateServer(index) {
+async function validateServer(index: number): Promise<void> {
 	const server = servers[index];
+	if (!server) {
+		return;
+	}
 
 	// Basic validation first
 	if (!server.host || !server.port) {
@@ -116,37 +120,36 @@ async function validateServer(index) {
 				[index]: { status: "valid", error: "" },
 			};
 			toastStore.success($t("setup.servers.valid"));
-		} else {
-			console.log("Setting server", index, "as invalid:", result.error);
-			validationStates = {
-				...validationStates,
-				[index]: { status: "invalid", error: result.error },
-			};
-			toastStore.error($t("setup.servers.invalid"), String(result.error));
+			checkValidationState();
+			return;
 		}
-
-		// Emit validation state change
-		checkValidationState();
+		console.log("Setting server", index, "as invalid:", result.error);
+		validationStates = {
+			...validationStates,
+			[index]: { status: "invalid", error: result.error },
+		};
+		toastStore.error($t("setup.servers.invalid"), String(result.error));
 	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
 		validationStates = {
 			...validationStates,
 			[index]: {
 				status: "invalid",
-				error: `Validation failed: ${error.message}`,
+				error: `Validation failed: ${errorMessage}`,
 			},
 		};
-		toastStore.error($t("setup.servers.invalid"), String(error));
-		console.error("Server validation error:", error);
-
-		// Emit validation state change
+		toastStore.error($t("setup.servers.invalid"), String(errorMessage));
+		console.error("Server validation error:", errorMessage);
 		checkValidationState();
 	}
 }
 
 // Add default server if none exist
-if (servers.length === 0) {
-	addServer();
-}
+$effect(() => {
+	if (servers.length === 0) {
+		addServer();
+	}
+});
 </script>
 
 <div class="space-y-6">

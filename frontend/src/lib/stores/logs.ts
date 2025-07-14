@@ -11,13 +11,14 @@ export const frontendLogs = writable<LogEntry[]>([]);
 function formatMessage(args: unknown[]): string {
 	return args
 		.map((arg) => {
-			if (typeof arg === "string") return arg;
-			if (arg instanceof Error) return arg.message;
-			try {
-				return JSON.stringify(arg, null, 2);
-			} catch (e) {
-				return "Unserializable object";
+			if (typeof arg === "string") {
+				return arg;
 			}
+			if (arg instanceof Error) {
+				return arg.message;
+			}
+
+			return JSON.stringify(arg, null, 2);
 		})
 		.join(" ");
 }

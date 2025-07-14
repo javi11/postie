@@ -213,7 +213,7 @@
 			"full": "Complète",
 			"none_description": "<strong>Aucune :</strong> Rien ne sera obfusqué - tous les noms de fichiers originaux, sujets et métadonnées préservés",
 			"partial_description": "<strong>Partielle :</strong> Sujet et nom de fichier obfusqués, même nom de fichier Yenc pour tous les articles, date de publication réelle, posteur cohérent",
-			"full_description": "<strong>Complète :</strong> Sujet et nom de fichier obfusqués, noms de fichiers Yenc aléatoires par article, dates aléatoires (dans les 6 heures), posteur aléatoire par article, pas d'en-tête NGX"
+			"full_description": "<strong>Complète :</strong> Sujet et nom de fichier obfusqués, noms de fichiers Yenc aléatoires par article, dates aléatoires (dans les 6 heures), posteur aléatoire par article, pas d'en-tête NXG"
 		},
 		"par2_obfuscation": {
 			"none_description": "<strong>Aucune :</strong> Les fichiers PAR2 utiliseront les noms de fichiers originaux et les métadonnées",
@@ -222,7 +222,7 @@
 		},
 		"message_id": {
 			"random": "Aléatoire - IDs de message aléatoires",
-			"ngx": "NGX - IDs de message format NGX"
+			"nxg": "NXG - IDs de message format NXG"
 		},
 		"group_policy_options": {
 			"all": "Tous - Publier dans tous les groupes",
@@ -232,7 +232,7 @@
 			"title": "En-têtes de Publication",
 			"default_from": "De par Défaut",
 			"default_from_description": "En-tête De par défaut (laisser vide pour aléatoire)",
-			"add_ngx_header": "Ajouter l'En-tête NGX",
+			"add_nxg_header": "Ajouter l'En-tête NXG",
 			"custom_headers": {
 				"title": "En-têtes Personnalisés",
 				"description": "En-têtes supplémentaires à inclure dans les publications",

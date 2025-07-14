@@ -2,11 +2,11 @@
 import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
-import type { ConfigData } from "$lib/types";
+import type { config as configType } from "$lib/wailsjs/go/models";
 import { FileCode, Save, Terminal } from "lucide-svelte";
 import DurationInput from "../inputs/DurationInput.svelte";
 
-export let config: ConfigData;
+export let config: configType.ConfigData;
 
 let saving = false;
 
@@ -56,7 +56,7 @@ async function savePostUploadScriptSettings() {
 <div class="card bg-base-100 shadow-xl">
   <div class="card-body space-y-6">
     <div class="flex items-center gap-3">
-      <Terminal class="w-5 h-5 text-gray-600 dark:text-gray-400" />
+      <Terminal class="w-5 h-5 text-base-content/60" />
       <h2 class="card-title text-lg">
         {$t('settings.post_upload_script.title')}
       </h2>

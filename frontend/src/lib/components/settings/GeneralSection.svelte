@@ -1,14 +1,14 @@
 <script lang="ts">
 import { page } from "$app/stores";
 import apiClient from "$lib/api/client";
-import { loadTranslations, locale, t } from "$lib/i18n";
-import { availableLocales, setStoredLocale } from "$lib/i18n";
+import LanguageSwitcher from "$lib/components/LanguageSwitcher.svelte";
+import ThemeSwitcher from "$lib/components/ThemeSwitcher.svelte";
+import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
-import type { ConfigData } from "$lib/types";
+import type { config as configType } from "$lib/wailsjs/go/models";
 import { Cog, FolderOpen, Save } from "lucide-svelte";
-import { onMount } from "svelte";
 
-export let config: ConfigData;
+export let config: configType.ConfigData;
 
 let saving = false;
 
@@ -21,29 +21,12 @@ if (config.maintain_original_extension === undefined) {
 	config.maintain_original_extension = true;
 }
 
-// Prepare language options for select
-const languageOptions = availableLocales.map((lang) => ({
-	value: lang.code,
-	name: `${lang.flag} ${lang.name}`,
-}));
-
-async function changeLanguage(event: Event) {
-	const target = event.target as HTMLSelectElement;
-	const newLocale = target.value;
-
-	// Store the selected locale
-	setStoredLocale(newLocale);
-
-	// The sveltekit-i18n library should automatically handle loading the new translations
-	// when the locale store is updated.
-	locale.set(newLocale);
-}
-
 async function selectOutputDirectory() {
 	try {
 		// Check if we're in Wails environment
+		await apiClient.initialize();
 		if (apiClient.environment === "wails") {
-			const { App } = await import("$lib/wailsjs/go/backend/App");
+			const App = await import("$lib/wailsjs/go/backend/App");
 			const dir = await App.SelectOutputDirectory();
 			if (dir) {
 				config.output_dir = dir;
@@ -86,7 +69,7 @@ async function saveGeneralSettings() {
 	<div class="card bg-base-100 shadow-xl">
 		<div class="card-body space-y-6">
 			<div class="flex items-center gap-3">
-				<Cog class="w-5 h-5 text-gray-600 dark:text-gray-400" />
+				<Cog class="w-5 h-5 text-base-content/60" />
 				<h2 class="card-title text-lg">
 					{$t('settings.general.title')}
 				</h2>
@@ -166,7 +149,7 @@ async function saveGeneralSettings() {
 	<div class="card bg-base-100 shadow-xl">
 		<div class="card-body space-y-6">
 			<div class="flex items-center gap-3">
-				<Cog class="w-5 h-5 text-gray-600 dark:text-gray-400" />
+				<Cog class="w-5 h-5 text-base-content/60" />
 				<h2 class="card-title text-lg">
 					{$t('settings.general.ui_preferences')}
 				</h2>
@@ -182,16 +165,7 @@ async function saveGeneralSettings() {
 						<label class="label" for="language-select">
 							<span class="label-text">{$t('settings.general.language')}</span>
 						</label>
-						<select
-							id="language-select"
-							class="select select-bordered w-full"
-							value={$locale}
-							onchange={changeLanguage}
-						>
-							{#each languageOptions as option}
-								<option value={option.value}>{option.name}</option>
-							{/each}
-						</select>
+						<LanguageSwitcher />
 						<div class="label">
 							<span class="label-text-alt">
 								{$t('settings.general.language_description')}
@@ -204,12 +178,7 @@ async function saveGeneralSettings() {
 						<div class="label">
 							<span class="label-text">{$t('settings.general.theme')}</span>
 						</div>
-						<div class="flex items-center gap-2 mt-2">
-							<span class="text-sm">
-								{$t('settings.general.theme_toggle')}
-							</span>
-							<input type="checkbox" class="toggle" checked />
-						</div>
+						<ThemeSwitcher />
 						<div class="label">
 							<span class="label-text-alt">
 								{$t('settings.general.theme_description')}

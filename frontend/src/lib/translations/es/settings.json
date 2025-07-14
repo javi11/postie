@@ -213,7 +213,7 @@
 			"full": "Completo",
 			"none_description": "<strong>Ninguno:</strong> Nada será ofuscado - todos los nombres de archivo originales, asuntos y metadatos preservados",
 			"partial_description": "<strong>Parcial:</strong> Asunto y nombre de archivo ofuscados, mismo nombre de archivo Yenc para todos los artículos, fecha de publicación real, poster consistente",
-			"full_description": "<strong>Completo:</strong> Asunto y nombre de archivo ofuscados, nombres de archivo Yenc aleatorios por artículo, fechas aleatorias (dentro de 6 horas), poster aleatorio por artículo, sin cabecera NGX"
+			"full_description": "<strong>Completo:</strong> Asunto y nombre de archivo ofuscados, nombres de archivo Yenc aleatorios por artículo, fechas aleatorias (dentro de 6 horas), poster aleatorio por artículo, sin cabecera NXG"
 		},
 		"par2_obfuscation": {
 			"none_description": "<strong>Ninguno:</strong> Los archivos PAR2 usarán nombres de archivo originales y metadatos",
@@ -222,7 +222,7 @@
 		},
 		"message_id": {
 			"random": "Aleatorio - IDs de mensaje aleatorios",
-			"ngx": "NGX - IDs de mensaje formato NGX"
+			"nxg": "NXG - IDs de mensaje formato NXG"
 		},
 		"group_policy_options": {
 			"all": "Todos - Publicar a todos los grupos",
@@ -232,7 +232,7 @@
 			"title": "Cabeceras de Publicación",
 			"default_from": "De Predeterminado",
 			"default_from_description": "Cabecera De predeterminada (dejar vacío para aleatorio)",
-			"add_ngx_header": "Agregar Cabecera NGX",
+			"add_nxg_header": "Agregar Cabecera NXG",
 			"custom_headers": {
 				"title": "Cabeceras Personalizadas",
 				"description": "Cabeceras adicionales para incluir en las publicaciones",

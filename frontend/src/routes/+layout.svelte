@@ -1,61 +1,28 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
-import { page } from "$app/stores";
+import { page } from "$app/state";
 import apiClient from "$lib/api/client";
 import logo from "$lib/assets/images/logo.png";
 import ToastContainer from "$lib/components/ToastContainer.svelte";
 import { t } from "$lib/i18n";
-import { appStatus, settingsSaveFunction } from "$lib/stores/app";
+import { appStatus } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
-import {
-	FileText,
-	Menu,
-	Moon,
-	PieChart,
-	Save,
-	Settings,
-	Sun,
-} from "lucide-svelte";
+import type { Par2DownloadStatus } from "$lib/types";
+import { ChartPie, FileText, Settings } from "lucide-svelte";
 import { onMount } from "svelte";
 import "../style.css";
 
 let needsConfiguration = false;
 let criticalConfigError = false;
-let isDarkMode = false;
-
-// Dark mode functionality
-function toggleDarkMode() {
-	isDarkMode = !isDarkMode;
-	if (isDarkMode) {
-		document.documentElement.setAttribute("data-theme", "dark");
-		document.documentElement.classList.add("dark");
-	} else {
-		document.documentElement.setAttribute("data-theme", "light");
-		document.documentElement.classList.remove("dark");
-	}
-	localStorage.setItem("theme", isDarkMode ? "dark" : "light");
-}
-
-async function handleSaveSettings() {
-	const saveFunction = $settingsSaveFunction;
-	if (saveFunction) {
-		await saveFunction();
-	}
-}
 
 onMount(async () => {
-	// Initialize dark mode from localStorage
+	// Initialize theme from localStorage or system preference
 	const savedTheme = localStorage.getItem("theme");
-	isDarkMode =
-		savedTheme === "dark" ||
-		(!savedTheme && window.matchMedia("(prefers-color-scheme: dark)").matches);
-	if (isDarkMode) {
-		document.documentElement.setAttribute("data-theme", "dark");
-		document.documentElement.classList.add("dark");
-	} else {
-		document.documentElement.setAttribute("data-theme", "light");
-		document.documentElement.classList.remove("dark");
-	}
+	const systemPrefersDark = window.matchMedia(
+		"(prefers-color-scheme: dark)",
+	).matches;
+	const defaultTheme = savedTheme || (systemPrefersDark ? "dark" : "light");
+	document.documentElement.setAttribute("data-theme", defaultTheme);
 
 	// Initialize API client (detects environment and sets up appropriate client)
 	await apiClient.initialize();
@@ -67,12 +34,13 @@ onMount(async () => {
 
 	// Listen for par2 download events
 	await apiClient.on("par2-download-status", (data) => {
-		if (data.status === "downloading") {
-			toastStore.info($t("common.common.loading"), data.message);
-		} else if (data.status === "completed") {
-			toastStore.success($t("common.common.success"), data.message);
-		} else if (data.status === "error") {
-			toastStore.error($t("common.common.error"), data.message);
+		const d = data as Par2DownloadStatus;
+		if (d.status === "downloading") {
+			toastStore.info($t("common.common.loading"), d.message);
+		} else if (d.status === "completed") {
+			toastStore.success($t("common.common.success"), d.message);
+		} else if (d.status === "error") {
+			toastStore.error($t("common.common.error"), d.message);
 		}
 	});
 
@@ -124,7 +92,7 @@ async function loadAppStatus() {
 		criticalConfigError = status.criticalConfigError || false;
 
 		// Force redirect to setup wizard if this is first start and not already on setup page
-		if (status.isFirstStart && $page.route.id !== "/setup") {
+		if (status.isFirstStart && page.route.id !== "/setup") {
 			goto("/setup");
 			return;
 		}
@@ -132,8 +100,8 @@ async function loadAppStatus() {
 		// Auto-redirect to settings if there's a critical configuration error
 		if (
 			criticalConfigError &&
-			$page.route.id !== "/settings" &&
-			$page.route.id !== "/setup"
+			page.route.id !== "/settings" &&
+			page.route.id !== "/setup"
 		) {
 			toastStore.error(
 				$t("common.common.error"),
@@ -144,33 +112,33 @@ async function loadAppStatus() {
 	} catch (error) {
 		console.error("Failed to load app status:", error);
 		// If we can't load app status, redirect to setup to be safe
-		if ($page.route.id !== "/setup") {
+		if (page.route.id !== "/setup") {
 			goto("/setup");
 		}
 	}
 }
 </script>
 
-<div
-	class="min-h-screen bg-gradient-to-br from-base-200 to-base-300 overflow-hidden"
->
+<div class="min-h-screen bg-base-200">
 	<!-- Show navbar only if not on setup page -->
-	{#if $page.route.id !== "/setup"}
+	{#if page.route.id !== "/setup"}
 		<!-- Header/Navigation -->
-		<header
-			class="navbar bg-base-100/80 backdrop-blur-sm border-b border-base-300/60 sticky top-0 z-50"
-		>
+		<div class="navbar bg-base-100/95 backdrop-blur-md shadow-lg border-b border-base-300/50 sticky top-0 z-50">
 			<div class="navbar-start">
 				<!-- Logo and Brand -->
 				<div class="flex items-center gap-3 px-4">
-					<img src={logo} alt="Postie UI" class="w-8 h-8" loading="lazy" />
+					<div class="avatar">
+						<div class="w-15 h-10">
+							<img src={logo} alt="Postie UI" class="w-full h-full object-contain" loading="lazy" />
+						</div>
+					</div>
 					<div>
 						<div class="flex items-center gap-2">
-							<h1 class="text-xl font-bold">
+							<h1 class="text-xl font-bold bg-clip-text">
 								Postie
 							</h1>
 						</div>
-						<p class="text-xs opacity-60">
+						<p class="text-xs text-base-content/60">
 							Upload Manager
 						</p>
 					</div>
@@ -179,53 +147,38 @@ async function loadAppStatus() {
 
 			<div class="navbar-center">
 				<!-- Navigation -->
-				<div class="flex items-center gap-2">
+				<div class="flex items-center gap-1">
 					<button
-						class="btn btn-sm {$page.route.id === "/" ? "btn-primary" : "btn-ghost"}"
+						class="btn btn-sm {page.route.id === "/" ? "btn-primary shadow-lg" : "btn-ghost hover:bg-base-200"} transition-all duration-200"
 						onclick={() => goto("/")}
 						disabled={needsConfiguration || criticalConfigError}
-						aria-current={$page.route.id === "/" ? "page" : undefined}
+						aria-current={page.route.id === "/" ? "page" : undefined}
 					>
-						<PieChart class="w-4 h-4" />
-						{$t('common.nav.dashboard')}
+						<ChartPie class="w-4 h-4" />
+						<span class="font-medium">{$t('common.nav.dashboard')}</span>
 					</button>
 					<button
-						class="btn btn-sm {$page.route.id === "/settings" ? "btn-secondary" : "btn-ghost"}"
+						class="btn btn-sm {page.route.id === "/settings" ? "btn-secondary shadow-lg" : "btn-ghost hover:bg-base-200"} transition-all duration-200"
 						onclick={() => goto("/settings")}
-						aria-current={$page.route.id === "/settings" ? "page" : undefined}
+						aria-current={page.route.id === "/settings" ? "page" : undefined}
 					>
 						<Settings class="w-4 h-4" />
-						<span class="hidden md:inline">{$t('common.nav.settings')}</span>
+						<span class="hidden md:inline font-medium">{$t('common.nav.settings')}</span>
 					</button>
 					<button
-						class="btn btn-sm {$page.route.id === "/logs" ? "btn-secondary" : "btn-ghost"}"
+						class="btn btn-sm {page.route.id === "/logs" ? "btn-accent shadow-lg" : "btn-ghost hover:bg-base-200"} transition-all duration-200"
 						onclick={() => goto("/logs")}
-						aria-current={$page.route.id === "/logs" ? "page" : undefined}
+						aria-current={page.route.id === "/logs" ? "page" : undefined}
 					>
 						<FileText class="w-4 h-4" />
-						<span class="hidden md:inline">{$t('common.nav.logs')}</span>
+						<span class="hidden md:inline font-medium">{$t('common.nav.logs')}</span>
 					</button>
 				</div>
 			</div>
-
-			<div class="navbar-end">
-				<!-- Dark mode toggle -->
-				<button
-					class="btn btn-sm btn-ghost btn-circle"
-					onclick={toggleDarkMode}
-					aria-label="Toggle dark mode"
-				>
-					{#if isDarkMode}
-						<Sun class="w-5 h-5" />
-					{:else}
-						<Moon class="w-5 h-5" />
-					{/if}
-				</button>
-			</div>
-		</header>
+		</div>
 
 		<!-- Page Content -->
-		<main class="max-w-7xl mx-auto px-6 py-8">
+		<main class="container mx-auto px-4 py-8 max-w-7xl animate-fade-in">
 			<slot />
 		</main>
 	{:else}

@@ -1,7 +1,7 @@
 <script lang="ts">
 import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
-import { type LogEntry, frontendLogs } from "$lib/stores/logs";
+import { frontendLogs, type LogEntry } from "$lib/stores/logs";
 import { ChevronDown, Pause, Play, RotateCcw } from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
 
@@ -39,7 +39,6 @@ let showFollowButton = false;
 async function loadInitialLogs() {
 	loading = true;
 	try {
-
 		// Load the most recent LINES_PER_PAGE lines (offset = 0)
 		const rawLogs = await apiClient.getLogsPaginated(LINES_PER_PAGE, 0);
 		const parsedLogs = parseLogLines(rawLogs);
@@ -216,9 +215,9 @@ function getLevelColor(level: LogEntry["level"]) {
 		case "info":
 			return "text-blue-400";
 		case "debug":
-			return "text-gray-400";
+			return "text-base-content/50";
 		default:
-			return "text-gray-200";
+			return "text-base-content/70";
 	}
 }
 

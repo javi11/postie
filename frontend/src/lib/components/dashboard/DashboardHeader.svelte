@@ -57,11 +57,11 @@ async function clearQueue() {
 }
 </script>
 
-<div class="card bg-base-100/60 backdrop-blur-sm border border-base-300/60 shadow-lg max-w-full">
+<div class="card bg-base-100/60 backdrop-blur-sm border border-base-300/60 shadow-xl animate-fade-in max-w-full">
   <div class="card-body">
     <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
       <div class="space-y-2">
-        <h1 class="text-3xl font-bold bg-gradient-to-r from-base-content to-base-content/60 bg-clip-text text-transparent">
+        <h1 class="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
           {$t("dashboard.header.title")}
         </h1>
         <p class="text-lg text-base-content/70">

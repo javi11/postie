@@ -1,55 +1,40 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
-import apiClient, { type ConfigData } from "$lib/api/client";
+import apiClient from "$lib/api/client";
 import ConnectionPoolSection from "$lib/components/settings/ConnectionPoolSection.svelte";
 import GeneralSection from "$lib/components/settings/GeneralSection.svelte";
 import NzbCompressionSection from "$lib/components/settings/NzbCompressionSection.svelte";
 import Par2Section from "$lib/components/settings/Par2Section.svelte";
 import PostCheckSection from "$lib/components/settings/PostCheckSection.svelte";
-import PostUploadScriptSection from "$lib/components/settings/PostUploadScriptSection.svelte";
 import PostingSection from "$lib/components/settings/PostingSection.svelte";
+import PostUploadScriptSection from "$lib/components/settings/PostUploadScriptSection.svelte";
 import QueueSection from "$lib/components/settings/QueueSection.svelte";
 import ServerSection from "$lib/components/settings/ServerSection.svelte";
-import SettingsHeader from "$lib/components/settings/SettingsHeader.svelte";
 import WatcherSection from "$lib/components/settings/WatcherSection.svelte";
 import { t } from "$lib/i18n";
-import {
-	type AppStatus,
-	advancedMode,
-	appStatus,
-	settingsSaveFunction,
-} from "$lib/stores/app";
+import { advancedMode, appStatus, settingsSaveFunction } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import { parseDuration } from "$lib/utils";
-import {
-	AlertCircle,
-	CheckCircle,
-	CloudUpload,
-	Eye,
-	File,
-	Loader2,
-	RefreshCw,
-	Save,
-	Settings,
-} from "lucide-svelte";
+import { backend, config as configType } from "$lib/wailsjs/go/models";
+import { AlertCircle, CheckCircle, RefreshCw, Settings } from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
 
-let configData: ConfigData | null = null;
-let localConfig: ConfigData | null = null;
+let configData: configType.ConfigData | null = null;
+let localConfig: configType.ConfigData | null = null;
 let needsConfiguration = false;
 let criticalConfigError = false;
 let criticalConfigErrorMessage = "";
 let loading = false;
 let loadError = false;
 
-onMount(async () => {
-	await loadConfig();
+onMount(() => {
+	loadConfig();
 
 	// Register save function with the store
 	settingsSaveFunction.set(handleSaveConfig);
 
 	// Subscribe to app status
-	const unsubscribe = appStatus.subscribe((status: AppStatus) => {
+	const unsubscribe = appStatus.subscribe((status: backend.AppStatus) => {
 		needsConfiguration = status.needsConfiguration;
 		criticalConfigError = status.criticalConfigError;
 		criticalConfigErrorMessage = status.error;
@@ -69,20 +54,11 @@ async function loadConfig() {
 		localConfig = JSON.parse(JSON.stringify(config));
 
 		// If no servers exist, add a default one to make it easier for the user
-		if (!localConfig.servers || localConfig.servers.length === 0) {
-			localConfig.servers = [
-				{
-					host: "",
-					port: 119,
-					username: "",
-					password: "",
-					ssl: false,
-					max_connections: 10,
-					max_connection_idle_time_in_seconds: 300,
-					max_connection_ttl_in_seconds: 3600,
-					insecure_ssl: false,
-				},
-			];
+		if (
+			localConfig &&
+			(!localConfig.servers || localConfig.servers.length === 0)
+		) {
+			localConfig.servers = [new configType.ServerConfig()];
 		}
 	} catch (error) {
 		console.error("Failed to load config:", error);
@@ -96,6 +72,14 @@ async function loadConfig() {
 
 async function handleSaveConfig() {
 	try {
+		if (!localConfig) {
+			toastStore.error(
+				$t("common.messages.configuration_error"),
+				$t("common.messages.no_configuration_loaded"),
+			);
+			return;
+		}
+
 		// Validate that at least one server is configured
 		if (!localConfig.servers || localConfig.servers.length === 0) {
 			toastStore.error(
@@ -111,14 +95,18 @@ async function handleSaveConfig() {
 			if (!server.host || server.host.trim() === "") {
 				toastStore.error(
 					$t("common.messages.configuration_error"),
-					$t("common.messages.server_host_required", { number: i + 1 }),
+					$t("common.messages.server_host_required", {
+						number: i + 1,
+					}),
 				);
 				return;
 			}
 			if (!server.port || server.port <= 0 || server.port > 65535) {
 				toastStore.error(
 					$t("common.messages.configuration_error"),
-					$t("common.messages.server_port_required", { number: i + 1 }),
+					$t("common.messages.server_port_required", {
+						number: i + 1,
+					}),
 				);
 				return;
 			}
@@ -128,15 +116,17 @@ async function handleSaveConfig() {
 		const configToSave = JSON.parse(JSON.stringify(localConfig));
 
 		// Convert server integer fields
-		configToSave.servers = configToSave.servers.map((server: ServerConfig) => ({
-			...server,
-			port: Number.parseInt(server.port) || 119,
-			max_connections: Number.parseInt(server.max_connections) || 10,
-			max_connection_idle_time_in_seconds:
-				Number.parseInt(server.max_connection_idle_time_in_seconds) || 300,
-			max_connection_ttl_in_seconds:
-				Number.parseInt(server.max_connection_ttl_in_seconds) || 3600,
-		}));
+		configToSave.servers = configToSave.servers.map(
+			(server: configType.ServerConfig) => ({
+				...server,
+				port: server.port || 119,
+				max_connections: server.max_connections || 10,
+				max_connection_idle_time_in_seconds:
+					server.max_connection_idle_time_in_seconds || 300,
+				max_connection_ttl_in_seconds:
+					server.max_connection_ttl_in_seconds || 3600,
+			}),
+		);
 
 		// Convert posting fields
 		configToSave.posting.max_retries =
@@ -243,11 +233,11 @@ onDestroy(() => {
 
 <div class="space-y-6">
   <!-- Main header section (not sticky) -->
-  <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+  <div class="bg-base-100 p-6 rounded-lg shadow-sm border border-base-300">
     <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
       <div class="flex-1">
         <div class="flex items-center gap-3 mb-2">
-          <Settings class="w-6 h-6 text-gray-600 dark:text-gray-400" />
+          <Settings class="w-6 h-6 text-base-content/60" />
           <h1 class="text-2xl font-bold">
             {$t('settings.title')}
           </h1>
@@ -329,24 +319,24 @@ onDestroy(() => {
       </div>
     </div>
       {:else if localConfig}
-      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+      <div class="bg-base-100 rounded-lg shadow-sm border border-base-300">
         <div role="tablist" class="tabs tabs-bordered">
           <input type="radio" name="settings_tabs" role="tab" class="tab" aria-label="Core Configuration" checked />
           <div role="tabpanel" class="tab-content p-6">
             <div class="space-y-6">
-              <GeneralSection bind:config={localConfig} />
-              <ServerSection bind:config={localConfig} />
+              <GeneralSection config={localConfig} />
+              <ServerSection config={localConfig} />
             </div>
           </div>
 
           <input type="radio" name="settings_tabs" role="tab" class="tab" aria-label="Upload Settings" />
           <div role="tabpanel" class="tab-content p-6">
             <div class="space-y-6">
-              <PostingSection bind:config={localConfig} />
-              <PostCheckSection bind:config={localConfig} />
+              <PostingSection config={localConfig} />
+              <PostCheckSection config={localConfig} />
               {#if $advancedMode}
-                <QueueSection bind:config={localConfig} />
-                <ConnectionPoolSection bind:config={localConfig} />
+                <QueueSection config={localConfig} />
+                <ConnectionPoolSection config={localConfig} />
               {/if}
             </div>
           </div>
@@ -354,16 +344,16 @@ onDestroy(() => {
           <input type="radio" name="settings_tabs" role="tab" class="tab" aria-label="File Processing" />
           <div role="tabpanel" class="tab-content p-6">
             <div class="space-y-6">
-              <Par2Section bind:config={localConfig} />
-              <NzbCompressionSection bind:config={localConfig} />
+              <Par2Section config={localConfig} />
+              <NzbCompressionSection config={localConfig} />
             </div>
           </div>
 
           <input type="radio" name="settings_tabs" role="tab" class="tab" aria-label="Automation" />
           <div role="tabpanel" class="tab-content p-6">
             <div class="space-y-6">
-              <WatcherSection bind:config={localConfig} />
-              <PostUploadScriptSection bind:config={localConfig} />
+              <WatcherSection config={localConfig} />
+              <PostUploadScriptSection config={localConfig} />
             </div>
           </div>
         </div>
@@ -371,7 +361,7 @@ onDestroy(() => {
   {:else}
     <div class="flex items-center justify-center py-12">
       <div class="text-center">
-        <p class="text-gray-600 dark:text-gray-400">{$t('settings.no_configuration_available')}</p>
+        <p class="text-base-content/60">{$t('settings.no_configuration_available')}</p>
       </div>
     </div>
   {/if}

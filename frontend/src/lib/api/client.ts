@@ -1,87 +1,11 @@
 // Unified API client that switches between Wails (desktop) and HTTP (web) modes
 
 import { browser } from "$app/environment";
-import type * as wailsApp from "$lib/wailsjs/go/backend/App";
-import type * as wailsRuntime from "$lib/wailsjs/runtime/runtime";
-import type {
-	ServerValidationData,
-	ServerValidationResult,
-	SetupWizardData,
-	WebClient,
-} from "./web-client";
+import type { backend, config } from "$lib/wailsjs/go/models";
+import type { WebClient } from "./web-client";
 
-// Types that match both Wails and web client interfaces
-export interface AppStatus {
-	hasPostie: boolean;
-	hasConfig: boolean;
-	configPath: string;
-	uploading: boolean;
-	criticalConfigError: boolean;
-	error: string;
-	hasServers: boolean;
-	serverCount: number;
-	validServerCount: number;
-	configValid: boolean;
-	needsConfiguration: boolean;
-}
-
-export interface QueueItem {
-	id: string;
-	name: string;
-	size: number;
-	status: string;
-	created: string;
-	updated: string;
-	error?: string;
-	priority?: number;
-	progress?: number;
-}
-
-export interface ProcessorStatus {
-	hasProcessor: boolean;
-	runningJobs: number;
-	runningJobIDs: string[];
-}
-
-export interface ProgressTracker {
-	currentFile: string;
-	totalFiles: number;
-	completedFiles: number;
-	stage: string;
-	details: string;
-	isRunning: boolean;
-	lastUpdate: number;
-	percentage: number;
-	currentFileProgress: number;
-	jobID: string;
-}
-
-export interface ConfigData {
-	servers: Array<{
-		name: string;
-		host: string;
-		port: number;
-		username: string;
-		password: string;
-		ssl: boolean;
-		connections: number;
-	}>;
-	posting: {
-		from: string;
-		groups: string[];
-		subject_prefix: string;
-	};
-	par2: {
-		enabled: boolean;
-		redundancy: number;
-		block_size: number;
-	};
-	compression: {
-		enabled: boolean;
-		level: number;
-	};
-	[key: string]: unknown;
-}
+type WailsApp = typeof import("$lib/wailsjs/go/backend/App");
+type WailsRuntime = typeof import("$lib/wailsjs/runtime/runtime");
 
 // Environment detection
 function isWailsEnvironment(): boolean {
@@ -106,12 +30,15 @@ function isWebEnvironment(): boolean {
 }
 
 // Lazy imports to avoid bundling issues
-let wailsClient: { App: wailsApp; Runtime: wailsRuntime } | null = null;
+let wailsClient: {
+	App: WailsApp;
+	Runtime: WailsRuntime;
+} | null = null;
 let webClient: WebClient | null = null;
 
 async function getWailsClient(): Promise<{
-	App: wailsApp;
-	Runtime: wailsRuntime;
+	App: WailsApp;
+	Runtime: WailsRuntime;
 }> {
 	if (!wailsClient) {
 		const [AppModule, RuntimeModule] = await Promise.all([
@@ -192,7 +119,7 @@ export class UnifiedClient {
 	}
 
 	// App Status
-	async getAppStatus(): Promise<AppStatus> {
+	async getAppStatus(): Promise<backend.AppStatus> {
 		await this.initialize();
 
 		if (this._environment === "wails") {
@@ -209,12 +136,12 @@ export class UnifiedClient {
 	}
 
 	// Configuration
-	async getConfig(): Promise<ConfigData> {
+	async getConfig(): Promise<config.ConfigData> {
 		await this.initialize();
 
 		if (this._environment === "wails") {
 			const client = await getWailsClient();
-			return client.App.GetConfig();
+			return client.App.GetConfig() as unknown as Promise<config.ConfigData>;
 		}
 
 		if (this._environment === "web") {
@@ -225,12 +152,14 @@ export class UnifiedClient {
 		throw new Error("No client available");
 	}
 
-	async saveConfig(config: ConfigData): Promise<void> {
+	async saveConfig(config: config.ConfigData): Promise<void> {
 		await this.initialize();
 
 		if (this._environment === "wails") {
 			const client = await getWailsClient();
-			return client.App.SaveConfig(config);
+			return client.App.SaveConfig(
+				config as unknown as import("$lib/wailsjs/go/models").config.ConfigData,
+			);
 		}
 
 		if (this._environment === "web") {
@@ -240,7 +169,7 @@ export class UnifiedClient {
 	}
 
 	// Queue Management
-	async getQueueItems(): Promise<QueueItem[]> {
+	async getQueueItems(): Promise<backend.QueueItem[]> {
 		await this.initialize();
 
 		if (this._environment === "wails") {
@@ -256,13 +185,7 @@ export class UnifiedClient {
 		throw new Error("No client available");
 	}
 
-	async getQueueStats(): Promise<{
-		total: number;
-		pending: number;
-		running: number;
-		complete: number;
-		error: number;
-	}> {
+	async getQueueStats(): Promise<backend.QueueStats> {
 		await this.initialize();
 
 		if (this._environment === "wails") {
@@ -337,7 +260,7 @@ export class UnifiedClient {
 	}
 
 	// Processing
-	async getProcessorStatus(): Promise<ProcessorStatus> {
+	async getProcessorStatus(): Promise<backend.ProcessorStatus> {
 		await this.initialize();
 
 		if (this._environment === "wails") {
@@ -353,7 +276,7 @@ export class UnifiedClient {
 		throw new Error("No client available");
 	}
 
-	async getProgress(): Promise<ProgressTracker> {
+	async getProgress(): Promise<backend.ProgressTracker> {
 		await this.initialize();
 
 		if (this._environment === "wails") {
@@ -587,8 +510,8 @@ export class UnifiedClient {
 
 	// Setup Wizard
 	async validateNNTPServer(
-		serverData: ServerValidationData,
-	): Promise<ServerValidationResult> {
+		serverData: backend.ServerData,
+	): Promise<backend.ValidationResult> {
 		await this.initialize();
 
 		if (this._environment === "wails") {
@@ -604,7 +527,9 @@ export class UnifiedClient {
 		throw new Error("No client available");
 	}
 
-	async setupWizardComplete(wizardData: SetupWizardData): Promise<void> {
+	async setupWizardComplete(
+		wizardData: backend.SetupWizardData,
+	): Promise<void> {
 		await this.initialize();
 
 		if (this._environment === "wails") {
@@ -615,6 +540,17 @@ export class UnifiedClient {
 		if (this._environment === "web") {
 			const client = await getWebClient();
 			return client.setupWizardComplete(wizardData);
+		}
+
+		throw new Error("No client available");
+	}
+
+	async selectOutputDirectory(): Promise<string> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			return client.App.SelectOutputDirectory();
 		}
 
 		throw new Error("No client available");
