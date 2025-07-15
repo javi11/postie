@@ -8,9 +8,13 @@ import { toastStore } from "$lib/stores/toast";
 import type { config as configType } from "$lib/wailsjs/go/models";
 import { CirclePlus, Info, Save, ShieldCheck, Trash2 } from "lucide-svelte";
 
-export let config: configType.ConfigData;
+interface Props {
+	config: configType.ConfigData;
+}
 
-let saving = false;
+const { config }: Props = $props();
+
+let saving = $state(false);
 
 // Ensure extra_par2_options exists
 if (!config.par2.extra_par2_options) {
@@ -61,14 +65,57 @@ function unitToBytes(value: number, unit: string): number {
 	}
 }
 
-// Reactive variables for easier editing
-let volumeSizeValue: number;
-let volumeSizeUnit = "MB";
-let redundancyValue: number;
+// Reactive local state
+let enabled = $state(config.par2?.enabled ?? false);
+let par2Path = $state(config.par2?.par2_path || "");
+let tempDir = $state(config.par2?.temp_dir || "");
+let redundancy = $state(config.par2?.redundancy || "10%");
+let volumeSize = $state(config.par2?.volume_size || 209715200);
+let maxInputSlices = $state(config.par2?.max_input_slices || 4000);
+let extraPar2Options = $state<string[]>(config.par2?.extra_par2_options || []);
+let volumeSizeValue = $state<number>(0);
+let volumeSizeUnit = $state("MB");
+let redundancyValue = $state<number>(10);
+let isAdvanced = $derived($advancedMode);
 
-// Parse existing values
-$: {
-	const size = config.par2.volume_size || 209715200; // 200MB default
+// Derived state
+let canSave = $derived(
+	(!enabled || (enabled && par2Path.trim())) &&
+	!saving
+);
+
+// Sync local state back to config
+$effect(() => {
+	config.par2.enabled = enabled;
+});
+
+$effect(() => {
+	config.par2.par2_path = par2Path;
+});
+
+$effect(() => {
+	config.par2.temp_dir = tempDir;
+});
+
+$effect(() => {
+	config.par2.redundancy = redundancy;
+});
+
+$effect(() => {
+	config.par2.volume_size = volumeSize;
+});
+
+$effect(() => {
+	config.par2.max_input_slices = maxInputSlices;
+});
+
+$effect(() => {
+	config.par2.extra_par2_options = extraPar2Options;
+});
+
+// Parse existing values and update local state
+$effect(() => {
+	const size = volumeSize || 209715200; // 200MB default
 	if (size >= 1073741824 && size % 1073741824 === 0) {
 		volumeSizeValue = size / 1073741824;
 		volumeSizeUnit = "GB";
@@ -76,46 +123,49 @@ $: {
 		volumeSizeValue = Math.round(size / 1048576);
 		volumeSizeUnit = "MB";
 	}
-}
+});
 
 // Parse redundancy percentage
-$: {
-	const redundancyStr = config.par2.redundancy || "10%";
+$effect(() => {
+	const redundancyStr = redundancy || "10%";
 	if (typeof redundancyStr === "string") {
 		redundancyValue = Number.parseInt(redundancyStr.replace("%", "")) || 10;
 	} else {
 		redundancyValue = 10;
 	}
-}
+});
 
-// Update config when display values change
-$: {
+// Update local values when display values change
+$effect(() => {
 	if (volumeSizeValue !== undefined && volumeSizeUnit) {
-		config.par2.volume_size = unitToBytes(volumeSizeValue, volumeSizeUnit);
+		volumeSize = unitToBytes(volumeSizeValue, volumeSizeUnit);
 	}
-}
+});
 
-$: {
+$effect(() => {
 	if (redundancyValue !== undefined && redundancyValue > 0) {
-		config.par2.redundancy = `${redundancyValue}%`;
+		redundancy = `${redundancyValue}%`;
 	}
-}
+});
 
 function addExtraOption() {
-	config.par2.extra_par2_options = [...config.par2.extra_par2_options, ""];
+	extraPar2Options = [...extraPar2Options, ""];
 }
 
 function removeExtraOption(index: number) {
-	config.par2.extra_par2_options = config.par2.extra_par2_options.filter(
-		(_, i) => i !== index,
-	);
+	extraPar2Options = extraPar2Options.filter((_, i) => i !== index);
+}
+
+function updateExtraOption(index: number, value: string) {
+	extraPar2Options[index] = value;
+	extraPar2Options = [...extraPar2Options]; // Trigger reactivity
 }
 
 async function selectTempDirectory() {
 	try {
 		const selectedDir = await apiClient.selectTempDirectory();
 		if (selectedDir) {
-			config.par2.temp_dir = selectedDir;
+			tempDir = selectedDir;
 		}
 	} catch (error) {
 		console.error("Failed to select temp directory:", error);
@@ -124,17 +174,29 @@ async function selectTempDirectory() {
 }
 
 async function savePar2Settings() {
+	if (!canSave) return;
+
 	try {
 		saving = true;
+
+		// Validation
+		if (enabled && !par2Path.trim()) {
+			throw new Error("PAR2 path is required when PAR2 is enabled");
+		}
 
 		// Get the current config from the server to avoid conflicts
 		const currentConfig = await apiClient.getConfig();
 
 		// Only update the par2 fields with proper type conversion
 		currentConfig.par2 = {
-			...config.par2,
-			volume_size: config.par2.volume_size || 153600000,
-			max_input_slices: config.par2.max_input_slices || 4000,
+			...currentConfig.par2,
+			enabled: enabled,
+			par2_path: par2Path.trim(),
+			temp_dir: tempDir.trim(),
+			redundancy: redundancy,
+			volume_size: volumeSize || 153600000,
+			max_input_slices: maxInputSlices || 4000,
+			extra_par2_options: extraPar2Options,
 		};
 
 		await apiClient.saveConfig(currentConfig);
@@ -152,12 +214,12 @@ async function savePar2Settings() {
 }
 
 // Display values for status cards
-$: redundancyDisplay = config.par2.redundancy || "10%";
-$: volumeSizeDisplay = config.par2.volume_size
-	? config.par2.volume_size >= 1073741824
-		? `${Math.round(config.par2.volume_size / 1073741824)} GB`
-		: `${Math.round(config.par2.volume_size / 1048576)} MB`
-	: "200 MB";
+let redundancyDisplay = $derived(redundancy || "10%");
+let volumeSizeDisplay = $derived(volumeSize
+	? volumeSize >= 1073741824
+		? `${Math.round(volumeSize / 1073741824)} GB`
+		: `${Math.round(volumeSize / 1048576)} MB`
+	: "200 MB");
 </script>
 
 <div class="card bg-base-100 shadow-sm">
@@ -171,7 +233,7 @@ $: volumeSizeDisplay = config.par2.volume_size
 
     <div class="space-y-4">
       <div class="flex items-center gap-3">
-        <input name="par2enable" type="checkbox" class="checkbox" bind:checked={config.par2.enabled} />
+        <input name="par2enable" type="checkbox" class="checkbox" bind:checked={enabled} />
         <div>
           <label for="par2enable" class="text-base font-medium text-base-content">{$t('settings.par2.enable')}</label>
           <p class="text-sm text-base-content/70">
@@ -180,7 +242,7 @@ $: volumeSizeDisplay = config.par2.volume_size
         </div>
       </div>
 
-      {#if config.par2.enabled}
+      {#if enabled}
         <div
           class="ml-6 space-y-6 p-4 bg-base-200 rounded-lg border border-base-300"
         >
@@ -192,7 +254,7 @@ $: volumeSizeDisplay = config.par2.volume_size
               <input
                 id="par2-path"
                 class="input input-bordered w-full"
-                bind:value={config.par2.par2_path}
+                bind:value={par2Path}
                 placeholder="./parpar"
               />
               <p class="text-sm text-base-content/70 mt-1">
@@ -208,7 +270,7 @@ $: volumeSizeDisplay = config.par2.volume_size
                 <input
                   id="temp-dir"
                   class="input input-bordered flex-1"
-                  bind:value={config.par2.temp_dir}
+                  bind:value={tempDir}
                   placeholder={$t('settings.par2.temp_dir_placeholder')}
                 />
                 {#if apiClient.environment === 'wails'}
@@ -226,7 +288,7 @@ $: volumeSizeDisplay = config.par2.volume_size
             </div>
 
             <PercentageInput
-              bind:value={config.par2.redundancy}
+              bind:value={redundancy}
               label={$t('settings.par2.redundancy')}
               description={$t('settings.par2.redundancy_description')}
               presets={redundancyPresets}
@@ -236,8 +298,8 @@ $: volumeSizeDisplay = config.par2.volume_size
             />
 
             <SizeInput
-              value={config.par2.volume_size}
-              onchange={(value) => config.par2.volume_size = value}
+              value={volumeSize}
+              onchange={(value) => volumeSize = value}
               label={$t('settings.par2.volume_size')}
               description={$t('settings.par2.volume_size_description')}
               presets={volumeSizePresets}
@@ -247,7 +309,7 @@ $: volumeSizeDisplay = config.par2.volume_size
               id="volume-size"
             />
 
-{#if $advancedMode}
+{#if isAdvanced}
             <div>
               <label for="max-slices" class="label">
                 <span class="label-text">{$t('settings.par2.max_input_slices')}</span>
@@ -256,7 +318,7 @@ $: volumeSizeDisplay = config.par2.volume_size
                 id="max-slices"
                 type="number"
                 class="input input-bordered w-full"
-                bind:value={config.par2.max_input_slices}
+                bind:value={maxInputSlices}
                 min="100"
                 max="10000"
               />
@@ -267,7 +329,7 @@ $: volumeSizeDisplay = config.par2.volume_size
 {/if}
           </div>
 
-{#if $advancedMode}
+{#if isAdvanced}
           <!-- Extra PAR2 Options Section -->
           <div class="space-y-4">
             <div class="flex items-center justify-between">
@@ -288,14 +350,14 @@ $: volumeSizeDisplay = config.par2.volume_size
               </button>
             </div>
 
-            {#if config.par2.extra_par2_options && config.par2.extra_par2_options.length > 0}
+            {#if extraPar2Options && extraPar2Options.length > 0}
               <div class="space-y-3">
-                {#each config.par2.extra_par2_options as option, index (index)}
+                {#each extraPar2Options as option, index (index)}
                   <div class="flex items-center gap-3">
                     <div class="flex-1">
                       <input
                         class="input input-bordered w-full"
-                        bind:value={config.par2.extra_par2_options[index]}
+                        bind:value={extraPar2Options[index]}
                         placeholder={$t('settings.par2.extra_options.placeholder')}
                       />
                     </div>
@@ -374,7 +436,7 @@ $: volumeSizeDisplay = config.par2.volume_size
                 <div
                   class="text-lg font-semibold text-blue-800 dark:text-blue-200"
                 >
-                  {config.par2.max_input_slices.toLocaleString()}
+                  {maxInputSlices.toLocaleString()}
                 </div>
                 <div class="text-sm text-blue-600 dark:text-blue-400">
                   {$t('settings.par2.status.max_slices')}
@@ -399,10 +461,10 @@ $: volumeSizeDisplay = config.par2.volume_size
       <button
         class="btn btn-success"
         onclick={savePar2Settings}
-        disabled={saving}
+        disabled={!canSave}
       >
         <Save class="w-4 h-4" />
-        {saving ? $t('settings.par2.saving') : $t('settings.par2.save_button')}
+        {saving ? $t('common.common.saving') : $t('settings.par2.save_button')}
       </button>
     </div>
   </div>

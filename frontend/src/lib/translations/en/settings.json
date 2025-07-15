@@ -84,7 +84,8 @@
 			"brotli_title": "Brotli:",
 			"brotli_description": "Excellent compression ratios but slower than zstd. Recommended levels: 1-4 for speed, 5-8 for balance, 9-11 for maximum compression.",
 			"disabled_description": "NZB files will be saved uncompressed. Enable compression to reduce file sizes."
-		}
+		},
+		"save_button": "Save NZB Compression Settings"
 	},
 	"connection_pool": {
 		"title": "Connection Pool Configuration",

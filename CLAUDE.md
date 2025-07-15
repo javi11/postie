@@ -1,5 +1,9 @@
 # SvelteKit Best Practices Guide for NZB Upload Project
 
+## Tooling
+
+DON'T USE NPM use BUN instead.
+
 ## Project Overview
 
 This is a desktop application built with:
@@ -682,7 +686,7 @@ async function saveSettings() {
         onclick={saveSettings}
         disabled={saving}
       >
-        {saving ? $t('settings.posting.saving') : $t('settings.posting.save_button')}
+        {saving ? $t('common.common.saving') : $t('settings.posting.save_button')}
       </button>
     </div>
   </div>

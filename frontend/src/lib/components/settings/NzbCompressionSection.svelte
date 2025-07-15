@@ -1,9 +1,15 @@
 <script lang="ts">
+import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
+import { toastStore } from "$lib/stores/toast";
 import type { config as configType } from "$lib/wailsjs/go/models";
-import { Archive } from "lucide-svelte";
+import { Archive, Save } from "lucide-svelte";
 
-export let config: configType.ConfigData;
+interface Props {
+	config: configType.ConfigData;
+}
+
+const { config }: Props = $props();
 
 // Ensure nzb_compression exists with defaults
 if (!config.nzb_compression) {
@@ -14,8 +20,14 @@ if (!config.nzb_compression) {
 	};
 }
 
+// Reactive local state
+let enabled = $state(config.nzb_compression.enabled ?? false);
+let compressionType = $state(config.nzb_compression.type || "none");
+let compressionLevel = $state(config.nzb_compression.level || 0);
+let saving = $state(false);
+
 // Dynamic compression types based on translations
-$: compressionTypes = [
+let compressionTypes = $derived([
 	{
 		value: "none",
 		name: $t("settings.nzb_compression.compression_types.none"),
@@ -28,11 +40,44 @@ $: compressionTypes = [
 		value: "brotli",
 		name: $t("settings.nzb_compression.compression_types.brotli"),
 	},
-];
+]);
 
 // Get compression level limits based on type
-$: compressionLimits = getCompressionLimits(config.nzb_compression.type);
-$: defaultLevel = getDefaultLevel(config.nzb_compression.type);
+let compressionLimits = $derived(getCompressionLimits(compressionType));
+let defaultLevel = $derived(getDefaultLevel(compressionType));
+
+// Derived state
+let canSave = $derived(
+	compressionType && 
+	(compressionType === "none" || 
+	 (compressionLevel >= compressionLimits.min && compressionLevel <= compressionLimits.max)) && 
+	!saving
+);
+
+// Sync local state back to config
+$effect(() => {
+	config.nzb_compression.enabled = enabled;
+});
+
+$effect(() => {
+	config.nzb_compression.type = compressionType;
+});
+
+$effect(() => {
+	config.nzb_compression.level = compressionLevel;
+});
+
+// Auto-adjust level when compression type changes
+$effect(() => {
+	if (compressionType === "none") {
+		compressionLevel = 0;
+	} else {
+		const limits = getCompressionLimits(compressionType);
+		if (compressionLevel < limits.min || compressionLevel > limits.max) {
+			compressionLevel = getDefaultLevel(compressionType);
+		}
+	}
+});
 
 function getCompressionLimits(type: string) {
 	switch (type) {
@@ -56,18 +101,61 @@ function getDefaultLevel(type: string) {
 	}
 }
 
-// Auto-set default level when compression type changes
-$: if (
-	config.nzb_compression.type !== "none" &&
-	config.nzb_compression.level === 0
-) {
-	config.nzb_compression.level = defaultLevel;
+async function saveNzbCompressionSettings() {
+	if (!canSave) return;
+	
+	try {
+		saving = true;
+
+		// Validation
+		if (compressionType !== "none") {
+			const limits = getCompressionLimits(compressionType);
+			if (compressionLevel < limits.min || compressionLevel > limits.max) {
+				throw new Error(`Compression level must be between ${limits.min} and ${limits.max}`);
+			}
+		}
+
+		// Get current config to avoid conflicts
+		const currentConfig = await apiClient.getConfig();
+
+		// Update only nzb compression section
+		currentConfig.nzb_compression = {
+			...currentConfig.nzb_compression,
+			enabled: enabled,
+			type: compressionType,
+			level: compressionLevel,
+		};
+
+		await apiClient.saveConfig(currentConfig);
+
+		toastStore.success(
+			$t("settings.nzb_compression.saved_success"),
+			$t("settings.nzb_compression.saved_success_description")
+		);
+	} catch (error) {
+		console.error("Failed to save NZB compression settings:", error);
+		toastStore.error($t("common.messages.error_saving"), String(error));
+	} finally {
+		saving = false;
+	}
 }
 
+// Auto-set default level when compression type changes
+$effect(() => {
+  if (
+    config.nzb_compression.type !== "none" &&
+    config.nzb_compression.level === 0
+  ) {
+    config.nzb_compression.level = defaultLevel;
+  }
+});
+
 // Reset level when compression is disabled
-$: if (config.nzb_compression.type === "none") {
-	config.nzb_compression.level = 0;
-}
+$effect(() => {
+  if (config.nzb_compression.type === "none") {
+    config.nzb_compression.level = 0;
+  }
+});
 </script>
 
 <div class="card bg-base-100 shadow-xl">
@@ -81,7 +169,7 @@ $: if (config.nzb_compression.type === "none") {
 
     <div class="form-control">
       <label class="label cursor-pointer justify-start gap-3">
-        <input type="checkbox" class="checkbox" bind:checked={config.nzb_compression.enabled} />
+        <input type="checkbox" class="checkbox" bind:checked={enabled} />
         <span class="label-text">{$t('settings.nzb_compression.enable')}</span>
       </label>
       <div class="label">
@@ -91,7 +179,7 @@ $: if (config.nzb_compression.type === "none") {
       </div>
     </div>
 
-    {#if config.nzb_compression.enabled}
+    {#if enabled}
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div class="form-control">
           <label class="label" for="compression-type">
@@ -100,7 +188,7 @@ $: if (config.nzb_compression.type === "none") {
           <select
             id="compression-type"
             class="select select-bordered"
-            bind:value={config.nzb_compression.type}
+            bind:value={compressionType}
           >
             {#each compressionTypes as type}
               <option value={type.value}>{type.name}</option>
@@ -113,7 +201,7 @@ $: if (config.nzb_compression.type === "none") {
           </div>
         </div>
 
-        {#if config.nzb_compression.type !== "none"}
+        {#if compressionType !== "none"}
           <div class="form-control">
             <label class="label" for="compression-level">
               <span class="label-text">{$t('settings.nzb_compression.compression_level')}</span>
@@ -122,7 +210,7 @@ $: if (config.nzb_compression.type === "none") {
               id="compression-level"
               type="number"
               class="input input-bordered"
-              bind:value={config.nzb_compression.level}
+              bind:value={compressionLevel}
               min={compressionLimits.min}
               max={compressionLimits.max}
             />
@@ -135,13 +223,13 @@ $: if (config.nzb_compression.type === "none") {
         {/if}
       </div>
 
-      {#if config.nzb_compression.type === "zstd"}
+      {#if compressionType === "zstd"}
         <div class="alert alert-info">
           <span class="text-sm">
             <strong>{$t('settings.nzb_compression.info.zstd_title')}</strong> {$t('settings.nzb_compression.info.zstd_description')}
           </span>
         </div>
-      {:else if config.nzb_compression.type === "brotli"}
+      {:else if compressionType === "brotli"}
         <div class="alert alert-success">
           <span class="text-sm">
             <strong>{$t('settings.nzb_compression.info.brotli_title')}</strong> {$t('settings.nzb_compression.info.brotli_description')}
@@ -155,5 +243,18 @@ $: if (config.nzb_compression.type === "none") {
         </span>
       </div>
     {/if}
+
+    <!-- Save Button -->
+    <div class="pt-4 border-t border-base-300">
+      <button
+        type="button"
+        class="btn btn-success"
+        onclick={saveNzbCompressionSettings}
+        disabled={!canSave}
+      >
+        <Save class="w-4 h-4" />
+        {saving ? $t('common.common.saving') : $t('settings.nzb_compression.save_button')}
+      </button>
+    </div>
   </div>
 </div>

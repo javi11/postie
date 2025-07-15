@@ -14,30 +14,89 @@ import {
 	Trash2,
 } from "lucide-svelte";
 
-export let config: configType.ConfigData;
+interface Props {
+	config: configType.ConfigData;
+}
 
-let saving = false;
+const { config }: Props = $props();
+
+let saving = $state(false);
 // Track validation state for each server
-let validationStates: Record<number, { status: string; error: string }> = {};
+let validationStates = $state<Record<number, { status: string; error: string }>>({});
 // Track original server state to detect modifications
-let originalServers: configType.ServerConfig[] = [];
+let originalServers = $state<configType.ServerConfig[]>([]);
 // Track which servers have been modified
-let modifiedServers: Set<number>;
+let modifiedServers = $state<Set<number>>(new Set());
+
+// Local reactive state for server configurations
+let serverConfigs = $state<Array<{
+	enabled: boolean;
+	host: string;
+	port: number;
+	username: string;
+	password: string;
+	max_connections: number;
+	ssl: boolean;
+	insecure_ssl: boolean;
+	max_connection_idle_time_in_seconds: number;
+	max_connection_ttl_in_seconds: number;
+}>>([]);
+
+// Ensure serverConfigs is always in sync with config.servers length
+$effect(() => {
+	if (config.servers && serverConfigs.length !== config.servers.length) {
+		serverConfigs = config.servers.map(server => ({
+			enabled: server.enabled ?? true,
+			host: server.host || "",
+			port: server.port || 119,
+			username: server.username || "",
+			password: server.password || "",
+			max_connections: server.max_connections || 10,
+			ssl: server.ssl ?? false,
+			insecure_ssl: server.insecure_ssl ?? false,
+			max_connection_idle_time_in_seconds: server.max_connection_idle_time_in_seconds || 300,
+			max_connection_ttl_in_seconds: server.max_connection_ttl_in_seconds || 3600,
+		}));
+	}
+});
 
 // Initialize original servers state when component loads
-$: if (config.servers && originalServers.length === 0) {
-	originalServers = JSON.parse(JSON.stringify(config.servers));
-	modifiedServers = new Set<number>();
-	// Mark previously saved servers as valid if they have required fields
-	config.servers.forEach((server, index) => {
-		if (server.host && server.port) {
-			validationStates = {
-				...validationStates,
-				[index]: { status: "valid", error: "" },
-			};
-		}
-	});
-}
+$effect(() => {
+	if (config.servers && originalServers.length === 0) {
+		originalServers = JSON.parse(JSON.stringify(config.servers));
+		modifiedServers = new Set<number>();
+		
+		// Mark previously saved servers as valid if they have required fields
+		config.servers.forEach((server, index) => {
+			if (server.host && server.port) {
+				validationStates = {
+					...validationStates,
+					[index]: { status: "valid", error: "" },
+				};
+			}
+		});
+	}
+});
+
+// Sync local state back to config
+$effect(() => {
+	if (serverConfigs.length > 0) {
+		serverConfigs.forEach((localServer, index) => {
+			if (config.servers[index]) {
+				config.servers[index].enabled = localServer.enabled;
+				config.servers[index].host = localServer.host;
+				config.servers[index].port = localServer.port;
+				config.servers[index].username = localServer.username;
+				config.servers[index].password = localServer.password;
+				config.servers[index].max_connections = localServer.max_connections;
+				config.servers[index].ssl = localServer.ssl;
+				config.servers[index].insecure_ssl = localServer.insecure_ssl;
+				config.servers[index].max_connection_idle_time_in_seconds = localServer.max_connection_idle_time_in_seconds;
+				config.servers[index].max_connection_ttl_in_seconds = localServer.max_connection_ttl_in_seconds;
+			}
+		});
+	}
+});
 
 // Duration preset definitions
 const idleTimePresets = [
@@ -52,27 +111,20 @@ const ttlPresets = [
 	{ label: "6h", value: 6, unit: "h" },
 ];
 
-// Helper functions for time conversion
-function secondsToTimeUnit(seconds: number): { value: number; unit: string } {
-	if (seconds >= 3600 && seconds % 3600 === 0) {
-		return { value: seconds / 3600, unit: "h" };
-	}
-	if (seconds >= 60 && seconds % 60 === 0) {
-		return { value: seconds / 60, unit: "m" };
-	}
-	return { value: seconds, unit: "s" };
-}
-
 function addServer() {
 	const newServer: configType.ServerConfig = new configType.ServerConfig();
 
 	config.servers = [...config.servers, newServer];
+	
+	// serverConfigs will be automatically updated by the $effect
+	
 	// Mark new server as modified
 	modifiedServers.add(config.servers.length - 1);
 }
 
 function removeServer(index: number) {
 	config.servers = config.servers.filter((_, i) => i !== index);
+	// serverConfigs will be automatically updated by the $effect
 }
 
 // Convert seconds to duration strings and back
@@ -106,19 +158,21 @@ function durationToSeconds(duration: string): number {
 }
 
 // Reactive duration strings for each server
-$: serverDurations = config.servers.map((server) => ({
+let serverDurations = $derived(serverConfigs.map((server) => ({
 	idle: secondsToDuration(server.max_connection_idle_time_in_seconds || 300),
 	ttl: secondsToDuration(server.max_connection_ttl_in_seconds || 3600),
-}));
+})));
 
 function updateIdleTime(serverIndex: number, duration: string) {
-	config.servers[serverIndex].max_connection_idle_time_in_seconds =
-		durationToSeconds(duration);
+	if (serverConfigs[serverIndex]) {
+		serverConfigs[serverIndex].max_connection_idle_time_in_seconds = durationToSeconds(duration);
+	}
 }
 
 function updateTTL(serverIndex: number, duration: string) {
-	config.servers[serverIndex].max_connection_ttl_in_seconds =
-		durationToSeconds(duration);
+	if (serverConfigs[serverIndex]) {
+		serverConfigs[serverIndex].max_connection_ttl_in_seconds = durationToSeconds(duration);
+	}
 }
 
 function getServerValidationState(index: number) {
@@ -157,7 +211,7 @@ function onServerFieldChange(index: number) {
 }
 
 async function validateServer(index: number) {
-	const server = config.servers[index];
+	const server = serverConfigs[index];
 
 	// Basic validation first
 	if (!server.host || !server.port) {
@@ -258,8 +312,8 @@ async function saveServerSettings() {
 		}
 
 		// Validate that all servers have required fields
-		for (let i = 0; i < config.servers.length; i++) {
-			const server = config.servers[i];
+		for (let i = 0; i < serverConfigs.length; i++) {
+			const server = serverConfigs[i];
 			if (!server.host || server.host.trim() === "") {
 				toastStore.error(
 					"Configuration Error",
@@ -325,6 +379,7 @@ async function saveServerSettings() {
         </h2>
       </div>
       <button
+        type="button"
         class="btn btn-sm btn-outline"
         onclick={addServer}
       >
@@ -342,6 +397,7 @@ async function saveServerSettings() {
           {$t('settings.server.no_servers_description')}
         </p>
         <button
+          type="button"
           class="btn btn-outline"
           onclick={addServer}
         >
@@ -351,204 +407,19 @@ async function saveServerSettings() {
       </div>
     {:else}
       <div class="space-y-6">
-        {#each config.servers as server, index (index)}
-          {@const validationState = getServerValidationState(index)}
-          <div
-            class="p-4 border border-base-300 rounded-lg bg-base-200"
-          >
-            <div class="flex items-center justify-between mb-4">
-              <div class="flex items-center gap-3">
-                <h3 class="text-md font-medium text-base-content">
-                  {$t('settings.server.server_number', { number: index + 1 })}
-                </h3>
-                {#if validationState.status === "validating"}
-                  <div class="badge badge-info gap-1">
-                    <Loader2 class="w-3 h-3 animate-spin" />
-                    {$t("setup.servers.validating")}
-                  </div>
-                {:else if validationState.status === "valid"}
-                  <div class="badge badge-success gap-1">
-                    <Check class="w-3 h-3" />
-                    {$t("setup.servers.valid")}
-                  </div>
-                {:else if !isServerModified(index) && server.host && server.port}
-                  <div class="badge badge-success gap-1">
-                    <Check class="w-3 h-3" />
-                    {$t("setup.servers.valid")} (Saved)
-                  </div>
-                {:else if validationState.status === "invalid"}
-                  <div class="badge badge-error">{$t("setup.servers.invalid")}</div>
-                {:else}
-                  <div class="badge badge-error">{$t("setup.servers.incomplete")}</div>
-                {/if}
-                <div class="flex items-center gap-2">
-                  <input type="checkbox" class="checkbox checkbox-sm" bind:checked={server.enabled} id="enabled-{index}" />
-                  <label class="label-text text-sm font-medium" for="enabled-{index}">{$t('settings.server.enabled')}</label>
-                </div>
-              </div>
-              <div class="flex items-center gap-2">
-                {#if validationState.status !== "validating"}
-                  <button
-                    class="btn btn-xs btn-primary btn-outline"
-                    onclick={() => validateServer(index)}
-                  >
-                    {$t("setup.servers.testConnection")}
-                  </button>
-                {/if}
-                <button
-                  class="btn btn-xs btn-error btn-outline"
-                  onclick={() => removeServer(index)}
-                >
-                  <Trash2 class="w-3 h-3" />
-                  {$t('settings.server.remove')}
-                </button>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label class="label" for="host-{index}">
-                  <span class="label-text">{$t('settings.server.host_required')}</span>
-                </label>
-                <input
-                  id="host-{index}"
-                  class="input input-bordered w-full"
-                  bind:value={server.host}
-                  placeholder={$t('settings.server.host_placeholder')}
-                  required
-                  oninput={() => onServerFieldChange(index)}
-                />
-              </div>
-
-              <div>
-                <label class="label" for="port-{index}">
-                  <span class="label-text">{$t('settings.server.port')}</span>
-                </label>
-                <input
-                  id="port-{index}"
-                  class="input input-bordered w-full"
-                  type="number"
-                  bind:value={server.port}
-                  min="1"
-                  max="65535"
-                  oninput={() => onServerFieldChange(index)}
-                />
-              </div>
-
-              <div>
-                <label class="label" for="username-{index}">
-                  <span class="label-text">{$t('settings.server.username')}</span>
-                </label>
-                <input
-                  id="username-{index}"
-                  class="input input-bordered w-full"
-                  bind:value={server.username}
-                  placeholder={$t('settings.server.username_placeholder')}
-                  autocomplete="username"
-                  oninput={() => onServerFieldChange(index)}
-                />
-              </div>
-
-              <div>
-                <label class="label" for="password-{index}">
-                  <span class="label-text">{$t('settings.server.password')}</span>
-                </label>
-                <input
-                  id="password-{index}"
-                  class="input input-bordered w-full"
-                  type="password"
-                  bind:value={server.password}
-                  placeholder={$t('settings.server.password_placeholder')}
-                  autocomplete="current-password"
-                  oninput={() => onServerFieldChange(index)}
-                />
-              </div>
-
-              <div>
-                <label class="label" for="max-connections-{index}">
-                  <span class="label-text">{$t('settings.server.max_connections')}</span>
-                </label>
-                <input
-                  id="max-connections-{index}"
-                  class="input input-bordered w-full"
-                  type="number"
-                  bind:value={server.max_connections}
-                  min="1"
-                  max="50"
-                  oninput={() => onServerFieldChange(index)}
-                />
-              </div>
-
-              <DurationInput
-                value={serverDurations[index]?.idle || "5m"}
-                label={$t('settings.server.connection_idle_timeout')}
-                description={$t('settings.server.connection_idle_timeout_description')}
-                presets={idleTimePresets}
-                id="idle-time-{index}"
-                onchange={(e) => updateIdleTime(index, e)}
-              />
-
-              <DurationInput
-                value={serverDurations[index]?.ttl || "1h"}
-                label={$t('settings.server.connection_ttl')}
-                description={$t('settings.server.connection_ttl_description')}
-                presets={ttlPresets}
-                id="ttl-{index}"
-                onchange={(e) => updateTTL(index, e)}
-              />
-            </div>
-
-            <div class="mt-4 space-y-3">
-              <div class="flex items-center gap-3">
-                <input type="checkbox" class="checkbox" bind:checked={server.ssl} onchange={() => onServerFieldChange(index)} id="ssl-{index}" />
-                <div class="flex items-center gap-2">
-                  <ShieldCheck class="w-4 h-4 text-success" />
-                  <label class="label-text text-sm font-medium" for="ssl-{index}">{$t('settings.server.use_ssl_tls')}</label>
-                </div>
-              </div>
-
-              {#if server.ssl}
-                <div class="ml-6">
-                  <div class="flex items-center gap-3">
-                    <input type="checkbox" class="checkbox" bind:checked={server.insecure_ssl} id="insecure-ssl-{index}" />
-                    <label class="label-text text-sm" for="insecure-ssl-{index}">
-                      {$t('settings.server.allow_insecure_ssl')}
-                    </label>
-                  </div>
-                </div>
-              {/if}
-            </div>
-
-            <!-- Validation Error Display -->
-            {#if validationState.error}
-              <div class="alert alert-error mt-3">
-                <p class="text-sm">
-                  {validationState.error}
-                </p>
-              </div>
-            {/if}
-
-            {#if !server.host || !server.port}
-              <div class="alert alert-warning mt-3">
-                <p class="text-sm">
-                  {$t('settings.server.validation_warning')}
-                </p>
-              </div>
-            {/if}
-          </div>
-        {/each}
       </div>
     {/if}
 
     <!-- Save Button -->
     <div class="pt-4 border-t border-base-300">
       <button
+        type="button"
         class="btn btn-success mb-4"
         onclick={saveServerSettings}
         disabled={saving}
       >
         <Save class="w-4 h-4" />
-        {saving ? $t('settings.server.saving') : $t('settings.server.save_button')}
+        {saving ? $t('common.common.saving') : $t('settings.server.save_button')}
       </button>
       
       <p class="text-sm text-base-content/70">

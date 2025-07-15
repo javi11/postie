@@ -117,74 +117,82 @@ async function loadAppStatus() {
 		}
 	}
 }
+
+function handler(error: unknown, _reset: () => void) {
+	const err = error as Error;
+	console.error("Error in layout:", err);
+	toastStore.error($t("common.common.error"), err.message);
+}
 </script>
 
 <div class="min-h-screen bg-base-200">
-	<!-- Show navbar only if not on setup page -->
-	{#if page.route.id !== "/setup"}
-		<!-- Header/Navigation -->
-		<div class="navbar bg-base-100/95 backdrop-blur-md shadow-lg border-b border-base-300/50 sticky top-0 z-50">
-			<div class="navbar-start">
-				<!-- Logo and Brand -->
-				<div class="flex items-center gap-3 px-4">
-					<div class="avatar">
-						<div class="w-15 h-10">
-							<img src={logo} alt="Postie UI" class="w-full h-full object-contain" loading="lazy" />
+	<svelte:boundary onerror={handler}>
+		<!-- Show navbar only if not on setup page -->
+		{#if page.route.id !== "/setup"}
+			<!-- Header/Navigation -->
+			<div class="navbar bg-base-100/95 backdrop-blur-md shadow-lg border-b border-base-300/50 sticky top-0 z-50">
+				<div class="navbar-start">
+					<!-- Logo and Brand -->
+					<div class="flex items-center gap-3 px-4">
+						<div class="avatar">
+							<div class="w-15 h-10">
+								<img src={logo} alt="Postie UI" class="w-full h-full object-contain" loading="lazy" />
+							</div>
+						</div>
+						<div>
+							<div class="flex items-center gap-2">
+								<h1 class="text-xl font-bold bg-clip-text">
+									Postie
+								</h1>
+							</div>
+							<p class="text-xs text-base-content/60">
+								Upload Manager
+							</p>
 						</div>
 					</div>
-					<div>
-						<div class="flex items-center gap-2">
-							<h1 class="text-xl font-bold bg-clip-text">
-								Postie
-							</h1>
-						</div>
-						<p class="text-xs text-base-content/60">
-							Upload Manager
-						</p>
+				</div>
+
+				<div class="navbar-center">
+					<!-- Navigation -->
+					<div class="flex items-center gap-1">
+						<button
+							class="btn btn-sm {page.route.id === "/" ? "btn-primary shadow-lg" : "btn-ghost hover:bg-base-200"} transition-all duration-200"
+							onclick={() => goto("/")}
+							disabled={needsConfiguration || criticalConfigError}
+							aria-current={page.route.id === "/" ? "page" : undefined}
+						>
+							<ChartPie class="w-4 h-4" />
+							<span class="font-medium">{$t('common.nav.dashboard')}</span>
+						</button>
+						<button
+							class="btn btn-sm {page.route.id === "/settings" ? "btn-secondary shadow-lg" : "btn-ghost hover:bg-base-200"} transition-all duration-200"
+							onclick={() => goto("/settings")}
+							aria-current={page.route.id === "/settings" ? "page" : undefined}
+						>
+							<Settings class="w-4 h-4" />
+							<span class="hidden md:inline font-medium">{$t('common.nav.settings')}</span>
+						</button>
+						<button
+							class="btn btn-sm {page.route.id === "/logs" ? "btn-accent shadow-lg" : "btn-ghost hover:bg-base-200"} transition-all duration-200"
+							onclick={() => goto("/logs")}
+							aria-current={page.route.id === "/logs" ? "page" : undefined}
+						>
+							<FileText class="w-4 h-4" />
+							<span class="hidden md:inline font-medium">{$t('common.nav.logs')}</span>
+						</button>
 					</div>
 				</div>
 			</div>
 
-			<div class="navbar-center">
-				<!-- Navigation -->
-				<div class="flex items-center gap-1">
-					<button
-						class="btn btn-sm {page.route.id === "/" ? "btn-primary shadow-lg" : "btn-ghost hover:bg-base-200"} transition-all duration-200"
-						onclick={() => goto("/")}
-						disabled={needsConfiguration || criticalConfigError}
-						aria-current={page.route.id === "/" ? "page" : undefined}
-					>
-						<ChartPie class="w-4 h-4" />
-						<span class="font-medium">{$t('common.nav.dashboard')}</span>
-					</button>
-					<button
-						class="btn btn-sm {page.route.id === "/settings" ? "btn-secondary shadow-lg" : "btn-ghost hover:bg-base-200"} transition-all duration-200"
-						onclick={() => goto("/settings")}
-						aria-current={page.route.id === "/settings" ? "page" : undefined}
-					>
-						<Settings class="w-4 h-4" />
-						<span class="hidden md:inline font-medium">{$t('common.nav.settings')}</span>
-					</button>
-					<button
-						class="btn btn-sm {page.route.id === "/logs" ? "btn-accent shadow-lg" : "btn-ghost hover:bg-base-200"} transition-all duration-200"
-						onclick={() => goto("/logs")}
-						aria-current={page.route.id === "/logs" ? "page" : undefined}
-					>
-						<FileText class="w-4 h-4" />
-						<span class="hidden md:inline font-medium">{$t('common.nav.logs')}</span>
-					</button>
-				</div>
-			</div>
-		</div>
-
-		<!-- Page Content -->
-		<main class="container mx-auto px-4 py-8 max-w-7xl animate-fade-in">
+			<!-- Page Content -->
+			<main class="container mx-auto px-4 py-8 max-w-7xl animate-fade-in">
+				<slot />
+			</main>
+		{:else}
+			<!-- Setup page takes full screen -->
 			<slot />
-		</main>
-	{:else}
-		<!-- Setup page takes full screen -->
-		<slot />
-	{/if}
+		{/if}
+	</svelte:boundary>
 
 	<!-- Toast notifications -->
 	<ToastContainer />

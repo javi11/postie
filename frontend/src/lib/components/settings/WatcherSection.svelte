@@ -23,6 +23,13 @@ const { config }: Props = $props();
 
 // Reactive local state
 let watchDirectory = $state("");
+let enabled = $state(config.watcher?.enabled ?? false);
+let checkInterval = $state(config.watcher?.check_interval || "5m");
+let sizeThreshold = $state(config.watcher?.size_threshold || 104857600); // 100MB
+let minFileSize = $state(config.watcher?.min_file_size || 1048576); // 1MB
+let deleteOriginalFile = $state(config.watcher?.delete_original_file ?? false);
+let startTime = $state(config.watcher?.schedule?.start_time || "00:00");
+let endTime = $state(config.watcher?.schedule?.end_time || "23:59");
 let saving = $state(false);
 let initialized = $state(false);
 
@@ -50,12 +57,22 @@ const minFileSizePresets = [
 
 // Derived state
 let isAdvanced = $derived($advancedMode);
-let canSave = $derived(config.watcher?.watch_directory && !saving);
+let canSave = $derived(watchDirectory.trim() && !saving);
 
-// Sync watch directory with config (bidirectional)
+// Sync all local state back to config
 $effect(() => {
-	if (initialized && config.watcher?.watch_directory !== watchDirectory) {
+	if (initialized) {
 		config.watcher.watch_directory = watchDirectory;
+		config.watcher.enabled = enabled;
+		config.watcher.check_interval = checkInterval;
+		config.watcher.size_threshold = sizeThreshold;
+		config.watcher.min_file_size = minFileSize;
+		config.watcher.delete_original_file = deleteOriginalFile;
+		if (!config.watcher.schedule) {
+			config.watcher.schedule = { start_time: "00:00", end_time: "23:59" };
+		}
+		config.watcher.schedule.start_time = startTime;
+		config.watcher.schedule.end_time = endTime;
 	}
 });
 
@@ -80,6 +97,15 @@ $effect(() => {
 			} else {
 				watchDirectory = config.watcher.watch_directory || "";
 			}
+			
+			// Initialize all local state from config
+			enabled = config.watcher?.enabled ?? false;
+			checkInterval = config.watcher?.check_interval || "5m";
+			sizeThreshold = config.watcher?.size_threshold || 104857600;
+			minFileSize = config.watcher?.min_file_size || 1048576;
+			deleteOriginalFile = config.watcher?.delete_original_file ?? false;
+			startTime = config.watcher?.schedule?.start_time || "00:00";
+			endTime = config.watcher?.schedule?.end_time || "23:59";
 			
 			initialized = true;
 		} catch (error) {
@@ -184,7 +210,7 @@ async function saveWatcherSettings() {
 
     <div class="space-y-4">
       <div class="flex items-center gap-3">
-        <input type="checkbox" class="toggle toggle-primary" bind:checked={config.watcher.enabled} id="watcher-enabled" />
+        <input type="checkbox" class="toggle toggle-primary" bind:checked={enabled} id="watcher-enabled" />
         <div class="flex items-center gap-2">
           <Folder class="w-4 h-4 text-primary" />
           <label class="label-text text-sm font-medium" for="watcher-enabled">{$t('settings.watcher.enable')}</label>
@@ -197,7 +223,7 @@ async function saveWatcherSettings() {
         </p>
       </div>
 
-      {#if config.watcher.enabled}
+      {#if enabled}
         <div class="animate-fade-in pl-4 border-l-2 border-primary/20 space-y-6">
           <div class="space-y-4">
             <div>
@@ -233,11 +259,8 @@ async function saveWatcherSettings() {
                       <input
                         id="watch-directory"
                         class="input input-bordered flex-1"
-                        bind:value={config.watcher.watch_directory}
+                        bind:value={watchDirectory}
                         placeholder="/path/to/watch/directory"
-                        oninput={() => {
-                          watchDirectory = config.watcher.watch_directory;
-                        }}
                       />
                     {/if}
                 </div>
@@ -253,7 +276,7 @@ async function saveWatcherSettings() {
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <DurationInput
-              bind:value={config.watcher.check_interval}
+              bind:value={checkInterval}
               label={$t('settings.watcher.check_interval')}
               description={$t('settings.watcher.check_interval_description')}
               presets={checkIntervalPresets}
@@ -261,7 +284,7 @@ async function saveWatcherSettings() {
             />
 
             <SizeInput
-              bind:value={config.watcher.size_threshold}
+              bind:value={sizeThreshold}
               label={$t('settings.watcher.size_threshold')}
               description={$t('settings.watcher.size_threshold_description')}
               presets={sizeThresholdPresets}
@@ -270,7 +293,7 @@ async function saveWatcherSettings() {
             />
 
             <SizeInput
-              bind:value={config.watcher.min_file_size}
+              bind:value={minFileSize}
               label={$t('settings.watcher.min_file_size')}
               description={$t('settings.watcher.min_file_size_description')}
               presets={minFileSizePresets}
@@ -293,7 +316,7 @@ async function saveWatcherSettings() {
                 <div>
                   <div class="form-control">
                     <label class="label cursor-pointer justify-start gap-3">
-                      <input type="checkbox" class="toggle toggle-primary" bind:checked={config.watcher.delete_original_file} />
+                      <input type="checkbox" class="toggle toggle-primary" bind:checked={deleteOriginalFile} />
                       <span class="label-text">{$t('settings.watcher.delete_original_file')}</span>
                     </label>
                   </div>
@@ -330,7 +353,7 @@ async function saveWatcherSettings() {
                           id="start-time"
                           type="time"
                           class="input input-bordered w-full"
-                          bind:value={config.watcher.schedule.start_time}
+                          bind:value={startTime}
                         />
                       </div>
                       <div>
@@ -341,7 +364,7 @@ async function saveWatcherSettings() {
                           id="end-time"
                           type="time"
                           class="input input-bordered w-full"
-                          bind:value={config.watcher.schedule.end_time}
+                          bind:value={endTime}
                         />
                       </div>
                     </div>
@@ -418,7 +441,7 @@ async function saveWatcherSettings() {
         disabled={!canSave}
       >
         <Save class="w-4 h-4" />
-        {saving ? $t('settings.watcher.saving') : $t('settings.watcher.save_button')}
+        {saving ? $t('common.common.saving') : $t('settings.watcher.save_button')}
       </button>
     </div>
   </div>

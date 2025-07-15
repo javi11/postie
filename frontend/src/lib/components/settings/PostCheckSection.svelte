@@ -13,9 +13,25 @@ const presets = [
 	{ label: "1m", value: 1, unit: "m" },
 ];
 
-export let config: configType.ConfigData;
+interface Props {
+	config: configType.ConfigData;
+}
 
-let saving = false;
+const { config }: Props = $props();
+
+// Reactive local state
+let enabled = $state(config.post_check?.enabled ?? true);
+let delay = $state(config.post_check?.delay || "10s");
+let maxReposts = $state(config.post_check?.max_reposts || 1);
+let saving = $state(false);
+
+// Derived state
+let canSave = $derived(
+	delay.trim() && 
+	maxReposts >= 0 && 
+	maxReposts <= 10 && 
+	!saving
+);
 
 // Ensure post_check exists with defaults
 if (!config.post_check) {
@@ -26,6 +42,19 @@ if (!config.post_check) {
 	};
 }
 
+// Sync local state back to config
+$effect(() => {
+	config.post_check.enabled = enabled;
+});
+
+$effect(() => {
+	config.post_check.delay = delay;
+});
+
+$effect(() => {
+	config.post_check.max_reposts = maxReposts;
+});
+
 async function savePostCheckSettings() {
 	try {
 		saving = true;
@@ -33,11 +62,20 @@ async function savePostCheckSettings() {
 		// Get the current config from the server to avoid conflicts
 		const currentConfig = await apiClient.getConfig();
 
+		// Validation
+		if (!delay.trim()) {
+			throw new Error("Delay is required");
+		}
+		
+		if (maxReposts < 0 || maxReposts > 10) {
+			throw new Error("Max reposts must be between 0 and 10");
+		}
+
 		// Only update the post_check fields with proper type conversion
 		currentConfig.post_check = {
-			enabled: config.post_check.enabled || false,
-			delay: config.post_check.delay || "10s",
-			max_reposts: config.post_check.max_reposts || 1,
+			enabled: enabled,
+			delay: delay.trim(),
+			max_reposts: maxReposts,
 		};
 
 		await apiClient.saveConfig(currentConfig);
@@ -66,7 +104,7 @@ async function savePostCheckSettings() {
 
     <div class="form-control">
       <label class="label cursor-pointer justify-start gap-3">
-        <input type="checkbox" class="checkbox" bind:checked={config.post_check.enabled} />
+        <input type="checkbox" class="checkbox" bind:checked={enabled} />
         <span class="label-text">{$t('settings.post_check.enable')}</span>
       </label>
       <div class="label">
@@ -76,12 +114,12 @@ async function savePostCheckSettings() {
       </div>
     </div>
 
-    {#if config.post_check.enabled}
+    {#if enabled}
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <DurationInput
             id="check-delay"
-            bind:value={config.post_check.delay}
+            bind:value={delay}
             label={$t('settings.post_check.check_delay')}
             description={$t('settings.post_check.check_delay_description')}
             placeholder="10"
@@ -99,7 +137,7 @@ async function savePostCheckSettings() {
             id="max-reposts"
             type="number"
             class="input input-bordered"
-            bind:value={config.post_check.max_reposts}
+            bind:value={maxReposts}
             min="0"
             max="10"
           />
@@ -123,10 +161,10 @@ async function savePostCheckSettings() {
       <button
         class="btn btn-success"
         onclick={savePostCheckSettings}
-        disabled={saving}
+        disabled={!canSave}
       >
         <Save class="w-4 h-4" />
-        {saving ? $t('settings.post_check.saving') : $t('settings.post_check.save_button')}
+        {saving ? $t('common.common.saving') : $t('settings.post_check.save_button')}
       </button>
     </div>
   </div>

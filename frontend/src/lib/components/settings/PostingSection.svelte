@@ -535,7 +535,7 @@ async function savePostingSettings() {
         disabled={saving}
       >
         <Save class="w-4 h-4" />
-        {saving ? $t('settings.posting.saving') : $t('settings.posting.save_button')}
+        {saving ? $t('common.common.saving') : $t('settings.posting.save_button')}
       </button>
     </div>
   </div>

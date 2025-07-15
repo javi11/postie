@@ -16,6 +16,7 @@
 		"reset": "Reset"
 	},
 	"common": {
+		"saving": "Saving...",
 		"start_auto_refresh": "Start auto-refresh",
 		"stop_auto_refresh": "Stop auto-refresh",
 		"refresh": "Refresh",

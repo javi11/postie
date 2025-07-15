@@ -13,7 +13,7 @@ interface Props {
 
 let { oncomplete }: Props = $props();
 
-let currentStep = 1;
+let currentStep = $state(1);
 let hasValidServers = false;
 
 const stepData = new backend.SetupWizardData();

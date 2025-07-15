@@ -8,53 +8,73 @@ import { toastStore } from "$lib/stores/toast";
 import type { config as configType } from "$lib/wailsjs/go/models";
 import { Cog, FolderOpen, Save } from "lucide-svelte";
 
-export let config: configType.ConfigData;
-
-let saving = false;
-
-// Initialize config defaults if they don't exist
-if (!config.output_dir) {
-	config.output_dir = "./output";
+interface Props {
+	config: configType.ConfigData;
 }
 
-if (config.maintain_original_extension === undefined) {
-	config.maintain_original_extension = true;
-}
+const { config }: Props = $props();
+
+// Reactive local state
+let outputDir = $state(config.output_dir || "./output");
+let maintainOriginalExtension = $state(config.maintain_original_extension ?? true);
+let saving = $state(false);
+
+// Derived state
+let canSave = $derived(outputDir.trim() && !saving);
+
+// Sync local state back to config
+$effect(() => {
+	config.output_dir = outputDir;
+});
+
+$effect(() => {
+	config.maintain_original_extension = maintainOriginalExtension;
+});
 
 async function selectOutputDirectory() {
 	try {
-		// Check if we're in Wails environment
 		await apiClient.initialize();
-		if (apiClient.environment === "wails") {
-			const App = await import("$lib/wailsjs/go/backend/App");
-			const dir = await App.SelectOutputDirectory();
-			if (dir) {
-				config.output_dir = dir;
-			}
+		
+		if (apiClient.environment !== "wails") {
+			toastStore.warning($t("common.messages.wails_only_feature"));
+			return;
 		}
-		// In web mode, users can just type the path directly in the input field
+		
+		const { SelectOutputDirectory } = await import("$lib/wailsjs/go/backend/App");
+		const dir = await SelectOutputDirectory();
+		
+		if (dir) {
+			outputDir = dir;
+		}
 	} catch (error) {
 		console.error("Failed to select output directory:", error);
+		toastStore.error($t("common.messages.error_selecting_directory"), String(error));
 	}
 }
 
 async function saveGeneralSettings() {
+	if (!canSave) return;
+	
 	try {
 		saving = true;
 
-		// Get the current config from the server to avoid conflicts
+		// Validation
+		if (!outputDir.trim()) {
+			throw new Error("Output directory is required");
+		}
+
+		// Get current config to avoid conflicts
 		const currentConfig = await apiClient.getConfig();
 
-		// Only update the general settings fields
-		currentConfig.output_dir = config.output_dir || "./output";
-		currentConfig.maintain_original_extension =
-			config.maintain_original_extension ?? true;
+		// Update only general settings fields
+		currentConfig.output_dir = outputDir.trim();
+		currentConfig.maintain_original_extension = maintainOriginalExtension;
 
 		await apiClient.saveConfig(currentConfig);
 
 		toastStore.success(
 			$t("settings.general.saved_success"),
-			$t("settings.general.saved_success_description"),
+			$t("settings.general.saved_success_description")
 		);
 	} catch (error) {
 		console.error("Failed to save general settings:", error);
@@ -84,14 +104,12 @@ async function saveGeneralSettings() {
 						<input
 							id="output-dir"
 							class="input input-bordered flex-1"
-							value={config.output_dir}
-							onchange={(e) => {
-								config.output_dir = (e.target as HTMLInputElement).value;
-							}}
+							bind:value={outputDir}
 							placeholder="./output"
 						/>
 						{#if apiClient.environment === 'wails'}
 							<button
+								type="button"
 								class="btn btn-outline btn-sm"
 								onclick={selectOutputDirectory}
 							>
@@ -118,10 +136,10 @@ async function saveGeneralSettings() {
 							id="maintain-extension"
 							type="checkbox"
 							class="checkbox"
-							bind:checked={config.maintain_original_extension}
+							bind:checked={maintainOriginalExtension}
 						/>
 						<span class="text-sm">
-							{config.maintain_original_extension ? $t('settings.general.maintain_extension_enabled') : $t('settings.general.maintain_extension_disabled')}
+							{maintainOriginalExtension ? $t('settings.general.maintain_extension_enabled') : $t('settings.general.maintain_extension_disabled')}
 						</span>
 					</div>
 					<div class="label">
@@ -135,12 +153,13 @@ async function saveGeneralSettings() {
 			<!-- Save Button -->
 			<div class="card-actions pt-4 border-t border-base-300">
 				<button
+					type="button"
 					class="btn btn-success"
 					onclick={saveGeneralSettings}
-					disabled={saving}
+					disabled={!canSave}
 				>
 					<Save class="w-4 h-4" />
-					{saving ? $t('settings.general.saving') : $t('settings.general.save_button')}
+					{saving ? $t('common.common.saving') : $t('settings.general.save_button')}
 				</button>
 			</div>
 		</div>

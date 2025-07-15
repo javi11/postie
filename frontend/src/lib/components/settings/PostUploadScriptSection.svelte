@@ -6,20 +6,46 @@ import type { config as configType } from "$lib/wailsjs/go/models";
 import { FileCode, Save, Terminal } from "lucide-svelte";
 import DurationInput from "../inputs/DurationInput.svelte";
 
-export let config: configType.ConfigData;
-
-let saving = false;
-
-// Reactive statement to initialize config defaults
-$: {
-	if (config && !config.post_upload_script) {
-		config.post_upload_script = {
-			enabled: false,
-			command: "",
-			timeout: "30s",
-		};
-	}
+interface Props {
+	config: configType.ConfigData;
 }
+
+const { config }: Props = $props();
+
+// Initialize config defaults
+if (config && !config.post_upload_script) {
+	config.post_upload_script = {
+		enabled: false,
+		command: "",
+		timeout: "30s",
+	};
+}
+
+// Reactive local state
+let enabled = $state(config.post_upload_script?.enabled ?? false);
+let command = $state(config.post_upload_script?.command || "");
+let timeout = $state(config.post_upload_script?.timeout || "30s");
+let saving = $state(false);
+
+// Derived state
+let canSave = $derived(
+	(!enabled || (enabled && command.trim())) && 
+	timeout.trim() && 
+	!saving
+);
+
+// Sync local state back to config
+$effect(() => {
+	config.post_upload_script.enabled = enabled;
+});
+
+$effect(() => {
+	config.post_upload_script.command = command;
+});
+
+$effect(() => {
+	config.post_upload_script.timeout = timeout;
+});
 
 async function savePostUploadScriptSettings() {
 	if (!config?.post_upload_script) {
@@ -31,10 +57,19 @@ async function savePostUploadScriptSettings() {
 
 		const currentConfig = await apiClient.getConfig();
 
+		// Validation
+		if (enabled && !command.trim()) {
+			throw new Error("Command is required when script is enabled");
+		}
+		
+		if (!timeout.trim()) {
+			throw new Error("Timeout is required");
+		}
+
 		currentConfig.post_upload_script = {
-			enabled: config.post_upload_script.enabled,
-			command: config.post_upload_script.command || "",
-			timeout: config.post_upload_script.timeout || "30s",
+			enabled: enabled,
+			command: command.trim(),
+			timeout: timeout.trim(),
 		};
 
 		await apiClient.saveConfig(currentConfig);
@@ -65,7 +100,7 @@ async function savePostUploadScriptSettings() {
     <div class="space-y-4">
       <div class="form-control">
         <label class="label cursor-pointer justify-start gap-3">
-          <input type="checkbox" class="toggle" bind:checked={config.post_upload_script.enabled} />
+          <input type="checkbox" class="toggle" bind:checked={enabled} />
           <span class="label-text">{$t('settings.post_upload_script.enable')}</span>
         </label>
         <div class="label">
@@ -75,7 +110,7 @@ async function savePostUploadScriptSettings() {
         </div>
       </div>
 
-      {#if config.post_upload_script.enabled}
+      {#if enabled}
         <div class="space-y-4 pl-4 border-l-2 border-blue-200 dark:border-blue-700">
           <div class="form-control">
             <label class="label" for="script-command">
@@ -84,7 +119,7 @@ async function savePostUploadScriptSettings() {
             <input
               id="script-command"
               class="input input-bordered font-mono"
-              bind:value={config.post_upload_script.command}
+              bind:value={command}
               placeholder={$t('settings.post_upload_script.command_placeholder')}
             />
             <div class="label">
@@ -100,7 +135,7 @@ async function savePostUploadScriptSettings() {
             </label>
             <DurationInput
               id="script-timeout"
-              bind:value={config.post_upload_script.timeout}
+              bind:value={timeout}
             />
             <div class="label">
               <span class="label-text-alt">
@@ -146,10 +181,10 @@ async function savePostUploadScriptSettings() {
       <button
         class="btn btn-success"
         onclick={savePostUploadScriptSettings}
-        disabled={saving}
+        disabled={!canSave}
       >
         <Save class="w-4 h-4" />
-        {saving ? $t('settings.post_upload_script.saving') : $t('settings.post_upload_script.save_button')}
+        {saving ? $t('common.common.saving') : $t('settings.post_upload_script.save_button')}
       </button>
     </div>
   </div>

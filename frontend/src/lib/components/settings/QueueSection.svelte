@@ -1,23 +1,95 @@
 <script lang="ts">
+import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
+import { toastStore } from "$lib/stores/toast";
 import type { config as configType } from "$lib/wailsjs/go/models";
-import { Quote } from "lucide-svelte";
+import { Quote, Save } from "lucide-svelte";
 
-export let config: configType.ConfigData;
-
-// Ensure queue exists with defaults
-if (!config.queue) {
-	config.queue = {
-		database_type: "sqlite",
-		database_path: "./postie_queue.db",
-		max_concurrent_uploads: 3,
-	};
+interface Props {
+	config: configType.ConfigData;
 }
 
-// Create reactive array for database types dropdown
-$: databaseTypes = [
+const { config }: Props = $props();
+
+// Reactive local state
+let databaseType = $state(config.queue?.database_type || "sqlite");
+let databasePath = $state(config.queue?.database_path || "./postie_queue.db");
+let maxConcurrentUploads = $state(config.queue?.max_concurrent_uploads || 3);
+let saving = $state(false);
+
+// Derived state
+let canSave = $derived(
+	databaseType && 
+	databasePath.trim() && 
+	maxConcurrentUploads > 0 && 
+	maxConcurrentUploads <= 20 && 
+	!saving
+);
+
+// Database types available
+const databaseTypes = [
 	{ value: "sqlite", name: $t("settings.queue.database_types.sqlite") },
-];
+] as const;
+
+// Sync local state back to config
+$effect(() => {
+	if (!config.queue) {
+		config.queue = {
+			database_type: "sqlite",
+			database_path: "./postie_queue.db",
+			max_concurrent_uploads: 3,
+		};
+	}
+	config.queue.database_type = databaseType;
+});
+
+$effect(() => {
+	config.queue.database_path = databasePath;
+});
+
+$effect(() => {
+	config.queue.max_concurrent_uploads = maxConcurrentUploads;
+});
+
+async function saveQueueSettings() {
+	if (!canSave) return;
+	
+	try {
+		saving = true;
+
+		// Validation
+		if (!databasePath.trim()) {
+			throw new Error("Database path is required");
+		}
+		
+		if (maxConcurrentUploads < 1 || maxConcurrentUploads > 20) {
+			throw new Error("Max concurrent uploads must be between 1 and 20");
+		}
+
+		// Get current config to avoid conflicts
+		const currentConfig = await apiClient.getConfig();
+
+		// Update only queue section
+		currentConfig.queue = {
+			...currentConfig.queue,
+			database_type: databaseType,
+			database_path: databasePath.trim(),
+			max_concurrent_uploads: maxConcurrentUploads,
+		};
+
+		await apiClient.saveConfig(currentConfig);
+
+		toastStore.success(
+			$t("settings.queue.saved_success"),
+			$t("settings.queue.saved_success_description")
+		);
+	} catch (error) {
+		console.error("Failed to save queue settings:", error);
+		toastStore.error($t("common.messages.error_saving"), String(error));
+	} finally {
+		saving = false;
+	}
+}
 </script>
 
 <div class="card bg-base-100 shadow-xl">
@@ -38,7 +110,7 @@ $: databaseTypes = [
           <select
             id="database-type"
             class="select select-bordered"
-            bind:value={config.queue.database_type}
+            bind:value={databaseType}
           >
             {#each databaseTypes as type}
               <option value={type.value}>{type.name}</option>
@@ -58,14 +130,14 @@ $: databaseTypes = [
           <input
             id="database-path"
             class="input input-bordered"
-            bind:value={config.queue.database_path}
-            placeholder={config.queue.database_type === "sqlite"
+            bind:value={databasePath}
+            placeholder={databaseType === "sqlite"
               ? $t('settings.queue.database_path_placeholder_sqlite')
               : $t('settings.queue.database_path_placeholder_network')}
           />
           <div class="label">
             <span class="label-text-alt">
-              {config.queue.database_type === "sqlite"
+              {databaseType === "sqlite"
                 ? $t('settings.queue.database_path_description_sqlite')
                 : $t('settings.queue.database_path_description_network')}
             </span>
@@ -80,7 +152,7 @@ $: databaseTypes = [
             id="max-concurrent"
             type="number"
             class="input input-bordered"
-            bind:value={config.queue.max_concurrent_uploads}
+            bind:value={maxConcurrentUploads}
             min="1"
             max="20"
           />
@@ -97,6 +169,19 @@ $: databaseTypes = [
       <span class="text-sm">
         {@html $t('settings.queue.info')}
       </span>
+    </div>
+
+    <!-- Save Button -->
+    <div class="pt-4 border-t border-base-300">
+      <button
+        type="button"
+        class="btn btn-success"
+        onclick={saveQueueSettings}
+        disabled={!canSave}
+      >
+        <Save class="w-4 h-4" />
+        {saving ? $t('common.common.saving') : $t('settings.queue.save_button')}
+      </button>
     </div>
   </div>
 </div>
