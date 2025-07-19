@@ -332,12 +332,12 @@ func Load(path string) (*ConfigData, error) {
 			"currentVersion", cfg.Version,
 			"requiredVersion", CurrentConfigVersion,
 			"configPath", path)
-		
+
 		// Remove the outdated config file
 		if err := os.Remove(path); err != nil {
 			slog.Warn("Failed to remove outdated config file", "error", err)
 		}
-		
+
 		return nil, fmt.Errorf("config version %d is outdated (current version: %d), config file removed", cfg.Version, CurrentConfigVersion)
 	}
 
@@ -347,7 +347,7 @@ func Load(path string) (*ConfigData, error) {
 	}
 
 	if cfg.Posting.RetryDelay == "" {
-		cfg.Posting.RetryDelay = Duration(5 * time.Second)
+		cfg.Posting.RetryDelay = Duration("5s")
 	}
 
 	if cfg.Posting.ArticleSizeInBytes <= 0 {

@@ -1035,7 +1035,7 @@ func createTestConfig() config.PostingConfig {
 	enabled := true
 	return config.PostingConfig{
 		MaxRetries:         3,
-		RetryDelay:         config.Duration(time.Second),
+		RetryDelay:         config.Duration("1s"),
 		ArticleSizeInBytes: 1000,
 		Groups:             []string{"alt.test"},
 		ThrottleRate:       1024 * 1024,
@@ -1055,7 +1055,7 @@ func createTestPostCheckConfig() config.PostCheck {
 	enabled := true
 	return config.PostCheck{
 		Enabled:    &enabled,
-		RetryDelay: config.Duration(time.Second),
+		RetryDelay: config.Duration("1s"),
 		MaxRePost:  2,
 	}
 }
