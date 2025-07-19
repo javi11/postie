@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -92,6 +93,22 @@ type App struct {
 	firstStart           bool
 }
 
+// recoverPanic handles panic recovery with logging
+func (a *App) recoverPanic(methodName string) {
+	if r := recover(); r != nil {
+		stack := debug.Stack()
+		slog.Error("Panic recovered in app method",
+			"method", methodName,
+			"panic", r,
+			"stack", string(stack))
+		
+		// Set critical error message if we don't have one already
+		if a.criticalErrorMessage == "" {
+			a.criticalErrorMessage = fmt.Sprintf("Critical error in %s: %v", methodName, r)
+		}
+	}
+}
+
 // NewApp creates a new App application struct
 func NewApp() *App {
 	// Get OS-specific paths
@@ -154,6 +171,8 @@ func (a *App) SetWebEventEmitter(emitter func(eventType string, data interface{}
 // Startup is called when the app starts. The context is saved
 // so we can call the runtime methods
 func (a *App) Startup(ctx context.Context) {
+	defer a.recoverPanic("Startup")
+	
 	a.ctx = ctx
 
 	// Note: Directory creation is now handled in GetAppPaths()
@@ -207,6 +226,8 @@ func (a *App) Startup(ctx context.Context) {
 
 // GetAppStatus returns the current application status
 func (a *App) GetAppStatus() AppStatus {
+	defer a.recoverPanic("GetAppStatus")
+	
 	status := AppStatus{
 		HasPostie:           a.postie != nil,
 		HasConfig:           a.config != nil,
@@ -289,6 +310,8 @@ func (a *App) GetRunningJobDetails() ([]*processor.RunningJobDetails, error) {
 
 // RetryJob retries a failed job
 func (a *App) RetryJob(id string) error {
+	defer a.recoverPanic("RetryJob")
+	
 	if a.queue == nil {
 		return nil
 	}
@@ -317,6 +340,8 @@ func getKeys(m map[string]bool) []string {
 
 // GetLogs returns the content of the log file.
 func (a *App) GetLogs() (string, error) {
+	defer a.recoverPanic("GetLogs")
+	
 	return a.GetLogsPaginated(0, 0) // 0, 0 means get last 1MB like before
 }
 
@@ -324,6 +349,8 @@ func (a *App) GetLogs() (string, error) {
 // limit: number of lines to return (0 = use original 1MB limit)
 // offset: number of lines to skip from the end (0 = start from most recent)
 func (a *App) GetLogsPaginated(limit, offset int) (string, error) {
+	defer a.recoverPanic("GetLogsPaginated")
+	
 	file, err := os.Open(a.appPaths.Log)
 	if err != nil {
 		return "", fmt.Errorf("failed to open log file: %w", err)
@@ -441,6 +468,8 @@ func (a *App) NavigateToDashboard() {
 
 // HandleDroppedFiles processes files that are dropped onto the application window
 func (a *App) HandleDroppedFiles(filePaths []string) error {
+	defer a.recoverPanic("HandleDroppedFiles")
+	
 	if len(filePaths) == 0 {
 		return fmt.Errorf("no files dropped")
 	}
@@ -541,6 +570,8 @@ func (a *App) isFirstStart() bool {
 
 // SetupWizardComplete saves the configuration from the setup wizard
 func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
+	defer a.recoverPanic("SetupWizardComplete")
+	
 	slog.Info("Completing setup wizard", "data", wizardData)
 
 	// Create new config based on wizard data
@@ -590,6 +621,8 @@ func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 
 // ValidateNNTPServer validates an NNTP server configuration by attempting to connect
 func (a *App) ValidateNNTPServer(serverData ServerData) ValidationResult {
+	defer a.recoverPanic("ValidateNNTPServer")
+	
 	// Basic validation
 	if serverData.Host == "" {
 		return ValidationResult{

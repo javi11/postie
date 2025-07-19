@@ -22,3 +22,42 @@ jobs:
         with:
           fetch-depth: 0
       - uses: ./.github/actions/test
+  build-gui-windows:
+    runs-on: windows-latest
+    needs: test
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # checkout
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Install Wails (version from wails.json)
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      # Install Bun
+      - name: Install Bun
+        run: npm install -g bun
+
+      # Build Windows GUI using Wails config
+      - name: Build Windows GUI
+        run: wails build -platform windows/amd64 -ldflags="-extldflags=-static"
+        env:
+          CGO_ENABLED: 1
+
+      # Upload Windows artifact
+      - name: Upload Windows GUI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: postie-gui-windows-amd64
+          path: build/bin
