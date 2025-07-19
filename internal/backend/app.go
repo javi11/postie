@@ -89,6 +89,7 @@ type App struct {
 	criticalErrorMessage string
 	isWebMode            bool
 	webEventEmitter      func(eventType string, data interface{})
+	firstStart           bool
 }
 
 // NewApp creates a new App application struct
@@ -160,6 +161,10 @@ func (a *App) Startup(ctx context.Context) {
 		"config", a.appPaths.Config,
 		"database", a.appPaths.Database,
 		"par2", a.appPaths.Par2)
+
+	// Check if it's the first start BEFORE creating any config
+	a.firstStart = a.determineFirstStart()
+	slog.Info("First start determination", "isFirstStart", a.firstStart)
 
 	// Load initial configuration
 	if err := a.loadConfig(); err != nil {
@@ -495,19 +500,43 @@ func (a *App) HandleDroppedFiles(filePaths []string) error {
 	return fmt.Errorf("queue not initialized")
 }
 
-// isFirstStart checks if this is the first time the application is being run
-func (a *App) isFirstStart() bool {
+// determineFirstStart checks if this is the first time the application is being run
+// This must be called BEFORE any config creation
+func (a *App) determineFirstStart() bool {
 	// Check if config file exists
 	if _, err := os.Stat(a.configPath); os.IsNotExist(err) {
+		slog.Info("Config file does not exist, treating as first start", "configPath", a.configPath)
 		return true
 	}
 
-	// Check if config has any configured servers
-	if a.config == nil {
+	// If config file exists, try to load it to check if it has meaningful content
+	cfg, err := config.Load(a.configPath)
+	if err != nil {
+		slog.Info("Config file exists but cannot be loaded, treating as first start", "error", err)
 		return true
 	}
 
+	// Check if config has any configured servers with actual host values
+	hasValidServers := false
+	for _, server := range cfg.Servers {
+		if server.Host != "" {
+			hasValidServers = true
+			break
+		}
+	}
+
+	if !hasValidServers {
+		slog.Info("Config file exists but has no valid servers, treating as first start")
+		return true
+	}
+
+	slog.Info("Config file exists with valid servers, not first start")
 	return false
+}
+
+// isFirstStart returns whether this is the first time the application is being run
+func (a *App) isFirstStart() bool {
+	return a.firstStart
 }
 
 // SetupWizardComplete saves the configuration from the setup wizard
@@ -516,6 +545,9 @@ func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 
 	// Create new config based on wizard data
 	cfg := config.GetDefaultConfig()
+	
+	// Ensure version is set
+	cfg.Version = config.CurrentConfigVersion
 
 	// Set servers from wizard
 	cfg.Servers = make([]config.ServerConfig, len(wizardData.Servers))
@@ -538,12 +570,6 @@ func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 		cfg.OutputDir = wizardData.OutputDirectory
 	}
 
-	// Set watch directory if provided
-	if wizardData.WatchDirectory != "" {
-		cfg.Watcher.WatchDirectory = wizardData.WatchDirectory
-		cfg.Watcher.Enabled = true
-	}
-
 	// Set the par2 path to the OS-specific location
 	cfg.Par2.Par2Path = a.appPaths.Par2
 
@@ -554,6 +580,9 @@ func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 	if err := a.SaveConfig(&cfg); err != nil {
 		return fmt.Errorf("failed to save wizard configuration: %w", err)
 	}
+
+	// Mark as no longer first start since setup is complete
+	a.firstStart = false
 
 	slog.Info("Setup wizard completed successfully")
 	return nil

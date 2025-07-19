@@ -32,10 +32,16 @@ function parseSize(val: number | undefined): { value: number; unit: string } {
 	if (!val || typeof val !== "number" || Number.isNaN(val)) {
 		return { value: 100, unit: "MB" };
 	}
+	
 	if (val >= 1073741824 && val % 1073741824 === 0) {
 		return { value: val / 1073741824, unit: "GB" };
 	}
-	return { value: Math.round(val / 1048576), unit: "MB" };
+
+	if (val >= 1048576 && val % 1048576 === 0) {
+		return { value: val / 1048576, unit: "MB" };
+	}
+
+	return { value: val / 1024, unit: "KB" };	;	
 }
 
 // Initialize with current value
@@ -68,6 +74,7 @@ $effect(() => {
 const sizeUnitOptions = $derived([
 	{ value: "MB", name: "MB" },
 	{ value: "GB", name: "GB" },
+	{ value: "KB", name: "KB" },
 ]);
 
 const dynamicMaxValue = $derived(
@@ -82,23 +89,15 @@ const byteDisplay = $derived(
 	showBytes ? `(${value.toLocaleString()} bytes)` : "",
 );
 
-// Functions
-function bytesToUnit(bytes: number, unit: string): number {
-	if (unit === "GB") {
-		return Math.round((bytes / 1024 / 1024 / 1024) * 100) / 100;
-	}
-	if (unit === "MB") {
-		return Math.round(bytes / 1024 / 1024);
-	}
-	return bytes;
-}
-
 function unitToBytes(val: number, unit: string): number {
 	if (unit === "GB") {
 		return val * 1024 * 1024 * 1024;
 	}
 	if (unit === "MB") {
 		return val * 1024 * 1024;
+	}
+	if (unit === "KB") {
+		return val * 1024;
 	}
 	return val;
 }
@@ -159,7 +158,7 @@ function setPreset(presetValue: number, presetUnit: string) {
 					class="btn btn-xs btn-outline hover:btn-primary transition-colors"
 					onclick={() => setPreset(preset.value, preset.unit)}
 				>
-					{preset.label}
+					{preset.value}{preset.unit}
 				</button>
 			{/each}
 		</div>

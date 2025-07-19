@@ -1,318 +1,48 @@
 <script lang="ts">
-import apiClient from "$lib/api/client";
-import { t } from "$lib/i18n";
-import { toastStore } from "$lib/stores/toast";
+import NntpServerManager from "$lib/components/NntpServerManager.svelte";
 import { backend } from "$lib/wailsjs/go/models";
-import { Check, Loader2, Plus, Trash2 } from "lucide-svelte";
-
-interface ValidationState {
-	status: "pending" | "validating" | "valid" | "invalid" | "incomplete";
-	error: string;
-}
 
 interface Props {
 	servers?: backend.ServerData[];
 	onupdate?: (data: { servers: backend.ServerData[] }) => void;
-	onvalidationchange?: (data: { hasValidServers: boolean }) => void;
+	onvalidationchange: (data: { hasValidServers: boolean }) => void;
 }
 
 let { servers = $bindable([]), onupdate, onvalidationchange }: Props = $props();
 
-// Track validation state for each server
-let validationStates = $state<Record<number, ValidationState>>({});
-
-function addServer(): void {
-	const serverIndex = servers.length;
-	const newServer = new backend.ServerData();
-	servers = [...servers, newServer];
-	validationStates = {
-		...validationStates,
-		[serverIndex]: { status: "pending", error: "" },
-	};
-	updateServers();
-}
-
-function removeServer(index: number): void {
-	servers = servers.filter((_, i) => i !== index);
-	// Rebuild validation states with new indices
-	const newValidationStates: Record<number, ValidationState> = {};
-	let newIndex = 0;
-	for (let i = 0; i < servers.length + 1; i++) {
-		if (i === index || !validationStates[i]) {
-			continue;
-		}
-		newValidationStates[newIndex] = validationStates[i];
-		newIndex++;
-	}
-	validationStates = newValidationStates;
-	updateServers();
-}
-
-function updateServers(): void {
+function handleServerUpdate(updatedServers: any[]) {
+	// Convert from our generic server format to backend.ServerData
+	servers = updatedServers.map(server => {
+		const serverData = new backend.ServerData();
+		serverData.host = server.host;
+		serverData.port = server.port;
+		serverData.username = server.username || "";
+		serverData.password = server.password || "";
+		serverData.maxConnections = server.max_connections || 10;
+		serverData.ssl = server.ssl || false;
+		return serverData;
+	});
+	
 	onupdate?.({ servers });
 }
 
-function onServerFieldChange(index: number): void {
-	// Clear validation state when server data changes
-	const currentState = validationStates[index];
-	if (currentState && currentState.status !== "pending") {
-		validationStates = {
-			...validationStates,
-			[index]: { status: "pending", error: "" },
-		};
-	}
-	updateServers();
-}
-
-function getServerValidationState(index: number): ValidationState {
-	const state = validationStates[index];
-	if (!state) {
-		return { status: "pending", error: "" };
-	}
-	return state;
-}
-
-function isServerComplete(index: number): boolean {
-	const validationState = getServerValidationState(index);
-	return validationState.status === "valid";
-}
-
-// Check if any servers are valid and emit validation state
-function checkValidationState(): boolean {
-	const hasValid = servers.some((_, index) => isServerComplete(index));
-	onvalidationchange?.({ hasValidServers: hasValid });
-	return hasValid;
-}
-
-async function validateServer(index: number): Promise<void> {
-	const server = servers[index];
-	if (!server) {
-		return;
-	}
-
-	// Basic validation first
-	if (!server.host || !server.port) {
-		validationStates = {
-			...validationStates,
-			[index]: { status: "incomplete", error: "Host and port are required" },
-		};
-		return;
-	}
-
-	validationStates = {
-		...validationStates,
-		[index]: { status: "validating", error: "" },
-	};
-
-	try {
-		const result = await apiClient.validateNNTPServer({
-			host: server.host,
-			port: server.port,
-			username: server.username,
-			password: server.password,
-			ssl: server.ssl,
-			maxConnections: server.maxConnections,
-		});
-
-		if (result.valid) {
-			validationStates = {
-				...validationStates,
-				[index]: { status: "valid", error: "" },
-			};
-			toastStore.success($t("setup.servers.valid"));
-			checkValidationState();
-			return;
-		}
-		console.log("Setting server", index, "as invalid:", result.error);
-		validationStates = {
-			...validationStates,
-			[index]: { status: "invalid", error: result.error },
-		};
-		toastStore.error($t("setup.servers.invalid"), String(result.error));
-	} catch (error) {
-		const errorMessage = error instanceof Error ? error.message : String(error);
-		validationStates = {
-			...validationStates,
-			[index]: {
-				status: "invalid",
-				error: `Validation failed: ${errorMessage}`,
-			},
-		};
-		toastStore.error($t("setup.servers.invalid"), String(errorMessage));
-		console.error("Server validation error:", errorMessage);
-		checkValidationState();
-	}
-}
-
-// Add default server if none exist
-$effect(() => {
-	if (servers.length === 0) {
-		addServer();
-	}
-});
+// Convert servers to the format expected by NntpServerManager
+let managedServers = $derived(servers.map(server => ({
+	host: server.host,
+	port: server.port,
+	username: server.username,
+	password: server.password,
+	max_connections: server.maxConnections || 10,
+	ssl: server.ssl,
+	max_connection_idle_time_in_seconds: 300,
+	max_connection_ttl_in_seconds: 3600,
+	insecure_ssl: false, // Default to false, can be overridden in UI
+})));
 </script>
 
-<div class="space-y-6">
-	<div>
-		<h3 class="text-lg font-semibold text-base-content mb-2">
-			{$t("setup.servers.title")}
-		</h3>
-		<p class="text-base-content/70 mb-4">
-			{$t("setup.servers.description")}
-		</p>
-	</div>
-
-	<div class="space-y-4">
-		{#each servers as server, index}
-			{@const validationState = getServerValidationState(index)}
-			<div class="card bg-base-100 shadow-lg">
-				<div class="card-body p-4">
-					<div class="flex justify-between items-start mb-4">
-						<div class="flex items-center gap-2">
-							<h4 class="font-medium text-base-content">
-								{$t("setup.servers.server")} {index + 1}
-							</h4>
-							{#if validationState.status === "validating"}
-								<div class="badge badge-primary gap-1">
-									<Loader2 class="w-3 h-3 animate-spin" />
-									{$t("setup.servers.validating")}
-								</div>
-							{:else if validationState.status === "valid"}
-								<div class="badge badge-success gap-1">
-									<Check class="w-3 h-3" />
-									{$t("setup.servers.valid")}
-								</div>
-							{:else if validationState.status === "invalid"}
-								<div class="badge badge-error">{$t("setup.servers.invalid")}</div>
-							{:else}
-								<div class="badge badge-error">{$t("setup.servers.incomplete")}</div>
-							{/if}
-						</div>
-						<div class="flex items-center gap-2">
-							{#if validationState.status !== "validating"}
-								<button
-									class="btn btn-primary btn-outline btn-sm"
-									onclick={() => validateServer(index)}
-								>
-									{$t("setup.servers.testConnection")}
-								</button>
-							{/if}
-							{#if servers.length > 1}
-								<button
-									class="btn btn-error btn-outline btn-sm"
-									onclick={() => removeServer(index)}
-								>
-									<Trash2 class="w-4 h-4" />
-								</button>
-							{/if}
-						</div>
-					</div>
-				
-				{#if validationState.error}
-					<div class="alert alert-error mb-4">
-						<p class="text-sm">
-							{validationState.error}
-						</p>
-					</div>
-				{/if}
-
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-					<div>
-						<label for="host-{index}" class="label">
-							<span class="label-text">{$t("setup.servers.host")} *</span>
-						</label>
-						<input
-							id="host-{index}"
-							class="input input-bordered w-full"
-							bind:value={server.host}
-							placeholder="news.example.com"
-							required
-							oninput={() => onServerFieldChange(index)}
-						/>
-					</div>
-
-					<div>
-						<label for="port-{index}" class="label">
-							<span class="label-text">{$t("setup.servers.port")} *</span>
-						</label>
-						<input
-							id="port-{index}"
-							class="input input-bordered w-full"
-							type="number"
-							bind:value={server.port}
-							min="1"
-							max="65535"
-							required
-							oninput={() => onServerFieldChange(index)}
-						/>
-					</div>
-
-					<div>
-						<label for="username-{index}" class="label">
-							<span class="label-text">{$t("setup.servers.username")}</span>
-						</label>
-						<input
-							id="username-{index}"
-							class="input input-bordered w-full"
-							bind:value={server.username}
-							oninput={() => onServerFieldChange(index)}
-						/>
-					</div>
-
-					<div>
-						<label for="password-{index}" class="label">
-							<span class="label-text">{$t("setup.servers.password")}</span>
-						</label>
-						<input
-							id="password-{index}"
-							class="input input-bordered w-full"
-							type="password"
-							bind:value={server.password}
-							oninput={() => onServerFieldChange(index)}
-						/>
-					</div>
-
-					<div>
-						<label for="maxConnections-{index}" class="label">
-							<span class="label-text">{$t("setup.servers.maxConnections")}</span>
-						</label>
-						<input
-							id="maxConnections-{index}"
-							class="input input-bordered w-full"
-							type="number"
-							bind:value={server.maxConnections}
-							min="1"
-							max="50"
-							oninput={() => onServerFieldChange(index)}
-						/>
-					</div>
-
-					<div class="flex items-center pt-6">
-						<input
-							type="checkbox"
-							class="checkbox mr-2"
-							bind:checked={server.ssl}
-							onchange={() => onServerFieldChange(index)}
-						/>
-						<label for="ssl-{index}" class="label-text cursor-pointer">
-							{$t("setup.servers.ssl")}
-						</label>
-					</div>
-				</div>
-				</div>
-			</div>
-		{/each}
-	</div>
-
-	<button
-		class="btn btn-outline w-full"
-		onclick={addServer}
-	>
-		<Plus class="w-4 h-4 mr-2" />
-		{$t("setup.servers.addServer")}
-	</button>
-
-	<div class="text-sm text-base-content/70">
-		<p>* {$t("setup.servers.requiredFields")}</p>
-	</div>
-</div>
+<NntpServerManager
+	servers={managedServers}
+	onupdate={handleServerUpdate}
+	onvalidationchange={onvalidationchange}
+	variant="setup"
+/>

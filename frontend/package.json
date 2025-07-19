@@ -29,6 +29,6 @@
 	},
 	"dependencies": {
 		"lucide-svelte": "^0.525.0",
-		"sveltekit-i18n": "^2.4.2"
+		"svelte-i18n": "^4.0.1"
 	}
 }

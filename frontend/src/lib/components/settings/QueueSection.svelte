@@ -3,7 +3,7 @@ import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import type { config as configType } from "$lib/wailsjs/go/models";
-import { Quote, Save } from "lucide-svelte";
+import { Quote, Save, Trash2 } from "lucide-svelte";
 
 interface Props {
 	config: configType.ConfigData;
@@ -16,6 +16,8 @@ let databaseType = $state(config.queue?.database_type || "sqlite");
 let databasePath = $state(config.queue?.database_path || "./postie_queue.db");
 let maxConcurrentUploads = $state(config.queue?.max_concurrent_uploads || 3);
 let saving = $state(false);
+let showClearModal = $state(false);
+let clearing = $state(false);
 
 // Derived state
 let canSave = $derived(
@@ -88,6 +90,28 @@ async function saveQueueSettings() {
 		toastStore.error($t("common.messages.error_saving"), String(error));
 	} finally {
 		saving = false;
+	}
+}
+
+async function clearQueue() {
+	if (!clearing) {
+		try {
+			clearing = true;
+			await apiClient.clearQueue();
+			toastStore.success(
+				$t("common.messages.queue_cleared"),
+				$t("common.messages.queue_cleared_description")
+			);
+		} catch (error) {
+			console.error("Failed to clear queue:", error);
+			toastStore.error(
+				$t("common.messages.failed_to_clear_queue"),
+				String(error)
+			);
+		} finally {
+			clearing = false;
+			showClearModal = false;
+		}
 	}
 }
 </script>
@@ -171,8 +195,18 @@ async function saveQueueSettings() {
       </span>
     </div>
 
-    <!-- Save Button -->
-    <div class="pt-4 border-t border-base-300">
+    <!-- Action Buttons -->
+    <div class="pt-4 border-t border-base-300 flex justify-between items-center">
+      <button
+        type="button"
+        class="btn btn-error btn-outline"
+        onclick={() => showClearModal = true}
+        disabled={clearing}
+      >
+        <Trash2 class="w-4 h-4" />
+        {$t('dashboard.header.clear_completed')}
+      </button>
+      
       <button
         type="button"
         class="btn btn-success"
@@ -185,3 +219,36 @@ async function saveQueueSettings() {
     </div>
   </div>
 </div>
+
+<!-- Clear Queue Confirmation Modal -->
+{#if showClearModal}
+  <div class="modal modal-open">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg mb-4">
+        {$t('dashboard.header.clear_completed')}
+      </h3>
+      <p class="py-4">
+        Are you sure you want to clear all completed items from the queue? This action cannot be undone.
+      </p>
+      <div class="modal-action">
+        <button
+          type="button"
+          class="btn btn-ghost"
+          onclick={() => showClearModal = false}
+          disabled={clearing}
+        >
+          {$t('common.common.cancel')}
+        </button>
+        <button
+          type="button"
+          class="btn btn-error"
+          onclick={clearQueue}
+          disabled={clearing}
+        >
+          <Trash2 class="w-4 h-4" />
+          {clearing ? $t('common.common.clearing') : $t('common.common.clear')}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}

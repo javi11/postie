@@ -20,11 +20,18 @@ let queueStats: backend.QueueStats = {
 	error: 0,
 };
 
+let intervalId: ReturnType<typeof setInterval> | undefined;
+
 onMount(async () => {
 	// Listen for queue updates
 	await apiClient.on("queue-updated", () => {
 		loadQueueStats();
 	});
+
+  // Set up polling to refresh stats every 10 seconds
+	intervalId = setInterval(() => {
+		loadQueueStats();
+	}, 10000);
 
 	// Load initial stats
 	loadQueueStats();
@@ -33,6 +40,11 @@ onMount(async () => {
 onDestroy(async () => {
 	// Clean up event listener
 	await apiClient.off("queue-updated");
+
+  // Clear the interval to stop polling
+	if (intervalId) {
+		clearInterval(intervalId);
+	}
 });
 
 async function loadQueueStats() {

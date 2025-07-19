@@ -37,11 +37,18 @@ $: if (queueItems.length > 0 && currentPage > totalPages) {
 	currentPage = 1;
 }
 
+let intervalId: ReturnType<typeof setInterval> | undefined;
+
 onMount(() => {
 	// Listen for queue updates
 	apiClient.on("queue-updated", () => {
 		loadQueue();
 	});
+
+  // Set up periodic refresh for queue
+	intervalId = setInterval(() => {
+		loadQueue();
+	}, 5000);
 
 	// Load initial queue
 	loadQueue();
@@ -50,6 +57,9 @@ onMount(() => {
 onDestroy(() => {
 	// Clean up event listener
 	apiClient.off("queue-updated");
+  if (intervalId) {
+    clearInterval(intervalId);
+  }
 });
 
 async function loadQueue() {

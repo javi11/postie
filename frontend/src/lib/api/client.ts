@@ -141,7 +141,7 @@ export class UnifiedClient {
 
 		if (this._environment === "wails") {
 			const client = await getWailsClient();
-			return client.App.GetConfig() as unknown as Promise<config.ConfigData>;
+			return client.App.GetConfig()
 		}
 
 		if (this._environment === "web") {
@@ -530,6 +530,7 @@ export class UnifiedClient {
 	async setupWizardComplete(
 		wizardData: backend.SetupWizardData,
 	): Promise<void> {
+		console.log("Completing setup wizard with data:", wizardData);
 		await this.initialize();
 
 		if (this._environment === "wails") {

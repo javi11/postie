@@ -77,7 +77,8 @@ It supports configuration via a YAML file and can process multiple files in a di
 			}
 		}
 
-		return poster.Post(ctx, files, dirPath, outputDir)
+		_, err = poster.Post(ctx, files, dirPath, outputDir)
+		return err
 	},
 }
 

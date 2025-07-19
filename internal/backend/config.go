@@ -52,6 +52,9 @@ func (a *App) SaveConfig(configData *config.ConfigData) error {
 		a.postie = nil
 	}
 
+	// Ensure version is set to current version when saving
+	configData.Version = config.CurrentConfigVersion
+
 	// Validate server connections before saving
 	if err := a.validateServerConnections(configData); err != nil {
 		return fmt.Errorf("server validation failed: %w", err)

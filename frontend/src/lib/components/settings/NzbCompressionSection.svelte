@@ -29,16 +29,16 @@ let saving = $state(false);
 // Dynamic compression types based on translations
 let compressionTypes = $derived([
 	{
-		value: "none",
-		name: $t("settings.nzb_compression.compression_types.none"),
-	},
-	{
 		value: "zstd",
 		name: $t("settings.nzb_compression.compression_types.zstd"),
 	},
 	{
 		value: "brotli",
 		name: $t("settings.nzb_compression.compression_types.brotli"),
+	},
+	{
+		value: "zip",
+		name: $t("settings.nzb_compression.compression_types.zip"),
 	},
 ]);
 
@@ -85,6 +85,8 @@ function getCompressionLimits(type: string) {
 			return { min: 1, max: 22 };
 		case "brotli":
 			return { min: 0, max: 11 };
+		case "zip":
+			return { min: 0, max: 9 };
 		default:
 			return { min: 0, max: 0 };
 	}
@@ -96,6 +98,8 @@ function getDefaultLevel(type: string) {
 			return 3;
 		case "brotli":
 			return 4;
+		case "zip":
+			return 6;
 		default:
 			return 0;
 	}
@@ -216,7 +220,7 @@ $effect(() => {
             />
             <div class="label">
               <span class="label-text-alt">
-                {$t('settings.nzb_compression.compression_level_description', { default:{ min: compressionLimits.min, max: compressionLimits.max } })}
+                {$t('settings.nzb_compression.compression_level_description', { values:{ min: compressionLimits.min, max: compressionLimits.max } })}
               </span>
             </div>
           </div>
@@ -233,6 +237,12 @@ $effect(() => {
         <div class="alert alert-success">
           <span class="text-sm">
             <strong>{$t('settings.nzb_compression.info.brotli_title')}</strong> {$t('settings.nzb_compression.info.brotli_description')}
+          </span>
+        </div>
+      {:else if compressionType === "zip"}
+        <div class="alert alert-warning">
+          <span class="text-sm">
+            <strong>{$t('settings.nzb_compression.info.zip_title')}</strong> {$t('settings.nzb_compression.info.zip_description')}
           </span>
         </div>
       {/if}

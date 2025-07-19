@@ -20,6 +20,8 @@ const (
 	defaultVolumeSize     = 153600000 // 150MB
 	defaultRedundancy     = "1n*1.2"  //https://github.com/animetosho/ParPar/blob/6feee4dd94bb18480f0bf08cd9d17ffc7e671b69/help-full.txt#L75
 	defaultMaxInputSlices = 4000
+	// CurrentConfigVersion represents the current configuration version
+	CurrentConfigVersion = 1
 )
 
 // Duration wraps time.Duration to provide custom JSON and YAML marshalling
@@ -42,7 +44,7 @@ func (d *Duration) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	*d = Duration(duration)
+	*d = Duration(duration.String())
 	return nil
 }
 
@@ -63,7 +65,7 @@ func (d *Duration) UnmarshalYAML(value *yaml.Node) error {
 		return err
 	}
 
-	*d = Duration(duration)
+	*d = Duration(duration.String())
 	return nil
 }
 
@@ -82,6 +84,8 @@ const (
 	CompressionTypeZstd CompressionType = "zstd"
 	// Brotli compression
 	CompressionTypeBrotli CompressionType = "brotli"
+	// ZIP compression
+	CompressionTypeZip CompressionType = "zip"
 )
 
 type GroupPolicy string
@@ -144,6 +148,7 @@ type ConnectionPoolConfig struct {
 
 // config is the internal implementation of the Config interface
 type ConfigData struct {
+	Version        int                  `yaml:"version" json:"version"`
 	Servers        []ServerConfig       `yaml:"servers" json:"servers"`
 	ConnectionPool ConnectionPoolConfig `yaml:"connection_pool" json:"connection_pool"`
 	Posting        PostingConfig        `yaml:"posting" json:"posting"`
@@ -265,7 +270,7 @@ type QueueConfig struct {
 type PostUploadScriptConfig struct {
 	// Whether to enable the post upload script execution. Default value is `false`.
 	Enabled bool `yaml:"enabled" json:"enabled"`
-	// Command to execute after NZB generation. Use {{nzb_path}} placeholder for the NZB file path
+	// Command to execute after NZB generation. Use {nzb_path} placeholder for the NZB file path
 	Command string `yaml:"command" json:"command"`
 	// Timeout for script execution. Default value is `30s`.
 	Timeout Duration `yaml:"timeout" json:"timeout"`
@@ -297,6 +302,16 @@ type ProgressStatus struct {
 	ElapsedTime         float64 `json:"elapsedTime"`
 }
 
+// IsConfigVersionOutdated checks if the given config version is outdated
+func IsConfigVersionOutdated(configVersion int) bool {
+	// If no version is specified (0), consider it outdated
+	if configVersion == 0 {
+		return true
+	}
+	// If version is less than current, it's outdated
+	return configVersion < CurrentConfigVersion
+}
+
 // Load loads configuration from a file
 func Load(path string) (*ConfigData, error) {
 	enabled := true
@@ -309,6 +324,21 @@ func Load(path string) (*ConfigData, error) {
 	var cfg ConfigData
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("error parsing config file: %w", err)
+	}
+
+	// Check if config version is outdated
+	if IsConfigVersionOutdated(cfg.Version) {
+		slog.Info("Config version is outdated, removing config file",
+			"currentVersion", cfg.Version,
+			"requiredVersion", CurrentConfigVersion,
+			"configPath", path)
+		
+		// Remove the outdated config file
+		if err := os.Remove(path); err != nil {
+			slog.Warn("Failed to remove outdated config file", "error", err)
+		}
+		
+		return nil, fmt.Errorf("config version %d is outdated (current version: %d), config file removed", cfg.Version, CurrentConfigVersion)
 	}
 
 	// Set default values
@@ -375,6 +405,11 @@ func Load(path string) (*ConfigData, error) {
 		cfg.Par2.MaxInputSlices = defaultMaxInputSlices
 	}
 
+	// Set version if not present
+	if cfg.Version == 0 {
+		cfg.Version = CurrentConfigVersion
+	}
+
 	// Set default values for NZB compression
 	if cfg.NzbCompression.Type == "" {
 		cfg.NzbCompression.Type = CompressionTypeNone
@@ -387,6 +422,8 @@ func Load(path string) (*ConfigData, error) {
 			cfg.NzbCompression.Level = 3 // Default zstd level
 		case CompressionTypeBrotli:
 			cfg.NzbCompression.Level = 4 // Default brotli level
+		case CompressionTypeZip:
+			cfg.NzbCompression.Level = 6 // Default zip level
 		}
 	}
 
@@ -456,6 +493,11 @@ func (c *ConfigData) validate() error {
 			if c.NzbCompression.Level < 0 || c.NzbCompression.Level > 11 {
 				return fmt.Errorf("invalid brotli compression level: %d (must be between 0-11)", c.NzbCompression.Level)
 			}
+		case CompressionTypeZip:
+			// zip levels are between 0-9
+			if c.NzbCompression.Level < 0 || c.NzbCompression.Level > 9 {
+				return fmt.Errorf("invalid zip compression level: %d (must be between 0-9)", c.NzbCompression.Level)
+			}
 		case CompressionTypeNone:
 			// Do nothing
 		default:
@@ -517,7 +559,7 @@ func (c *ConfigData) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
 	}
 
 	if c.ConnectionPool.HealthCheckInterval == "" {
-		c.ConnectionPool.HealthCheckInterval = Duration(time.Minute)
+		c.ConnectionPool.HealthCheckInterval = Duration("1m")
 	}
 
 	if c.ConnectionPool.MinConnections <= 0 {
@@ -620,16 +662,17 @@ func GetDefaultConfig() ConfigData {
 	enabled := true
 	disabled := false
 	return ConfigData{
+		Version: CurrentConfigVersion,
 		Servers: []ServerConfig{},
 		ConnectionPool: ConnectionPoolConfig{
 			MinConnections:                      5,
-			HealthCheckInterval:                 Duration(time.Minute),
+			HealthCheckInterval:                 Duration("1m"),
 			SkipProvidersVerificationOnCreation: false,
 		},
 		Posting: PostingConfig{
 			WaitForPar2:        &enabled,
 			MaxRetries:         3,
-			RetryDelay:         Duration(5 * time.Second),
+			RetryDelay:         Duration("5s"),
 			ArticleSizeInBytes: 750000, // 750KB
 			Groups:             []string{"alt.binaries.test"},
 			ThrottleRate:       1048576, // 1MB/s
@@ -645,7 +688,7 @@ func GetDefaultConfig() ConfigData {
 		},
 		PostCheck: PostCheck{
 			Enabled:    &enabled,
-			RetryDelay: Duration(10 * time.Second),
+			RetryDelay: Duration("10s"),
 			MaxRePost:  1,
 		},
 		Par2: Par2Config{

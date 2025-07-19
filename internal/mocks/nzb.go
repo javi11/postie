@@ -65,11 +65,12 @@ func (mr *MockNZBGeneratorMockRecorder) AddFileHash(filename, hash any) *gomock.
 }
 
 // Generate mocks base method.
-func (m *MockNZBGenerator) Generate(outputPath string) error {
+func (m *MockNZBGenerator) Generate(outputPath string) (string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Generate", outputPath)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Generate indicates an expected call of Generate.

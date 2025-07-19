@@ -1,3 +1,6 @@
 {
-    "biome.lsp.bin": "frontend/node_modules/.bin/biome"
+    "i18n-ally.localesPaths": [
+        "./frontend/src/lib/locales"
+    ],
+    "i18n-ally.pathMatcher": "{locale}/{namespaces}.json"
 }

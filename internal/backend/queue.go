@@ -281,16 +281,6 @@ func (a *App) DownloadNZB(id string) error {
 	savePath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
 		Title:           "Save NZB File",
 		DefaultFilename: fileName,
-		Filters: []runtime.FileFilter{
-			{
-				DisplayName: "NZB Files (*.nzb)",
-				Pattern:     "*.nzb",
-			},
-			{
-				DisplayName: "All Files (*.*)",
-				Pattern:     "*.*",
-			},
-		},
 	})
 
 	if err != nil {

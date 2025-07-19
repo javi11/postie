@@ -1,0 +1,74 @@
+{
+	"setup": {
+		"title": "Bienvenue dans Postie",
+		"description": "Configurons vos serveurs NNTP et répertoires pour commencer.",
+		"wizard_title": "Configuration de Postie",
+		"wizard_subtitle": "Configurons tout ensemble avec Postie",
+		"steps": {
+			"welcome": "Bienvenue",
+			"servers": "Serveurs NNTP",
+			"directories": "Répertoires"
+		},
+		"welcome": {
+			"title": "Bienvenue dans Postie !",
+			"subtitle": "Votre gestionnaire de téléchargement NNTP fiable. Configurons tout en quelques étapes simples.",
+			"preferences_title": "Choisissez Vos Préférences",
+			"language_title": "Langue",
+			"language_description": "Sélectionnez votre langue préférée",
+			"theme_title": "Thème",
+			"theme_description": "Choisissez le mode clair ou sombre",
+			"features": {
+				"upload": {
+					"title": "Téléchargements Faciles",
+					"description": "Glissez-déposez des fichiers ou parcourez pour télécharger vers vos serveurs NNTP"
+				},
+				"reliable": {
+					"title": "Fiable et Sécurisé",
+					"description": "Vérification intégrée, support PAR2 et récupération d'erreurs"
+				},
+				"fast": {
+					"title": "Haute Performance",
+					"description": "Téléchargements multi-threadés avec mise en commun de connexions"
+				}
+			},
+			"gettingStarted": {
+				"title": "Ce que nous allons configurer :",
+				"step1": "Configurer vos connexions de serveur NNTP",
+				"step2": "Définir vos répertoires de sortie",
+				"step3": "Commencer à télécharger vos fichiers !"
+			}
+		},
+		"directories": {
+			"title": "Configurer les Répertoires",
+			"description": "Définissez où vos fichiers seront sauvegardés et optionnellement un répertoire à surveiller pour le traitement automatique.",
+			"outputDirectory": "Répertoire de Sortie",
+			"outputDescription": "Où les fichiers NZB générés et le contenu téléchargé seront sauvegardés.",
+			"outputPath": "Chemin de Sortie",
+			"watchDirectory": "Répertoire de Surveillance",
+			"watchDescription": "Optionnel : Répertoire à surveiller pour de nouveaux fichiers à télécharger automatiquement.",
+			"watchPath": "Chemin de Surveillance",
+			"browse": "Parcourir",
+			"optional": "Optionnel",
+			"requiredFields": "Champs requis"
+		},
+		"summary": {
+			"title": "Réviser la Configuration",
+			"description": "Révisez vos paramètres avant de finaliser la configuration.",
+			"servers": "Serveurs NNTP",
+			"directories": "Répertoires",
+			"outputDirectory": "Répertoire de Sortie",
+			"watchDirectory": "Répertoire de Surveillance",
+			"connections": "connexions",
+			"notConfigured": "Non configuré",
+			"readyMessage": "Votre configuration semble correcte ! Cliquez sur Terminer pour sauvegarder et commencer à utiliser Postie."
+		},
+		"buttons": {
+			"previous": "Précédent",
+			"next": "Suivant",
+			"finish": "Terminer la Configuration"
+		},
+		"messages": {
+			"setupRequired": "La configuration est requise pour utiliser Postie. Veuillez compléter l'assistant de configuration."
+		}
+	}
+}

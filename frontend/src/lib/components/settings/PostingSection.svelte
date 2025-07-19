@@ -1,7 +1,6 @@
 <script lang="ts">
 // Imports
 import apiClient from "$lib/api/client";
-import ByteSizeInput from "$lib/components/inputs/ByteSizeInput.svelte";
 import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 import ThrottleRateInput from "$lib/components/inputs/ThrottleRateInput.svelte";
 import { t } from "$lib/i18n";
@@ -9,6 +8,7 @@ import { advancedMode } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import { config as configType } from "$lib/wailsjs/go/models";
 import { CloudUpload, Plus, Save, Trash2 } from "lucide-svelte";
+  import SizeInput from "$lib/components/inputs/SizeInput.svelte";
 
 // Types
 interface ComponentProps {
@@ -20,7 +20,6 @@ const { config }: ComponentProps = $props();
 
 // State
 let saving = $state(false);
-
 // Reactive local state for form inputs (following best practices)
 let maxRetries = $state(config.posting.max_retries || 3);
 let retryDelay = $state(config.posting.retry_delay || "5s");
@@ -125,9 +124,9 @@ const retryDelayPresets = [
 ];
 
 const articleSizePresets = [
-	{ label: "500KB", value: 500000 },
-	{ label: "750KB", value: 750000 },
-	{ label: "1MB", value: 1000000 },
+	{ label: "500KB", value: 500, unit: "KB" },
+	{ label: "750KB", value: 750, unit: "KB" },
+	{ label: "1MB", value: 1, unit: "MB" },
 ];
 
 const throttleRatePresets = [
@@ -167,7 +166,6 @@ async function savePostingSettings() {
 
 		// Get current config to avoid conflicts
 		const currentConfig = await apiClient.getConfig();
-
 		// Update posting section with type conversion
 		currentConfig.posting = {
 			...config.posting,
@@ -224,7 +222,6 @@ async function savePostingSettings() {
           {$t('settings.posting.max_retries_description')}
         </p>
       </div>
-
       <!-- Retry Delay -->
       <DurationInput
         bind:value={retryDelay}
@@ -235,7 +232,7 @@ async function savePostingSettings() {
       />
 
       <!-- Article Size -->
-      <ByteSizeInput
+      <SizeInput
         bind:value={articleSizeInBytes}
         label={$t('settings.posting.article_size')}
         description={$t('settings.posting.article_size_description')}

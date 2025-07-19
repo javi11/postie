@@ -33,7 +33,8 @@ function parseValue(val: string | undefined): { number: number; unit: string } {
 	if (!val || typeof val !== "string" || val.trim() === "") {
 		return { number: 5, unit: "s" };
 	}
-	const match = val.match(/^(\d+)([smh])$/);
+	// Match patterns like "1m0s" or "1h30m" and extract the first meaningful element
+	const match = val.match(/^(\d+)([smh])/);
 	return match
 		? { number: Number.parseInt(match[1]), unit: match[2] }
 		: { number: 5, unit: "s" };
@@ -99,6 +100,10 @@ function setPreset(presetValue: number, presetUnit: string) {
 				min={minValue}
 				max={maxValue}
 				{placeholder}
+				oninput={(e) => {
+					const target = e.target as HTMLInputElement;
+					target.value = target.value.replace(/[^0-9]/g, '');
+				}}
 			/>
 		</div>
 		<div class="w-24">

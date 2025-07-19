@@ -2,6 +2,7 @@
 import { goto } from "$app/navigation";
 import apiClient from "$lib/api/client";
 import ConnectionPoolSection from "$lib/components/settings/ConnectionPoolSection.svelte";
+import FileNamingSection from "$lib/components/settings/FileNamingSection.svelte";
 import GeneralSection from "$lib/components/settings/GeneralSection.svelte";
 import NzbCompressionSection from "$lib/components/settings/NzbCompressionSection.svelte";
 import Par2Section from "$lib/components/settings/Par2Section.svelte";
@@ -49,10 +50,10 @@ async function loadConfig() {
 		loadError = false;
 		await apiClient.initialize();
 		const config = await apiClient.getConfig();
+
 		configData = config;
 		// Initialize localConfig with the loaded config
 		localConfig = JSON.parse(JSON.stringify(config));
-
 		// If no servers exist, add a default one to make it easier for the user
 		if (
 			localConfig &&
@@ -96,7 +97,7 @@ async function handleSaveConfig() {
 				toastStore.error(
 					$t("common.messages.configuration_error"),
 					$t("common.messages.server_host_required", {
-						number: i + 1,
+						values: { number: i + 1 },
 					}),
 				);
 				return;
@@ -105,7 +106,7 @@ async function handleSaveConfig() {
 				toastStore.error(
 					$t("common.messages.configuration_error"),
 					$t("common.messages.server_port_required", {
-						number: i + 1,
+						values: { number: i + 1 },
 					}),
 				);
 				return;
@@ -344,6 +345,7 @@ onDestroy(() => {
           <input type="radio" name="settings_tabs" role="tab" class="tab" aria-label="File Processing" />
           <div role="tabpanel" class="tab-content p-6">
             <div class="space-y-6">
+              <FileNamingSection config={localConfig} />
               <Par2Section config={localConfig} />
               <NzbCompressionSection config={localConfig} />
             </div>

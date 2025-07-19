@@ -90,7 +90,7 @@ function cancelUpload(jobID: string) {
               </div>
               <div>
                 <h3 class="text-lg font-semibold text-base-content">
-                  {$t("dashboard.progress.job_title", { jobId: job.jobID })}
+                  {$t("dashboard.progress.job_title", { values: { jobId: job.jobID } })}
                 </h3>
                 <p class="text-sm text-base-content/70">Active upload in progress</p>
               </div>

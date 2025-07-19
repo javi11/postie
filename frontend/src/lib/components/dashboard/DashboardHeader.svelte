@@ -3,7 +3,7 @@ import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import { uploadActions, uploadStore } from "$lib/stores/upload";
-import { AlertTriangle, Plus, Trash2, X } from "lucide-svelte";
+import { AlertTriangle, Plus, X } from "lucide-svelte";
 
 export let needsConfiguration: boolean;
 export let criticalConfigError: boolean;
@@ -40,21 +40,6 @@ async function cancelCurrentUpload() {
 	}
 }
 
-async function clearQueue() {
-	try {
-		await apiClient.clearQueue();
-		toastStore.success(
-			$t("common.messages.queue_cleared"),
-			$t("common.messages.queue_cleared_description"),
-		);
-	} catch (error) {
-		console.error("Failed to clear queue:", error);
-		toastStore.error(
-			$t("common.messages.failed_to_clear_queue"),
-			String(error),
-		);
-	}
-}
 </script>
 
 <div class="card bg-base-100/60 backdrop-blur-sm border border-base-300/60 shadow-xl animate-fade-in max-w-full">
@@ -117,14 +102,6 @@ async function clearQueue() {
             {$t("dashboard.header.add_files")}
           </button>
         {/if}
-
-        <button
-          class="btn btn-error btn-outline"
-          onclick={clearQueue}
-        >
-          <Trash2 class="w-4 h-4" />
-          {$t("dashboard.header.clear_completed")}
-        </button>
       </div>
     </div>
 
@@ -133,7 +110,7 @@ async function clearQueue() {
         <AlertTriangle class="w-5 h-5" />
         <span>
           <span class="font-semibold">{$t("dashboard.alerts.config_error")}</span>
-          {@html $t("dashboard.alerts.config_error_description", { settingsLink: `<a href="/settings" class="font-medium underline hover:no-underline transition-all">${$t("dashboard.alerts.settings_link")}</a>` })}
+          {@html $t("dashboard.alerts.config_error_description", { values: { settingsLink: `<a href="/settings" class="font-medium underline hover:no-underline transition-all">${$t("dashboard.alerts.settings_link")}</a>` } })}
         </span>
       </div>
     {:else if needsConfiguration}
@@ -141,7 +118,7 @@ async function clearQueue() {
         <AlertTriangle class="w-5 h-5" />
         <span>
           <span class="font-semibold">{$t("dashboard.alerts.config_required")}</span>
-          {@html $t("dashboard.alerts.config_required_description", { settingsLink: `<a href="/settings" class="font-medium underline hover:no-underline transition-all">${$t("dashboard.alerts.settings_link")}</a>` })}
+          {@html $t("dashboard.alerts.config_required_description", { values: { settingsLink: `<a href="/settings" class="font-medium underline hover:no-underline transition-all">${$t("dashboard.alerts.settings_link")}</a>` } })}
         </span>
       </div>
     {/if}

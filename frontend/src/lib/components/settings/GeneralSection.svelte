@@ -16,7 +16,6 @@ const { config }: Props = $props();
 
 // Reactive local state
 let outputDir = $state(config.output_dir || "./output");
-let maintainOriginalExtension = $state(config.maintain_original_extension ?? true);
 let saving = $state(false);
 
 // Derived state
@@ -25,10 +24,6 @@ let canSave = $derived(outputDir.trim() && !saving);
 // Sync local state back to config
 $effect(() => {
 	config.output_dir = outputDir;
-});
-
-$effect(() => {
-	config.maintain_original_extension = maintainOriginalExtension;
 });
 
 async function selectOutputDirectory() {
@@ -68,7 +63,6 @@ async function saveGeneralSettings() {
 
 		// Update only general settings fields
 		currentConfig.output_dir = outputDir.trim();
-		currentConfig.maintain_original_extension = maintainOriginalExtension;
 
 		await apiClient.saveConfig(currentConfig);
 
@@ -125,28 +119,6 @@ async function saveGeneralSettings() {
 						<strong>{$t('settings.general.info_title')}</strong>
 						{$t('settings.general.info_description')}
 					</span>
-				</div>
-
-				<div class="form-control">
-					<label class="label" for="maintain-extension">
-						<span class="label-text">{$t('settings.general.maintain_original_extension')}</span>
-					</label>
-					<div class="flex items-center gap-2">
-						<input
-							id="maintain-extension"
-							type="checkbox"
-							class="checkbox"
-							bind:checked={maintainOriginalExtension}
-						/>
-						<span class="text-sm">
-							{maintainOriginalExtension ? $t('settings.general.maintain_extension_enabled') : $t('settings.general.maintain_extension_disabled')}
-						</span>
-					</div>
-					<div class="label">
-						<span class="label-text-alt">
-							{$t('settings.general.maintain_original_extension_description')}
-						</span>
-					</div>
 				</div>
 			</div>
 

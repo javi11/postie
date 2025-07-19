@@ -8,13 +8,13 @@ import ServerSetupStep from "./ServerSetupStep.svelte";
 import WelcomeStep from "./WelcomeStep.svelte";
 
 interface Props {
-	oncomplete?: (data: backend.SetupWizardData) => void;
+	oncomplete: (data: backend.SetupWizardData) => void;
 }
 
 let { oncomplete }: Props = $props();
 
 let currentStep = $state(1);
-let hasValidServers = false;
+let hasValidServers = $state(false);
 
 const stepData = new backend.SetupWizardData();
 
@@ -64,14 +64,12 @@ function handleValidationChange(event: { hasValidServers: boolean }) {
 
 function handleDirectoryUpdate(event: {
 	outputDirectory: string;
-	watchDirectory: string;
 }) {
 	stepData.outputDirectory = event.outputDirectory;
-	stepData.watchDirectory = event.watchDirectory;
 }
 
 async function finishSetup() {
-	oncomplete?.(stepData);
+	oncomplete(stepData);
 }
 </script>
 
@@ -144,7 +142,6 @@ async function finishSetup() {
 					{:else if currentStep === 3}
 						<DirectorySetupStep 
 							outputDirectory={stepData.outputDirectory}
-							watchDirectory={stepData.watchDirectory}
 							onupdate={handleDirectoryUpdate}
 						/>
 					{/if}

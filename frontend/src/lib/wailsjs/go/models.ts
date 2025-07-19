@@ -533,6 +533,7 @@ export namespace config {
 	    }
 	}
 	export class ConfigData {
+	    version: number;
 	    servers: ServerConfig[];
 	    connection_pool: ConnectionPoolConfig;
 	    posting: PostingConfig;
@@ -551,6 +552,7 @@ export namespace config {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
 	        this.servers = this.convertValues(source["servers"], ServerConfig);
 	        this.connection_pool = this.convertValues(source["connection_pool"], ConnectionPoolConfig);
 	        this.posting = this.convertValues(source["posting"], PostingConfig);
