@@ -20,6 +20,8 @@ func (a *App) GetConfigPath() string {
 
 // GetConfig returns the current configuration
 func (a *App) GetConfig() (*config.ConfigData, error) {
+	defer a.recoverPanic("GetConfig")
+	
 	if a.configPath == "" {
 		return nil, fmt.Errorf("no config file specified")
 	}
@@ -45,6 +47,8 @@ func (a *App) GetConfig() (*config.ConfigData, error) {
 
 // SaveConfig saves the configuration
 func (a *App) SaveConfig(configData *config.ConfigData) error {
+	defer a.recoverPanic("SaveConfig")
+	
 	slog.Info("Saving config", "path", a.configPath, "configData", configData)
 
 	if a.postie != nil {
@@ -121,6 +125,8 @@ func (a *App) validateServerConnections(configData *config.ConfigData) error {
 
 // SelectConfigFile allows user to select a config file
 func (a *App) SelectConfigFile() (string, error) {
+	defer a.recoverPanic("SelectConfigFile")
+	
 	file, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "Select config file",
 		Filters: []runtime.FileFilter{
@@ -222,6 +228,8 @@ func (a *App) createDefaultConfig() error {
 
 // ensurePar2Executable downloads par2 executable if it doesn't exist
 func (a *App) ensurePar2Executable(ctx context.Context) {
+	defer a.recoverPanic("ensurePar2Executable")
+	
 	// Use the OS-specific par2 path
 	par2Path := a.appPaths.Par2
 

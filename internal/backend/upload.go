@@ -13,6 +13,8 @@ import (
 
 // UploadFiles uploads the selected files
 func (a *App) UploadFiles() error {
+	defer a.recoverPanic("UploadFiles")
+	
 	a.uploadingMux.Lock()
 	if a.uploading {
 		a.uploadingMux.Unlock()
@@ -223,6 +225,8 @@ func (a *App) IsUploading() bool {
 
 // CancelUpload cancels the currently running direct upload
 func (a *App) CancelUpload() error {
+	defer a.recoverPanic("CancelUpload")
+	
 	a.uploadingMux.Lock()
 	defer a.uploadingMux.Unlock()
 

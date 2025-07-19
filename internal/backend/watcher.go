@@ -12,6 +12,8 @@ import (
 )
 
 func (a *App) initializeWatcher() error {
+	defer a.recoverPanic("initializeWatcher")
+	
 	if a.config == nil {
 		return fmt.Errorf("config not loaded")
 	}
