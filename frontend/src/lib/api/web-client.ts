@@ -1,45 +1,6 @@
 // Web API client for browser environment (replaces Wails bindings)
 
-import type { ProgressTracker } from "../types";
-import type { ConfigData } from "./client";
-
-export interface AppStatus {
-	hasPostie: boolean;
-	hasConfig: boolean;
-	configPath: string;
-	uploading: boolean;
-	criticalConfigError: boolean;
-	error: string;
-	hasServers: boolean;
-	serverCount: number;
-	validServerCount: number;
-	configValid: boolean;
-	needsConfiguration: boolean;
-	isFirstStart: boolean;
-}
-
-export interface QueueItem {
-	id: string;
-	name: string;
-	size: number;
-	status: string;
-	created: string;
-	updated: string;
-	error?: string;
-}
-
-export interface ProcessorStatus {
-	hasProcessor: boolean;
-	runningJobs: number;
-	runningJobIDs: string[];
-}
-
-export interface RunningJob {
-	id: string;
-	name: string;
-	status: string;
-	progress: number;
-}
+import type { backend, config, processor } from "$lib/wailsjs/go/models";
 
 const API_BASE = "/api";
 
@@ -182,37 +143,25 @@ export class WebClient {
 	}
 
 	// App methods
-	async getStatus(): Promise<AppStatus> {
-		return this.get<AppStatus>("/status");
+	async getStatus(): Promise<backend.AppStatus> {
+		return this.get<backend.AppStatus>("/status");
 	}
 
-	async getConfig(): Promise<ConfigData> {
-		return this.get<ConfigData>("/config");
+	async getConfig(): Promise<config.ConfigData> {
+		return this.get<config.ConfigData>("/config");
 	}
 
-	async saveConfig(config: ConfigData): Promise<void> {
+	async saveConfig(config: config.ConfigData): Promise<void> {
 		return this.post<void>("/config", config);
 	}
 
 	// Queue methods
-	async getQueueItems(): Promise<QueueItem[]> {
-		return this.get<QueueItem[]>("/queue");
+	async getQueueItems(): Promise<backend.QueueItem[]> {
+		return this.get<backend.QueueItem[]>("/queue");
 	}
 
-	async getQueueStats(): Promise<{
-		total: number;
-		pending: number;
-		running: number;
-		complete: number;
-		error: number;
-	}> {
-		return this.get<{
-			total: number;
-			pending: number;
-			running: number;
-			complete: number;
-			error: number;
-		}>("/queue/stats");
+	async getQueueStats(): Promise<backend.QueueStats> {
+		return this.get<backend.QueueStats>("/queue/stats");
 	}
 
 	async retryJob(id: string): Promise<void> {
@@ -224,16 +173,16 @@ export class WebClient {
 	}
 
 	// Processor methods
-	async getProcessorStatus(): Promise<ProcessorStatus> {
-		return this.get<ProcessorStatus>("/processor/status");
+	async getProcessorStatus(): Promise<backend.ProcessorStatus> {
+		return this.get<backend.ProcessorStatus>("/processor/status");
 	}
 
-	async getRunningJobs(): Promise<RunningJob[]> {
-		return this.get<RunningJob[]>("/running-jobs");
+	async getRunningJobs(): Promise<processor.RunningJobItem[]> {
+		return this.get<processor.RunningJobItem[]>("/running-jobs");
 	}
 
-	async getProgress(): Promise<ProgressTracker> {
-		return this.get<ProgressTracker>("/progress");
+	async getProgress(): Promise<backend.ProgressTracker> {
+		return this.get<backend.ProgressTracker>("/progress");
 	}
 
 	// Logs
@@ -346,7 +295,15 @@ export class WebClient {
 	}
 
 	// Setup Wizard
-	async setupWizardComplete(wizardData: any): Promise<void> {
+	async validateNNTPServer(
+		serverData: backend.ServerData,
+	): Promise<backend.ValidationResult> {
+		return this.post<backend.ValidationResult>("/validate-server", serverData);
+	}
+
+	async setupWizardComplete(
+		wizardData: backend.SetupWizardData,
+	): Promise<void> {
 		return this.post<void>("/setup/complete", wizardData);
 	}
 }

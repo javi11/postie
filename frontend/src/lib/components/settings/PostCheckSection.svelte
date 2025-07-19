@@ -1,19 +1,10 @@
 <script lang="ts">
 import apiClient from "$lib/api/client";
+import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
-import type { ConfigData } from "$lib/types";
-import {
-	Button,
-	Card,
-	Checkbox,
-	Heading,
-	Input,
-	Label,
-	P,
-} from "flowbite-svelte";
-import { CheckCircleSolid, FloppyDiskSolid } from "flowbite-svelte-icons";
-import DurationInput from "../inputs/DurationInput.svelte";
+import type { config as configType } from "$lib/wailsjs/go/models";
+import { CheckCircle, Save } from "lucide-svelte";
 
 const presets = [
 	{ label: "5s", value: 5, unit: "s" },
@@ -22,9 +13,25 @@ const presets = [
 	{ label: "1m", value: 1, unit: "m" },
 ];
 
-export let config: ConfigData;
+interface Props {
+	config: configType.ConfigData;
+}
 
-let saving = false;
+const { config }: Props = $props();
+
+// Reactive local state
+let enabled = $state(config.post_check?.enabled ?? true);
+let delay = $state(config.post_check?.delay || "10s");
+let maxReposts = $state(config.post_check?.max_reposts || 1);
+let saving = $state(false);
+
+// Derived state
+let canSave = $derived(
+	delay.trim() && 
+	maxReposts >= 0 && 
+	maxReposts <= 10 && 
+	!saving
+);
 
 // Ensure post_check exists with defaults
 if (!config.post_check) {
@@ -35,6 +42,19 @@ if (!config.post_check) {
 	};
 }
 
+// Sync local state back to config
+$effect(() => {
+	config.post_check.enabled = enabled;
+});
+
+$effect(() => {
+	config.post_check.delay = delay;
+});
+
+$effect(() => {
+	config.post_check.max_reposts = maxReposts;
+});
+
 async function savePostCheckSettings() {
 	try {
 		saving = true;
@@ -42,11 +62,20 @@ async function savePostCheckSettings() {
 		// Get the current config from the server to avoid conflicts
 		const currentConfig = await apiClient.getConfig();
 
+		// Validation
+		if (!delay.trim()) {
+			throw new Error("Delay is required");
+		}
+		
+		if (maxReposts < 0 || maxReposts > 10) {
+			throw new Error("Max reposts must be between 0 and 10");
+		}
+
 		// Only update the post_check fields with proper type conversion
 		currentConfig.post_check = {
-			enabled: config.post_check.enabled || false,
-			delay: config.post_check.delay || "10s",
-			max_reposts: Number.parseInt(config.post_check.max_reposts) || 1,
+			enabled: enabled,
+			delay: delay.trim(),
+			max_reposts: maxReposts,
 		};
 
 		await apiClient.saveConfig(currentConfig);
@@ -64,34 +93,33 @@ async function savePostCheckSettings() {
 }
 </script>
 
-<Card class="max-w-full shadow-sm p-5">
-  <div class="space-y-6">
+<div class="card bg-base-100 shadow-xl">
+  <div class="card-body space-y-6">
     <div class="flex items-center gap-3">
-      <CheckCircleSolid class="w-5 h-5 text-orange-600 dark:text-orange-400" />
-      <Heading
-        tag="h2"
-        class="text-lg font-semibold text-gray-900 dark:text-white"
-      >
+      <CheckCircle class="w-5 h-5 text-orange-600 dark:text-orange-400" />
+      <h2 class="card-title text-lg">
         {$t('settings.post_check.title')}
-      </Heading>
+      </h2>
     </div>
 
-    <div class="space-y-4">
-      <div class="flex items-center gap-3">
-        <Checkbox bind:checked={config.post_check.enabled} />
-        <Label class="text-sm font-medium">{$t('settings.post_check.enable')}</Label>
+    <div class="form-control">
+      <label class="label cursor-pointer justify-start gap-3">
+        <input type="checkbox" class="checkbox" bind:checked={enabled} />
+        <span class="label-text">{$t('settings.post_check.enable')}</span>
+      </label>
+      <div class="label">
+        <span class="label-text-alt ml-8">
+          {$t('settings.post_check.enable_description')}
+        </span>
       </div>
-      <P class="text-sm text-gray-600 dark:text-gray-400 ml-6">
-        {$t('settings.post_check.enable_description')}
-      </P>
     </div>
 
-    {#if config.post_check.enabled}
+    {#if enabled}
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <DurationInput
             id="check-delay"
-            bind:value={config.post_check.delay}
+            bind:value={delay}
             label={$t('settings.post_check.check_delay')}
             description={$t('settings.post_check.check_delay_description')}
             placeholder="10"
@@ -101,41 +129,43 @@ async function savePostCheckSettings() {
           />
         </div>
 
-        <div>
-          <Label for="max-reposts" class="mb-2">{$t('settings.post_check.max_reposts')}</Label>
-          <Input
+        <div class="form-control">
+          <label class="label" for="max-reposts">
+            <span class="label-text">{$t('settings.post_check.max_reposts')}</span>
+          </label>
+          <input
             id="max-reposts"
             type="number"
-            bind:value={config.post_check.max_reposts}
+            class="input input-bordered"
+            bind:value={maxReposts}
             min="0"
             max="10"
           />
-          <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            {$t('settings.post_check.max_reposts_description')}
-          </P>
+          <div class="label">
+            <span class="label-text-alt">
+              {$t('settings.post_check.max_reposts_description')}
+            </span>
+          </div>
         </div>
       </div>
     {/if}
 
-    <div
-      class="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded"
-    >
-      <P class="text-sm text-yellow-800 dark:text-yellow-200">
+    <div class="alert alert-warning">
+      <span class="text-sm">
         <strong>{$t('settings.post_check.info_title')}</strong> {$t('settings.post_check.info_description')}
-      </P>
+      </span>
     </div>
 
     <!-- Save Button -->
-    <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
-      <Button
-        color="green"
+    <div class="card-actions pt-4 border-t border-base-300">
+      <button
+        class="btn btn-success"
         onclick={savePostCheckSettings}
-        disabled={saving}
-        class="cursor-pointer flex items-center gap-2"
+        disabled={!canSave}
       >
-        <FloppyDiskSolid class="w-4 h-4" />
-        {saving ? $t('settings.post_check.saving') : $t('settings.post_check.save_button')}
-      </Button>
+        <Save class="w-4 h-4" />
+        {saving ? $t('common.common.saving') : $t('settings.post_check.save_button')}
+      </button>
     </div>
   </div>
-</Card>
+</div>

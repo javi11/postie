@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -192,8 +193,8 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			errChan <- ctx.Err()
 			return
 		default:
-			// Create a pool with error handling
-			pool := pool.New().WithContext(ctx).WithMaxGoroutines(p.cfg.MaxWorkers).WithCancelOnError().WithFirstError()
+			// Create a pool with error handling - use all available CPU cores
+			pool := pool.New().WithContext(ctx).WithMaxGoroutines(runtime.NumCPU()).WithCancelOnError().WithFirstError()
 			var bytesPosted int64
 			articlesProcessed := 0
 			articleErrors := 0
@@ -283,8 +284,8 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 			errChan <- ctx.Err()
 			return
 		default:
-			// Create a pool with error handling
-			pool := pool.New().WithContext(ctx).WithMaxGoroutines(p.cfg.MaxWorkers).WithCancelOnError().WithFirstError()
+			// Create a pool with error handling - use all available CPU cores
+			pool := pool.New().WithContext(ctx).WithMaxGoroutines(runtime.NumCPU()).WithCancelOnError().WithFirstError()
 			articlesChecked := 0
 			articleErrors := 0
 			var failedArticles []*article.Article
@@ -512,9 +513,9 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int, wg *sy
 		}
 
 		var xNxgHeader string
-		if p.cfg.PostHeaders.AddNGXHeader &&
+		if p.cfg.PostHeaders.AddNXGHeader &&
 			p.cfg.ObfuscationPolicy != config.ObfuscationPolicyFull &&
-			p.cfg.MessageIDFormat != config.MessageIDFormatNGX {
+			p.cfg.MessageIDFormat != config.MessageIDFormatNXG {
 			xNxgHeader, err = nxgHeader.GetXNxgHeader(
 				int64(fileNumber),
 				int64(totalFiles),

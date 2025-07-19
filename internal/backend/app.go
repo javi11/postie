@@ -43,6 +43,29 @@ type ValidationResult struct {
 	Error string `json:"error"`
 }
 
+// AppStatus represents the current application status
+type AppStatus struct {
+	HasPostie           bool   `json:"hasPostie"`
+	HasConfig           bool   `json:"hasConfig"`
+	ConfigPath          string `json:"configPath"`
+	Uploading           bool   `json:"uploading"`
+	CriticalConfigError bool   `json:"criticalConfigError"`
+	Error               string `json:"error"`
+	IsFirstStart        bool   `json:"isFirstStart"`
+	HasServers          bool   `json:"hasServers"`
+	ServerCount         int    `json:"serverCount"`
+	ValidServerCount    int    `json:"validServerCount"`
+	ConfigValid         bool   `json:"configValid"`
+	NeedsConfiguration  bool   `json:"needsConfiguration"`
+}
+
+// ProcessorStatus represents the current processor status
+type ProcessorStatus struct {
+	HasProcessor  bool     `json:"hasProcessor"`
+	RunningJobs   int      `json:"runningJobs"`
+	RunningJobIDs []string `json:"runningJobIDs"`
+}
+
 // App struct for the Wails application
 type App struct {
 	ctx                  context.Context
@@ -66,6 +89,7 @@ type App struct {
 	criticalErrorMessage string
 	isWebMode            bool
 	webEventEmitter      func(eventType string, data interface{})
+	firstStart           bool
 }
 
 // NewApp creates a new App application struct
@@ -138,6 +162,10 @@ func (a *App) Startup(ctx context.Context) {
 		"database", a.appPaths.Database,
 		"par2", a.appPaths.Par2)
 
+	// Check if it's the first start BEFORE creating any config
+	a.firstStart = a.determineFirstStart()
+	slog.Info("First start determination", "isFirstStart", a.firstStart)
+
 	// Load initial configuration
 	if err := a.loadConfig(); err != nil {
 		slog.Info("Config file not found or invalid, creating default config", "path", a.configPath, "error", err)
@@ -178,22 +206,22 @@ func (a *App) Startup(ctx context.Context) {
 }
 
 // GetAppStatus returns the current application status
-func (a *App) GetAppStatus() map[string]interface{} {
-	status := map[string]interface{}{
-		"hasPostie":           a.postie != nil,
-		"hasConfig":           a.config != nil,
-		"configPath":          a.configPath,
-		"uploading":           a.IsUploading(),
-		"criticalConfigError": false, // Default to false
-		"error":               "",
-		"isFirstStart":        a.isFirstStart(),
+func (a *App) GetAppStatus() AppStatus {
+	status := AppStatus{
+		HasPostie:           a.postie != nil,
+		HasConfig:           a.config != nil,
+		ConfigPath:          a.configPath,
+		Uploading:           a.IsUploading(),
+		CriticalConfigError: false, // Default to false
+		Error:               "",
+		IsFirstStart:        a.isFirstStart(),
 	}
 
 	if a.config != nil {
 		configData := a.config
 		hasServers := len(configData.Servers) > 0
-		status["hasServers"] = hasServers
-		status["serverCount"] = len(configData.Servers)
+		status.HasServers = hasServers
+		status.ServerCount = len(configData.Servers)
 
 		// Check if all servers have valid configuration (at least host filled)
 		validServers := 0
@@ -202,21 +230,21 @@ func (a *App) GetAppStatus() map[string]interface{} {
 				validServers++
 			}
 		}
-		status["validServerCount"] = validServers
-		status["configValid"] = hasServers && validServers > 0
-		status["needsConfiguration"] = !hasServers || validServers == 0
+		status.ValidServerCount = validServers
+		status.ConfigValid = hasServers && validServers > 0
+		status.NeedsConfiguration = !hasServers || validServers == 0
 
 		// Set criticalConfigError if we have servers configured but postie instance creation failed
 		if hasServers && validServers > 0 && a.postie == nil {
-			status["criticalConfigError"] = true
-			status["error"] = a.criticalErrorMessage
+			status.CriticalConfigError = true
+			status.Error = a.criticalErrorMessage
 		}
 	} else {
-		status["hasServers"] = false
-		status["serverCount"] = 0
-		status["validServerCount"] = 0
-		status["configValid"] = false
-		status["needsConfiguration"] = true
+		status.HasServers = false
+		status.ServerCount = 0
+		status.ValidServerCount = 0
+		status.ConfigValid = false
+		status.NeedsConfiguration = true
 	}
 
 	slog.Debug("Current application status", "status", status)
@@ -225,16 +253,17 @@ func (a *App) GetAppStatus() map[string]interface{} {
 }
 
 // GetProcessorStatus returns processor status information
-func (a *App) GetProcessorStatus() map[string]interface{} {
-	status := map[string]interface{}{
-		"hasProcessor": a.processor != nil,
-		"runningJobs":  0,
+func (a *App) GetProcessorStatus() ProcessorStatus {
+	status := ProcessorStatus{
+		HasProcessor:  a.processor != nil,
+		RunningJobs:   0,
+		RunningJobIDs: []string{},
 	}
 
 	if a.processor != nil {
 		runningJobs := a.processor.GetRunningJobs()
-		status["runningJobs"] = len(runningJobs)
-		status["runningJobIDs"] = getKeys(runningJobs)
+		status.RunningJobs = len(runningJobs)
+		status.RunningJobIDs = getKeys(runningJobs)
 	}
 
 	return status
@@ -420,7 +449,7 @@ func (a *App) HandleDroppedFiles(filePaths []string) error {
 
 	// Check if configuration is valid before proceeding
 	status := a.GetAppStatus()
-	if needsConfig, ok := status["needsConfiguration"].(bool); ok && needsConfig {
+	if status.NeedsConfiguration {
 		return fmt.Errorf("configuration required: Please configure at least one server in the Settings page before uploading files")
 	}
 
@@ -471,19 +500,43 @@ func (a *App) HandleDroppedFiles(filePaths []string) error {
 	return fmt.Errorf("queue not initialized")
 }
 
-// isFirstStart checks if this is the first time the application is being run
-func (a *App) isFirstStart() bool {
+// determineFirstStart checks if this is the first time the application is being run
+// This must be called BEFORE any config creation
+func (a *App) determineFirstStart() bool {
 	// Check if config file exists
 	if _, err := os.Stat(a.configPath); os.IsNotExist(err) {
+		slog.Info("Config file does not exist, treating as first start", "configPath", a.configPath)
 		return true
 	}
 
-	// Check if config has any configured servers
-	if a.config == nil {
+	// If config file exists, try to load it to check if it has meaningful content
+	cfg, err := config.Load(a.configPath)
+	if err != nil {
+		slog.Info("Config file exists but cannot be loaded, treating as first start", "error", err)
 		return true
 	}
 
+	// Check if config has any configured servers with actual host values
+	hasValidServers := false
+	for _, server := range cfg.Servers {
+		if server.Host != "" {
+			hasValidServers = true
+			break
+		}
+	}
+
+	if !hasValidServers {
+		slog.Info("Config file exists but has no valid servers, treating as first start")
+		return true
+	}
+
+	slog.Info("Config file exists with valid servers, not first start")
 	return false
+}
+
+// isFirstStart returns whether this is the first time the application is being run
+func (a *App) isFirstStart() bool {
+	return a.firstStart
 }
 
 // SetupWizardComplete saves the configuration from the setup wizard
@@ -492,6 +545,9 @@ func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 
 	// Create new config based on wizard data
 	cfg := config.GetDefaultConfig()
+	
+	// Ensure version is set
+	cfg.Version = config.CurrentConfigVersion
 
 	// Set servers from wizard
 	cfg.Servers = make([]config.ServerConfig, len(wizardData.Servers))
@@ -514,12 +570,6 @@ func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 		cfg.OutputDir = wizardData.OutputDirectory
 	}
 
-	// Set watch directory if provided
-	if wizardData.WatchDirectory != "" {
-		cfg.Watcher.WatchDirectory = wizardData.WatchDirectory
-		cfg.Watcher.Enabled = true
-	}
-
 	// Set the par2 path to the OS-specific location
 	cfg.Par2.Par2Path = a.appPaths.Par2
 
@@ -530,6 +580,9 @@ func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 	if err := a.SaveConfig(&cfg); err != nil {
 		return fmt.Errorf("failed to save wizard configuration: %w", err)
 	}
+
+	// Mark as no longer first start since setup is complete
+	a.firstStart = false
 
 	slog.Info("Setup wizard completed successfully")
 	return nil

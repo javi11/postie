@@ -1,6 +1,5 @@
 <script lang="ts">
-import { Button, Input, Label, P } from "flowbite-svelte";
-
+// Types
 interface ComponentProps {
 	value?: number;
 	label?: string;
@@ -11,8 +10,10 @@ interface ComponentProps {
 	maxValue?: number;
 	id?: string;
 	unitLabel?: string;
+	onchange?: (value: number) => void;
 }
 
+// Props
 let {
 	value = $bindable(0),
 	label = "",
@@ -23,43 +24,65 @@ let {
 	maxValue = 1000,
 	id = "",
 	unitLabel = "MB/s",
+	onchange,
 }: ComponentProps = $props();
 
+// Effects - trigger callback when value changes
+$effect(() => {
+	onchange?.(value);
+});
+
+// Functions
 function setPreset(presetValue: number) {
 	value = presetValue;
 }
 </script>
 
-<div>
-	<Label for={id} class="mb-2">{label}</Label>
+<!-- Throttle Rate Input Component -->
+<div class="form-control w-full">
+	<!-- Label -->
+	{#if label}
+		<label class="label" for={id}>
+			<span class="label-text font-medium text-base-content">{label}</span>
+		</label>
+	{/if}
+	
+	<!-- Input with Unit Display -->
 	<div class="flex gap-2">
 		<div class="flex-1">
-			<Input
+			<input
 				{id}
 				type="number"
+				class="input input-bordered w-full focus:input-primary transition-colors"
 				bind:value
 				min={minValue}
 				max={maxValue}
 				{placeholder}
 			/>
 		</div>
-		<div class="w-16 flex items-center justify-center text-sm font-medium text-gray-600 dark:text-gray-400">
+		<div class="w-16 flex items-center justify-center text-sm font-medium text-base-content/60">
 			{unitLabel}
 		</div>
 	</div>
-	<P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-		{description}
-	</P>
+	
+	<!-- Description -->
+	{#if description}
+		<p class="text-sm text-base-content/70 mt-1">
+			{description}
+		</p>
+	{/if}
+	
+	<!-- Preset Buttons -->
 	{#if presets.length > 0}
 		<div class="mt-2 flex flex-wrap gap-2">
 			{#each presets as preset}
-				<Button
+				<button
 					type="button"
-					class="cursor-pointer px-2 py-1 text-xs"
+					class="btn btn-xs btn-outline hover:btn-primary transition-colors"
 					onclick={() => setPreset(preset.value)}
 				>
 					{preset.label}
-				</Button>
+				</button>
 			{/each}
 		</div>
 	{/if}

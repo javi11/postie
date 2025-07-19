@@ -1,11 +1,15 @@
 package nzb
 
 import (
+	"archive/zip"
+	"compress/flate"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/andybalholm/brotli"
@@ -22,24 +26,26 @@ type NZBGenerator interface {
 	// AddFileHash adds a hash for a file
 	AddFileHash(filename string, hash string)
 	// Generate creates an NZB file
-	Generate(outputPath string) error
+	Generate(outputPath string) (string, error)
 }
 
 // Generator creates NZB files
 type Generator struct {
-	articles          map[string][]*article.Article // filename -> articles
-	filesHash         map[string]string             // filename -> checksums
-	segmentSize       uint64                        // size of each segment in bytes
-	compressionConfig config.NzbCompressionConfig   // compression configuration
+	articles                  map[string][]*article.Article // filename -> articles
+	filesHash                 map[string]string             // filename -> checksums
+	segmentSize               uint64                        // size of each segment in bytes
+	compressionConfig         config.NzbCompressionConfig   // compression configuration
+	maintainOriginalExtension bool                          // whether to maintain original file extension
 }
 
 // NewGenerator creates a new NZB generator
-func NewGenerator(segmentSize uint64, compressionConfig config.NzbCompressionConfig) NZBGenerator {
+func NewGenerator(segmentSize uint64, compressionConfig config.NzbCompressionConfig, maintainOriginalExtension bool) NZBGenerator {
 	return &Generator{
-		articles:          make(map[string][]*article.Article),
-		filesHash:         make(map[string]string),
-		segmentSize:       segmentSize,
-		compressionConfig: compressionConfig,
+		articles:                  make(map[string][]*article.Article),
+		filesHash:                 make(map[string]string),
+		segmentSize:               segmentSize,
+		compressionConfig:         compressionConfig,
+		maintainOriginalExtension: maintainOriginalExtension,
 	}
 }
 
@@ -61,10 +67,13 @@ func (g *Generator) AddArticle(art *article.Article) {
 }
 
 // Generate creates an NZB file for all files
-func (g *Generator) Generate(outputPath string) error {
+func (g *Generator) Generate(outputPath string) (string, error) {
 	if len(g.articles) == 0 {
-		return fmt.Errorf("no articles found")
+		return "", fmt.Errorf("no articles found")
 	}
+
+	// Generate the final NZB filename based on maintainOriginalExtension setting
+	finalNzbPath := g.generateFinalNzbPath(outputPath)
 
 	// Create NZB file
 	nzbFile := &nzbparser.Nzb{
@@ -137,43 +146,50 @@ func (g *Generator) Generate(outputPath string) error {
 
 	// Create output directory if it doesn't exist
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
-		return fmt.Errorf("error creating output directory: %w", err)
+		return "", fmt.Errorf("error creating output directory: %w", err)
 	}
 
 	// Write NZB file
 	data, err := nzbparser.Write(nzbFile)
 	if err != nil {
-		return fmt.Errorf("error writing NZB file: %w", err)
+		return "", fmt.Errorf("error writing NZB file: %w", err)
 	}
 
-	// Apply compression if enabled
-	var finalPath string
+	// Apply compression if enabled and write to final path
 	if g.compressionConfig.Enabled {
 		switch g.compressionConfig.Type {
 		case config.CompressionTypeZstd:
-			finalPath = outputPath + ".zst"
-			if err := g.compressWithZstd(data, finalPath); err != nil {
-				return fmt.Errorf("error compressing NZB file with zstd: %w", err)
+			compressionPath := finalNzbPath + ".zst"
+			if err := g.compressWithZstd(data, compressionPath); err != nil {
+				return "", fmt.Errorf("error compressing NZB file with zstd: %w", err)
 			}
+			return compressionPath, nil
 		case config.CompressionTypeBrotli:
-			finalPath = outputPath + ".br"
-			if err := g.compressWithBrotli(data, finalPath); err != nil {
-				return fmt.Errorf("error compressing NZB file with brotli: %w", err)
+			compressionPath := finalNzbPath + ".br"
+			if err := g.compressWithBrotli(data, compressionPath); err != nil {
+				return "", fmt.Errorf("error compressing NZB file with brotli: %w", err)
 			}
+			return compressionPath, nil
+		case config.CompressionTypeZip:
+			compressionPath := finalNzbPath + ".zip"
+			if err := g.compressWithZip(data, compressionPath, finalNzbPath); err != nil {
+				return "", fmt.Errorf("error compressing NZB file with zip: %w", err)
+			}
+			return compressionPath, nil
 		default:
 			// No compression or unknown type, write the file as is
-			if err := os.WriteFile(outputPath, data, 0644); err != nil {
-				return fmt.Errorf("error writing NZB file: %w", err)
+			if err := os.WriteFile(finalNzbPath, data, 0644); err != nil {
+				return "", fmt.Errorf("error writing NZB file: %w", err)
 			}
+			return finalNzbPath, nil
 		}
 	} else {
 		// No compression, write the file as is
-		if err := os.WriteFile(outputPath, data, 0644); err != nil {
-			return fmt.Errorf("error writing NZB file: %w", err)
+		if err := os.WriteFile(finalNzbPath, data, 0644); err != nil {
+			return "", fmt.Errorf("error writing NZB file: %w", err)
 		}
+		return finalNzbPath, nil
 	}
-
-	return nil
 }
 
 // compressWithZstd compresses data with zstd and writes it to the given path
@@ -238,9 +254,77 @@ func (g *Generator) compressWithBrotli(data []byte, outputPath string) error {
 	return nil
 }
 
+// compressWithZip compresses data with zip and writes it to the given path
+func (g *Generator) compressWithZip(data []byte, outputPath string, originalNzbPath string) error {
+	// Create the file
+	f, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("error creating compressed file: %w", err)
+	}
+	defer func() {
+		if err := f.Close(); err != nil {
+			slog.Error("error closing file", "error", err)
+		}
+	}()
+
+	// Create zip writer
+	w := zip.NewWriter(f)
+	defer func() {
+		if err := w.Close(); err != nil {
+			slog.Error("error closing zip writer", "error", err)
+		}
+	}()
+
+	// Get the base filename for the entry in the zip
+	nzbFilename := filepath.Base(originalNzbPath)
+
+	// Create a file header with compression settings
+	header := &zip.FileHeader{
+		Name:   nzbFilename,
+		Method: zip.Deflate,
+	}
+	
+	// Set compression level by manipulating the extra field
+	// This is a workaround since Go's zip package doesn't expose compression level directly
+	w.RegisterCompressor(zip.Deflate, func(out io.Writer) (io.WriteCloser, error) {
+		return flate.NewWriter(out, g.compressionConfig.Level)
+	})
+
+	zipFile, err := w.CreateHeader(header)
+	if err != nil {
+		return fmt.Errorf("error creating zip entry: %w", err)
+	}
+
+	// Write the NZB data to the zip file
+	if _, err := zipFile.Write(data); err != nil {
+		return fmt.Errorf("error writing data to zip: %w", err)
+	}
+
+	return nil
+}
+
 // AddFileHash adds a hash for a file
 func (g *Generator) AddFileHash(filename string, hash string) {
 	g.filesHash[filename] = hash
+}
+
+// generateFinalNzbPath creates the final NZB path based on the configuration
+func (g *Generator) generateFinalNzbPath(originalFilePath string) string {
+	dir := filepath.Dir(originalFilePath)
+	basename := filepath.Base(originalFilePath)
+
+	var filename string
+	if g.maintainOriginalExtension {
+		// Keep original extension: filename.ext.nzb
+		filename = basename + ".nzb"
+	} else {
+		// Remove original extension: filename.nzb
+		ext := filepath.Ext(basename)
+		nameWithoutExt := strings.TrimSuffix(basename, ext)
+		filename = nameWithoutExt + ".nzb"
+	}
+
+	return filepath.Join(dir, filename)
 }
 
 // Parse reads an NZB file

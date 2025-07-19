@@ -1,6 +1,5 @@
 <script lang="ts">
-import { Button, Input, Label, P, Select } from "flowbite-svelte";
-
+// Types
 interface ComponentProps {
 	value?: number;
 	label?: string;
@@ -14,6 +13,7 @@ interface ComponentProps {
 	onchange?: (value: number) => void;
 }
 
+// Props
 let {
 	value = $bindable(100),
 	label = "",
@@ -27,38 +27,56 @@ let {
 	onchange,
 }: ComponentProps = $props();
 
-const sizeUnitOptions = [
+// State - local state for form inputs (following best practices)
+function parseSize(val: number | undefined): { value: number; unit: string } {
+	if (!val || typeof val !== "number" || Number.isNaN(val)) {
+		return { value: 100, unit: "MB" };
+	}
+	
+	if (val >= 1073741824 && val % 1073741824 === 0) {
+		return { value: val / 1073741824, unit: "GB" };
+	}
+
+	if (val >= 1048576 && val % 1048576 === 0) {
+		return { value: val / 1048576, unit: "MB" };
+	}
+
+	return { value: val / 1024, unit: "KB" };	;	
+}
+
+// Initialize with current value
+const initial = parseSize(value);
+let sizeValue = $state(initial.value);
+let sizeUnit = $state(initial.unit);
+let lastUpdatedValue = $state(value);
+
+// Effects - sync local state back to bound value when user changes inputs
+$effect(() => {
+	const newValue = unitToBytes(sizeValue, sizeUnit);
+	if (newValue !== lastUpdatedValue) {
+		lastUpdatedValue = newValue;
+		value = newValue;
+		onchange?.(newValue);
+	}
+});
+
+// Effect to update local state when value prop changes externally (avoid infinite loop)
+$effect(() => {
+	if (value !== lastUpdatedValue) {
+		const parsed = parseSize(value);
+		sizeValue = parsed.value;
+		sizeUnit = parsed.unit;
+		lastUpdatedValue = value;
+	}
+});
+
+// Derived state - reactive calculations
+const sizeUnitOptions = $derived([
 	{ value: "MB", name: "MB" },
 	{ value: "GB", name: "GB" },
-];
+	{ value: "KB", name: "KB" },
+]);
 
-let sizeValue = $state(100);
-let sizeUnit = $state("MB");
-
-// Helper functions for size conversion
-function bytesToUnit(bytes: number, unit: string): number {
-	switch (unit) {
-		case "GB":
-			return Math.round((bytes / 1024 / 1024 / 1024) * 100) / 100;
-		case "MB":
-			return Math.round(bytes / 1024 / 1024);
-		default:
-			return bytes;
-	}
-}
-
-function unitToBytes(val: number, unit: string): number {
-	switch (unit) {
-		case "GB":
-			return val * 1024 * 1024 * 1024;
-		case "MB":
-			return val * 1024 * 1024;
-		default:
-			return val;
-	}
-}
-
-// Update maxValue based on unit
 const dynamicMaxValue = $derived(
 	maxValue
 		? sizeUnit === "GB"
@@ -67,85 +85,81 @@ const dynamicMaxValue = $derived(
 		: undefined,
 );
 
-function setPreset(presetValue: number, presetUnit: string) {
-	sizeValue = presetValue;
-	sizeUnit = presetUnit;
-	updateValue();
-}
-
-// Parse the bound value and sync with local state
-function parseAndSync() {
-	if (!value || typeof value !== "number") {
-		sizeValue = 100;
-		sizeUnit = "MB";
-		return;
-	}
-
-	if (value >= 1073741824 && value % 1073741824 === 0) {
-		sizeValue = value / 1073741824;
-		sizeUnit = "GB";
-	} else {
-		sizeValue = Math.round(value / 1048576);
-		sizeUnit = "MB";
-	}
-}
-
-// Sync local state when bound value changes
-$effect(() => {
-	parseAndSync();
-});
-
-// Update bound value when local state changes
-function updateValue() {
-	value = unitToBytes(sizeValue, sizeUnit);
-	onchange?.(value);
-}
-
-// Get byte display text
 const byteDisplay = $derived(
 	showBytes ? `(${value.toLocaleString()} bytes)` : "",
 );
+
+function unitToBytes(val: number, unit: string): number {
+	if (unit === "GB") {
+		return val * 1024 * 1024 * 1024;
+	}
+	if (unit === "MB") {
+		return val * 1024 * 1024;
+	}
+	if (unit === "KB") {
+		return val * 1024;
+	}
+	return val;
+}
+
+function setPreset(presetValue: number, presetUnit: string) {
+	sizeValue = presetValue;
+	sizeUnit = presetUnit;
+}
 </script>
 
-<div>
+<!-- Size Input Component -->
+<div class="form-control w-full">
+	<!-- Label -->
 	{#if label}
-		<Label for={id} class="mb-2">{label}</Label>
+		<label class="label" for={id}>
+			<span class="label-text font-medium text-base-content">{label}</span>
+		</label>
 	{/if}
+	
+	<!-- Input with Unit Selector -->
 	<div class="flex gap-2">
 		<div class="flex-1">
-			<Input
+			<input
 				{id}
 				type="number"
+				class="input input-bordered w-full focus:input-primary transition-colors"
 				bind:value={sizeValue}
 				min={minValue}
 				max={dynamicMaxValue || undefined}
 				{placeholder}
-				oninput={updateValue}
 			/>
 		</div>
 		<div class="w-20">
-			<Select
-				items={sizeUnitOptions}
+			<select
+				class="select select-bordered focus:select-primary transition-colors"
 				bind:value={sizeUnit}
-				onchange={updateValue}
-			/>
+			>
+				{#each sizeUnitOptions as option}
+					<option value={option.value}>{option.name}</option>
+				{/each}
+			</select>
 		</div>
 	</div>
+	
+	<!-- Description with Bytes Display -->
 	{#if description || byteDisplay}
-		<P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+		<p class="text-sm text-base-content/70 mt-1">
 			{description} {byteDisplay}
-		</P>
+		</p>
 	{/if}
+	
+	<!-- Preset Buttons -->
 	{#if presets.length > 0}
 		<div class="mt-2 flex flex-wrap gap-2">
 			{#each presets as preset}
-				<Button
+				<button
 					type="button"
-					class="cursor-pointer px-2 py-1 text-xs"
+					class="btn btn-xs btn-outline hover:btn-primary transition-colors"
 					onclick={() => setPreset(preset.value, preset.unit)}
 				>
-					{preset.label}
-				</Button>
+					{preset.value}{preset.unit}
+				</button>
 			{/each}
 		</div>
 	{/if}

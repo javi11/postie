@@ -78,25 +78,30 @@ func (p *Postie) SetProgressCallback(callback poster.ProgressCallback) {
 	p.par2runner.SetProgressCallback(par2Callback)
 }
 
-func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir string, outputDir string) error {
+func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir string, outputDir string) (string, error) {
 	if len(files) == 0 {
-		return fmt.Errorf("no files to post")
+		return "", fmt.Errorf("no files to post")
 	}
 
 	// Start posting
 	startTime := time.Now()
+	var lastNzbPath string
 
 	for _, f := range files {
 		slog.InfoContext(ctx, "Posting file", "file", f.Path)
 
 		if *p.postingCfg.WaitForPar2 {
-			if err := p.post(ctx, f, rootDir, outputDir); err != nil {
-				return err
+			nzbPath, err := p.post(ctx, f, rootDir, outputDir)
+			if err != nil {
+				return "", err
 			}
+			lastNzbPath = nzbPath
 		} else {
-			if err := p.postInParallel(ctx, f, rootDir, outputDir); err != nil {
-				return err
+			nzbPath, err := p.postInParallel(ctx, f, rootDir, outputDir)
+			if err != nil {
+				return "", err
 			}
+			lastNzbPath = nzbPath
 		}
 	}
 
@@ -110,7 +115,7 @@ func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir st
 	slog.InfoContext(ctx, "Total bytes", "count", stats.BytesPosted)
 	slog.InfoContext(ctx, "Errors", "count", stats.ArticleErrors)
 
-	return nil
+	return lastNzbPath, nil
 }
 
 func (p *Postie) postInParallel(
@@ -118,7 +123,7 @@ func (p *Postie) postInParallel(
 	f fileinfo.FileInfo,
 	rootDir string,
 	outputDir string,
-) error {
+) (string, error) {
 	var (
 		createdPar2Paths []string
 		err              error
@@ -131,7 +136,7 @@ func (p *Postie) postInParallel(
 		}
 	}()
 
-	nzbGen := nzb.NewGenerator(p.postingCfg.ArticleSizeInBytes, p.compressionCfg)
+	nzbGen := nzb.NewGenerator(p.postingCfg.ArticleSizeInBytes, p.compressionCfg, p.maintainOriginalExtension)
 
 	errg := errgroup.Group{}
 
@@ -165,26 +170,27 @@ func (p *Postie) postInParallel(
 	})
 
 	if err := errg.Wait(); err != nil {
-		return err
+		return "", err
 	}
 
 	// Generate single NZB file for all files
 	dirPath := filepath.Dir(f.Path)
 	dirPath = strings.TrimPrefix(dirPath, rootDir)
 
-	nzbFilename := p.generateNZBFilename(f.Path)
-	nzbPath := filepath.Join(outputDir, dirPath, nzbFilename)
-	if err := nzbGen.Generate(nzbPath); err != nil {
-		return fmt.Errorf("error generating NZB file: %w", err)
+	// Use the original filename as input for NZB generation
+	nzbPath := filepath.Join(outputDir, dirPath, filepath.Base(f.Path))
+	finalPath, err := nzbGen.Generate(nzbPath)
+	if err != nil {
+		return "", fmt.Errorf("error generating NZB file: %w", err)
 	}
 
 	// Execute post upload script if configured
-	if err := p.executePostUploadScript(ctx, nzbPath); err != nil {
-		slog.ErrorContext(ctx, "Post upload script execution failed", "error", err, "nzbPath", nzbPath)
+	if err := p.executePostUploadScript(ctx, finalPath); err != nil {
+		slog.ErrorContext(ctx, "Post upload script execution failed", "error", err, "nzbPath", finalPath)
 		// Note: We don't return the error here to avoid failing the upload if the script fails
 	}
 
-	return nil
+	return finalPath, nil
 }
 
 func (p *Postie) post(
@@ -192,7 +198,7 @@ func (p *Postie) post(
 	f fileinfo.FileInfo,
 	rootDir string,
 	outputDir string,
-) error {
+) (string, error) {
 	var (
 		createdPar2Paths []string
 		err              error
@@ -207,7 +213,7 @@ func (p *Postie) post(
 	}()
 
 	filesPath := []string{f.Path}
-	nzbGen := nzb.NewGenerator(p.postingCfg.ArticleSizeInBytes, p.compressionCfg)
+	nzbGen := nzb.NewGenerator(p.postingCfg.ArticleSizeInBytes, p.compressionCfg, p.maintainOriginalExtension)
 
 	if *p.par2Cfg.Enabled {
 		createdPar2Paths, err = p.par2runner.Create(ctx, []fileinfo.FileInfo{f})
@@ -216,7 +222,7 @@ func (p *Postie) post(
 				slog.ErrorContext(ctx, "Error during par2 creation. Upload will continue without par2.", "error", err)
 			}
 
-			return err
+			return "", err
 		}
 
 		filesPath = append(filesPath, createdPar2Paths...)
@@ -225,7 +231,7 @@ func (p *Postie) post(
 	if err := p.poster.Post(ctx, filesPath, rootDir, nzbGen); err != nil {
 		slog.ErrorContext(ctx, fmt.Sprintf("Error during upload: %s", filesPath), "error", err)
 
-		return err
+		return "", err
 	}
 
 	for _, p := range createdPar2Paths {
@@ -238,35 +244,22 @@ func (p *Postie) post(
 	dirPath := filepath.Dir(f.Path)
 	dirPath = strings.TrimPrefix(dirPath, rootDir)
 
-	nzbFilename := p.generateNZBFilename(f.Path)
-	nzbPath := filepath.Join(outputDir, dirPath, nzbFilename)
-	if err := nzbGen.Generate(nzbPath); err != nil {
-		return fmt.Errorf("error generating NZB file: %w", err)
+	// Use the original filename as input for NZB generation
+	nzbPath := filepath.Join(outputDir, dirPath, filepath.Base(f.Path))
+	finalPath, err := nzbGen.Generate(nzbPath)
+	if err != nil {
+		return "", fmt.Errorf("error generating NZB file: %w", err)
 	}
 
 	// Execute post upload script if configured
-	if err := p.executePostUploadScript(ctx, nzbPath); err != nil {
-		slog.ErrorContext(ctx, "Post upload script execution failed", "error", err, "nzbPath", nzbPath)
+	if err := p.executePostUploadScript(ctx, finalPath); err != nil {
+		slog.ErrorContext(ctx, "Post upload script execution failed", "error", err, "nzbPath", finalPath)
 		// Note: We don't return the error here to avoid failing the upload if the script fails
 	}
 
-	return nil
+	return finalPath, nil
 }
 
-// generateNZBFilename creates the NZB filename based on the configuration
-func (p *Postie) generateNZBFilename(originalFilePath string) string {
-	basename := filepath.Base(originalFilePath)
-
-	if p.maintainOriginalExtension {
-		// Keep original extension: filename.ext.nzb
-		return basename + ".nzb"
-	} else {
-		// Remove original extension: filename.nzb
-		ext := filepath.Ext(basename)
-		nameWithoutExt := strings.TrimSuffix(basename, ext)
-		return nameWithoutExt + ".nzb"
-	}
-}
 
 func (p *Postie) executePostUploadScript(ctx context.Context, nzbPath string) error {
 	if !p.postUploadScriptCfg.Enabled || p.postUploadScriptCfg.Command == "" {
@@ -276,11 +269,11 @@ func (p *Postie) executePostUploadScript(ctx context.Context, nzbPath string) er
 	slog.InfoContext(ctx, "Executing post upload script", "command", p.postUploadScriptCfg.Command, "nzbPath", nzbPath)
 
 	// Create timeout context
-	timeoutCtx, cancel := context.WithTimeout(ctx, p.postUploadScriptCfg.Timeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, p.postUploadScriptCfg.Timeout.ToDuration())
 	defer cancel()
 
-	// Replace {{nzb_path}} placeholder with actual NZB path
-	command := strings.ReplaceAll(p.postUploadScriptCfg.Command, "{{nzb_path}}", nzbPath)
+	// Replace {nzb_path} placeholder with actual NZB path
+	command := strings.ReplaceAll(p.postUploadScriptCfg.Command, "{nzb_path}", nzbPath)
 
 	// Parse command using shell
 	cmd := exec.CommandContext(timeoutCtx, "sh", "-c", command)

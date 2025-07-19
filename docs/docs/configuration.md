@@ -64,12 +64,12 @@ posting:
   groups:
     - alt.bin.test
   throttle_rate: 0 # unlimited (bytes per second)
-  message_id_format: random # Options: random, ngx
+  message_id_format: random # Options: random, nxg
   obfuscation_policy: full # Options: full, partial, none
   par2_obfuscation_policy: full # Options: full, partial, none
   group_policy: each_file # Options: all, each_file
   post_headers:
-    add_ngx_header: false
+    add_nxg_header: false
     default_from: ""
     custom_headers:
       - name: "X-Custom-Header"
@@ -91,8 +91,8 @@ par2:
 
 nzb_compression:
   enabled: false # Whether to enable compression of the output NZB file
-  type: none # Options: none, zstd, brotli
-  level: 0 # Compression level (zstd: 1-22, brotli: 0-11)
+  type: none # Options: none, zstd, brotli, zip
+  level: 0 # Compression level (zstd: 1-22, brotli: 0-11, zip: 0-9)
 
 watcher:
   enabled: false # Whether to enable the file watcher
@@ -118,7 +118,7 @@ queue:
 # Post upload script configuration
 post_upload_script:
   enabled: false # Whether to enable post upload script execution
-  command: "" # Command to execute, use {{nzb_path}} placeholder for NZB file path
+  command: "" # Command to execute, use {nzb_path} placeholder for NZB file path
   timeout: 30s # Maximum time to wait for command execution
 ```
 
@@ -172,12 +172,12 @@ posting:
   groups: # Newsgroups to post to
     - alt.bin.test
   throttle_rate: 0 # Upload speed limit in bytes/sec (0 = unlimited)
-  message_id_format: random # Format of message IDs ("random" or "[ngx](https://github.com/javi11/nxg)")
+  message_id_format: random # Format of message IDs ("random" or "[nxg](https://github.com/javi11/nxg)")
   obfuscation_policy: full # Level of obfuscation ("full", "partial", or "none")
   par2_obfuscation_policy: full # Obfuscation for PAR2 files
   group_policy: each_file # How to distribute posts ("all" or "each_file")
   post_headers: # Additional headers configuration
-    add_ngx_header: false # Whether to add [X-NXG](https://github.com/javi11/nxg) header
+    add_nxg_header: false # Whether to add [X-NXG](https://github.com/javi11/nxg) header
     default_from: "" # Default poster name
     custom_headers: # Custom headers to add to the post
       - name: "X-Custom-Header"
@@ -235,22 +235,24 @@ Configure NZB file compression:
 ```yaml
 nzb_compression:
   enabled: false # Whether to enable compression of the output NZB file
-  type: none # Compression algorithm to use (options: none, zstd, brotli)
-  level: 0 # Compression level (zstd: 1-22, brotli: 0-11)
+  type: none # Compression algorithm to use (options: none, zstd, brotli, zip)
+  level: 0 # Compression level (zstd: 1-22, brotli: 0-11, zip: 0-9)
 ```
 
-When compression is enabled, the generated NZB files will be compressed using the specified algorithm and will have the appropriate file extension added (`.nzb.zst` for zstd or `.nzb.br` for brotli). This can significantly reduce the size of NZB files, especially for large uploads with many segments.
+When compression is enabled, the generated NZB files will be compressed using the specified algorithm and will have the appropriate file extension added (`.nzb.zst` for zstd, `.nzb.br` for brotli, or `.nzb.zip` for zip). This can significantly reduce the size of NZB files, especially for large uploads with many segments.
 
 #### Compression Types
 
 - **none**: No compression (default)
 - **zstd**: [Zstandard compression](https://github.com/facebook/zstd) - fast compression with good ratios
 - **brotli**: [Brotli compression](https://github.com/google/brotli) - higher compression ratios but slower
+- **zip**: Standard ZIP compression - universal compatibility with moderate compression
 
 #### Compression Levels
 
 - **zstd**: 1-22 (higher = better compression but slower, default: 3)
 - **brotli**: 0-11 (higher = better compression but slower, default: 4)
+- **zip**: 0-9 (higher = better compression but slower, default: 6)
 
 **💡 Tip: The web UI provides compression size estimates and helps you choose the optimal settings for your use case.**
 
@@ -295,7 +297,7 @@ Configure commands to run after successful uploads:
 ```yaml
 post_upload_script:
   enabled: false # Whether to enable post upload script execution
-  command: "" # Command to execute, use {{nzb_path}} placeholder for NZB file path
+  command: "" # Command to execute, use {nzb_path} placeholder for NZB file path
   timeout: 30s # Maximum time to wait for command execution
 ```
 
@@ -304,7 +306,7 @@ Example webhook notification:
 ```yaml
 post_upload_script:
   enabled: true
-  command: 'curl -X POST -H "Content-Type: application/json" -d "{\"nzb_path\": \"{{nzb_path}}\"}" https://your-webhook-url.com/notify'
+  command: 'curl -X POST -H "Content-Type: application/json" -d "{\"nzb_path\": \"{nzb_path}\"}" https://your-webhook-url.com/notify'
   timeout: 30s
 ```
 

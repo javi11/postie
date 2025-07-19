@@ -9,7 +9,8 @@ import { t } from "$lib/i18n";
 import { appStatus, progress } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import { uploadActions } from "$lib/stores/upload";
-import { PlusOutline } from "flowbite-svelte-icons";
+import type { ProgressStatus } from "$lib/types";
+import { Plus } from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
 
 let needsConfiguration = false;
@@ -17,10 +18,7 @@ let criticalConfigError = false;
 let isDragOver = false;
 let dragCounter = 0;
 
-onMount(async () => {
-	// Initialize API client
-	await apiClient.initialize();
-
+onMount(() => {
 	// Set up drag over detection for UI feedback
 	window.addEventListener("dragenter", handleDragEnter);
 	window.addEventListener("dragleave", handleDragLeave);
@@ -28,63 +26,49 @@ onMount(async () => {
 	window.addEventListener("drop", handleDrop);
 
 	// Listen for file drop events from backend
-	await apiClient.on("file-drop-success", (count) => {
+	apiClient.on("file-drop-success", () => {
 		// Hide overlay when files are successfully processed
 		isDragOver = false;
 		dragCounter = 0;
-		toastStore.success(
-			$t("common.common.success"),
-			$t("common.messages.files_added_description"),
-		);
 	});
 
-	await apiClient.on("file-drop-error", (error) => {
+	apiClient.on("file-drop-error", (error) => {
+		const errMessage = error as string;
 		// Hide overlay when there's an error
 		isDragOver = false;
 		dragCounter = 0;
-		toastStore.error($t("common.common.error"), error);
+		toastStore.error($t("common.common.error"), errMessage);
 	});
 
-	// Listen for queue updates (from drag and drop or other sources)
-	await apiClient.on("queue-updated", () => {
-		// This event is emitted when files are added to queue via drag and drop
-		// The QueueSection component should automatically refresh its data
-		console.log("Queue updated via drag and drop");
-	});
-
-	// Listen for upload progress events from server
-	await apiClient.on("upload-progress", (data) => {
-		console.log("Upload progress:", data);
-		// Server progress events help track the processing stage
-	});
-
-	await apiClient.on("upload-complete", (data) => {
+	apiClient.on("upload-complete", (data) => {
 		console.log("Upload complete:", data);
 		// Mark all processing files as completed when upload is complete
 		uploadActions.completeUpload();
 	});
 
-	await apiClient.on("upload-error", (data) => {
-		console.log("Upload error:", data);
+	apiClient.on("upload-error", (error) => {
+		const errMessage = error as string;
+		console.log("Upload error:", errMessage);
 		// Handle upload errors from server
-		toastStore.error($t("common.common.error"), data.error || "Upload failed");
+		toastStore.error($t("common.common.error"), errMessage || "Upload failed");
 	});
 
 	// Listen for progress events
-	await apiClient.on("progress", (data) => {
+	apiClient.on("progress", (data) => {
+		const d = data as ProgressStatus;
 		progress.update((jobs) => {
 			// For direct uploads without jobID, use a default key
-			const jobKey = data.jobID;
+			const jobKey = d.jobID;
 
 			// Remove job if not running (completed, cancelled, or error)
-			if (!data.isRunning) {
+			if (!d.isRunning) {
 				const { [jobKey]: _, ...rest } = jobs;
 				return rest;
 			}
 
 			// Otherwise, update/add job
 			// Ensure jobID is set for UI consistency
-			const jobData = { ...data, jobID: jobKey };
+			const jobData = { ...d, jobID: jobKey };
 			return { ...jobs, [jobKey]: jobData };
 		});
 	});
@@ -271,7 +255,7 @@ async function handleUpload() {
     <div class="drag-overlay">
       <div class="drag-overlay-content">
         <div class="drag-icon">
-          <PlusOutline class="w-16 h-16 text-white" />
+          <Plus class="w-16 h-16 text-white" />
         </div>
         <h2 class="text-2xl font-bold text-white mb-2">Drop Files Here</h2>
         <p class="text-white/80">Release to add files to queue</p>

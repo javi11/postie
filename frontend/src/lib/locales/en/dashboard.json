@@ -1,0 +1,102 @@
+{
+	"dashboard": {
+		"title": "Dashboard",
+		"header": {
+			"title": "Upload Dashboard",
+			"description": "Manage your file uploads and monitor progress",
+			"add_files": "Add Files",
+			"clear_completed": "Clear Completed"
+		},
+		"queue": {
+			"title": "Upload Queue",
+			"items": "items",
+			"total_size": "Total Size",
+			"nzb": "NZB",
+			"progress": "Progress",
+			"no_items": "No items in queue",
+			"no_items_description": "Upload files to see them here",
+			"file": "File",
+			"size": "Size",
+			"status": "Status",
+			"created": "Created",
+			"actions": "Actions",
+			"completed_at": "Completed:",
+			"completed": "Completed",
+			"retry": "Retry",
+			"remove": "Remove",
+			"download_nzb": "NZB",
+			"increase_priority": "Increase priority",
+			"decrease_priority": "Decrease priority",
+			"remove_from_queue": "Remove from queue",
+			"items_per_page": "Items per page",
+			"showing": "Showing",
+			"to": "to",
+			"of": "of",
+			"entries": "entries",
+			"previous": "Previous",
+			"next": "Next",
+			"status_types": {
+				"pending": "pending",
+				"complete": "complete",
+				"error": "error",
+				"waiting": "Waiting",
+				"processing": "Processing",
+				"completed": "Completed",
+				"failed": "Failed"
+			}
+		},
+		"progress": {
+			"title": "Upload Progress",
+			"status": {
+				"active": "Active",
+				"idle": "Idle"
+			},
+			"job_title": "Job {jobId}",
+			"cancel_upload": "Cancel Upload",
+			"overall": "Overall Progress",
+			"current_file": "Current File",
+			"elapsed_time": "Elapsed Time",
+			"upload_speed": "Upload Speed",
+			"estimated_remaining": "Estimated Remaining",
+			"stage": "Stage",
+			"details": "Details",
+			"last_update": "Last Update",
+			"no_upload_title": "No upload in progress",
+			"no_upload_description": "Click \"Start Upload\" to begin processing the queue"
+		},
+		"stats": {
+			"title": "Statistics",
+			"uploaded": "Uploaded",
+			"pending": "Pending",
+			"running": "Running",
+			"complete": "Complete",
+			"completed": "Completed",
+			"errors": "Errors",
+			"failed": "Failed",
+			"in_progress": "In Progress",
+			"rate": "Upload Rate",
+			"queue_stats": {
+				"title": "Queue Statistics",
+				"overview": "Real-time view of your upload queue status",
+				"total_items": "Total Items",
+				"waiting_to_process": "Waiting to process",
+				"currently_processing": "Currently processing",
+				"successfully_finished": "Successfully finished",
+				"errors_detected": "Errors Detected",
+				"failed_to_process": "Items that failed to process",
+				"failed_items": "Failed items",
+				"queue_progress": "Queue Progress",
+				"overall_completion": "Overall completion status",
+				"no_items": "No items in queue",
+				"upload_files_prompt": "Upload some files to see queue statistics"
+			}
+		},
+		"alerts": {
+			"config_error": "Configuration Error",
+			"config_error_description": "There was an error with your server configuration (e.g., invalid hostname, connection failure). Please check your {{settingsLink}} to fix the configuration.",
+			"config_required": "Configuration Required",
+			"config_required_description": "Please configure at least one server in the {{settingsLink}} page before uploading files.",
+			"settings_link": "Settings"
+		}
+	}
+}

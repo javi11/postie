@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -148,7 +147,8 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 	slog.Info("Processing file", "msg", msg.ID, "path", job.Path)
 
 	// Process the file
-	if err := p.processFile(ctx, msg, job); err != nil {
+	actualNzbPath, err := p.processFile(ctx, msg, job)
+	if err != nil {
 		if err == context.Canceled {
 			// Remove the job from the queue
 			if err := p.queue.RemoveFromQueue(string(msg.ID)); err != nil {
@@ -163,13 +163,9 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 		return p.handleProcessingError(ctx, msg, job, string(msg.ID), err)
 	}
 
-	// Generate the NZB path that would have been created by the postie.Post method
-	// Since we're processing a single file, the NZB will be in the output folder with the same base name
-	nzbFilename := p.generateNZBFilename(job.Path)
-	nzbPath := filepath.Join(p.outputFolder, nzbFilename)
-
+	// Use the actual NZB path returned by the postie.Post method
 	// Mark as completed with the NZB path and job data
-	if err := p.queue.CompleteFile(ctx, msg.ID, nzbPath, job); err != nil {
+	if err := p.queue.CompleteFile(ctx, msg.ID, actualNzbPath, job); err != nil {
 		slog.ErrorContext(ctx, "Error marking file as completed", "error", err, "path", job.Path)
 		return err
 	}
@@ -177,7 +173,7 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 	return nil
 }
 
-func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *queue.FileJob) error {
+func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *queue.FileJob) (string, error) {
 	fileName := getFileName(job.Path)
 	jobID := string(msg.ID)
 
@@ -210,18 +206,19 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 
 	// Emit progress start event
 	if p.eventEmitter != nil {
-		p.eventEmitter("progress", map[string]interface{}{
-			"currentFile":         fileName,
-			"totalFiles":          1,
-			"completedFiles":      0,
-			"stage":               "Processing",
-			"details":             fmt.Sprintf("Processing %s", fileName),
-			"isRunning":           true,
-			"lastUpdate":          time.Now().Unix(),
-			"percentage":          0,
-			"currentFileProgress": 0,
-			"jobID":               jobID,
-		})
+		progressStatus := config.ProgressStatus{
+			CurrentFile:         fileName,
+			TotalFiles:          1,
+			CompletedFiles:      0,
+			Stage:               "Processing",
+			Details:             fmt.Sprintf("Processing %s", fileName),
+			IsRunning:           true,
+			LastUpdate:          time.Now().Unix(),
+			Percentage:          0,
+			CurrentFileProgress: 0,
+			JobID:               jobID,
+		}
+		p.eventEmitter("progress", progressStatus)
 	}
 
 	// Create file info
@@ -246,21 +243,22 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 		p.jobsMux.Unlock()
 
 		if p.eventEmitter != nil {
-			p.eventEmitter("progress", map[string]interface{}{
-				"currentFile":         fileName,
-				"totalFiles":          1,
-				"completedFiles":      0,
-				"stage":               stage,
-				"details":             details,
-				"isRunning":           true,
-				"lastUpdate":          time.Now().Unix(),
-				"percentage":          fileProgress,
-				"currentFileProgress": fileProgress,
-				"jobID":               jobID,
-				"speed":               speed,
-				"secondsLeft":         secondsLeft,
-				"elapsedTime":         elapsedTime,
-			})
+			progressStatus := config.ProgressStatus{
+				CurrentFile:         fileName,
+				TotalFiles:          1,
+				CompletedFiles:      0,
+				Stage:               stage,
+				Details:             details,
+				IsRunning:           true,
+				LastUpdate:          time.Now().Unix(),
+				Percentage:          fileProgress,
+				CurrentFileProgress: fileProgress,
+				JobID:               jobID,
+				Speed:               speed,
+				SecondsLeft:         secondsLeft,
+				ElapsedTime:         elapsedTime,
+			}
+			p.eventEmitter("progress", progressStatus)
 		}
 
 		// Extend timeout for long-running operations
@@ -280,69 +278,73 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 	inputFolder := filepath.Dir(job.Path)
 
 	// Post the file using the job-specific context
-	if err := p.postie.Post(jobCtx, []fileinfo.FileInfo{fileInfo}, inputFolder, p.outputFolder); err != nil {
+	actualNzbPath, err := p.postie.Post(jobCtx, []fileinfo.FileInfo{fileInfo}, inputFolder, p.outputFolder)
+	if err != nil {
 		// Check if this was a cancellation
 		if err == context.Canceled {
 			// Emit cancellation event
 			if p.eventEmitter != nil {
-				p.eventEmitter("progress", map[string]interface{}{
-					"currentFile":         fileName,
-					"totalFiles":          1,
-					"completedFiles":      0,
-					"stage":               "Cancelled",
-					"details":             fmt.Sprintf("Cancelled %s", fileName),
-					"isRunning":           false,
-					"lastUpdate":          time.Now().Unix(),
-					"percentage":          0,
-					"currentFileProgress": 0,
-					"jobID":               jobID,
-					"speed":               0,
-					"secondsLeft":         0,
-					"elapsedTime":         0,
-				})
+				progressStatus := config.ProgressStatus{
+					CurrentFile:         fileName,
+					TotalFiles:          1,
+					CompletedFiles:      0,
+					Stage:               "Cancelled",
+					Details:             fmt.Sprintf("Cancelled %s", fileName),
+					IsRunning:           false,
+					LastUpdate:          time.Now().Unix(),
+					Percentage:          0,
+					CurrentFileProgress: 0,
+					JobID:               jobID,
+					Speed:               0,
+					SecondsLeft:         0,
+					ElapsedTime:         0,
+				}
+				p.eventEmitter("progress", progressStatus)
 			}
-			return context.Canceled
+			return "", context.Canceled
 		}
 
 		// Emit error progress event
 		if p.eventEmitter != nil {
-			p.eventEmitter("progress", map[string]interface{}{
-				"currentFile":         fileName,
-				"totalFiles":          1,
-				"completedFiles":      0,
-				"stage":               "Error",
-				"details":             fmt.Sprintf("Error processing %s: %v", fileName, err),
-				"isRunning":           false,
-				"lastUpdate":          time.Now().Unix(),
-				"percentage":          0,
-				"currentFileProgress": 0,
-				"jobID":               jobID,
-				"speed":               0,
-				"secondsLeft":         0,
-				"elapsedTime":         0,
-			})
+			progressStatus := config.ProgressStatus{
+				CurrentFile:         fileName,
+				TotalFiles:          1,
+				CompletedFiles:      0,
+				Stage:               "Error",
+				Details:             fmt.Sprintf("Error processing %s: %v", fileName, err),
+				IsRunning:           false,
+				LastUpdate:          time.Now().Unix(),
+				Percentage:          0,
+				CurrentFileProgress: 0,
+				JobID:               jobID,
+				Speed:               0,
+				SecondsLeft:         0,
+				ElapsedTime:         0,
+			}
+			p.eventEmitter("progress", progressStatus)
 		}
 
-		return err
+		return "", err
 	}
 
 	// Emit completion progress event
 	if p.eventEmitter != nil {
-		p.eventEmitter("progress", map[string]interface{}{
-			"currentFile":         fileName,
-			"totalFiles":          1,
-			"completedFiles":      1,
-			"stage":               "Completed",
-			"details":             fmt.Sprintf("Completed %s", fileName),
-			"isRunning":           false,
-			"lastUpdate":          time.Now().Unix(),
-			"percentage":          100,
-			"currentFileProgress": 100,
-			"jobID":               jobID,
-			"speed":               0,
-			"secondsLeft":         0,
-			"elapsedTime":         0,
-		})
+		progressStatus := config.ProgressStatus{
+			CurrentFile:         fileName,
+			TotalFiles:          1,
+			CompletedFiles:      1,
+			Stage:               "Completed",
+			Details:             fmt.Sprintf("Completed %s", fileName),
+			IsRunning:           false,
+			LastUpdate:          time.Now().Unix(),
+			Percentage:          100,
+			CurrentFileProgress: 100,
+			JobID:               jobID,
+			Speed:               0,
+			SecondsLeft:         0,
+			ElapsedTime:         0,
+		}
+		p.eventEmitter("progress", progressStatus)
 	}
 
 	// Delete the original file
@@ -352,7 +354,7 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 		}
 	}
 
-	return nil
+	return actualNzbPath, nil
 }
 
 func (p *Processor) handleProcessingError(ctx context.Context, msg *goqite.Message, job *queue.FileJob, jobID string, err error) error {
@@ -378,18 +380,19 @@ func (p *Processor) handleProcessingError(ctx context.Context, msg *goqite.Messa
 
 	// Emit error event
 	if p.eventEmitter != nil {
-		p.eventEmitter("progress", map[string]interface{}{
-			"currentFile":         getFileName(job.Path),
-			"totalFiles":          1,
-			"completedFiles":      0,
-			"stage":               "Error",
-			"details":             fmt.Sprintf("Error processing %s: %v", getFileName(job.Path), err),
-			"isRunning":           false,
-			"lastUpdate":          time.Now().Unix(),
-			"percentage":          0,
-			"currentFileProgress": 0,
-			"jobID":               jobID,
-		})
+		progressStatus := config.ProgressStatus{
+			CurrentFile:         getFileName(job.Path),
+			TotalFiles:          1,
+			CompletedFiles:      0,
+			Stage:               "Error",
+			Details:             fmt.Sprintf("Error processing %s: %v", getFileName(job.Path), err),
+			IsRunning:           false,
+			LastUpdate:          time.Now().Unix(),
+			Percentage:          0,
+			CurrentFileProgress: 0,
+			JobID:               jobID,
+		}
+		p.eventEmitter("progress", progressStatus)
 	}
 
 	return nil
@@ -425,21 +428,22 @@ func (p *Processor) CancelJob(jobID string) error {
 
 	// Emit immediate cancellation event to frontend
 	if p.eventEmitter != nil {
-		p.eventEmitter("progress", map[string]interface{}{
-			"currentFile":         fileName,
-			"totalFiles":          1,
-			"completedFiles":      0,
-			"stage":               "Cancelled",
-			"details":             fmt.Sprintf("Cancelled %s", fileName),
-			"isRunning":           false,
-			"lastUpdate":          time.Now().Unix(),
-			"percentage":          0,
-			"currentFileProgress": 0,
-			"jobID":               jobID,
-			"speed":               0,
-			"secondsLeft":         0,
-			"elapsedTime":         0,
-		})
+		progressStatus := config.ProgressStatus{
+			CurrentFile:         fileName,
+			TotalFiles:          1,
+			CompletedFiles:      0,
+			Stage:               "Cancelled",
+			Details:             fmt.Sprintf("Cancelled %s", fileName),
+			IsRunning:           false,
+			LastUpdate:          time.Now().Unix(),
+			Percentage:          0,
+			CurrentFileProgress: 0,
+			JobID:               jobID,
+			Speed:               0,
+			SecondsLeft:         0,
+			ElapsedTime:         0,
+		}
+		p.eventEmitter("progress", progressStatus)
 	}
 
 	slog.Info("Job cancelled", "jobID", jobID)
@@ -500,20 +504,6 @@ func (p *Processor) IsPathBeingProcessed(path string) bool {
 	return false
 }
 
-// generateNZBFilename creates the NZB filename based on the configuration
-func (p *Processor) generateNZBFilename(originalFilePath string) string {
-	basename := filepath.Base(originalFilePath)
-
-	if p.maintainOriginalExtension {
-		// Keep original extension: filename.ext.nzb
-		return basename + ".nzb"
-	} else {
-		// Remove original extension: filename.nzb
-		ext := filepath.Ext(basename)
-		nameWithoutExt := strings.TrimSuffix(basename, ext)
-		return nameWithoutExt + ".nzb"
-	}
-}
 
 func getFileName(path string) string {
 	// Simple filename extraction

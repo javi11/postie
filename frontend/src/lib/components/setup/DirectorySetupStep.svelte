@@ -1,17 +1,21 @@
 <script lang="ts">
-import { createEventDispatcher } from "svelte";
-import { t } from "$lib/i18n";
-import { Button, Input, Label, Card } from "flowbite-svelte";
-import { FolderOpenSolid } from "flowbite-svelte-icons";
 import apiClient from "$lib/api/client";
+import { t } from "$lib/i18n";
+import { FolderOpen } from "lucide-svelte";
 
-const dispatch = createEventDispatcher();
+interface Props {
+	outputDirectory?: string;
+	watchDirectory?: string;
+	onupdate?: (data: {
+		outputDirectory: string;
+		watchDirectory: string;
+	}) => void;
+}
 
-export let outputDirectory = "";
-export let watchDirectory = "";
+let { outputDirectory = "", watchDirectory = "", onupdate }: Props = $props();
 
 function updateDirectories() {
-	dispatch("update", { outputDirectory, watchDirectory });
+	onupdate?.({ outputDirectory, watchDirectory });
 }
 
 async function selectOutputDirectory() {
@@ -26,18 +30,6 @@ async function selectOutputDirectory() {
 	}
 }
 
-async function selectWatchDirectory() {
-	try {
-		const dir = await apiClient.selectWatchDirectory();
-		if (dir) {
-			watchDirectory = dir;
-			updateDirectories();
-		}
-	} catch (error) {
-		console.error("Failed to select watch directory:", error);
-	}
-}
-
 // Set default output directory if empty
 if (!outputDirectory) {
 	outputDirectory = "./output";
@@ -47,52 +39,55 @@ if (!outputDirectory) {
 
 <div class="space-y-6">
 	<div>
-		<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+		<h3 class="text-lg font-semibold text-base-content mb-2">
 			{$t("setup.directories.title")}
 		</h3>
-		<p class="text-gray-600 dark:text-gray-400 mb-4">
+		<p class="text-base-content/70 mb-4">
 			{$t("setup.directories.description")}
 		</p>
 	</div>
 
 	<div class="space-y-6">
 		<!-- Output Directory -->
-		<Card class="p-4 max-w-full">
-			<div class="mb-4">
-				<h4 class="font-medium text-gray-900 dark:text-white mb-2">
-					{$t("setup.directories.outputDirectory")}
-				</h4>
-				<p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-					{$t("setup.directories.outputDescription")}
-				</p>
+		<div class="card bg-base-100 shadow-xl">
+			<div class="card-body">
+				<div class="mb-4">
+					<h4 class="card-title">
+						{$t("setup.directories.outputDirectory")}
+					</h4>
+					<p class="text-sm text-base-content/70 mb-4">
+						{$t("setup.directories.outputDescription")}
+					</p>
+				</div>
+				<div class="form-control">
+					<label class="label" for="output-dir">
+						<span class="label-text">{$t("setup.directories.outputPath")} *</span>
+					</label>
+					<div class="flex gap-2">
+						<input
+							id="output-dir"
+							class="input input-bordered flex-1"
+							bind:value={outputDirectory}
+							placeholder="./output"
+							required
+							oninput={updateDirectories}
+						/>
+						{#if apiClient.environment === "wails"}
+							<button
+								class="btn btn-outline"
+								onclick={selectOutputDirectory}
+							>
+								<FolderOpen class="w-4 h-4" />
+								{$t("setup.directories.browse")}
+							</button>
+						{/if}
+					</div>
+				</div>
 			</div>
-			<Label for="output-dir" class="mb-2">
-				{$t("setup.directories.outputPath")} *
-			</Label>
-			<div class="flex gap-2">
-				<Input
-					id="output-dir"
-					bind:value={outputDirectory}
-					placeholder="./output"
-					required
-					oninput={updateDirectories}
-					class="flex-1"
-				/>
-				{#if apiClient.environment === "wails"}
-					<Button
-						color="alternative"
-						outline
-						onclick={selectOutputDirectory}
-					>
-						<FolderOpenSolid class="w-4 h-4 mr-1" />
-						{$t("setup.directories.browse")}
-					</Button>
-				{/if}
-			</div>
-		</Card>
+		</div>
 	</div>
 
-	<div class="text-sm text-gray-500 dark:text-gray-400">
+	<div class="text-sm text-base-content/50">
 		<p>* {$t("setup.directories.requiredFields")}</p>
 	</div>
 </div>

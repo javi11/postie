@@ -19,7 +19,7 @@ func TestNewGenerator(t *testing.T) {
 		Level:   0,
 	}
 
-	generator := NewGenerator(segmentSize, compressionConfig)
+	generator := NewGenerator(segmentSize, compressionConfig, true)
 
 	assert.NotNil(t, generator, "Generator should not be nil")
 
@@ -40,7 +40,7 @@ func TestAddArticle(t *testing.T) {
 		Level:   0,
 	}
 
-	generator := NewGenerator(segmentSize, compressionConfig).(*Generator)
+	generator := NewGenerator(segmentSize, compressionConfig, true).(*Generator)
 
 	// Create a test article
 	testArticle := &article.Article{
@@ -113,7 +113,7 @@ func TestAddFileHash(t *testing.T) {
 		Level:   0,
 	}
 
-	generator := NewGenerator(segmentSize, compressionConfig).(*Generator)
+	generator := NewGenerator(segmentSize, compressionConfig, true).(*Generator)
 
 	// Add a file hash
 	filename := "test-file.txt"
@@ -134,7 +134,7 @@ func TestGenerate(t *testing.T) {
 			Level:   0,
 		}
 
-		generator := NewGenerator(segmentSize, compressionConfig).(*Generator)
+		generator := NewGenerator(segmentSize, compressionConfig, true).(*Generator)
 
 		// Add test articles
 		testArticle1 := &article.Article{
@@ -181,15 +181,15 @@ func TestGenerate(t *testing.T) {
 		outputPath := filepath.Join(tempDir, "test.nzb")
 
 		// Generate the NZB file
-		err = generator.Generate(outputPath)
+		finalPath, err := generator.Generate(outputPath)
 		require.NoError(t, err, "Failed to generate NZB file")
 
 		// Check that the NZB file was created
-		_, err = os.Stat(outputPath)
+		_, err = os.Stat(finalPath)
 		assert.NoError(t, err, "NZB file should exist")
 
 		// Parse the NZB file to check its contents
-		nzbFile, err := Parse(outputPath)
+		nzbFile, err := Parse(finalPath)
 		require.NoError(t, err, "Failed to parse NZB file")
 
 		// Check the NZB file contents
@@ -211,7 +211,7 @@ func TestGenerate(t *testing.T) {
 			Level:   3,
 		}
 
-		generator := NewGenerator(segmentSize, compressionConfig).(*Generator)
+		generator := NewGenerator(segmentSize, compressionConfig, true).(*Generator)
 
 		// Add test articles
 		testArticle1 := &article.Article{
@@ -239,11 +239,11 @@ func TestGenerate(t *testing.T) {
 		outputPath := filepath.Join(tempDir, "test.nzb")
 
 		// Generate the NZB file
-		err = generator.Generate(outputPath)
+		finalPath, err := generator.Generate(outputPath)
 		require.NoError(t, err, "Failed to generate NZB file")
 
 		// Check that the compressed NZB file was created
-		_, err = os.Stat(outputPath + ".zst")
+		_, err = os.Stat(finalPath)
 		assert.NoError(t, err, "Compressed NZB file should exist")
 	})
 
@@ -255,7 +255,7 @@ func TestGenerate(t *testing.T) {
 			Level:   4,
 		}
 
-		generator := NewGenerator(segmentSize, compressionConfig).(*Generator)
+		generator := NewGenerator(segmentSize, compressionConfig, true).(*Generator)
 
 		// Add test articles
 		testArticle1 := &article.Article{
@@ -283,11 +283,11 @@ func TestGenerate(t *testing.T) {
 		outputPath := filepath.Join(tempDir, "test.nzb")
 
 		// Generate the NZB file
-		err = generator.Generate(outputPath)
+		finalPath, err := generator.Generate(outputPath)
 		require.NoError(t, err, "Failed to generate NZB file")
 
 		// Check that the compressed NZB file was created
-		_, err = os.Stat(outputPath + ".br")
+		_, err = os.Stat(finalPath)
 		assert.NoError(t, err, "Compressed NZB file should exist")
 	})
 
@@ -299,7 +299,7 @@ func TestGenerate(t *testing.T) {
 			Level:   0,
 		}
 
-		generator := NewGenerator(segmentSize, compressionConfig).(*Generator)
+		generator := NewGenerator(segmentSize, compressionConfig, true).(*Generator)
 
 		// Create a temporary directory for the NZB file
 		tempDir, err := os.MkdirTemp("", "nzb-test")
@@ -312,7 +312,7 @@ func TestGenerate(t *testing.T) {
 		outputPath := filepath.Join(tempDir, "test.nzb")
 
 		// Generate the NZB file
-		err = generator.Generate(outputPath)
+		_, err = generator.Generate(outputPath)
 		assert.Error(t, err, "Generate should fail with no articles")
 		assert.Contains(t, err.Error(), "no articles found", "Error message should indicate no articles")
 	})
@@ -493,7 +493,7 @@ func TestCompressWithZstd(t *testing.T) {
 		Level:   3,
 	}
 
-	generator := NewGenerator(segmentSize, compressionConfig).(*Generator)
+	generator := NewGenerator(segmentSize, compressionConfig, true).(*Generator)
 
 	// Create test data
 	testData := []byte("This is test data for compression")
@@ -526,7 +526,7 @@ func TestCompressWithBrotli(t *testing.T) {
 		Level:   4,
 	}
 
-	generator := NewGenerator(segmentSize, compressionConfig).(*Generator)
+	generator := NewGenerator(segmentSize, compressionConfig, true).(*Generator)
 
 	// Create test data
 	testData := []byte("This is test data for compression")

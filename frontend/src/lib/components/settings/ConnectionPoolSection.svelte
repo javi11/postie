@@ -1,11 +1,16 @@
 <script lang="ts">
+import apiClient from "$lib/api/client";
 import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 import { t } from "$lib/i18n";
-import type { ConfigData } from "$lib/types";
-import { Card, Checkbox, Heading, Input, Label, P } from "flowbite-svelte";
-import { LinkOutline } from "flowbite-svelte-icons";
+import { toastStore } from "$lib/stores/toast";
+import type { config as configType } from "$lib/wailsjs/go/models";
+import { Link, Save } from "lucide-svelte";
 
-export let config: ConfigData;
+interface Props {
+	config: configType.ConfigData;
+}
+
+const { config }: Props = $props();
 
 // Ensure connection_pool exists with defaults
 if (!config.connection_pool) {
@@ -16,6 +21,73 @@ if (!config.connection_pool) {
 	};
 }
 
+// Reactive local state
+let minConnections = $state(config.connection_pool.min_connections || 5);
+let healthCheckInterval = $state(config.connection_pool.health_check_interval || "1m");
+let skipProvidersVerification = $state(config.connection_pool.skip_providers_verification_on_creation ?? false);
+let saving = $state(false);
+
+// Derived state
+let canSave = $derived(
+	minConnections > 0 && 
+	minConnections <= 50 && 
+	healthCheckInterval.trim() && 
+	!saving
+);
+
+// Sync local state back to config
+$effect(() => {
+	config.connection_pool.min_connections = minConnections;
+});
+
+$effect(() => {
+	config.connection_pool.health_check_interval = healthCheckInterval;
+});
+
+$effect(() => {
+	config.connection_pool.skip_providers_verification_on_creation = skipProvidersVerification;
+});
+
+async function saveConnectionPoolSettings() {
+	if (!canSave) return;
+	
+	try {
+		saving = true;
+
+		// Validation
+		if (minConnections < 1 || minConnections > 50) {
+			throw new Error("Min connections must be between 1 and 50");
+		}
+		
+		if (!healthCheckInterval.trim()) {
+			throw new Error("Health check interval is required");
+		}
+
+		// Get current config to avoid conflicts
+		const currentConfig = await apiClient.getConfig();
+
+		// Update only connection pool section
+		currentConfig.connection_pool = {
+			...currentConfig.connection_pool,
+			min_connections: minConnections,
+			health_check_interval: healthCheckInterval.trim(),
+			skip_providers_verification_on_creation: skipProvidersVerification,
+		};
+
+		await apiClient.saveConfig(currentConfig);
+
+		toastStore.success(
+			$t("settings.connection_pool.saved_success"),
+			$t("settings.connection_pool.saved_success_description")
+		);
+	} catch (error) {
+		console.error("Failed to save connection pool settings:", error);
+		toastStore.error($t("common.messages.error_saving"), String(error));
+	} finally {
+		saving = false;
+	}
+}
+
 const healthCheckPresets = [
 	{ label: "30s", value: 30, unit: "s" },
 	{ label: "1m", value: 1, unit: "m" },
@@ -24,35 +96,37 @@ const healthCheckPresets = [
 ];
 </script>
 
-<Card class="max-w-full shadow-sm p-5">
-  <div class="space-y-6">
+<div class="card bg-base-100 shadow-xl">
+  <div class="card-body space-y-6">
     <div class="flex items-center gap-3">
-      <LinkOutline class="w-5 h-5 text-purple-600 dark:text-purple-400" />
-      <Heading
-        tag="h2"
-        class="text-lg font-semibold text-gray-900 dark:text-white"
-      >
+      <Link class="w-5 h-5 text-purple-600 dark:text-purple-400" />
+      <h2 class="card-title text-lg">
         {$t('settings.connection_pool.title')}
-      </Heading>
+      </h2>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div>
-        <Label for="min-connections" class="mb-2">{$t('settings.connection_pool.min_connections')}</Label>
-        <Input
+      <div class="form-control">
+        <label class="label" for="min-connections">
+          <span class="label-text">{$t('settings.connection_pool.min_connections')}</span>
+        </label>
+        <input
           id="min-connections"
           type="number"
-          bind:value={config.connection_pool.min_connections}
+          class="input input-bordered"
+          bind:value={minConnections}
           min="1"
           max="50"
         />
-        <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-          {$t('settings.connection_pool.min_connections_description')}
-        </P>
+        <div class="label">
+          <span class="label-text-alt">
+            {$t('settings.connection_pool.min_connections_description')}
+          </span>
+        </div>
       </div>
 
       <DurationInput
-        bind:value={config.connection_pool.health_check_interval}
+        bind:value={healthCheckInterval}
         label={$t('settings.connection_pool.health_check_interval')}
         description={$t('settings.connection_pool.health_check_interval_description')}
         presets={healthCheckPresets}
@@ -60,28 +134,39 @@ const healthCheckPresets = [
       />
     </div>
 
-    <div class="space-y-3">
-      <div class="flex items-center gap-3">
-        <Checkbox
-          bind:checked={
-            config.connection_pool.skip_providers_verification_on_creation
-          }
+    <div class="form-control">
+      <label class="label cursor-pointer justify-start gap-3">
+        <input
+          type="checkbox"
+          class="checkbox"
+          bind:checked={skipProvidersVerification}
         />
-        <Label class="text-sm font-medium"
-          >{$t('settings.connection_pool.skip_providers_verification_on_creation')}</Label
-        >
+        <span class="label-text">{$t('settings.connection_pool.skip_providers_verification_on_creation')}</span>
+      </label>
+      <div class="label">
+        <span class="label-text-alt ml-8">
+          {$t('settings.connection_pool.skip_providers_verification_on_creation_description')}
+        </span>
       </div>
-      <P class="text-sm text-gray-600 dark:text-gray-400 ml-6">
-        {$t('settings.connection_pool.skip_providers_verification_on_creation_description')}
-      </P>
     </div>
 
-    <div
-      class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded"
-    >
-      <P class="text-sm text-blue-800 dark:text-blue-200">
+    <div class="alert alert-info">
+      <span class="text-sm">
         <strong>{$t('settings.connection_pool.info_title')}</strong> {$t('settings.connection_pool.info_description')}
-      </P>
+      </span>
+    </div>
+
+    <!-- Save Button -->
+    <div class="pt-4 border-t border-base-300">
+      <button
+        type="button"
+        class="btn btn-success"
+        onclick={saveConnectionPoolSettings}
+        disabled={!canSave}
+      >
+        <Save class="w-4 h-4" />
+        {saving ? $t('common.common.saving') : $t('settings.connection_pool.save_button')}
+      </button>
     </div>
   </div>
-</Card>
+</div>

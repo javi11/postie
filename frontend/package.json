@@ -7,29 +7,28 @@
 		"dev": "vite dev",
 		"build": "vite build",
 		"preview": "vite preview",
-		"check": "biome check --write && svelte-kit sync && svelte-check --ignore \"node_modules\" --no-tsconfig",
-		"check:watch": "biome check --write --watch && svelte-kit sync && svelte-check --ignore \"node_modules\" --no-tsconfig --watch"
+		"check": "svelte-kit sync && svelte-check --no-tsconfig",
+		"check:watch": "svelte-kit sync && svelte-check --no-tsconfig --watch"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "1.9.4",
 		"@sveltejs/adapter-static": "^3.0.8",
 		"@sveltejs/kit": "^2.21.4",
 		"@sveltejs/vite-plugin-svelte": "^5.1.0",
-		"@tailwindcss/vite": "^4.1.8",
+		"@tailwindcss/typography": "^0.5.16",
+		"@tailwindcss/vite": "^4.1.11",
 		"@tsconfig/svelte": "^5.0.4",
 		"@types/node": "^24.0.1",
 		"autoprefixer": "^10.4.21",
-		"flowbite": "^3.1.2",
-		"flowbite-svelte": "^1.6.2",
-		"flowbite-svelte-icons": "^2.2.0",
+		"daisyui": "^5.0.46",
 		"svelte": "^5.33.18",
 		"svelte-check": "^4.2.1",
 		"svelte-preprocess": "^6.0.3",
-		"tailwindcss": "^4.1.8",
+		"tailwindcss": "^4.1.11",
 		"typescript": "^5.8.3",
 		"vite": "^6.3.5"
 	},
 	"dependencies": {
-		"sveltekit-i18n": "^2.4.2"
+		"lucide-svelte": "^0.525.0",
+		"svelte-i18n": "^4.0.1"
 	}
 }

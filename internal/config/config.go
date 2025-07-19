@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -19,7 +20,60 @@ const (
 	defaultVolumeSize     = 153600000 // 150MB
 	defaultRedundancy     = "1n*1.2"  //https://github.com/animetosho/ParPar/blob/6feee4dd94bb18480f0bf08cd9d17ffc7e671b69/help-full.txt#L75
 	defaultMaxInputSlices = 4000
+	// CurrentConfigVersion represents the current configuration version
+	CurrentConfigVersion = 1
 )
+
+// Duration wraps time.Duration to provide custom JSON and YAML marshalling
+type Duration string
+
+// MarshalJSON implements json.Marshaler interface
+func (d Duration) MarshalJSON() ([]byte, error) {
+	return json.Marshal(string(d))
+}
+
+// UnmarshalJSON implements json.Unmarshaler interface
+func (d *Duration) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+
+	duration, err := time.ParseDuration(s)
+	if err != nil {
+		return err
+	}
+
+	*d = Duration(duration.String())
+	return nil
+}
+
+// MarshalYAML implements yaml.Marshaler interface
+func (d Duration) MarshalYAML() (interface{}, error) {
+	return string(d), nil
+}
+
+// UnmarshalYAML implements yaml.Unmarshaler interface
+func (d *Duration) UnmarshalYAML(value *yaml.Node) error {
+	var s string
+	if err := value.Decode(&s); err != nil {
+		return err
+	}
+
+	duration, err := time.ParseDuration(s)
+	if err != nil {
+		return err
+	}
+
+	*d = Duration(duration.String())
+	return nil
+}
+
+// ToDuration converts Duration to time.Duration
+func (d Duration) ToDuration() time.Duration {
+	duration, _ := time.ParseDuration(string(d))
+	return duration
+}
 
 type CompressionType string
 
@@ -30,6 +84,8 @@ const (
 	CompressionTypeZstd CompressionType = "zstd"
 	// Brotli compression
 	CompressionTypeBrotli CompressionType = "brotli"
+	// ZIP compression
+	CompressionTypeZip CompressionType = "zip"
 )
 
 type GroupPolicy string
@@ -44,8 +100,8 @@ const (
 type MessageIDFormat string
 
 const (
-	// NGX: the Message-ID will be formatted as https://github.com/javi11/nxg
-	MessageIDFormatNGX MessageIDFormat = "ngx"
+	// NXG: the Message-ID will be formatted as https://github.com/javi11/nxg
+	MessageIDFormatNXG MessageIDFormat = "nxg"
 	// Random: the Message-ID will be a random string of 32 characters
 	MessageIDFormatRandom MessageIDFormat = "random"
 )
@@ -58,7 +114,7 @@ const (
 	// - Filename: will be obfuscated
 	// - Yenc header filename: will be randomized for every article
 	// - Date: will be randomized for every article within last 6 hours
-	// - NGX-header: will not be added
+	// - NXG-header: will not be added
 	// - Poster: will be random for each article
 	ObfuscationPolicyFull ObfuscationPolicy = "full"
 	// Will do the following obfuscation:
@@ -85,13 +141,14 @@ type Config interface {
 }
 
 type ConnectionPoolConfig struct {
-	MinConnections                      int           `yaml:"min_connections" json:"min_connections"`
-	HealthCheckInterval                 time.Duration `yaml:"health_check_interval" json:"health_check_interval"`
-	SkipProvidersVerificationOnCreation bool          `yaml:"skip_providers_verification_on_creation" json:"skip_providers_verification_on_creation"`
+	MinConnections                      int      `yaml:"min_connections" json:"min_connections"`
+	HealthCheckInterval                 Duration `yaml:"health_check_interval" json:"health_check_interval"`
+	SkipProvidersVerificationOnCreation bool     `yaml:"skip_providers_verification_on_creation" json:"skip_providers_verification_on_creation"`
 }
 
 // config is the internal implementation of the Config interface
 type ConfigData struct {
+	Version        int                  `yaml:"version" json:"version"`
 	Servers        []ServerConfig       `yaml:"servers" json:"servers"`
 	ConnectionPool ConnectionPoolConfig `yaml:"connection_pool" json:"connection_pool"`
 	Posting        PostingConfig        `yaml:"posting" json:"posting"`
@@ -134,8 +191,8 @@ type ServerConfig struct {
 type PostHeaders struct {
 	// Whether to add the X-NXG header to the uploaded articles (You will still see this header in the generated NZB). Default value is `true`.
 	// If obfuscation policy is `FULL` this header will not be added.
-	// If message_id_format is not `ngx` this header will not be added.
-	AddNGXHeader bool `yaml:"add_ngx_header" json:"add_ngx_header"`
+	// If message_id_format is not `nxg` this header will not be added.
+	AddNXGHeader bool `yaml:"add_nxg_header" json:"add_nxg_header"`
 	// The default from header for the uploaded articles. By default a random poster will be used for each article. This will override GenerateFromByArticle
 	DefaultFrom string `yaml:"default_from" json:"default_from"`
 	// Add custom headers to the uploaded articles. Subject, From, Newsgroups, Message-ID and Date can not be override.
@@ -151,7 +208,7 @@ type PostCheck struct {
 	// If enabled articles will be checked after being posted. Default value is `true`.
 	Enabled *bool `yaml:"enabled" json:"enabled"`
 	// Delay between retries. Default value is `10s`.
-	RetryDelay time.Duration `yaml:"delay" json:"delay"`
+	RetryDelay Duration `yaml:"delay" json:"delay"`
 	// The maximum number of re-posts if article check fails. Default value is `1`.
 	MaxRePost uint `yaml:"max_reposts" json:"max_reposts"`
 }
@@ -160,11 +217,10 @@ type PostCheck struct {
 type PostingConfig struct {
 	WaitForPar2        *bool           `yaml:"wait_for_par2" json:"wait_for_par2"`
 	MaxRetries         int             `yaml:"max_retries" json:"max_retries"`
-	RetryDelay         time.Duration   `yaml:"retry_delay" json:"retry_delay"`
+	RetryDelay         Duration        `yaml:"retry_delay" json:"retry_delay"`
 	ArticleSizeInBytes uint64          `yaml:"article_size_in_bytes" json:"article_size_in_bytes"`
 	Groups             []string        `yaml:"groups" json:"groups"`
 	ThrottleRate       int64           `yaml:"throttle_rate" json:"throttle_rate"` // bytes per second
-	MaxWorkers         int             `yaml:"max_workers" json:"max_workers"`
 	MessageIDFormat    MessageIDFormat `yaml:"message_id_format" json:"message_id_format"`
 	PostHeaders        PostHeaders     `yaml:"post_headers" json:"post_headers"`
 	// If true the uploaded subject and filename will be obfuscated. Default value is `true`.
@@ -181,7 +237,7 @@ type WatcherConfig struct {
 	Schedule           ScheduleConfig `yaml:"schedule" json:"schedule"`
 	IgnorePatterns     []string       `yaml:"ignore_patterns" json:"ignore_patterns"`
 	MinFileSize        int64          `yaml:"min_file_size" json:"min_file_size"`
-	CheckInterval      time.Duration  `yaml:"check_interval" json:"check_interval"`
+	CheckInterval      Duration       `yaml:"check_interval" json:"check_interval"`
 	DeleteOriginalFile bool           `yaml:"delete_original_file" json:"delete_original_file"`
 }
 
@@ -214,10 +270,46 @@ type QueueConfig struct {
 type PostUploadScriptConfig struct {
 	// Whether to enable the post upload script execution. Default value is `false`.
 	Enabled bool `yaml:"enabled" json:"enabled"`
-	// Command to execute after NZB generation. Use {{nzb_path}} placeholder for the NZB file path
+	// Command to execute after NZB generation. Use {nzb_path} placeholder for the NZB file path
 	Command string `yaml:"command" json:"command"`
 	// Timeout for script execution. Default value is `30s`.
-	Timeout time.Duration `yaml:"timeout" json:"timeout"`
+	Timeout Duration `yaml:"timeout" json:"timeout"`
+}
+
+// Par2DownloadStatus represents the status of par2 executable download
+type Par2DownloadStatus struct {
+	Status  string `json:"status"`  // "downloading", "completed", "error"
+	Message string `json:"message"` // Human readable message
+}
+
+// ProgressStatus represents the progress of file processing operations
+type ProgressStatus struct {
+	CurrentFile         string  `json:"currentFile"`
+	TotalFiles          int     `json:"totalFiles"`
+	CompletedFiles      int     `json:"completedFiles"`
+	Stage               string  `json:"stage"`
+	Details             string  `json:"details"`
+	IsRunning           bool    `json:"isRunning"`
+	LastUpdate          int64   `json:"lastUpdate"`
+	Percentage          float64 `json:"percentage"`
+	CurrentFileProgress float64 `json:"currentFileProgress"`
+	JobID               string  `json:"jobID"`
+	TotalBytes          int64   `json:"totalBytes"`
+	TransferredBytes    int64   `json:"transferredBytes"`
+	CurrentFileBytes    int64   `json:"currentFileBytes"`
+	Speed               float64 `json:"speed"`
+	SecondsLeft         float64 `json:"secondsLeft"`
+	ElapsedTime         float64 `json:"elapsedTime"`
+}
+
+// IsConfigVersionOutdated checks if the given config version is outdated
+func IsConfigVersionOutdated(configVersion int) bool {
+	// If no version is specified (0), consider it outdated
+	if configVersion == 0 {
+		return true
+	}
+	// If version is less than current, it's outdated
+	return configVersion < CurrentConfigVersion
 }
 
 // Load loads configuration from a file
@@ -234,13 +326,28 @@ func Load(path string) (*ConfigData, error) {
 		return nil, fmt.Errorf("error parsing config file: %w", err)
 	}
 
+	// Check if config version is outdated
+	if IsConfigVersionOutdated(cfg.Version) {
+		slog.Info("Config version is outdated, removing config file",
+			"currentVersion", cfg.Version,
+			"requiredVersion", CurrentConfigVersion,
+			"configPath", path)
+
+		// Remove the outdated config file
+		if err := os.Remove(path); err != nil {
+			slog.Warn("Failed to remove outdated config file", "error", err)
+		}
+
+		return nil, fmt.Errorf("config version %d is outdated (current version: %d), config file removed", cfg.Version, CurrentConfigVersion)
+	}
+
 	// Set default values
 	if cfg.Posting.MaxRetries <= 0 {
 		cfg.Posting.MaxRetries = 3
 	}
 
-	if cfg.Posting.RetryDelay <= 0 {
-		cfg.Posting.RetryDelay = 5 * time.Second
+	if cfg.Posting.RetryDelay == "" {
+		cfg.Posting.RetryDelay = Duration("5s")
 	}
 
 	if cfg.Posting.ArticleSizeInBytes <= 0 {
@@ -298,6 +405,11 @@ func Load(path string) (*ConfigData, error) {
 		cfg.Par2.MaxInputSlices = defaultMaxInputSlices
 	}
 
+	// Set version if not present
+	if cfg.Version == 0 {
+		cfg.Version = CurrentConfigVersion
+	}
+
 	// Set default values for NZB compression
 	if cfg.NzbCompression.Type == "" {
 		cfg.NzbCompression.Type = CompressionTypeNone
@@ -310,6 +422,8 @@ func Load(path string) (*ConfigData, error) {
 			cfg.NzbCompression.Level = 3 // Default zstd level
 		case CompressionTypeBrotli:
 			cfg.NzbCompression.Level = 4 // Default brotli level
+		case CompressionTypeZip:
+			cfg.NzbCompression.Level = 6 // Default zip level
 		}
 	}
 
@@ -342,16 +456,6 @@ func Load(path string) (*ConfigData, error) {
 	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
-
-	maxWorkers := 0
-
-	for _, s := range cfg.Servers {
-		if s.Enabled == nil || *s.Enabled {
-			maxWorkers += s.MaxConnections
-		}
-	}
-
-	cfg.Posting.MaxWorkers = maxWorkers
 
 	return &cfg, nil
 }
@@ -388,6 +492,11 @@ func (c *ConfigData) validate() error {
 			// brotli levels are between 0-11
 			if c.NzbCompression.Level < 0 || c.NzbCompression.Level > 11 {
 				return fmt.Errorf("invalid brotli compression level: %d (must be between 0-11)", c.NzbCompression.Level)
+			}
+		case CompressionTypeZip:
+			// zip levels are between 0-9
+			if c.NzbCompression.Level < 0 || c.NzbCompression.Level > 9 {
+				return fmt.Errorf("invalid zip compression level: %d (must be between 0-9)", c.NzbCompression.Level)
 			}
 		case CompressionTypeNone:
 			// Do nothing
@@ -449,8 +558,8 @@ func (c *ConfigData) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
 		}
 	}
 
-	if c.ConnectionPool.HealthCheckInterval <= 0 {
-		c.ConnectionPool.HealthCheckInterval = time.Minute
+	if c.ConnectionPool.HealthCheckInterval == "" {
+		c.ConnectionPool.HealthCheckInterval = Duration("1m")
 	}
 
 	if c.ConnectionPool.MinConnections <= 0 {
@@ -459,11 +568,11 @@ func (c *ConfigData) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
 
 	config := nntppool.Config{
 		Providers:                           providers,
-		HealthCheckInterval:                 c.ConnectionPool.HealthCheckInterval,
+		HealthCheckInterval:                 c.ConnectionPool.HealthCheckInterval.ToDuration(),
 		MinConnections:                      c.ConnectionPool.MinConnections,
 		MaxRetries:                          uint(c.Posting.MaxRetries),
 		DelayType:                           nntppool.DelayTypeExponential,
-		RetryDelay:                          c.Posting.RetryDelay,
+		RetryDelay:                          c.Posting.RetryDelay.ToDuration(),
 		SkipProvidersVerificationOnCreation: c.ConnectionPool.SkipProvidersVerificationOnCreation,
 	}
 
@@ -553,23 +662,23 @@ func GetDefaultConfig() ConfigData {
 	enabled := true
 	disabled := false
 	return ConfigData{
+		Version: CurrentConfigVersion,
 		Servers: []ServerConfig{},
 		ConnectionPool: ConnectionPoolConfig{
 			MinConnections:                      5,
-			HealthCheckInterval:                 time.Minute,
+			HealthCheckInterval:                 Duration("1m"),
 			SkipProvidersVerificationOnCreation: false,
 		},
 		Posting: PostingConfig{
 			WaitForPar2:        &enabled,
 			MaxRetries:         3,
-			RetryDelay:         5 * time.Second,
+			RetryDelay:         Duration("5s"),
 			ArticleSizeInBytes: 750000, // 750KB
 			Groups:             []string{"alt.binaries.test"},
 			ThrottleRate:       1048576, // 1MB/s
-			MaxWorkers:         0,
 			MessageIDFormat:    MessageIDFormatRandom,
 			PostHeaders: PostHeaders{
-				AddNGXHeader:  false,
+				AddNXGHeader:  false,
 				DefaultFrom:   "",
 				CustomHeaders: []CustomHeader{},
 			},
@@ -579,7 +688,7 @@ func GetDefaultConfig() ConfigData {
 		},
 		PostCheck: PostCheck{
 			Enabled:    &enabled,
-			RetryDelay: 10 * time.Second,
+			RetryDelay: Duration("10s"),
 			MaxRePost:  1,
 		},
 		Par2: Par2Config{
@@ -601,7 +710,7 @@ func GetDefaultConfig() ConfigData {
 			},
 			IgnorePatterns:     []string{"*.tmp", "*.part", "*.!ut"},
 			MinFileSize:        1048576, // 1MB
-			CheckInterval:      5 * time.Minute,
+			CheckInterval:      Duration("5m"),
 			DeleteOriginalFile: false, // Default to keeping original files for safety
 		},
 		NzbCompression: NzbCompressionConfig{
@@ -619,7 +728,7 @@ func GetDefaultConfig() ConfigData {
 		PostUploadScript: PostUploadScriptConfig{
 			Enabled: false,
 			Command: "",
-			Timeout: 30 * time.Second,
+			Timeout: Duration("30s"),
 		},
 	}
 }

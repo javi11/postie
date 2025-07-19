@@ -28,6 +28,15 @@ type QueueItem struct {
 	NzbPath      *string    `json:"nzbPath"`
 }
 
+// QueueStats represents queue statistics
+type QueueStats struct {
+	Total    int `json:"total"`
+	Pending  int `json:"pending"`
+	Running  int `json:"running"`
+	Complete int `json:"complete"`
+	Error    int `json:"error"`
+}
+
 func (a *App) initializeQueue() error {
 	if a.config == nil {
 		return fmt.Errorf("config not loaded")
@@ -210,18 +219,42 @@ func (a *App) ClearQueue() error {
 }
 
 // GetQueueStats returns statistics about the queue via queue
-func (a *App) GetQueueStats() (map[string]interface{}, error) {
+func (a *App) GetQueueStats() (QueueStats, error) {
 	if a.queue == nil {
-		return map[string]interface{}{
-			"total":    0,
-			"pending":  0,
-			"running":  0,
-			"complete": 0,
-			"error":    0,
+		return QueueStats{
+			Total:    0,
+			Pending:  0,
+			Running:  0,
+			Complete: 0,
+			Error:    0,
 		}, nil
 	}
 
-	return a.queue.GetQueueStats()
+	stats, err := a.queue.GetQueueStats()
+	if err != nil {
+		return QueueStats{}, err
+	}
+
+	// Convert map[string]interface{} to QueueStats struct
+	queueStats := QueueStats{}
+
+	if total, ok := stats["total"].(int); ok {
+		queueStats.Total = total
+	}
+	if pending, ok := stats["pending"].(int); ok {
+		queueStats.Pending = pending
+	}
+	if running, ok := stats["running"].(int); ok {
+		queueStats.Running = running
+	}
+	if complete, ok := stats["complete"].(int); ok {
+		queueStats.Complete = complete
+	}
+	if errorCount, ok := stats["error"].(int); ok {
+		queueStats.Error = errorCount
+	}
+
+	return queueStats, nil
 }
 
 // DownloadNZB downloads the NZB file for a completed item
@@ -248,16 +281,6 @@ func (a *App) DownloadNZB(id string) error {
 	savePath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
 		Title:           "Save NZB File",
 		DefaultFilename: fileName,
-		Filters: []runtime.FileFilter{
-			{
-				DisplayName: "NZB Files (*.nzb)",
-				Pattern:     "*.nzb",
-			},
-			{
-				DisplayName: "All Files (*.*)",
-				Pattern:     "*.*",
-			},
-		},
 	})
 
 	if err != nil {

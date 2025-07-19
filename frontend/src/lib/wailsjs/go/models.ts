@@ -1,5 +1,55 @@
 export namespace backend {
 	
+	export class AppStatus {
+	    hasPostie: boolean;
+	    hasConfig: boolean;
+	    configPath: string;
+	    uploading: boolean;
+	    criticalConfigError: boolean;
+	    error: string;
+	    isFirstStart: boolean;
+	    hasServers: boolean;
+	    serverCount: number;
+	    validServerCount: number;
+	    configValid: boolean;
+	    needsConfiguration: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hasPostie = source["hasPostie"];
+	        this.hasConfig = source["hasConfig"];
+	        this.configPath = source["configPath"];
+	        this.uploading = source["uploading"];
+	        this.criticalConfigError = source["criticalConfigError"];
+	        this.error = source["error"];
+	        this.isFirstStart = source["isFirstStart"];
+	        this.hasServers = source["hasServers"];
+	        this.serverCount = source["serverCount"];
+	        this.validServerCount = source["validServerCount"];
+	        this.configValid = source["configValid"];
+	        this.needsConfiguration = source["needsConfiguration"];
+	    }
+	}
+	export class ProcessorStatus {
+	    hasProcessor: boolean;
+	    runningJobs: number;
+	    runningJobIDs: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ProcessorStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hasProcessor = source["hasProcessor"];
+	        this.runningJobs = source["runningJobs"];
+	        this.runningJobIDs = source["runningJobIDs"];
+	    }
+	}
 	export class ProgressTracker {
 	    currentFile: string;
 	    totalFiles: number;
@@ -97,6 +147,26 @@ export namespace backend {
 		    return a;
 		}
 	}
+	export class QueueStats {
+	    total: number;
+	    pending: number;
+	    running: number;
+	    complete: number;
+	    error: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new QueueStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total = source["total"];
+	        this.pending = source["pending"];
+	        this.running = source["running"];
+	        this.complete = source["complete"];
+	        this.error = source["error"];
+	    }
+	}
 	export class ServerData {
 	    host: string;
 	    port: number;
@@ -175,7 +245,7 @@ export namespace config {
 	export class PostUploadScriptConfig {
 	    enabled: boolean;
 	    command: string;
-	    timeout: number;
+	    timeout: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new PostUploadScriptConfig(source);
@@ -241,7 +311,7 @@ export namespace config {
 	    schedule: ScheduleConfig;
 	    ignore_patterns: string[];
 	    min_file_size: number;
-	    check_interval: number;
+	    check_interval: string;
 	    delete_original_file: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -304,7 +374,7 @@ export namespace config {
 	}
 	export class PostCheck {
 	    enabled?: boolean;
-	    delay: number;
+	    delay: string;
 	    max_reposts: number;
 	
 	    static createFrom(source: any = {}) {
@@ -333,7 +403,7 @@ export namespace config {
 	    }
 	}
 	export class PostHeaders {
-	    add_ngx_header: boolean;
+	    add_nxg_header: boolean;
 	    default_from: string;
 	    custom_headers: CustomHeader[];
 	
@@ -343,7 +413,7 @@ export namespace config {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.add_ngx_header = source["add_ngx_header"];
+	        this.add_nxg_header = source["add_nxg_header"];
 	        this.default_from = source["default_from"];
 	        this.custom_headers = this.convertValues(source["custom_headers"], CustomHeader);
 	    }
@@ -369,11 +439,10 @@ export namespace config {
 	export class PostingConfig {
 	    wait_for_par2?: boolean;
 	    max_retries: number;
-	    retry_delay: number;
+	    retry_delay: string;
 	    article_size_in_bytes: number;
 	    groups: string[];
 	    throttle_rate: number;
-	    max_workers: number;
 	    message_id_format: string;
 	    post_headers: PostHeaders;
 	    obfuscation_policy: string;
@@ -392,7 +461,6 @@ export namespace config {
 	        this.article_size_in_bytes = source["article_size_in_bytes"];
 	        this.groups = source["groups"];
 	        this.throttle_rate = source["throttle_rate"];
-	        this.max_workers = source["max_workers"];
 	        this.message_id_format = source["message_id_format"];
 	        this.post_headers = this.convertValues(source["post_headers"], PostHeaders);
 	        this.obfuscation_policy = source["obfuscation_policy"];
@@ -420,7 +488,7 @@ export namespace config {
 	}
 	export class ConnectionPoolConfig {
 	    min_connections: number;
-	    health_check_interval: number;
+	    health_check_interval: string;
 	    skip_providers_verification_on_creation: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -465,6 +533,7 @@ export namespace config {
 	    }
 	}
 	export class ConfigData {
+	    version: number;
 	    servers: ServerConfig[];
 	    connection_pool: ConnectionPoolConfig;
 	    posting: PostingConfig;
@@ -483,6 +552,7 @@ export namespace config {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
 	        this.servers = this.convertValues(source["servers"], ServerConfig);
 	        this.connection_pool = this.convertValues(source["connection_pool"], ConnectionPoolConfig);
 	        this.posting = this.convertValues(source["posting"], PostingConfig);

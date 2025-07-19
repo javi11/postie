@@ -1,0 +1,90 @@
+{
+	"common": {
+		"nav": {
+			"dashboard": "Panel de Control",
+			"settings": "Configuración",
+			"language": "Idioma",
+			"logs": "Logs"
+		},
+		"actions": {
+			"save": "Guardar",
+			"cancel": "Cancelar",
+			"edit": "Editar",
+			"delete": "Eliminar",
+			"add": "Agregar",
+			"close": "Cerrar",
+			"confirm": "Confirmar",
+			"reset": "Restablecer"
+		},
+		"common": {
+			"saving": "Guardando...",
+			"clearing": "Limpiando...",
+			"clear": "Limpiar",
+			"cancel": "Cancelar",
+			"start_auto_refresh": "Iniciar auto-actualización",
+			"stop_auto_refresh": "Detener auto-actualización",
+			"refresh": "Actualizar",
+			"loading": "Cargando...",
+			"error": "Error",
+			"success": "Éxito",
+			"warning": "Advertencia",
+			"info": "Información",
+			"yes": "Sí",
+			"no": "No",
+			"enabled": "Habilitado",
+			"disabled": "Deshabilitado",
+			"status": "Estado",
+			"name": "Nombre",
+			"value": "Valor",
+			"description": "Descripción"
+		},
+		"inputs": {
+			"time_units": {
+				"seconds": "Segundos",
+				"minutes": "Minutos",
+				"hours": "Horas"
+			},
+			"bytes": "bytes",
+			"browse": "Explorar",
+			"select_directory": "Seleccionar directorio...",
+			"select_file": "Seleccionar archivo...",
+			"kb": "KB",
+			"mb": "MB",
+			"gb": "GB"
+		},
+		"messages": {
+			"saved_successfully": "Configuración guardada exitosamente",
+			"error_saving": "Error al guardar la configuración",
+			"confirm_delete": "¿Estás seguro de que quieres eliminar este elemento?",
+			"no_data": "No hay datos disponibles",
+			"files_added": "Archivos agregados",
+			"files_added_description": "Los archivos han sido agregados a la cola",
+			"queue_cleared": "Cola limpiada",
+			"queue_cleared_description": "Los elementos completados y fallidos han sido eliminados",
+			"upload_cancelled": "Carga cancelada",
+			"upload_cancelled_description": "La carga ha sido cancelada exitosamente",
+			"job_cancelled": "Trabajo cancelado",
+			"failed_to_clear_queue": "Error al limpiar la cola",
+			"failed_to_cancel": "Error al cancelar trabajo",
+			"failed_to_cancel_upload": "Error al cancelar carga",
+			"failed_to_load_queue": "Error al cargar la cola",
+			"item_removed": "Elemento eliminado",
+			"item_removed_description": "El elemento ha sido eliminado de la cola.",
+			"failed_to_remove_item": "Error al eliminar el elemento",
+			"nzb_downloaded": "NZB descargado",
+			"failed_to_download_nzb": "Error al descargar el NZB",
+			"failed_to_update_priority": "Error al actualizar la prioridad",
+			"configuration_error": "Error de Configuración",
+			"no_servers_configured": "No hay servidores configurados",
+			"server_host_required": "Servidor {number}: El host es requerido",
+			"server_port_required": "Servidor {number}: Se requiere un número de puerto válido (1-65535)",
+			"configuration_saved": "Configuración guardada",
+			"configuration_saved_description": "¡Tu configuración ha sido guardada exitosamente!",
+			"configuration_save_failed": "Error al guardar configuración",
+			"item_retried": "Elemento reintentado correctamente",
+			"failed_to_retry_item": "Error al reintentar el elemento",
+			"item_cancelled": "Elemento cancelado",
+			"failed_to_cancel_item": "Error al cancelar el elemento"
+		}
+	}
+}

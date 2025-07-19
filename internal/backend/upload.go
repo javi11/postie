@@ -36,12 +36,12 @@ func (a *App) UploadFiles() error {
 		a.uploadingMux.Lock()
 		a.uploading = false
 		a.uploadingMux.Unlock()
-		return fmt.Errorf("no files selected")
+		return nil
 	}
 
 	// Check if configuration is valid before proceeding with upload
 	status := a.GetAppStatus()
-	if needsConfig, ok := status["needsConfiguration"].(bool); ok && needsConfig {
+	if status.NeedsConfiguration {
 		a.uploadingMux.Lock()
 		a.uploading = false
 		a.uploadingMux.Unlock()

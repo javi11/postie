@@ -2,38 +2,50 @@
 import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
-import type { ConfigData } from "$lib/types";
-import {
-	Badge,
-	Button,
-	Card,
-	Heading,
-	Input,
-	Label,
-	P,
-	Toggle,
-} from "flowbite-svelte";
-import {
-	CommandOutline,
-	FileCodeSolid,
-	FloppyDiskSolid,
-} from "flowbite-svelte-icons";
+import type { config as configType } from "$lib/wailsjs/go/models";
+import { FileCode, Save, Terminal } from "lucide-svelte";
 import DurationInput from "../inputs/DurationInput.svelte";
 
-export let config: ConfigData;
-
-let saving = false;
-
-// Reactive statement to initialize config defaults
-$: {
-	if (config && !config.post_upload_script) {
-		config.post_upload_script = {
-			enabled: false,
-			command: "",
-			timeout: "30s",
-		};
-	}
+interface Props {
+	config: configType.ConfigData;
 }
+
+const { config }: Props = $props();
+
+// Initialize config defaults
+if (config && !config.post_upload_script) {
+	config.post_upload_script = {
+		enabled: false,
+		command: "",
+		timeout: "30s",
+	};
+}
+
+// Reactive local state
+let enabled = $state(config.post_upload_script?.enabled ?? false);
+let command = $state(config.post_upload_script?.command || "");
+let timeout = $state(config.post_upload_script?.timeout || "30s");
+let saving = $state(false);
+
+// Derived state
+let canSave = $derived(
+	(!enabled || (enabled && command.trim())) && 
+	timeout.trim() && 
+	!saving
+);
+
+// Sync local state back to config
+$effect(() => {
+	config.post_upload_script.enabled = enabled;
+});
+
+$effect(() => {
+	config.post_upload_script.command = command;
+});
+
+$effect(() => {
+	config.post_upload_script.timeout = timeout;
+});
 
 async function savePostUploadScriptSettings() {
 	if (!config?.post_upload_script) {
@@ -45,10 +57,19 @@ async function savePostUploadScriptSettings() {
 
 		const currentConfig = await apiClient.getConfig();
 
+		// Validation
+		if (enabled && !command.trim()) {
+			throw new Error("Command is required when script is enabled");
+		}
+		
+		if (!timeout.trim()) {
+			throw new Error("Timeout is required");
+		}
+
 		currentConfig.post_upload_script = {
-			enabled: config.post_upload_script.enabled,
-			command: config.post_upload_script.command || "",
-			timeout: config.post_upload_script.timeout || "30s",
+			enabled: enabled,
+			command: command.trim(),
+			timeout: timeout.trim(),
 		};
 
 		await apiClient.saveConfig(currentConfig);
@@ -67,77 +88,87 @@ async function savePostUploadScriptSettings() {
 </script>
 
 {#if config && config.post_upload_script}
-<Card class="max-w-full shadow-sm p-5">
-  <div class="space-y-6">
+<div class="card bg-base-100 shadow-xl">
+  <div class="card-body space-y-6">
     <div class="flex items-center gap-3">
-      <CommandOutline class="w-5 h-5 text-gray-600 dark:text-gray-400" />
-      <Heading tag="h2" class="text-lg font-semibold text-gray-900 dark:text-white">
+      <Terminal class="w-5 h-5 text-base-content/60" />
+      <h2 class="card-title text-lg">
         {$t('settings.post_upload_script.title')}
-      </Heading>
+      </h2>
     </div>
 
     <div class="space-y-4">
-      <div>
-        <Label class="flex items-center gap-3 cursor-pointer">
-          <Toggle bind:checked={config.post_upload_script.enabled} />
-          <span>{$t('settings.post_upload_script.enable')}</span>
-        </Label>
-        <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-          {$t('settings.post_upload_script.enable_description')}
-        </P>
+      <div class="form-control">
+        <label class="label cursor-pointer justify-start gap-3">
+          <input type="checkbox" class="toggle" bind:checked={enabled} />
+          <span class="label-text">{$t('settings.post_upload_script.enable')}</span>
+        </label>
+        <div class="label">
+          <span class="label-text-alt ml-8">
+            {$t('settings.post_upload_script.enable_description')}
+          </span>
+        </div>
       </div>
 
-      {#if config.post_upload_script.enabled}
+      {#if enabled}
         <div class="space-y-4 pl-4 border-l-2 border-blue-200 dark:border-blue-700">
-          <div>
-            <Label for="script-command" class="mb-2">{$t('settings.post_upload_script.command')}</Label>
-            <Input
+          <div class="form-control">
+            <label class="label" for="script-command">
+              <span class="label-text">{$t('settings.post_upload_script.command')}</span>
+            </label>
+            <input
               id="script-command"
-              bind:value={config.post_upload_script.command}
+              class="input input-bordered font-mono"
+              bind:value={command}
               placeholder={$t('settings.post_upload_script.command_placeholder')}
-              class="font-mono"
             />
-            <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              {@html $t('settings.post_upload_script.command_description')}
-            </P>
+            <div class="label">
+              <span class="label-text-alt">
+                {@html $t('settings.post_upload_script.command_description')}
+              </span>
+            </div>
           </div>
 
-          <div>
-            <Label for="script-timeout" class="mb-2">{$t('settings.post_upload_script.timeout')}</Label>
+          <div class="form-control">
+            <label class="label" for="script-timeout">
+              <span class="label-text">{$t('settings.post_upload_script.timeout')}</span>
+            </label>
             <DurationInput
               id="script-timeout"
-              bind:value={config.post_upload_script.timeout}
+              bind:value={timeout}
             />
-            <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              {$t('settings.post_upload_script.timeout_description')}
-            </P>
+            <div class="label">
+              <span class="label-text-alt">
+                {$t('settings.post_upload_script.timeout_description')}
+              </span>
+            </div>
           </div>
         </div>
       {/if}
 
-      <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
+      <div class="alert alert-info">
         <div class="flex items-start gap-3">
-          <FileCodeSolid class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+          <FileCode class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
           <div class="space-y-2">
-            <P class="text-sm font-medium text-blue-800 dark:text-blue-200">
+            <p class="text-sm font-medium">
               {$t('settings.post_upload_script.examples.title')}
-            </P>
-            <P class="text-sm text-blue-700 dark:text-blue-300">
+            </p>
+            <p class="text-sm">
               {$t('settings.post_upload_script.examples.description')}
-            </P>
+            </p>
             <div class="space-y-2">
-              <div class="bg-white dark:bg-gray-800 p-3 rounded text-xs font-mono space-y-2 text-gray-600 dark:text-gray-400">
+              <div class="bg-base-200 p-3 rounded text-xs font-mono space-y-2">
                 <div>
-                  <Badge color="green" class="mb-1">{$t('settings.post_upload_script.examples.webhook')}</Badge>
-                  <div class="break-all">{$t('settings.post_upload_script.examples.webhook_example')}</div>
+                  <div class="badge badge-success mb-1">{$t('settings.post_upload_script.examples.webhook')}</div>
+                  <div class="break-all text-base-content/70">{$t('settings.post_upload_script.examples.webhook_example')}</div>
                 </div>
                 <div>
-                  <Badge color="blue" class="mb-1">{$t('settings.post_upload_script.examples.copy_file')}</Badge>
-                  <div class="break-all">{$t('settings.post_upload_script.examples.copy_file_example')}</div>
+                  <div class="badge badge-info mb-1">{$t('settings.post_upload_script.examples.copy_file')}</div>
+                  <div class="break-all text-base-content/70">{$t('settings.post_upload_script.examples.copy_file_example')}</div>
                 </div>
                 <div>
-                  <Badge color="purple" class="mb-1">{$t('settings.post_upload_script.examples.custom_script')}</Badge>
-                  <div class="break-all">{$t('settings.post_upload_script.examples.custom_script_example')}</div>
+                  <div class="badge badge-secondary mb-1">{$t('settings.post_upload_script.examples.custom_script')}</div>
+                  <div class="break-all text-base-content/70">{$t('settings.post_upload_script.examples.custom_script_example')}</div>
                 </div>
               </div>
             </div>
@@ -146,23 +177,24 @@ async function savePostUploadScriptSettings() {
       </div>
     </div>
 
-    <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
-      <Button
-        color="green"
+    <div class="card-actions pt-4 border-t border-base-300">
+      <button
+        class="btn btn-success"
         onclick={savePostUploadScriptSettings}
-        disabled={saving}
-        class="cursor-pointer flex items-center gap-2"
+        disabled={!canSave}
       >
-        <FloppyDiskSolid class="w-4 h-4" />
-        {saving ? $t('settings.post_upload_script.saving') : $t('settings.post_upload_script.save_button')}
-      </Button>
+        <Save class="w-4 h-4" />
+        {saving ? $t('common.common.saving') : $t('settings.post_upload_script.save_button')}
+      </button>
     </div>
   </div>
-</Card>
+</div>
 {:else}
-<Card class="max-w-full shadow-sm p-5">
-  <div class="flex items-center justify-center py-8">
-    <P class="text-gray-500 dark:text-gray-400">{$t('settings.post_upload_script.loading')}</P>
+<div class="card bg-base-100 shadow-xl">
+  <div class="card-body">
+    <div class="flex items-center justify-center py-8">
+      <p class="text-base-content/50">{$t('settings.post_upload_script.loading')}</p>
+    </div>
   </div>
-</Card>
+</div>
 {/if} 

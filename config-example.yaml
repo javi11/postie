@@ -26,7 +26,7 @@ posting:
   par2_obfuscation_policy: 'full'
   group_policy: 'each_file'
   post_headers:
-    add_ngx_header: false
+    add_nxg_header: false
     default_from: ''
     custom_headers: []
 
@@ -90,11 +90,11 @@ queue:
 # This command will be executed after NZB file generation is complete
 post_upload_script:
   enabled: false
-  command: '' # Command to execute, use {{nzb_path}} placeholder for NZB file path
+  command: '' # Command to execute, use {nzb_path} placeholder for NZB file path
   timeout: 30s # Maximum time to wait for command execution
 
 # Example: Using curl to send a webhook notification
 # post_upload_script:
 #   enabled: true
-#   command: 'curl -X POST -H "Content-Type: application/json" -d "{\"nzb_path\": \"{{nzb_path}}\"}" https://your-webhook-url.com/notify'
+#   command: 'curl -X POST -H "Content-Type: application/json" -d "{\"nzb_path\": \"{nzb_path}\"}" https://your-webhook-url.com/notify'
 #   timeout: 30s

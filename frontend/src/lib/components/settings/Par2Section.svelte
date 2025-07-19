@@ -5,28 +5,16 @@ import SizeInput from "$lib/components/inputs/SizeInput.svelte";
 import { t } from "$lib/i18n";
 import { advancedMode } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
-import type { ConfigData } from "$lib/types";
-import {
-	Button,
-	Card,
-	Checkbox,
-	Heading,
-	Input,
-	Label,
-	P,
-	Select,
-} from "flowbite-svelte";
-import {
-	CirclePlusSolid,
-	FloppyDiskSolid,
-	InfoCircleSolid,
-	ShieldCheckSolid,
-	TrashBinSolid,
-} from "flowbite-svelte-icons";
+import type { config as configType } from "$lib/wailsjs/go/models";
+import { CirclePlus, Info, Save, ShieldCheck, Trash2 } from "lucide-svelte";
 
-export let config: ConfigData;
+interface Props {
+	config: configType.ConfigData;
+}
 
-let saving = false;
+const { config }: Props = $props();
+
+let saving = $state(false);
 
 // Ensure extra_par2_options exists
 if (!config.par2.extra_par2_options) {
@@ -77,14 +65,57 @@ function unitToBytes(value: number, unit: string): number {
 	}
 }
 
-// Reactive variables for easier editing
-let volumeSizeValue: number;
-let volumeSizeUnit = "MB";
-let redundancyValue: number;
+// Reactive local state
+let enabled = $state(config.par2?.enabled ?? false);
+let par2Path = $state(config.par2?.par2_path || "");
+let tempDir = $state(config.par2?.temp_dir || "");
+let redundancy = $state(config.par2?.redundancy || "10%");
+let volumeSize = $state(config.par2?.volume_size || 209715200);
+let maxInputSlices = $state(config.par2?.max_input_slices || 4000);
+let extraPar2Options = $state<string[]>(config.par2?.extra_par2_options || []);
+let volumeSizeValue = $state<number>(0);
+let volumeSizeUnit = $state("MB");
+let redundancyValue = $state<number>(10);
+let isAdvanced = $derived($advancedMode);
 
-// Parse existing values
-$: {
-	const size = config.par2.volume_size || 209715200; // 200MB default
+// Derived state
+let canSave = $derived(
+	(!enabled || (enabled && par2Path.trim())) &&
+	!saving
+);
+
+// Sync local state back to config
+$effect(() => {
+	config.par2.enabled = enabled;
+});
+
+$effect(() => {
+	config.par2.par2_path = par2Path;
+});
+
+$effect(() => {
+	config.par2.temp_dir = tempDir;
+});
+
+$effect(() => {
+	config.par2.redundancy = redundancy;
+});
+
+$effect(() => {
+	config.par2.volume_size = volumeSize;
+});
+
+$effect(() => {
+	config.par2.max_input_slices = maxInputSlices;
+});
+
+$effect(() => {
+	config.par2.extra_par2_options = extraPar2Options;
+});
+
+// Parse existing values and update local state
+$effect(() => {
+	const size = volumeSize || 209715200; // 200MB default
 	if (size >= 1073741824 && size % 1073741824 === 0) {
 		volumeSizeValue = size / 1073741824;
 		volumeSizeUnit = "GB";
@@ -92,46 +123,49 @@ $: {
 		volumeSizeValue = Math.round(size / 1048576);
 		volumeSizeUnit = "MB";
 	}
-}
+});
 
 // Parse redundancy percentage
-$: {
-	const redundancyStr = config.par2.redundancy || "10%";
+$effect(() => {
+	const redundancyStr = redundancy || "10%";
 	if (typeof redundancyStr === "string") {
 		redundancyValue = Number.parseInt(redundancyStr.replace("%", "")) || 10;
 	} else {
 		redundancyValue = 10;
 	}
-}
+});
 
-// Update config when display values change
-$: {
+// Update local values when display values change
+$effect(() => {
 	if (volumeSizeValue !== undefined && volumeSizeUnit) {
-		config.par2.volume_size = unitToBytes(volumeSizeValue, volumeSizeUnit);
+		volumeSize = unitToBytes(volumeSizeValue, volumeSizeUnit);
 	}
-}
+});
 
-$: {
+$effect(() => {
 	if (redundancyValue !== undefined && redundancyValue > 0) {
-		config.par2.redundancy = `${redundancyValue}%`;
+		redundancy = `${redundancyValue}%`;
 	}
-}
+});
 
 function addExtraOption() {
-	config.par2.extra_par2_options = [...config.par2.extra_par2_options, ""];
+	extraPar2Options = [...extraPar2Options, ""];
 }
 
 function removeExtraOption(index: number) {
-	config.par2.extra_par2_options = config.par2.extra_par2_options.filter(
-		(_, i) => i !== index,
-	);
+	extraPar2Options = extraPar2Options.filter((_, i) => i !== index);
+}
+
+function updateExtraOption(index: number, value: string) {
+	extraPar2Options[index] = value;
+	extraPar2Options = [...extraPar2Options]; // Trigger reactivity
 }
 
 async function selectTempDirectory() {
 	try {
 		const selectedDir = await apiClient.selectTempDirectory();
 		if (selectedDir) {
-			config.par2.temp_dir = selectedDir;
+			tempDir = selectedDir;
 		}
 	} catch (error) {
 		console.error("Failed to select temp directory:", error);
@@ -140,17 +174,29 @@ async function selectTempDirectory() {
 }
 
 async function savePar2Settings() {
+	if (!canSave) return;
+
 	try {
 		saving = true;
+
+		// Validation
+		if (enabled && !par2Path.trim()) {
+			throw new Error("PAR2 path is required when PAR2 is enabled");
+		}
 
 		// Get the current config from the server to avoid conflicts
 		const currentConfig = await apiClient.getConfig();
 
 		// Only update the par2 fields with proper type conversion
 		currentConfig.par2 = {
-			...config.par2,
-			volume_size: Number.parseInt(config.par2.volume_size) || 153600000,
-			max_input_slices: Number.parseInt(config.par2.max_input_slices) || 4000,
+			...currentConfig.par2,
+			enabled: enabled,
+			par2_path: par2Path.trim(),
+			temp_dir: tempDir.trim(),
+			redundancy: redundancy,
+			volume_size: volumeSize || 153600000,
+			max_input_slices: maxInputSlices || 4000,
+			extra_par2_options: extraPar2Options,
 		};
 
 		await apiClient.saveConfig(currentConfig);
@@ -168,80 +214,81 @@ async function savePar2Settings() {
 }
 
 // Display values for status cards
-$: redundancyDisplay = config.par2.redundancy || "10%";
-$: volumeSizeDisplay = config.par2.volume_size
-	? config.par2.volume_size >= 1073741824
-		? `${Math.round(config.par2.volume_size / 1073741824)} GB`
-		: `${Math.round(config.par2.volume_size / 1048576)} MB`
-	: "200 MB";
+let redundancyDisplay = $derived(redundancy || "10%");
+let volumeSizeDisplay = $derived(volumeSize
+	? volumeSize >= 1073741824
+		? `${Math.round(volumeSize / 1073741824)} GB`
+		: `${Math.round(volumeSize / 1048576)} MB`
+	: "200 MB");
 </script>
 
-<Card class="max-w-full shadow-sm p-5">
-  <div class="space-y-6">
+<div class="card bg-base-100 shadow-sm">
+  <div class="card-body space-y-6">
     <div class="flex items-center gap-3">
-      <ShieldCheckSolid class="w-5 h-5 text-purple-600 dark:text-purple-400" />
-      <Heading
-        tag="h2"
-        class="text-lg font-semibold text-gray-900 dark:text-white"
-      >
+      <ShieldCheck class="w-5 h-5 text-purple-600 dark:text-purple-400" />
+      <h2 class="text-lg font-semibold text-base-content">
         {$t('settings.par2.title')}
-      </Heading>
+      </h2>
     </div>
 
     <div class="space-y-4">
       <div class="flex items-center gap-3">
-        <Checkbox bind:checked={config.par2.enabled} />
+        <input name="par2enable" type="checkbox" class="checkbox" bind:checked={enabled} />
         <div>
-          <Label class="text-base font-medium">{$t('settings.par2.enable')}</Label>
-          <P class="text-sm text-gray-600 dark:text-gray-400">
+          <label for="par2enable" class="text-base font-medium text-base-content">{$t('settings.par2.enable')}</label>
+          <p class="text-sm text-base-content/70">
             {$t('settings.par2.enable_description')}
-          </P>
+          </p>
         </div>
       </div>
 
-      {#if config.par2.enabled}
+      {#if enabled}
         <div
-          class="ml-6 space-y-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700"
+          class="ml-6 space-y-6 p-4 bg-base-200 rounded-lg border border-base-300"
         >
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <Label for="par2-path" class="mb-2">{$t('settings.par2.par2_path')}</Label>
-              <Input
+              <label for="par2-path" class="label">
+                <span class="label-text">{$t('settings.par2.par2_path')}</span>
+              </label>
+              <input
                 id="par2-path"
-                bind:value={config.par2.par2_path}
+                class="input input-bordered w-full"
+                bind:value={par2Path}
                 placeholder="./parpar"
               />
-              <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              <p class="text-sm text-base-content/70 mt-1">
                 {$t('settings.par2.par2_path_description')}
-              </P>
+              </p>
             </div>
 
             <div>
-              <Label for="temp-dir" class="mb-2">{$t('settings.par2.temp_dir')}</Label>
+              <label for="temp-dir" class="label">
+                <span class="label-text">{$t('settings.par2.temp_dir')}</span>
+              </label>
               <div class="flex gap-2">
-                <Input
+                <input
                   id="temp-dir"
-                  bind:value={config.par2.temp_dir}
+                  class="input input-bordered flex-1"
+                  bind:value={tempDir}
                   placeholder={$t('settings.par2.temp_dir_placeholder')}
-                  class="flex-1"
                 />
                 {#if apiClient.environment === 'wails'}
-                  <Button
-                    color="alternative"
+                  <button
+                    class="btn btn-outline"
                     onclick={selectTempDirectory}
-                    class="cursor-pointer"
                   >
                     {$t('settings.general.browse')}
-                  </Button>
+                  </button>
                 {/if}
               </div>
-              <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              <p class="text-sm text-base-content/70 mt-1">
                 {$t('settings.par2.temp_dir_description')}
-              </P>
+              </p>
             </div>
 
             <PercentageInput
-              bind:value={config.par2.redundancy}
+              bind:value={redundancy}
               label={$t('settings.par2.redundancy')}
               description={$t('settings.par2.redundancy_description')}
               presets={redundancyPresets}
@@ -251,8 +298,8 @@ $: volumeSizeDisplay = config.par2.volume_size
             />
 
             <SizeInput
-              value={config.par2.volume_size}
-              onchange={(value) => config.par2.volume_size = value}
+              value={volumeSize}
+              onchange={(value) => volumeSize = value}
               label={$t('settings.par2.volume_size')}
               description={$t('settings.par2.volume_size_description')}
               presets={volumeSizePresets}
@@ -262,78 +309,75 @@ $: volumeSizeDisplay = config.par2.volume_size
               id="volume-size"
             />
 
-{#if $advancedMode}
+{#if isAdvanced}
             <div>
-              <Label for="max-slices" class="mb-2">{$t('settings.par2.max_input_slices')}</Label>
-              <Input
+              <label for="max-slices" class="label">
+                <span class="label-text">{$t('settings.par2.max_input_slices')}</span>
+              </label>
+              <input
                 id="max-slices"
                 type="number"
-                bind:value={config.par2.max_input_slices}
+                class="input input-bordered w-full"
+                bind:value={maxInputSlices}
                 min="100"
                 max="10000"
               />
-              <P class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              <p class="text-sm text-base-content/70 mt-1">
                 {$t('settings.par2.max_input_slices_description')}
-              </P>
+              </p>
             </div>
 {/if}
           </div>
 
-{#if $advancedMode}
+{#if isAdvanced}
           <!-- Extra PAR2 Options Section -->
           <div class="space-y-4">
             <div class="flex items-center justify-between">
               <div>
-                <Heading
-                  tag="h4"
-                  class="text-sm font-medium text-gray-900 dark:text-white"
-                >
+                <h4 class="text-sm font-medium text-base-content">
                   {$t('settings.par2.extra_options.title')}
-                </Heading>
-                <P class="text-sm text-gray-600 dark:text-gray-400">
+                </h4>
+                <p class="text-sm text-base-content/70">
                   {$t('settings.par2.extra_options.description')}
-                </P>
+                </p>
               </div>
-              <Button
-                size="sm"
+              <button
+                class="btn btn-sm btn-outline"
                 onclick={addExtraOption}
-                class="cursor-pointer flex items-center gap-2"
               >
-                <CirclePlusSolid class="w-4 h-4" />
+                <CirclePlus class="w-4 h-4" />
                 {$t('settings.par2.extra_options.add_option')}
-              </Button>
+              </button>
             </div>
 
-            {#if config.par2.extra_par2_options && config.par2.extra_par2_options.length > 0}
+            {#if extraPar2Options && extraPar2Options.length > 0}
               <div class="space-y-3">
-                {#each config.par2.extra_par2_options as option, index (index)}
+                {#each extraPar2Options as option, index (index)}
                   <div class="flex items-center gap-3">
                     <div class="flex-1">
-                      <Input
-                        bind:value={config.par2.extra_par2_options[index]}
+                      <input
+                        class="input input-bordered w-full"
+                        bind:value={extraPar2Options[index]}
                         placeholder={$t('settings.par2.extra_options.placeholder')}
                       />
                     </div>
-                    <Button
-                      size="sm"
-                      color="red"
-                      variant="outline"
+                    <button
+                      class="btn btn-sm btn-error btn-outline"
                       onclick={() => removeExtraOption(index)}
-                      class="cursor-pointer flex items-center gap-1"
                     >
-                      <TrashBinSolid class="w-3 h-3" />
+                      <Trash2 class="w-3 h-3" />
                       {$t('settings.par2.extra_options.remove')}
-                    </Button>
+                    </button>
                   </div>
                 {/each}
               </div>
             {:else}
               <div
-                class="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded"
+                class="p-3 bg-base-200 border border-base-300 rounded"
               >
-                <P class="text-sm text-gray-600 dark:text-gray-400">
+                <p class="text-sm text-base-content/70">
                   {$t('settings.par2.extra_options.no_options')}
-                </P>
+                </p>
               </div>
             {/if}
           </div>
@@ -341,20 +385,20 @@ $: volumeSizeDisplay = config.par2.volume_size
 
           <div class="space-y-4">
             <div
-              class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg"
+              class="alert alert-info"
             >
               <div class="flex items-start gap-3">
-                <InfoCircleSolid
-                  class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5"
+                <Info
+                  class="w-5 h-5 mt-0.5"
                 />
                 <div>
-                  <P
-                    class="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2"
+                  <p
+                    class="text-sm font-medium mb-2"
                   >
                     {$t('settings.par2.info.title')}
-                  </P>
+                  </p>
                   <ul
-                    class="text-sm text-blue-700 dark:text-blue-300 space-y-1 list-disc list-inside"
+                    class="text-sm space-y-1 list-disc list-inside"
                   >
                     <li>{$t('settings.par2.info.features.redundancy_percentage_determines_how_much_data_can_be_recovered')}</li>
                     <li>{$t('settings.par2.info.features.higher_redundancy_better_recovery_but_larger_par2_files')}</li>
@@ -392,7 +436,7 @@ $: volumeSizeDisplay = config.par2.volume_size
                 <div
                   class="text-lg font-semibold text-blue-800 dark:text-blue-200"
                 >
-                  {config.par2.max_input_slices.toLocaleString()}
+                  {maxInputSlices.toLocaleString()}
                 </div>
                 <div class="text-sm text-blue-600 dark:text-blue-400">
                   {$t('settings.par2.status.max_slices')}
@@ -403,26 +447,25 @@ $: volumeSizeDisplay = config.par2.volume_size
         </div>
       {:else}
         <div
-          class="ml-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg"
+          class="ml-6 p-4 alert alert-warning"
         >
-          <P class="text-sm text-yellow-800 dark:text-yellow-200">
+          <p class="text-sm">
             {@html $t('settings.par2.disabled_message')}
-          </P>
+          </p>
         </div>
       {/if}
     </div>
 
     <!-- Save Button -->
-    <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
-      <Button
-        color="green"
+    <div class="pt-4 border-t border-base-300">
+      <button
+        class="btn btn-success"
         onclick={savePar2Settings}
-        disabled={saving}
-        class="cursor-pointer flex items-center gap-2"
+        disabled={!canSave}
       >
-        <FloppyDiskSolid class="w-4 h-4" />
-        {saving ? $t('settings.par2.saving') : $t('settings.par2.save_button')}
-      </Button>
+        <Save class="w-4 h-4" />
+        {saving ? $t('common.common.saving') : $t('settings.par2.save_button')}
+      </button>
     </div>
   </div>
-</Card>
+</div>
