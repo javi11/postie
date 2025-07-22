@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -69,6 +70,38 @@ func (p *Postie) Close() {
 	p.poster.Close()
 }
 
+// safeRemoveFile attempts to remove a file with retry logic for Windows compatibility
+func safeRemoveFile(ctx context.Context, filePath string) {
+	maxRetries := 3
+	baseDelay := 100 * time.Millisecond
+	
+	for i := 0; i < maxRetries; i++ {
+		if err := os.Remove(filePath); err == nil {
+			return // Success
+		}
+		
+		// On Windows, files might still be locked. Wait and retry.
+		if i < maxRetries-1 {
+			delay := baseDelay * time.Duration(i+1)
+			select {
+			case <-ctx.Done():
+				slog.ErrorContext(ctx, "File cleanup cancelled", "file", filePath)
+				return
+			case <-time.After(delay):
+				// Continue to next retry
+			}
+		}
+	}
+	
+	// Final attempt with detailed error logging
+	if err := os.Remove(filePath); err != nil {
+		slog.ErrorContext(ctx, "Failed to remove file after retries", 
+			"file", filePath, 
+			"error", err,
+			"os", runtime.GOOS)
+	}
+}
+
 // SetProgressCallback sets the progress callback function for both poster and par2runner
 func (p *Postie) SetProgressCallback(callback poster.ProgressCallback) {
 	p.poster.SetProgressCallback(callback)
@@ -79,6 +112,17 @@ func (p *Postie) SetProgressCallback(callback poster.ProgressCallback) {
 }
 
 func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir string, outputDir string) (string, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.ErrorContext(ctx, "Panic in Postie.Post",
+				"panic", r,
+				"files", len(files),
+				"rootDir", rootDir,
+				"outputDir", outputDir,
+				"os", runtime.GOOS)
+		}
+	}()
+	
 	if len(files) == 0 {
 		return "", fmt.Errorf("no files to post")
 	}
@@ -130,9 +174,7 @@ func (p *Postie) postInParallel(
 	)
 	defer func() {
 		for _, p := range createdPar2Paths {
-			if err := os.Remove(p); err != nil {
-				slog.ErrorContext(ctx, "Error during par2 cleanup", "error", err)
-			}
+			safeRemoveFile(ctx, p)
 		}
 	}()
 
@@ -206,9 +248,7 @@ func (p *Postie) post(
 
 	defer func() {
 		for _, p := range createdPar2Paths {
-			if err := os.Remove(p); err != nil {
-				slog.ErrorContext(ctx, "Error during par2 cleanup", "error", err)
-			}
+			safeRemoveFile(ctx, p)
 		}
 	}()
 
@@ -235,9 +275,7 @@ func (p *Postie) post(
 	}
 
 	for _, p := range createdPar2Paths {
-		if err := os.Remove(p); err != nil {
-			slog.ErrorContext(ctx, "Error during par2 cleanup", "error", err)
-		}
+		safeRemoveFile(ctx, p)
 	}
 
 	// Generate single NZB file for all files
@@ -275,8 +313,13 @@ func (p *Postie) executePostUploadScript(ctx context.Context, nzbPath string) er
 	// Replace {nzb_path} placeholder with actual NZB path
 	command := strings.ReplaceAll(p.postUploadScriptCfg.Command, "{nzb_path}", nzbPath)
 
-	// Parse command using shell
-	cmd := exec.CommandContext(timeoutCtx, "sh", "-c", command)
+	// Parse command using appropriate shell for the OS
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.CommandContext(timeoutCtx, "cmd", "/C", command)
+	} else {
+		cmd = exec.CommandContext(timeoutCtx, "sh", "-c", command)
+	}
 	cmd.Dir = filepath.Dir(nzbPath)
 
 	output, err := cmd.CombinedOutput()
