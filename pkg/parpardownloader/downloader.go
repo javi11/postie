@@ -103,7 +103,7 @@ func findAssetForSystem(release *Release, goos, goarch string) (*struct {
 	BrowserDownloadURL string `json:"browser_download_url"`
 }, error) {
 	var assetName string
-	
+
 	// Detect actual runtime architecture for containers
 	actualArch := goarch
 	if goos == "linux" {
@@ -112,7 +112,7 @@ func findAssetForSystem(release *Release, goos, goarch string) (*struct {
 			actualArch = containerArch
 		}
 	}
-	
+
 	switch goos {
 	case "linux":
 		switch actualArch {
@@ -191,24 +191,26 @@ func downloadFile(filename, url string) error {
 		}
 
 		_, err = io.Copy(tempOut, buf)
-		tempOut.Close()
+		_ = tempOut.Close()
 		if err != nil {
-			os.Remove(tempFile)
+			_ = os.Remove(tempFile)
 			return fmt.Errorf("error writing temp file: %w", err)
 		}
 
 		// Open the 7z file for reading
 		reader, err := sevenzip.OpenReader(tempFile)
 		if err != nil {
-			os.Remove(tempFile)
+			_ = os.Remove(tempFile)
 			return fmt.Errorf("error opening 7z file: %w", err)
 		}
-		defer reader.Close()
+		defer func() {
+			_ = reader.Close()
+		}()
 
 		// Find the executable file in the archive (should be the first/only file)
 		if len(reader.File) == 0 {
-			reader.Close()
-			os.Remove(tempFile)
+			_ = reader.Close()
+			_ = os.Remove(tempFile)
 			return fmt.Errorf("no files found in 7z archive")
 		}
 
@@ -216,18 +218,18 @@ func downloadFile(filename, url string) error {
 		file := reader.File[0]
 		rc, err := file.Open()
 		if err != nil {
-			reader.Close()
-			os.Remove(tempFile)
+			_ = reader.Close()
+			_ = os.Remove(tempFile)
 			return fmt.Errorf("error opening file in archive: %w", err)
 		}
 
 		// Copy the executable content to the output file
 		_, err = io.Copy(out, rc)
-		rc.Close()
-		reader.Close()
+		_ = rc.Close()
+		_ = reader.Close()
 
 		// Clean up temp file
-		os.Remove(tempFile)
+		_ = os.Remove(tempFile)
 
 		if err != nil {
 			return fmt.Errorf("error extracting file from 7z archive: %w", err)
@@ -255,22 +257,22 @@ func detectContainerArch() string {
 	// Method 1: Check /proc/cpuinfo for processor info (Linux-specific)
 	if cpuInfo, err := os.ReadFile("/proc/cpuinfo"); err == nil {
 		cpuInfoStr := string(cpuInfo)
-		
+
 		// Look for x86_64/amd64 indicators
-		if strings.Contains(cpuInfoStr, "x86_64") || 
-		   strings.Contains(cpuInfoStr, "Intel") || 
-		   strings.Contains(cpuInfoStr, "AMD") {
+		if strings.Contains(cpuInfoStr, "x86_64") ||
+			strings.Contains(cpuInfoStr, "Intel") ||
+			strings.Contains(cpuInfoStr, "AMD") {
 			return "amd64"
 		}
-		
+
 		// Look for ARM64/aarch64 indicators
-		if strings.Contains(cpuInfoStr, "aarch64") || 
-		   strings.Contains(cpuInfoStr, "ARM64") ||
-		   strings.Contains(cpuInfoStr, "arm64") {
+		if strings.Contains(cpuInfoStr, "aarch64") ||
+			strings.Contains(cpuInfoStr, "ARM64") ||
+			strings.Contains(cpuInfoStr, "arm64") {
 			return "arm64"
 		}
 	}
-	
+
 	// Method 2: Check platform-specific environment variables
 	if arch := os.Getenv("TARGETARCH"); arch != "" {
 		return arch
@@ -283,14 +285,14 @@ func detectContainerArch() string {
 			return "arm64"
 		}
 	}
-	
+
 	// Method 3: For Docker environments, default to amd64 if detection fails
 	// This is safer as most container images run in amd64 mode even on ARM hosts
 	if _, err := os.Stat("/.dockerenv"); err == nil {
 		slog.Warn("Running in Docker but couldn't detect arch, defaulting to amd64")
 		return "amd64"
 	}
-	
+
 	// If all methods fail, return empty to use runtime.GOARCH
 	return ""
 }
