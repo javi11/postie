@@ -62,15 +62,15 @@ WORKDIR /app
 # Install necessary packages
 RUN apt-get update -y && apt-get install --reinstall mime-support -y && apt-get install -y wget
 
-# Create the service directory and the run script for web mode
-RUN mkdir -p /etc/services.d/postie && \
-    echo '#!/usr/bin/with-contenv bash\n\
+# Create the entrypoint script for web mode
+RUN echo '#!/bin/bash\n\
+    PUID=${PUID:-1000}\n\
+    PGID=${PGID:-1000}\n\
     groupmod -o -g "$PGID" abc\n\
     usermod -o -u "$PUID" abc\n\
     chown -R abc:abc /app /config /watch /output\n\
     exec s6-setuidgid abc /app/postie-web\n\
-    ' > /etc/services.d/postie/run && \
-    chmod +x /etc/services.d/postie/run
+    ' > /entrypoint.sh && chmod +x /entrypoint.sh
 
 # Copy web binary from builder
 COPY --from=backend-builder /app/postie-web /app/postie-web
