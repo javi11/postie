@@ -131,25 +131,6 @@ func setupLogging(logPath string) error {
 		return fmt.Errorf("failed to create log directory: %w", err)
 	}
 
-	// Test write permissions by creating a temporary file
-	tempFile := filepath.Join(logDir, ".write_test")
-	if f, err := os.Create(tempFile); err != nil {
-		// If we can't write to the intended directory, try temp directory
-		if runtime.GOOS == "windows" {
-			tempDir := os.TempDir()
-			fallbackLogPath := filepath.Join(tempDir, "postie.log")
-			slog.Warn("Cannot write to log directory, using temp directory",
-				"original", logPath,
-				"fallback", fallbackLogPath)
-			logPath = fallbackLogPath
-		} else {
-			return fmt.Errorf("cannot write to log directory: %w", err)
-		}
-	} else {
-		_ = f.Close()
-		_ = os.Remove(tempFile)
-	}
-
 	// Configure lumberjack with Windows-optimized settings
 	logFile := &lumberjack.Logger{
 		Filename:   logPath,

@@ -48,10 +48,12 @@ async function handleWizardComplete(
 		goto("/");
 		return;
 	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
 		console.error("Setup wizard failed:", error);
+
 		toastStore.error(
 			$t("common.common.error"),
-			$t("common.messages.configuration_save_failed"),
+			errorMessage,
 		);
 	}
 }

@@ -673,9 +673,9 @@ func GetDefaultConfig() ConfigData {
 			WaitForPar2:        &enabled,
 			MaxRetries:         3,
 			RetryDelay:         Duration("5s"),
-			ArticleSizeInBytes: 750000, // 750KB
+			ArticleSizeInBytes: 768000, // 768KB
 			Groups:             []string{"alt.binaries.test"},
-			ThrottleRate:       1048576, // 1MB/s
+			ThrottleRate:       0, // 0 means no throttling
 			MessageIDFormat:    MessageIDFormatRandom,
 			PostHeaders: PostHeaders{
 				AddNXGHeader:  false,

@@ -142,6 +142,7 @@ func main() {
 			EnableFileDrop:     true,
 			DisableWebViewDrop: true,
 		},
+		Logger: logger.NewDefaultLogger(),
 		OnStartup: func(ctx context.Context) {
 			appCtx = ctx
 			app.Startup(ctx)

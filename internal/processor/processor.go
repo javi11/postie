@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +18,37 @@ import (
 )
 
 const maxRetries = 3
+
+// isWithinPath checks if a file path is within a given directory path
+func isWithinPath(filePath, dirPath string) bool {
+	if dirPath == "" {
+		return false
+	}
+	
+	// Clean both paths to handle .. and . components
+	cleanFilePath := filepath.Clean(filePath)
+	cleanDirPath := filepath.Clean(dirPath)
+	
+	// Make both paths absolute for proper comparison
+	absFilePath, err := filepath.Abs(cleanFilePath)
+	if err != nil {
+		return false
+	}
+	
+	absDirPath, err := filepath.Abs(cleanDirPath)
+	if err != nil {
+		return false
+	}
+	
+	// Check if the file path starts with the directory path
+	rel, err := filepath.Rel(absDirPath, absFilePath)
+	if err != nil {
+		return false
+	}
+	
+	// If the relative path starts with "..", the file is outside the directory
+	return !filepath.IsAbs(rel) && !strings.HasPrefix(rel, "..")
+}
 
 type Processor struct {
 	queue        *queue.Queue
@@ -33,6 +65,7 @@ type Processor struct {
 	jobsMux                   sync.RWMutex
 	deleteOriginalFile        bool
 	maintainOriginalExtension bool
+	watchFolder               string // Path to the watch folder for maintaining folder structure
 }
 
 type ProcessorOptions struct {
@@ -43,6 +76,7 @@ type ProcessorOptions struct {
 	EventEmitter              func(eventName string, optionalData ...interface{})
 	DeleteOriginalFile        bool
 	MaintainOriginalExtension bool
+	WatchFolder               string // Path to the watch folder for maintaining folder structure
 }
 
 // RunningJobDetails stores detailed information about a running job
@@ -73,6 +107,7 @@ func New(opts ProcessorOptions) *Processor {
 		runningJobDetails:         make(map[string]*RunningJobDetails),
 		deleteOriginalFile:        opts.DeleteOriginalFile,
 		maintainOriginalExtension: opts.MaintainOriginalExtension,
+		watchFolder:               opts.WatchFolder,
 	}
 }
 
@@ -274,8 +309,19 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 		p.postie.SetProgressCallback(progressCallback)
 	}
 
-	// Get the directory containing the file for input folder
-	inputFolder := filepath.Dir(job.Path)
+	// Determine the input folder for maintaining folder structure
+	var inputFolder string
+	if p.watchFolder != "" && isWithinPath(job.Path, p.watchFolder) {
+		// For files from the watcher, use the watch folder as root to maintain structure
+		inputFolder = p.watchFolder
+		slog.DebugContext(jobCtx, "Using watch folder as root for folder structure", 
+			"watchFolder", p.watchFolder, "filePath", job.Path)
+	} else {
+		// For manually added files, use the directory containing the file
+		inputFolder = filepath.Dir(job.Path)
+		slog.DebugContext(jobCtx, "Using file directory as root", 
+			"inputFolder", inputFolder, "filePath", job.Path)
+	}
 
 	// Post the file using the job-specific context
 	actualNzbPath, err := p.postie.Post(jobCtx, []fileinfo.FileInfo{fileInfo}, inputFolder, p.outputFolder)

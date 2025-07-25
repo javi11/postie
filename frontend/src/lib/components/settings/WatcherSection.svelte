@@ -173,11 +173,23 @@ async function saveWatcherSettings() {
 			throw new Error("Watcher configuration is missing");
 		}
 
+    currentConfig.watcher.enabled = config.watcher.enabled;
     currentConfig.watcher.watch_directory = watchDirectory || currentConfig.watcher.watch_directory;
-    currentConfig.watcher.size_threshold = config.watcher.size_threshold || currentConfig.watcher.size_threshold;
-    currentConfig.watcher.min_file_size = config.watcher.min_file_size || currentConfig.watcher.min_file_size;
+    currentConfig.watcher.size_threshold = config.watcher.size_threshold ?? currentConfig.watcher.size_threshold;
+    currentConfig.watcher.min_file_size = config.watcher.min_file_size ?? currentConfig.watcher.min_file_size;
     currentConfig.watcher.check_interval = config.watcher.check_interval || currentConfig.watcher.check_interval;
-    currentConfig.watcher.delete_original_file = config.watcher.delete_original_file || currentConfig.watcher.delete_original_file;
+    currentConfig.watcher.delete_original_file = config.watcher.delete_original_file ?? currentConfig.watcher.delete_original_file;
+    
+    // Update schedule if it exists
+    if (config.watcher.schedule) {
+      currentConfig.watcher.schedule.start_time = config.watcher.schedule.start_time;
+      currentConfig.watcher.schedule.end_time = config.watcher.schedule.end_time;
+    }
+    
+    // Update ignore patterns if they exist
+    if (config.watcher.ignore_patterns) {
+      currentConfig.watcher.ignore_patterns = config.watcher.ignore_patterns;
+    }
 
 		// Preserve convertValues method if it exists
 		if (currentConfig.watcher.convertValues) {
@@ -302,7 +314,6 @@ async function saveWatcherSettings() {
             />
           </div>
 
-      {#if isAdvanced}
           <div class="space-y-4">
             <div>
               <h3 class="text-md font-medium text-base-content mb-2">
@@ -327,7 +338,6 @@ async function saveWatcherSettings() {
               </div>
             </div>
           </div>
-      {/if}
 
           <div class="space-y-4">
             <div>

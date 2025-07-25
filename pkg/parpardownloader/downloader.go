@@ -103,7 +103,6 @@ func findAssetForSystem(release *Release, goos, goarch string) (*struct {
 	BrowserDownloadURL string `json:"browser_download_url"`
 }, error) {
 	var assetName string
-
 	// Detect actual runtime architecture for containers
 	actualArch := goarch
 	if goos == "linux" {
@@ -112,7 +111,6 @@ func findAssetForSystem(release *Release, goos, goarch string) (*struct {
 			actualArch = containerArch
 		}
 	}
-
 	switch goos {
 	case "linux":
 		switch actualArch {
@@ -285,7 +283,6 @@ func detectContainerArch() string {
 			return "arm64"
 		}
 	}
-
 	// Method 3: For Docker environments, default to amd64 if detection fails
 	// This is safer as most container images run in amd64 mode even on ARM hosts
 	if _, err := os.Stat("/.dockerenv"); err == nil {
