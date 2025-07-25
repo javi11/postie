@@ -107,7 +107,7 @@ func (a *App) recoverPanic(methodName string) {
 		if a.criticalErrorMessage == "" {
 			a.criticalErrorMessage = fmt.Sprintf("Critical error in %s: %v", methodName, r)
 		}
-		
+
 		// Write to crash log file for debugging, especially useful on Windows
 		if crashFile, err := os.OpenFile("postie_backend_crash.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
 			fmt.Fprintf(crashFile, "=== POSTIE BACKEND PANIC ===\n")
@@ -129,25 +129,6 @@ func setupLogging(logPath string) error {
 	logDir := filepath.Dir(logPath)
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return fmt.Errorf("failed to create log directory: %w", err)
-	}
-
-	// Test write permissions by creating a temporary file
-	tempFile := filepath.Join(logDir, ".write_test")
-	if f, err := os.Create(tempFile); err != nil {
-		// If we can't write to the intended directory, try temp directory
-		if runtime.GOOS == "windows" {
-			tempDir := os.TempDir()
-			fallbackLogPath := filepath.Join(tempDir, "postie.log")
-			slog.Warn("Cannot write to log directory, using temp directory",
-				"original", logPath,
-				"fallback", fallbackLogPath)
-			logPath = fallbackLogPath
-		} else {
-			return fmt.Errorf("cannot write to log directory: %w", err)
-		}
-	} else {
-		f.Close()
-		os.Remove(tempFile)
 	}
 
 	// Configure lumberjack with Windows-optimized settings

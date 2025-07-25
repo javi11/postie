@@ -86,7 +86,9 @@
 			"console": "integratedTerminal",
 			"env": {
 				"NODE_ENV": "development",
-				"VITE_WS_PROXY": "true"
+				"VITE_WS_PROXY": "true",
+				"GOOS": "windows",
+				"GOARCH": "amd64"
 			},
 			"preLaunchTask": "Start Web Backend",
 			"postDebugTask": "Stop Web Backend"
