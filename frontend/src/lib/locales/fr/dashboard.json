@@ -94,9 +94,9 @@
 		},
 		"alerts": {
 			"config_error": "Erreur de Configuration",
-			"config_error_description": "Il y a eu une erreur avec la configuration de votre serveur (ex. nom d'hôte invalide, échec de connexion). Veuillez vérifier vos {{settingsLink}} pour corriger la configuration.",
+			"config_error_description": "Il y a eu une erreur avec la configuration de votre serveur (ex. nom d'hôte invalide, échec de connexion). Veuillez vérifier vos {settingsLink} pour corriger la configuration.",
 			"config_required": "Configuration Requise",
-			"config_required_description": "Veuillez configurer au moins un serveur dans la page {{settingsLink}} avant de télécharger des fichiers.",
+			"config_required_description": "Veuillez configurer au moins un serveur dans la page {settingsLink} avant de télécharger des fichiers.",
 			"settings_link": "Paramètres"
 		}
 	}

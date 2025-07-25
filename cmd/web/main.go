@@ -235,6 +235,8 @@ func (ws *WebServer) setupRoutes() {
 	api.HandleFunc("/processor/status", ws.handleGetProcessorStatus).Methods("GET")
 	api.HandleFunc("/running-jobs", ws.handleGetRunningJobs).Methods("GET")
 	api.HandleFunc("/progress", ws.handleGetProgress).Methods("GET")
+	api.HandleFunc("/validate-server", ws.handleValidateServer).Methods("POST")
+	api.HandleFunc("/setup/complete", ws.handleSetupComplete).Methods("POST")
 
 	// Serve static files (catch-all)
 	ws.router.PathPrefix("/").Handler(ws.getStaticFileHandler())
@@ -579,6 +581,33 @@ func (ws *WebServer) handleGetProgress(w http.ResponseWriter, r *http.Request) {
 	progress := ws.app.GetProgress()
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(progress)
+}
+
+func (ws *WebServer) handleValidateServer(w http.ResponseWriter, r *http.Request) {
+	var serverData backend.ServerData
+	if err := json.NewDecoder(r.Body).Decode(&serverData); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	result := ws.app.ValidateNNTPServer(serverData)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(result)
+}
+
+func (ws *WebServer) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
+	var wizardData backend.SetupWizardData
+	if err := json.NewDecoder(r.Body).Decode(&wizardData); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := ws.app.SetupWizardComplete(wizardData); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func main() {

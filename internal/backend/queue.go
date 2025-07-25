@@ -86,6 +86,8 @@ func (a *App) initializeQueue() error {
 
 // AddFilesToQueue adds multiple files to the queue for processing
 func (a *App) AddFilesToQueue() error {
+	defer a.recoverPanic("AddFilesToQueue")
+	
 	if a.queue == nil {
 		slog.Error("Queue not initialized - this should not happen")
 		return fmt.Errorf("queue not initialized - please restart the application")
@@ -137,6 +139,8 @@ func (a *App) AddFilesToQueue() error {
 
 // GetQueueItems returns the current queue items from the queue
 func (a *App) GetQueueItems() ([]QueueItem, error) {
+	defer a.recoverPanic("GetQueueItems")
+	
 	if a.queue == nil {
 		return []QueueItem{}, nil
 	}

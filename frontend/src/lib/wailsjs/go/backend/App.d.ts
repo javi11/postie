@@ -23,6 +23,8 @@ export function GetConfig():Promise<config.ConfigData>;
 
 export function GetConfigPath():Promise<string>;
 
+export function GetLoggingStatus():Promise<Record<string, any>>;
+
 export function GetLogs():Promise<string>;
 
 export function GetLogsPaginated(arg1:number,arg2:number):Promise<string>;

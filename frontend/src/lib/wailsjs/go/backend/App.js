@@ -38,6 +38,10 @@ export function GetConfigPath() {
   return window['go']['backend']['App']['GetConfigPath']();
 }
 
+export function GetLoggingStatus() {
+  return window['go']['backend']['App']['GetLoggingStatus']();
+}
+
 export function GetLogs() {
   return window['go']['backend']['App']['GetLogs']();
 }
