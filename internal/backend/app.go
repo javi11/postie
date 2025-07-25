@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -16,7 +18,7 @@ import (
 	"github.com/javi11/postie/internal/watcher"
 	"github.com/javi11/postie/pkg/postie"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -92,6 +94,84 @@ type App struct {
 	firstStart           bool
 }
 
+// recoverPanic handles panic recovery with logging
+func (a *App) recoverPanic(methodName string) {
+	if r := recover(); r != nil {
+		stack := debug.Stack()
+		slog.Error("Panic recovered in app method",
+			"method", methodName,
+			"panic", r,
+			"stack", string(stack))
+
+		// Set critical error message if we don't have one already
+		if a.criticalErrorMessage == "" {
+			a.criticalErrorMessage = fmt.Sprintf("Critical error in %s: %v", methodName, r)
+		}
+
+		// Write to crash log file for debugging, especially useful on Windows
+		if crashFile, err := os.OpenFile("postie_backend_crash.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			_, _ = fmt.Fprintf(crashFile, "=== POSTIE BACKEND PANIC ===\n")
+			_, _ = fmt.Fprintf(crashFile, "Method: %s\n", methodName)
+			_, _ = fmt.Fprintf(crashFile, "OS: %s\n", runtime.GOOS)
+			_, _ = fmt.Fprintf(crashFile, "Arch: %s\n", runtime.GOARCH)
+			_, _ = fmt.Fprintf(crashFile, "Go Version: %s\n", runtime.Version())
+			_, _ = fmt.Fprintf(crashFile, "Panic: %v\n\n", r)
+			_, _ = fmt.Fprintf(crashFile, "Stack trace:\n%s\n", string(stack))
+			_, _ = fmt.Fprintf(crashFile, "=== END PANIC REPORT ===\n\n")
+			_ = crashFile.Close()
+		}
+	}
+}
+
+// setupLogging configures logging with Windows-specific optimizations
+func setupLogging(logPath string) error {
+	// Ensure log directory exists with proper permissions
+	logDir := filepath.Dir(logPath)
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return fmt.Errorf("failed to create log directory: %w", err)
+	}
+
+	// Test write permissions by creating a temporary file
+	tempFile := filepath.Join(logDir, ".write_test")
+	if f, err := os.Create(tempFile); err != nil {
+		// If we can't write to the intended directory, try temp directory
+		if runtime.GOOS == "windows" {
+			tempDir := os.TempDir()
+			fallbackLogPath := filepath.Join(tempDir, "postie.log")
+			slog.Warn("Cannot write to log directory, using temp directory",
+				"original", logPath,
+				"fallback", fallbackLogPath)
+			logPath = fallbackLogPath
+		} else {
+			return fmt.Errorf("cannot write to log directory: %w", err)
+		}
+	} else {
+		_ = f.Close()
+		_ = os.Remove(tempFile)
+	}
+
+	// Configure lumberjack with Windows-optimized settings
+	logFile := &lumberjack.Logger{
+		Filename:   logPath,
+		MaxSize:    5, // megabytes
+		MaxBackups: 3,
+		MaxAge:     28, // days
+		Compress:   true,
+	}
+
+	multiWriter := io.MultiWriter(os.Stdout, logFile)
+	logger := slog.New(slog.NewJSONHandler(multiWriter, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
+	slog.SetDefault(logger)
+
+	slog.Info("Logging initialized successfully",
+		"logPath", logPath,
+		"os", runtime.GOOS)
+
+	return nil
+}
+
 // NewApp creates a new App application struct
 func NewApp() *App {
 	// Get OS-specific paths
@@ -108,20 +188,15 @@ func NewApp() *App {
 		}
 	}
 
-	// Setup logging
-	logFile := &lumberjack.Logger{
-		Filename:   appPaths.Log,
-		MaxSize:    5, // megabytes
-		MaxBackups: 3,
-		MaxAge:     28, //days
-		Compress:   true,
+	// Setup logging with Windows-specific optimizations
+	if err := setupLogging(appPaths.Log); err != nil {
+		// Fallback to basic stdout logging if file logging fails
+		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		}))
+		slog.SetDefault(logger)
+		slog.Error("Failed to setup file logging, using stdout only", "error", err)
 	}
-
-	multiWriter := io.MultiWriter(os.Stdout, logFile)
-	logger := slog.New(slog.NewJSONHandler(multiWriter, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	}))
-	slog.SetDefault(logger)
 
 	slog.Info("Using OS-specific paths",
 		"config", appPaths.Config,
@@ -154,6 +229,8 @@ func (a *App) SetWebEventEmitter(emitter func(eventType string, data interface{}
 // Startup is called when the app starts. The context is saved
 // so we can call the runtime methods
 func (a *App) Startup(ctx context.Context) {
+	defer a.recoverPanic("Startup")
+
 	a.ctx = ctx
 
 	// Note: Directory creation is now handled in GetAppPaths()
@@ -207,6 +284,8 @@ func (a *App) Startup(ctx context.Context) {
 
 // GetAppStatus returns the current application status
 func (a *App) GetAppStatus() AppStatus {
+	defer a.recoverPanic("GetAppStatus")
+
 	status := AppStatus{
 		HasPostie:           a.postie != nil,
 		HasConfig:           a.config != nil,
@@ -252,6 +331,34 @@ func (a *App) GetAppStatus() AppStatus {
 	return status
 }
 
+// GetLoggingStatus returns information about logging configuration
+func (a *App) GetLoggingStatus() map[string]interface{} {
+	status := map[string]interface{}{
+		"logPath":    a.appPaths.Log,
+		"os":         runtime.GOOS,
+		"canWrite":   false,
+		"fileExists": false,
+		"error":      "",
+	}
+
+	// Check if log file exists
+	if _, err := os.Stat(a.appPaths.Log); err == nil {
+		status["fileExists"] = true
+	}
+
+	// Test write permissions
+	testFile := filepath.Join(filepath.Dir(a.appPaths.Log), ".write_test")
+	if f, err := os.Create(testFile); err != nil {
+		status["error"] = fmt.Sprintf("Cannot write to log directory: %v", err)
+	} else {
+		_ = f.Close()
+		_ = os.Remove(testFile)
+		status["canWrite"] = true
+	}
+
+	return status
+}
+
 // GetProcessorStatus returns processor status information
 func (a *App) GetProcessorStatus() ProcessorStatus {
 	status := ProcessorStatus{
@@ -289,6 +396,8 @@ func (a *App) GetRunningJobDetails() ([]*processor.RunningJobDetails, error) {
 
 // RetryJob retries a failed job
 func (a *App) RetryJob(id string) error {
+	defer a.recoverPanic("RetryJob")
+
 	if a.queue == nil {
 		return nil
 	}
@@ -299,7 +408,7 @@ func (a *App) RetryJob(id string) error {
 
 	// Emit events for both desktop and web modes
 	if !a.isWebMode {
-		runtime.EventsEmit(a.ctx, "queue:updated")
+		wailsruntime.EventsEmit(a.ctx, "queue:updated")
 	} else if a.webEventEmitter != nil {
 		a.webEventEmitter("queue:updated", nil)
 	}
@@ -317,6 +426,8 @@ func getKeys(m map[string]bool) []string {
 
 // GetLogs returns the content of the log file.
 func (a *App) GetLogs() (string, error) {
+	defer a.recoverPanic("GetLogs")
+
 	return a.GetLogsPaginated(0, 0) // 0, 0 means get last 1MB like before
 }
 
@@ -324,6 +435,8 @@ func (a *App) GetLogs() (string, error) {
 // limit: number of lines to return (0 = use original 1MB limit)
 // offset: number of lines to skip from the end (0 = start from most recent)
 func (a *App) GetLogsPaginated(limit, offset int) (string, error) {
+	defer a.recoverPanic("GetLogsPaginated")
+
 	file, err := os.Open(a.appPaths.Log)
 	if err != nil {
 		return "", fmt.Errorf("failed to open log file: %w", err)
@@ -424,7 +537,7 @@ func (a *App) readLogLines(file *os.File, limit, offset int) (string, error) {
 // NavigateToSettings emits an event to navigate to the settings page
 func (a *App) NavigateToSettings() {
 	if a.ctx != nil && !a.isWebMode {
-		runtime.EventsEmit(a.ctx, "navigate-to-settings")
+		wailsruntime.EventsEmit(a.ctx, "navigate-to-settings")
 	} else if a.webEventEmitter != nil {
 		a.webEventEmitter("navigate-to-settings", nil)
 	}
@@ -433,7 +546,7 @@ func (a *App) NavigateToSettings() {
 // NavigateToDashboard emits an event to navigate to the dashboard page
 func (a *App) NavigateToDashboard() {
 	if a.ctx != nil && !a.isWebMode {
-		runtime.EventsEmit(a.ctx, "navigate-to-dashboard")
+		wailsruntime.EventsEmit(a.ctx, "navigate-to-dashboard")
 	} else if a.webEventEmitter != nil {
 		a.webEventEmitter("navigate-to-dashboard", nil)
 	}
@@ -441,6 +554,8 @@ func (a *App) NavigateToDashboard() {
 
 // HandleDroppedFiles processes files that are dropped onto the application window
 func (a *App) HandleDroppedFiles(filePaths []string) error {
+	defer a.recoverPanic("HandleDroppedFiles")
+
 	if len(filePaths) == 0 {
 		return fmt.Errorf("no files dropped")
 	}
@@ -484,7 +599,7 @@ func (a *App) HandleDroppedFiles(filePaths []string) error {
 			slog.Info("Added dropped files to queue", "added", addedCount, "total", len(filePaths))
 			// Emit event to refresh queue in frontend for both desktop and web modes
 			if !a.isWebMode {
-				runtime.EventsEmit(a.ctx, "queue-updated")
+				wailsruntime.EventsEmit(a.ctx, "queue-updated")
 			} else if a.webEventEmitter != nil {
 				a.webEventEmitter("queue-updated", nil)
 			}
@@ -541,11 +656,13 @@ func (a *App) isFirstStart() bool {
 
 // SetupWizardComplete saves the configuration from the setup wizard
 func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
+	defer a.recoverPanic("SetupWizardComplete")
+
 	slog.Info("Completing setup wizard", "data", wizardData)
 
 	// Create new config based on wizard data
 	cfg := config.GetDefaultConfig()
-	
+
 	// Ensure version is set
 	cfg.Version = config.CurrentConfigVersion
 
@@ -590,6 +707,8 @@ func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 
 // ValidateNNTPServer validates an NNTP server configuration by attempting to connect
 func (a *App) ValidateNNTPServer(serverData ServerData) ValidationResult {
+	defer a.recoverPanic("ValidateNNTPServer")
+
 	// Basic validation
 	if serverData.Host == "" {
 		return ValidationResult{

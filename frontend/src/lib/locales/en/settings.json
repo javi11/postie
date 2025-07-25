@@ -311,6 +311,7 @@
 			"info": "<strong>Upload Queue:</strong> Manages file uploads with persistence, retry logic, and concurrent processing."
 		},
 		"server": {
+			"validating": "Validating...",
 			"title": "NNTP Servers",
 			"add_server": "Add Server",
 			"add_first_server": "Add Your First Server",

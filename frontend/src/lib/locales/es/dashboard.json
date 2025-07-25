@@ -95,9 +95,9 @@
 		},
 		"alerts": {
 			"config_error": "Error de Configuración",
-			"config_error_description": "Hubo un error con la configuración del servidor (ej. nombre de host inválido, fallo de conexión). Por favor revisa tu {{settingsLink}} para corregir la configuración.",
+			"config_error_description": "Hubo un error con la configuración del servidor (ej. nombre de host inválido, fallo de conexión). Por favor revisa tu {settingsLink} para corregir la configuración.",
 			"config_required": "Configuración Requerida",
-			"config_required_description": "Por favor configura al menos un servidor en la página de {{settingsLink}} antes de subir archivos.",
+			"config_required_description": "Por favor configura al menos un servidor en la página de {settingsLink} antes de subir archivos.",
 			"settings_link": "Configuración"
 		}
 	}

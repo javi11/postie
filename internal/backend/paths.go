@@ -84,10 +84,6 @@ func GetAppPaths() (*AppPaths, error) {
 	}
 
 	logPath := filepath.Join(dataDir, "postie.log")
-	_, err = os.Create(logPath)
-	if err != nil {
-		return nil, err
-	}
 
 	return &AppPaths{
 		Config:   filepath.Join(configDir, "config.yaml"),

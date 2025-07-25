@@ -356,6 +356,7 @@
 		"server": {
 			"title": "Servidores NNTP",
 			"add_server": "Agregar Servidor",
+			"validating": "Validando...",
 			"add_first_server": "Agregar Su Primer Servidor",
 			"no_servers_title": "No hay servidores configurados",
 			"no_servers_description": "Agregue al menos un servidor NNTP para comenzar a cargar.",

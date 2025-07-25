@@ -93,9 +93,9 @@
 		},
 		"alerts": {
 			"config_error": "Configuration Error",
-			"config_error_description": "There was an error with your server configuration (e.g., invalid hostname, connection failure). Please check your {{settingsLink}} to fix the configuration.",
+			"config_error_description": "There was an error with your server configuration (e.g., invalid hostname, connection failure). Please check your {settingsLink} to fix the configuration.",
 			"config_required": "Configuration Required",
-			"config_required_description": "Please configure at least one server in the {{settingsLink}} page before uploading files.",
+			"config_required_description": "Please configure at least one server in the {settingsLink} page before uploading files.",
 			"settings_link": "Settings"
 		}
 	}

@@ -113,16 +113,30 @@ func (p *poster) Close() {
 	if p.pool != nil {
 		done := make(chan struct{})
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("Panic during pool quit", "panic", r)
+				}
+				close(done)
+			}()
 			p.pool.Quit()
-			close(done)
 		}()
+
+		// Use longer timeout on Windows due to slower networking cleanup
+		timeout := 5 * time.Second
+		if runtime.GOOS == "windows" {
+			timeout = 10 * time.Second
+		}
 
 		select {
 		case <-done:
 			// Quit completed successfully
-		case <-time.After(5 * time.Second):
-			// Timeout occurred, ignore and set pool to nil
-			slog.Warn("Pool quit timed out after 5 seconds, setting pool to nil")
+			slog.Debug("Connection pool closed successfully")
+		case <-time.After(timeout):
+			// Timeout occurred, log warning but continue
+			slog.Warn("Pool quit timed out, forcing close", 
+				"timeout_seconds", timeout.Seconds(),
+				"os", runtime.GOOS)
 		}
 		p.pool = nil
 	}
@@ -135,6 +149,16 @@ func (p *poster) Post(
 	rootDir string,
 	nzbGen nzb.NZBGenerator,
 ) error {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.ErrorContext(ctx, "Panic in poster.Post",
+				"panic", r,
+				"files", len(files),
+				"rootDir", rootDir,
+				"os", runtime.GOOS)
+		}
+	}()
+	
 	wg := sync.WaitGroup{}
 	var failedPosts int
 
@@ -268,7 +292,9 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 
 			// Close file
 			if post.file != nil {
-				_ = post.file.Close()
+				if err := post.file.Close(); err != nil {
+					slog.WarnContext(ctx, "Error closing file handle", "error", err, "file", post.FilePath)
+				}
 			}
 
 			post.wg.Done()
@@ -387,7 +413,9 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 
 			// Close file
 			if post.file != nil {
-				_ = post.file.Close()
+				if err := post.file.Close(); err != nil {
+					slog.WarnContext(ctx, "Error closing file handle", "error", err, "file", post.FilePath)
+				}
 			}
 
 			post.wg.Done()
