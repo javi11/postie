@@ -33,7 +33,7 @@ func recoverMainPanic() {
 		slog.Error("Critical panic in main application",
 			"panic", r,
 			"stack", string(stack))
-		
+
 		// Create detailed crash log for debugging, especially on Windows
 		crashLogPath := "postie_crash.log"
 		if crashFile, err := os.Create(crashLogPath); err == nil {
@@ -46,13 +46,13 @@ func recoverMainPanic() {
 			fmt.Fprintf(crashFile, "Stack trace:\n%s\n", string(stack))
 			fmt.Fprintf(crashFile, "=== END CRASH REPORT ===\n")
 			crashFile.Close()
-			
+
 			fmt.Printf("Critical error: %v\n", r)
 			fmt.Printf("Detailed crash log written to: %s\n", crashLogPath)
 		} else {
 			fmt.Printf("Critical error: %v (could not write crash log: %v)\n", r, err)
 		}
-		
+
 		os.Exit(1)
 	}
 }
@@ -142,6 +142,7 @@ func main() {
 			EnableFileDrop:     true,
 			DisableWebViewDrop: true,
 		},
+		Logger: logger.NewDefaultLogger(),
 		OnStartup: func(ctx context.Context) {
 			appCtx = ctx
 			app.Startup(ctx)
@@ -156,10 +157,10 @@ func main() {
 							"panic", r,
 							"paths", paths,
 							"stack", string(stack))
-						
+
 						// Emit error event to frontend
 						wailsruntime.EventsEmit(ctx, "file-drop-error", fmt.Sprintf("Critical error: %v", r))
-						
+
 						// Write to crash log for debugging
 						if crashFile, err := os.OpenFile("postie_crash.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
 							fmt.Fprintf(crashFile, "File drop panic: %v\nPaths: %v\nStack:\n%s\n\n", r, paths, string(stack))
@@ -167,7 +168,7 @@ func main() {
 						}
 					}
 				}()
-				
+
 				if err := app.HandleDroppedFiles(paths); err != nil {
 					slog.Error("Error handling dropped files", "error", err, "paths", paths)
 					// Emit error event to frontend for user notification
@@ -181,6 +182,9 @@ func main() {
 		LogLevelProduction: logger.DEBUG,
 		Bind: []interface{}{
 			app,
+		},
+		Debug: options.Debug{
+			OpenInspectorOnStartup: true,
 		},
 		Mac: &mac.Options{
 			About: &mac.AboutInfo{
