@@ -14,7 +14,7 @@ function createToastStore() {
 	const { subscribe, set, update } = writable<ToastMessage[]>([]);
 
 	const addToast = (toast: Omit<ToastMessage, "id">) => {
-		const id = crypto.randomUUID();
+		const id = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 		const newToast: ToastMessage = {
 			id,
 			...toast,
