@@ -107,6 +107,19 @@ func (a *App) recoverPanic(methodName string) {
 		if a.criticalErrorMessage == "" {
 			a.criticalErrorMessage = fmt.Sprintf("Critical error in %s: %v", methodName, r)
 		}
+		
+		// Write to crash log file for debugging, especially useful on Windows
+		if crashFile, err := os.OpenFile("postie_backend_crash.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(crashFile, "=== POSTIE BACKEND PANIC ===\n")
+			fmt.Fprintf(crashFile, "Method: %s\n", methodName)
+			fmt.Fprintf(crashFile, "OS: %s\n", runtime.GOOS)
+			fmt.Fprintf(crashFile, "Arch: %s\n", runtime.GOARCH)
+			fmt.Fprintf(crashFile, "Go Version: %s\n", runtime.Version())
+			fmt.Fprintf(crashFile, "Panic: %v\n\n", r)
+			fmt.Fprintf(crashFile, "Stack trace:\n%s\n", string(stack))
+			fmt.Fprintf(crashFile, "=== END PANIC REPORT ===\n\n")
+			crashFile.Close()
+		}
 	}
 }
 
