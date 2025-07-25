@@ -12,7 +12,7 @@ import (
 
 func (a *App) initializeProcessor() error {
 	defer a.recoverPanic("initializeProcessor")
-	
+
 	if a.config == nil {
 		return fmt.Errorf("config not loaded")
 	}
@@ -141,6 +141,7 @@ func (a *App) initializeProcessor() error {
 		EventEmitter:              eventEmitter,
 		DeleteOriginalFile:        watcherCfg.DeleteOriginalFile,
 		MaintainOriginalExtension: a.config.GetMaintainOriginalExtension(),
+		WatchFolder:               watcherCfg.WatchDirectory, // Pass watch folder for folder structure maintenance
 	})
 
 	// Start processor
@@ -157,7 +158,7 @@ func (a *App) initializeProcessor() error {
 // CancelJob cancels a running job via processor
 func (a *App) CancelJob(id string) error {
 	defer a.recoverPanic("CancelJob")
-	
+
 	if a.processor == nil {
 		return fmt.Errorf("processor not initialized")
 	}
