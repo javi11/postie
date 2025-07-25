@@ -37,15 +37,15 @@ func recoverMainPanic() {
 		// Create detailed crash log for debugging, especially on Windows
 		crashLogPath := "postie_crash.log"
 		if crashFile, err := os.Create(crashLogPath); err == nil {
-			fmt.Fprintf(crashFile, "=== POSTIE CRASH REPORT ===\n")
-			fmt.Fprintf(crashFile, "Time: %s\n", os.Getenv("TIME"))
-			fmt.Fprintf(crashFile, "OS: %s\n", runtime.GOOS)
-			fmt.Fprintf(crashFile, "Arch: %s\n", runtime.GOARCH)
-			fmt.Fprintf(crashFile, "Go Version: %s\n", runtime.Version())
-			fmt.Fprintf(crashFile, "Panic: %v\n\n", r)
-			fmt.Fprintf(crashFile, "Stack trace:\n%s\n", string(stack))
-			fmt.Fprintf(crashFile, "=== END CRASH REPORT ===\n")
-			crashFile.Close()
+			_, _ = fmt.Fprintf(crashFile, "=== POSTIE CRASH REPORT ===\n")
+			_, _ = fmt.Fprintf(crashFile, "Time: %s\n", os.Getenv("TIME"))
+			_, _ = fmt.Fprintf(crashFile, "OS: %s\n", runtime.GOOS)
+			_, _ = fmt.Fprintf(crashFile, "Arch: %s\n", runtime.GOARCH)
+			_, _ = fmt.Fprintf(crashFile, "Go Version: %s\n", runtime.Version())
+			_, _ = fmt.Fprintf(crashFile, "Panic: %v\n\n", r)
+			_, _ = fmt.Fprintf(crashFile, "Stack trace:\n%s\n", string(stack))
+			_, _ = fmt.Fprintf(crashFile, "=== END CRASH REPORT ===\n")
+			_ = crashFile.Close()
 
 			fmt.Printf("Critical error: %v\n", r)
 			fmt.Printf("Detailed crash log written to: %s\n", crashLogPath)
@@ -163,8 +163,8 @@ func main() {
 
 						// Write to crash log for debugging
 						if crashFile, err := os.OpenFile("postie_crash.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-							fmt.Fprintf(crashFile, "File drop panic: %v\nPaths: %v\nStack:\n%s\n\n", r, paths, string(stack))
-							crashFile.Close()
+							_, _ = fmt.Fprintf(crashFile, "File drop panic: %v\nPaths: %v\nStack:\n%s\n\n", r, paths, string(stack))
+							_ = crashFile.Close()
 						}
 					}
 				}()

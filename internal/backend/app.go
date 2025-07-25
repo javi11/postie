@@ -110,15 +110,15 @@ func (a *App) recoverPanic(methodName string) {
 
 		// Write to crash log file for debugging, especially useful on Windows
 		if crashFile, err := os.OpenFile("postie_backend_crash.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			fmt.Fprintf(crashFile, "=== POSTIE BACKEND PANIC ===\n")
-			fmt.Fprintf(crashFile, "Method: %s\n", methodName)
-			fmt.Fprintf(crashFile, "OS: %s\n", runtime.GOOS)
-			fmt.Fprintf(crashFile, "Arch: %s\n", runtime.GOARCH)
-			fmt.Fprintf(crashFile, "Go Version: %s\n", runtime.Version())
-			fmt.Fprintf(crashFile, "Panic: %v\n\n", r)
-			fmt.Fprintf(crashFile, "Stack trace:\n%s\n", string(stack))
-			fmt.Fprintf(crashFile, "=== END PANIC REPORT ===\n\n")
-			crashFile.Close()
+			_, _ = fmt.Fprintf(crashFile, "=== POSTIE BACKEND PANIC ===\n")
+			_, _ = fmt.Fprintf(crashFile, "Method: %s\n", methodName)
+			_, _ = fmt.Fprintf(crashFile, "OS: %s\n", runtime.GOOS)
+			_, _ = fmt.Fprintf(crashFile, "Arch: %s\n", runtime.GOARCH)
+			_, _ = fmt.Fprintf(crashFile, "Go Version: %s\n", runtime.Version())
+			_, _ = fmt.Fprintf(crashFile, "Panic: %v\n\n", r)
+			_, _ = fmt.Fprintf(crashFile, "Stack trace:\n%s\n", string(stack))
+			_, _ = fmt.Fprintf(crashFile, "=== END PANIC REPORT ===\n\n")
+			_ = crashFile.Close()
 		}
 	}
 }
@@ -332,8 +332,8 @@ func (a *App) GetLoggingStatus() map[string]interface{} {
 	if f, err := os.Create(testFile); err != nil {
 		status["error"] = fmt.Sprintf("Cannot write to log directory: %v", err)
 	} else {
-		f.Close()
-		os.Remove(testFile)
+		_ = f.Close()
+		_ = os.Remove(testFile)
 		status["canWrite"] = true
 	}
 
