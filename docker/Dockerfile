@@ -95,6 +95,9 @@ VOLUME ["/config", "/watch", "/output"]
 # Default command for web mode
 CMD ["/app/postie-web"]
 
+# Set the entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
+
 LABEL org.opencontainers.image.source="https://github.com/javi11/postie"
 LABEL build_version="version: Build-date:- ${VERSION}  ${BUILD_DATE}"
 LABEL maintainer="javi11"
