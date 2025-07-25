@@ -183,9 +183,6 @@ func main() {
 		Bind: []interface{}{
 			app,
 		},
-		Debug: options.Debug{
-			OpenInspectorOnStartup: true,
-		},
 		Mac: &mac.Options{
 			About: &mac.AboutInfo{
 				Title:   "Postie",
