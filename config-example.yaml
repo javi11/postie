@@ -20,7 +20,7 @@ posting:
   article_size_in_bytes: 750000
   groups:
     - 'alt.binaries.test'
-  throttle_rate: 1048576
+  throttle_rate: 0
   message_id_format: 'random'
   obfuscation_policy: 'full'
   par2_obfuscation_policy: 'full'
