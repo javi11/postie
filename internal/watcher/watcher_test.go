@@ -1,8 +1,10 @@
 package watcher
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,6 +21,46 @@ func (m *mockProcessor) IsPathBeingProcessed(path string) bool {
 	return m.processingPaths[path]
 }
 
+// mockQueueWithDuplicateCheck simulates queue behavior with duplicate checking
+// It implements the queue.QueueInterface
+type mockQueueWithDuplicateCheck struct {
+	addFileCalls []string
+	mu           sync.Mutex
+}
+
+func (m *mockQueueWithDuplicateCheck) AddFile(ctx context.Context, path string, size int64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Simulate duplicate checking - if file already in calls, ignore
+	for _, existingPath := range m.addFileCalls {
+		if existingPath == path {
+			// Simulate queue.AddFile behavior - log and return nil for duplicates
+			return nil
+		}
+	}
+
+	// Add file to our mock queue
+	m.addFileCalls = append(m.addFileCalls, path)
+	return nil
+}
+
+func (m *mockQueueWithDuplicateCheck) GetQueueItems() ([]queue.QueueItem, error) {
+	return []queue.QueueItem{}, nil
+}
+
+func (m *mockQueueWithDuplicateCheck) RemoveFromQueue(id string) error {
+	return nil
+}
+
+func (m *mockQueueWithDuplicateCheck) ClearQueue() error {
+	return nil
+}
+
+func (m *mockQueueWithDuplicateCheck) GetQueueStats() (map[string]interface{}, error) {
+	return map[string]interface{}{}, nil
+}
+
 // Helper function to create a test watcher
 func createTestWatcher(t *testing.T) (*Watcher, string) {
 	tempDir := t.TempDir()
@@ -33,7 +75,9 @@ func createTestWatcher(t *testing.T) (*Watcher, string) {
 		IgnorePatterns:     []string{},
 	}
 
-	mockQueue := &queue.Queue{} // You might need to mock this properly
+	mockQueue := &mockQueueWithDuplicateCheck{
+		addFileCalls: make([]string, 0),
+	}
 	mockProc := &mockProcessor{
 		processingPaths: make(map[string]bool),
 	}
@@ -387,5 +431,128 @@ func TestIntegrationStabilityCheck(t *testing.T) {
 	shouldProcess3b := watcher.shouldProcessFile(filePath, info3)
 	if !shouldProcess3b {
 		t.Error("Second check of stable file should be processed")
+	}
+}
+
+func TestDuplicatePrevention(t *testing.T) {
+	watcher, tempDir := createTestWatcher(t)
+
+	// Create a stable file that meets all criteria
+	content := make([]byte, 1500) // Large enough file
+	for i := range content {
+		content[i] = 'x'
+	}
+	filePath := createTestFile(t, tempDir, "duplicate_test.txt", content, time.Now().Add(-10*time.Second))
+
+	// Get file info
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("Failed to stat file: %v", err)
+	}
+
+	// Mock queue to track AddFile calls
+	mockQueue := &mockQueueWithDuplicateCheck{
+		addFileCalls: make([]string, 0),
+	}
+	watcher.queue = mockQueue
+
+	// First scan - file should be processed
+	watcher.shouldProcessFile(filePath, info) // Populate size cache
+	shouldProcess1 := watcher.shouldProcessFile(filePath, info) // Now stable
+	if !shouldProcess1 {
+		t.Error("Stable file should be processed on first scan")
+	}
+
+	// Simulate adding to queue on first scan
+	err = watcher.queue.AddFile(nil, filePath, info.Size())
+	if err != nil {
+		t.Fatalf("Failed to add file to queue: %v", err)
+	}
+
+	// Verify first call was made
+	if len(mockQueue.addFileCalls) != 1 {
+		t.Errorf("Expected 1 AddFile call, got %d", len(mockQueue.addFileCalls))
+	}
+
+	// Second scan - file should still be stable but queue should prevent duplicate
+	shouldProcess2 := watcher.shouldProcessFile(filePath, info)
+	if !shouldProcess2 {
+		t.Error("File should still be considered processable")
+	}
+
+	// Simulate adding to queue on second scan (should be prevented by queue)
+	err = watcher.queue.AddFile(nil, filePath, info.Size())
+	if err != nil {
+		t.Errorf("AddFile should not return error for duplicate: %v", err)
+	}
+
+	// Verify still only one call was actually processed by queue
+	if len(mockQueue.addFileCalls) != 1 {
+		t.Errorf("Expected queue to prevent duplicate, still got %d AddFile calls", len(mockQueue.addFileCalls))
+	}
+}
+
+func TestMultipleScanCycles(t *testing.T) {
+	watcher, tempDir := createTestWatcher(t)
+
+	// Mock queue to track calls
+	mockQueue := &mockQueueWithDuplicateCheck{
+		addFileCalls: make([]string, 0),
+	}
+	watcher.queue = mockQueue
+
+	// Create multiple files
+	files := []string{"file1.txt", "file2.txt", "file3.txt"}
+	for _, filename := range files {
+		content := make([]byte, 1500)
+		for i := range content {
+			content[i] = 'y'
+		}
+		createTestFile(t, tempDir, filename, content, time.Now().Add(-10*time.Second))
+	}
+
+	// Simulate multiple scan cycles
+	for cycle := 0; cycle < 3; cycle++ {
+		t.Logf("Scan cycle %d", cycle+1)
+		
+		for _, filename := range files {
+			filePath := filepath.Join(tempDir, filename)
+			info, err := os.Stat(filePath)
+			if err != nil {
+				t.Fatalf("Failed to stat file: %v", err)
+			}
+
+			// First call to populate size cache, second to check stability
+			watcher.shouldProcessFile(filePath, info)
+			if watcher.shouldProcessFile(filePath, info) {
+				err = watcher.queue.AddFile(nil, filePath, info.Size())
+				if err != nil {
+					t.Errorf("Cycle %d: AddFile failed for %s: %v", cycle+1, filename, err)
+				}
+			}
+		}
+	}
+
+	// Verify each file was only added once despite multiple scans
+	if len(mockQueue.addFileCalls) != len(files) {
+		t.Errorf("Expected %d unique files in queue, got %d calls: %v", 
+			len(files), len(mockQueue.addFileCalls), mockQueue.addFileCalls)
+	}
+
+	// Verify all expected files are present
+	expectedFiles := make(map[string]bool)
+	for _, filename := range files {
+		expectedFiles[filepath.Join(tempDir, filename)] = true
+	}
+
+	for _, addedFile := range mockQueue.addFileCalls {
+		if !expectedFiles[addedFile] {
+			t.Errorf("Unexpected file added to queue: %s", addedFile)
+		}
+		delete(expectedFiles, addedFile)
+	}
+
+	if len(expectedFiles) > 0 {
+		t.Errorf("Some files were not added to queue: %v", expectedFiles)
 	}
 }

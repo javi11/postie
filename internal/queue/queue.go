@@ -14,6 +14,17 @@ import (
 	"maragu.dev/goqite"
 )
 
+var _ QueueInterface = (*Queue)(nil)
+
+// QueueInterface defines the interface for queue operations
+type QueueInterface interface {
+	AddFile(ctx context.Context, path string, size int64) error
+	GetQueueItems() ([]QueueItem, error)
+	RemoveFromQueue(id string) error
+	ClearQueue() error
+	GetQueueStats() (map[string]interface{}, error)
+}
+
 type Queue struct {
 	queue     *goqite.Queue
 	db        *sql.DB
