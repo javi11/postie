@@ -22,7 +22,7 @@ type ProcessorInterface interface {
 
 type Watcher struct {
 	cfg            config.WatcherConfig
-	queue          *queue.Queue
+	queue          queue.QueueInterface
 	processor      ProcessorInterface
 	watchFolder    string
 	eventEmitter   func(eventName string, optionalData ...interface{})
@@ -37,14 +37,14 @@ type fileCacheEntry struct {
 
 func New(
 	cfg config.WatcherConfig,
-	queue *queue.Queue,
+	q queue.QueueInterface,
 	processor ProcessorInterface,
 	watchFolder string,
 	eventEmitter func(eventName string, optionalData ...interface{}),
 ) *Watcher {
 	return &Watcher{
 		cfg:           cfg,
-		queue:         queue,
+		queue:         q,
 		processor:     processor,
 		watchFolder:   watchFolder,
 		eventEmitter:  eventEmitter,
@@ -127,13 +127,9 @@ func (w *Watcher) scanDirectory(ctx context.Context) error {
 			return nil
 		}
 
-		// Add file to queue
-		// If delete original file is enabled, skip duplicate check since files are deleted after processing
-		if w.cfg.DeleteOriginalFile {
-			err = w.queue.AddFileWithoutDuplicateCheck(ctx, path, info.Size())
-		} else {
-			err = w.queue.AddFile(ctx, path, info.Size())
-		}
+		// Add file to queue with duplicate checking
+		// Always check for duplicates to prevent queue pollution, regardless of DeleteOriginalFile setting
+		err = w.queue.AddFile(ctx, path, info.Size())
 
 		if err != nil {
 			slog.ErrorContext(ctx, "Error adding file to queue", "path", path, "error", err)
