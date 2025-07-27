@@ -98,11 +98,6 @@ async function saveServerSettings() {
 		console.log("Saving server settings:", currentConfig);
 
 		await apiClient.saveConfig(currentConfig);
-
-		toastStore.success(
-			$t("settings.server.saved_success"),
-			$t("settings.server.saved_success_description"),
-		);
 	} catch (error) {
 		console.error("Failed to save server settings:", error);
 		toastStore.error($t("common.messages.error_saving"), String(error));

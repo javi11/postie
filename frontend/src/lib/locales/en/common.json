@@ -18,6 +18,8 @@
 		},
 		"common": {
 			"saving": "Saving...",
+			"applying": "Applying...",
+			"discarding": "Discarding...",
 			"clearing": "Clearing...",
 			"clear": "Clear",
 			"cancel": "Cancel",

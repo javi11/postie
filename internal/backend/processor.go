@@ -108,6 +108,9 @@ func (a *App) initializeProcessor() error {
 					if stage, ok := progressData["stage"].(string); ok {
 						if stage == "Completed" || stage == "Cancelled" || stage == "Error" {
 							a.progress.JobID = ""
+							
+							// Check if we should apply pending config changes
+							go a.checkAndApplyPendingConfig()
 						}
 					}
 

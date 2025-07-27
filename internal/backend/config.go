@@ -18,7 +18,7 @@ func (a *App) GetConfigPath() string {
 	return a.configPath
 }
 
-// GetConfig returns the current configuration
+// GetConfig returns the current configuration (pending config if available, otherwise applied config)
 func (a *App) GetConfig() (*config.ConfigData, error) {
 	defer a.recoverPanic("GetConfig")
 	
@@ -31,7 +31,44 @@ func (a *App) GetConfig() (*config.ConfigData, error) {
 		return nil, fmt.Errorf("config file not found")
 	}
 
+	// If we have pending config, return that instead of applied config
+	a.pendingConfigMux.RLock()
+	pendingConfig := a.pendingConfig
+	a.pendingConfigMux.RUnlock()
+	
+	if pendingConfig != nil {
+		slog.Debug("Returning pending configuration to frontend")
+		return pendingConfig, nil
+	}
+
 	// If we have a loaded config, get its data
+	if a.config != nil {
+		return a.config, nil
+	}
+
+	// Otherwise load it fresh
+	cfg, err := config.Load(a.configPath)
+	if err != nil {
+		return nil, fmt.Errorf("error loading config file: %w", err)
+	}
+
+	return cfg, nil
+}
+
+// GetAppliedConfig returns the currently applied configuration (ignoring pending)
+func (a *App) GetAppliedConfig() (*config.ConfigData, error) {
+	defer a.recoverPanic("GetAppliedConfig")
+	
+	if a.configPath == "" {
+		return nil, fmt.Errorf("no config file specified")
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(a.configPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("config file not found")
+	}
+
+	// Always return the applied config, ignoring pending
 	if a.config != nil {
 		return a.config, nil
 	}
@@ -51,17 +88,56 @@ func (a *App) SaveConfig(configData *config.ConfigData) error {
 	
 	slog.Info("Saving config", "path", a.configPath, "configData", configData)
 
-	if a.postie != nil {
-		a.postie.Close()
-		a.postie = nil
-	}
-
 	// Ensure version is set to current version when saving
 	configData.Version = config.CurrentConfigVersion
 
 	// Validate server connections before saving
 	if err := a.validateServerConnections(configData); err != nil {
 		return fmt.Errorf("server validation failed: %w", err)
+	}
+
+	// Check if there are active uploads or running jobs
+	hasActiveWork := a.IsUploading()
+	if a.processor != nil {
+		runningJobs := a.processor.GetRunningJobs()
+		hasActiveWork = hasActiveWork || len(runningJobs) > 0
+	}
+
+	if hasActiveWork {
+		// Store config as pending and defer application
+		a.pendingConfigMux.Lock()
+		a.pendingConfig = configData
+		a.pendingConfigMux.Unlock()
+
+		// Save to file but don't apply yet
+		if err := config.SaveConfig(configData, a.configPath); err != nil {
+			return err
+		}
+
+		// Emit pending config event to frontend
+		pendingStatus := map[string]interface{}{
+			"hasPendingConfig": true,
+			"message":          "Configuration changes will be applied when current uploads finish",
+		}
+		if !a.isWebMode {
+			runtime.EventsEmit(a.ctx, "config-pending", pendingStatus)
+		} else if a.webEventEmitter != nil {
+			a.webEventEmitter("config-pending", pendingStatus)
+		}
+
+		slog.Info("Config saved but deferred due to active uploads/jobs")
+		return nil
+	}
+
+	// No active work, apply config immediately
+	return a.applyConfigChanges(configData)
+}
+
+// applyConfigChanges applies the configuration changes immediately
+func (a *App) applyConfigChanges(configData *config.ConfigData) error {
+	if a.postie != nil {
+		a.postie.Close()
+		a.postie = nil
 	}
 
 	if err := config.SaveConfig(configData, a.configPath); err != nil {
@@ -73,6 +149,11 @@ func (a *App) SaveConfig(configData *config.ConfigData) error {
 		return err
 	}
 
+	// Clear any pending config since we just applied changes
+	a.pendingConfigMux.Lock()
+	a.pendingConfig = nil
+	a.pendingConfigMux.Unlock()
+
 	// Emit a config update event to the frontend for both desktop and web modes
 	if !a.isWebMode {
 		runtime.EventsEmit(a.ctx, "config-updated", configData)
@@ -80,8 +161,7 @@ func (a *App) SaveConfig(configData *config.ConfigData) error {
 		a.webEventEmitter("config-updated", configData)
 	}
 
-	slog.Info("Config saved successfully")
-
+	slog.Info("Config applied successfully")
 	return nil
 }
 
@@ -345,4 +425,144 @@ func (a *App) SelectTempDirectory() (string, error) {
 	}
 
 	return dir, nil
+}
+
+// HasPendingConfigChanges returns whether there are pending config changes
+func (a *App) HasPendingConfigChanges() bool {
+	defer a.recoverPanic("HasPendingConfigChanges")
+	
+	a.pendingConfigMux.RLock()
+	defer a.pendingConfigMux.RUnlock()
+	return a.pendingConfig != nil
+}
+
+// GetPendingConfigStatus returns the status of pending config changes
+func (a *App) GetPendingConfigStatus() map[string]interface{} {
+	defer a.recoverPanic("GetPendingConfigStatus")
+	
+	a.pendingConfigMux.RLock()
+	defer a.pendingConfigMux.RUnlock()
+	
+	status := map[string]interface{}{
+		"hasPendingConfig": a.pendingConfig != nil,
+		"canApplyNow":      !a.IsUploading(),
+	}
+	
+	if a.processor != nil {
+		runningJobs := a.processor.GetRunningJobs()
+		status["canApplyNow"] = status["canApplyNow"].(bool) && len(runningJobs) == 0
+	}
+	
+	if a.pendingConfig != nil {
+		status["message"] = "Configuration changes are pending. They will be applied when uploads finish."
+	}
+	
+	return status
+}
+
+// ApplyPendingConfig manually applies pending configuration changes
+func (a *App) ApplyPendingConfig() error {
+	defer a.recoverPanic("ApplyPendingConfig")
+	
+	a.pendingConfigMux.Lock()
+	pendingConfig := a.pendingConfig
+	a.pendingConfigMux.Unlock()
+	
+	if pendingConfig == nil {
+		return fmt.Errorf("no pending configuration changes")
+	}
+	
+	// Check if we can apply now (no active uploads/jobs)
+	hasActiveWork := a.IsUploading()
+	if a.processor != nil {
+		runningJobs := a.processor.GetRunningJobs()
+		hasActiveWork = hasActiveWork || len(runningJobs) > 0
+	}
+	
+	if hasActiveWork {
+		return fmt.Errorf("cannot apply configuration while uploads or jobs are running")
+	}
+	
+	// Apply the pending configuration
+	return a.applyConfigChanges(pendingConfig)
+}
+
+// DiscardPendingConfig discards pending configuration changes
+func (a *App) DiscardPendingConfig() error {
+	defer a.recoverPanic("DiscardPendingConfig")
+	
+	a.pendingConfigMux.Lock()
+	defer a.pendingConfigMux.Unlock()
+	
+	if a.pendingConfig == nil {
+		return fmt.Errorf("no pending configuration changes to discard")
+	}
+	
+	a.pendingConfig = nil
+	
+	// Emit event to frontend
+	status := map[string]interface{}{
+		"hasPendingConfig": false,
+		"message":          "Pending configuration changes have been discarded",
+	}
+	if !a.isWebMode {
+		runtime.EventsEmit(a.ctx, "config-pending", status)
+	} else if a.webEventEmitter != nil {
+		a.webEventEmitter("config-pending", status)
+	}
+	
+	slog.Info("Pending configuration changes discarded")
+	return nil
+}
+
+// checkAndApplyPendingConfig checks if there are pending config changes and applies them if no active work
+func (a *App) checkAndApplyPendingConfig() {
+	defer a.recoverPanic("checkAndApplyPendingConfig")
+	
+	a.pendingConfigMux.RLock()
+	pendingConfig := a.pendingConfig
+	a.pendingConfigMux.RUnlock()
+	
+	if pendingConfig == nil {
+		return // No pending config
+	}
+	
+	// Check if there's still active work
+	hasActiveWork := a.IsUploading()
+	if a.processor != nil {
+		runningJobs := a.processor.GetRunningJobs()
+		hasActiveWork = hasActiveWork || len(runningJobs) > 0
+	}
+	
+	if hasActiveWork {
+		return // Still have active work, keep waiting
+	}
+	
+	// No active work, apply the pending configuration
+	slog.Info("Automatically applying pending configuration changes")
+	if err := a.applyConfigChanges(pendingConfig); err != nil {
+		slog.Error("Failed to apply pending configuration changes", "error", err)
+		
+		// Emit error event to frontend
+		errorStatus := map[string]interface{}{
+			"hasPendingConfig": true,
+			"error":           fmt.Sprintf("Failed to apply pending configuration: %v", err),
+		}
+		if !a.isWebMode {
+			runtime.EventsEmit(a.ctx, "config-pending", errorStatus)
+		} else if a.webEventEmitter != nil {
+			a.webEventEmitter("config-pending", errorStatus)
+		}
+	} else {
+		// Success - emit event that config has been applied
+		appliedStatus := map[string]interface{}{
+			"hasPendingConfig": false,
+			"message":          "Pending configuration changes have been applied successfully",
+		}
+		if !a.isWebMode {
+			runtime.EventsEmit(a.ctx, "config-applied", appliedStatus)
+		} else if a.webEventEmitter != nil {
+			a.webEventEmitter("config-applied", appliedStatus)
+		}
+	}
 }

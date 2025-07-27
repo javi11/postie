@@ -49,8 +49,8 @@ function dismissToast(id: string) {
 }
 </script>
 
-<!-- Toast Container positioned at top-right -->
-<div class="toast toast-top toast-end z-50">
+<!-- Toast Container positioned at bottom-right -->
+<div class="toast toast-bottom toast-end z-50">
   {#each toasts as toast (toast.id)}
 	<div
 	  transition:slide={{ duration: 300 }}

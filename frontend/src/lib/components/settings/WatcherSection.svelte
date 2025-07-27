@@ -197,11 +197,6 @@ async function saveWatcherSettings() {
 		}
 
 		await apiClient.saveConfig(currentConfig);
-
-		toastStore.success(
-			$t("settings.watcher.saved_success"),
-			$t("settings.watcher.saved_success_description")
-		);
 	} catch (error) {
 		console.error("Failed to save watcher settings:", error);
 		toastStore.error($t("common.messages.error_saving"), String(error));

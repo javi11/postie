@@ -79,6 +79,9 @@ func (a *App) UploadFiles() error {
 			a.uploadCancel = nil
 			a.uploadCtx = nil
 			a.uploadingMux.Unlock()
+			
+			// Check if we should apply pending config changes after upload finishes
+			go a.checkAndApplyPendingConfig()
 		}()
 
 		// Set up progress callback - this will handle all progress updates

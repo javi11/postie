@@ -92,6 +92,8 @@ type App struct {
 	isWebMode            bool
 	webEventEmitter      func(eventType string, data interface{})
 	firstStart           bool
+	pendingConfig        *config.ConfigData
+	pendingConfigMux     sync.RWMutex
 }
 
 // recoverPanic handles panic recovery with logging

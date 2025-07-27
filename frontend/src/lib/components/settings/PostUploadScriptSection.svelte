@@ -73,11 +73,6 @@ async function savePostUploadScriptSettings() {
 		};
 
 		await apiClient.saveConfig(currentConfig);
-
-		toastStore.success(
-			$t("settings.post_upload_script.saved_success"),
-			$t("settings.post_upload_script.saved_success_description"),
-		);
 	} catch (error) {
 		console.error("Failed to save post upload script settings:", error);
 		toastStore.error($t("common.messages.error_saving"), String(error));

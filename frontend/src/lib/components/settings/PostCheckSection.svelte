@@ -79,11 +79,6 @@ async function savePostCheckSettings() {
 		};
 
 		await apiClient.saveConfig(currentConfig);
-
-		toastStore.success(
-			$t("settings.post_check.saved_success"),
-			$t("settings.post_check.saved_success_description"),
-		);
 	} catch (error) {
 		console.error("Failed to save post check settings:", error);
 		toastStore.error($t("common.messages.error_saving"), String(error));

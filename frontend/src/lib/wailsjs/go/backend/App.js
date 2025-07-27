@@ -6,6 +6,10 @@ export function AddFilesToQueue() {
   return window['go']['backend']['App']['AddFilesToQueue']();
 }
 
+export function ApplyPendingConfig() {
+  return window['go']['backend']['App']['ApplyPendingConfig']();
+}
+
 export function CancelJob(arg1) {
   return window['go']['backend']['App']['CancelJob'](arg1);
 }
@@ -22,12 +26,20 @@ export function DebugQueueItem(arg1) {
   return window['go']['backend']['App']['DebugQueueItem'](arg1);
 }
 
+export function DiscardPendingConfig() {
+  return window['go']['backend']['App']['DiscardPendingConfig']();
+}
+
 export function DownloadNZB(arg1) {
   return window['go']['backend']['App']['DownloadNZB'](arg1);
 }
 
 export function GetAppStatus() {
   return window['go']['backend']['App']['GetAppStatus']();
+}
+
+export function GetAppliedConfig() {
+  return window['go']['backend']['App']['GetAppliedConfig']();
 }
 
 export function GetConfig() {
@@ -56,6 +68,10 @@ export function GetNZBContent(arg1) {
 
 export function GetOutputDirectory() {
   return window['go']['backend']['App']['GetOutputDirectory']();
+}
+
+export function GetPendingConfigStatus() {
+  return window['go']['backend']['App']['GetPendingConfigStatus']();
 }
 
 export function GetProcessorStatus() {
@@ -88,6 +104,10 @@ export function GetWatchDirectory() {
 
 export function HandleDroppedFiles(arg1) {
   return window['go']['backend']['App']['HandleDroppedFiles'](arg1);
+}
+
+export function HasPendingConfigChanges() {
+  return window['go']['backend']['App']['HasPendingConfigChanges']();
 }
 
 export function IsUploading() {
