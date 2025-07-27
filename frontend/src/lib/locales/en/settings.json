@@ -29,6 +29,24 @@
 				"setup_required_description": "Please configure the required settings to start using Postie."
 			}
 		},
+		"pending_config": {
+			"pending_title": "Configuration Changes Pending",
+			"error_title": "Configuration Error",
+			"apply_now": "Apply Now",
+			"discard": "Discard Changes",
+			"applied_title": "Configuration Applied",
+			"applied_message": "Your configuration changes have been successfully applied.",
+			"apply_success": "Configuration Applied",
+			"apply_success_message": "Configuration changes have been applied successfully.",
+			"apply_error": "Failed to Apply Configuration",
+			"discard_success": "Changes Discarded",
+			"discard_message": "Pending configuration changes have been discarded.",
+			"discard_error": "Failed to Discard Changes"
+		},
+		"config_status": {
+			"editing_pending": "Editing Pending",
+			"applied": "Applied"
+		},
 		"sections": {
 			"general": "General",
 			"server": "Server",

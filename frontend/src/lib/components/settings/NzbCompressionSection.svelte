@@ -131,11 +131,6 @@ async function saveNzbCompressionSettings() {
 		};
 
 		await apiClient.saveConfig(currentConfig);
-
-		toastStore.success(
-			$t("settings.nzb_compression.saved_success"),
-			$t("settings.nzb_compression.saved_success_description")
-		);
 	} catch (error) {
 		console.error("Failed to save NZB compression settings:", error);
 		toastStore.error($t("common.messages.error_saving"), String(error));

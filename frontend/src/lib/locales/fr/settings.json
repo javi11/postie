@@ -29,6 +29,20 @@
 				"setup_required_description": "Veuillez configurer les paramètres requis pour commencer à utiliser Postie."
 			}
 		},
+		"pending_config": {
+			"pending_title": "Changements de Configuration en Attente",
+			"error_title": "Erreur de Configuration",
+			"apply_now": "Appliquer Maintenant",
+			"discard": "Annuler les Changements",
+			"applied_title": "Configuration Appliquée",
+			"applied_message": "Vos changements de configuration ont été appliqués avec succès.",
+			"apply_success": "Configuration Appliquée",
+			"apply_success_message": "Les changements de configuration ont été appliqués avec succès.",
+			"apply_error": "Échec de l'Application de la Configuration",
+			"discard_success": "Changements Annulés",
+			"discard_message": "Les changements de configuration en attente ont été annulés.",
+			"discard_error": "Échec de l'Annulation des Changements"
+		},
 		"sections": {
 			"general": "Général",
 			"server": "Serveur",

@@ -80,11 +80,6 @@ async function saveQueueSettings() {
 		};
 
 		await apiClient.saveConfig(currentConfig);
-
-		toastStore.success(
-			$t("settings.queue.saved_success"),
-			$t("settings.queue.saved_success_description")
-		);
 	} catch (error) {
 		console.error("Failed to save queue settings:", error);
 		toastStore.error($t("common.messages.error_saving"), String(error));

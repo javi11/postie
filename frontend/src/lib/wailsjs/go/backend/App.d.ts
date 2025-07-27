@@ -7,6 +7,8 @@ import {context} from '../models';
 
 export function AddFilesToQueue():Promise<void>;
 
+export function ApplyPendingConfig():Promise<void>;
+
 export function CancelJob(arg1:string):Promise<void>;
 
 export function CancelUpload():Promise<void>;
@@ -15,9 +17,13 @@ export function ClearQueue():Promise<void>;
 
 export function DebugQueueItem(arg1:string):Promise<Record<string, any>>;
 
+export function DiscardPendingConfig():Promise<void>;
+
 export function DownloadNZB(arg1:string):Promise<void>;
 
 export function GetAppStatus():Promise<backend.AppStatus>;
+
+export function GetAppliedConfig():Promise<config.ConfigData>;
 
 export function GetConfig():Promise<config.ConfigData>;
 
@@ -32,6 +38,8 @@ export function GetLogsPaginated(arg1:number,arg2:number):Promise<string>;
 export function GetNZBContent(arg1:string):Promise<string>;
 
 export function GetOutputDirectory():Promise<string>;
+
+export function GetPendingConfigStatus():Promise<Record<string, any>>;
 
 export function GetProcessorStatus():Promise<backend.ProcessorStatus>;
 
@@ -48,6 +56,8 @@ export function GetRunningJobs():Promise<Array<processor.RunningJobItem>>;
 export function GetWatchDirectory():Promise<string>;
 
 export function HandleDroppedFiles(arg1:Array<string>):Promise<void>;
+
+export function HasPendingConfigChanges():Promise<boolean>;
 
 export function IsUploading():Promise<boolean>;
 

@@ -156,11 +156,6 @@ function removeExtraOption(index: number) {
 	extraPar2Options = extraPar2Options.filter((_, i) => i !== index);
 }
 
-function updateExtraOption(index: number, value: string) {
-	extraPar2Options[index] = value;
-	extraPar2Options = [...extraPar2Options]; // Trigger reactivity
-}
-
 async function selectTempDirectory() {
 	try {
 		const selectedDir = await apiClient.selectTempDirectory();
@@ -200,11 +195,6 @@ async function savePar2Settings() {
 		};
 
 		await apiClient.saveConfig(currentConfig);
-
-		toastStore.success(
-			$t("settings.par2.saved_success"),
-			$t("settings.par2.saved_success_description"),
-		);
 	} catch (error) {
 		console.error("Failed to save PAR2 settings:", error);
 		toastStore.error($t("common.messages.error_saving"), String(error));

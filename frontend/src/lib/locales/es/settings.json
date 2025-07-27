@@ -29,6 +29,20 @@
 				"setup_required_description": "Por favor configure los ajustes requeridos para comenzar a usar Postie."
 			}
 		},
+		"pending_config": {
+			"pending_title": "Cambios de Configuración Pendientes",
+			"error_title": "Error de Configuración",
+			"apply_now": "Aplicar Ahora",
+			"discard": "Descartar Cambios",
+			"applied_title": "Configuración Aplicada",
+			"applied_message": "Sus cambios de configuración se han aplicado correctamente.",
+			"apply_success": "Configuración Aplicada",
+			"apply_success_message": "Los cambios de configuración se han aplicado correctamente.",
+			"apply_error": "Error al Aplicar la Configuración",
+			"discard_success": "Cambios Descartados",
+			"discard_message": "Los cambios de configuración pendientes han sido descartados.",
+			"discard_error": "Error al Descartar Cambios"
+		},
 		"sections": {
 			"general": "General",
 			"server": "Servidor",

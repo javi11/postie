@@ -36,11 +36,6 @@ async function saveFileNamingSettings() {
 		currentConfig.maintain_original_extension = maintainOriginalExtension;
 
 		await apiClient.saveConfig(currentConfig);
-
-		toastStore.success(
-			$t("settings.file_naming.saved_success"),
-			$t("settings.file_naming.saved_success_description")
-		);
 	} catch (error) {
 		console.error("Failed to save file naming settings:", error);
 		toastStore.error($t("common.messages.error_saving"), String(error));

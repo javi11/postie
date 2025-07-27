@@ -75,11 +75,6 @@ async function saveConnectionPoolSettings() {
 		};
 
 		await apiClient.saveConfig(currentConfig);
-
-		toastStore.success(
-			$t("settings.connection_pool.saved_success"),
-			$t("settings.connection_pool.saved_success_description")
-		);
 	} catch (error) {
 		console.error("Failed to save connection pool settings:", error);
 		toastStore.error($t("common.messages.error_saving"), String(error));

@@ -665,7 +665,7 @@ func GetDefaultConfig() ConfigData {
 		Version: CurrentConfigVersion,
 		Servers: []ServerConfig{},
 		ConnectionPool: ConnectionPoolConfig{
-			MinConnections:                      5,
+			MinConnections:                      0,
 			HealthCheckInterval:                 Duration("1m"),
 			SkipProvidersVerificationOnCreation: false,
 		},

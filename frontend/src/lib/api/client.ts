@@ -546,6 +546,87 @@ export class UnifiedClient {
 		throw new Error("No client available");
 	}
 
+	async getAppliedConfig(): Promise<config.ConfigData> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			return client.App.GetAppliedConfig();
+		}
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.getAppliedConfig();
+		}
+
+		throw new Error("No client available");
+	}
+
+	// Pending Config Management
+	async hasPendingConfigChanges(): Promise<boolean> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			return client.App.HasPendingConfigChanges();
+		}
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.hasPendingConfigChanges();
+		}
+
+		throw new Error("No client available");
+	}
+
+	async getPendingConfigStatus(): Promise<Record<string, unknown>> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			return client.App.GetPendingConfigStatus();
+		}
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.getPendingConfigStatus();
+		}
+
+		throw new Error("No client available");
+	}
+
+	async applyPendingConfig(): Promise<void> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			return client.App.ApplyPendingConfig();
+		}
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.applyPendingConfig();
+		}
+
+		throw new Error("No client available");
+	}
+
+	async discardPendingConfig(): Promise<void> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			return client.App.DiscardPendingConfig();
+		}
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.discardPendingConfig();
+		}
+
+		throw new Error("No client available");
+	}
+
 	async selectOutputDirectory(): Promise<string> {
 		await this.initialize();
 

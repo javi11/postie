@@ -65,11 +65,6 @@ async function saveGeneralSettings() {
 		currentConfig.output_dir = outputDir.trim();
 
 		await apiClient.saveConfig(currentConfig);
-
-		toastStore.success(
-			$t("settings.general.saved_success"),
-			$t("settings.general.saved_success_description")
-		);
 	} catch (error) {
 		console.error("Failed to save general settings:", error);
 		toastStore.error($t("common.messages.error_saving"), String(error));

@@ -178,11 +178,6 @@ async function savePostingSettings() {
 		};
 
 		await apiClient.saveConfig(currentConfig);
-
-		toastStore.success(
-			$t("settings.posting.saved_success"),
-			$t("settings.posting.saved_success_description"),
-		);
 	} catch (error) {
 		console.error("Failed to save posting settings:", error);
 		toastStore.error($t("common.messages.error_saving"), String(error));

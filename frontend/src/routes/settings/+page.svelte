@@ -6,6 +6,8 @@ import FileNamingSection from "$lib/components/settings/FileNamingSection.svelte
 import GeneralSection from "$lib/components/settings/GeneralSection.svelte";
 import NzbCompressionSection from "$lib/components/settings/NzbCompressionSection.svelte";
 import Par2Section from "$lib/components/settings/Par2Section.svelte";
+import PendingConfigNotification from "$lib/components/settings/PendingConfigNotification.svelte";
+import ConfigStatusBadge from "$lib/components/settings/ConfigStatusBadge.svelte";
 import PostCheckSection from "$lib/components/settings/PostCheckSection.svelte";
 import PostingSection from "$lib/components/settings/PostingSection.svelte";
 import PostUploadScriptSection from "$lib/components/settings/PostUploadScriptSection.svelte";
@@ -242,6 +244,7 @@ onDestroy(() => {
           <h1 class="text-2xl font-bold">
             {$t('settings.title')}
           </h1>
+          <ConfigStatusBadge />
           {#if criticalConfigError}
             <div class="flex items-center gap-2 px-3 py-1 bg-red-100 dark:bg-red-900/30 rounded-full">
               <AlertCircle class="w-4 h-4 text-red-600 dark:text-red-400" />
@@ -320,6 +323,9 @@ onDestroy(() => {
       </div>
     </div>
       {:else if localConfig}
+      <!-- Pending Config Notification -->
+      <PendingConfigNotification />
+      
       <div class="bg-base-100 rounded-lg shadow-sm border border-base-300">
         <div role="tablist" class="tabs tabs-bordered">
           <input type="radio" name="settings_tabs" role="tab" class="tab" aria-label="Core Configuration" checked />

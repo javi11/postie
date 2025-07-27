@@ -306,6 +306,27 @@ export class WebClient {
 	): Promise<void> {
 		return this.post<void>("/setup/complete", wizardData);
 	}
+
+	// Pending Config Management
+	async hasPendingConfigChanges(): Promise<boolean> {
+		return this.get<boolean>("/config/pending/status");
+	}
+
+	async getPendingConfigStatus(): Promise<Record<string, unknown>> {
+		return this.get<Record<string, unknown>>("/config/pending");
+	}
+
+	async applyPendingConfig(): Promise<void> {
+		return this.post<void>("/config/pending/apply", {});
+	}
+
+	async discardPendingConfig(): Promise<void> {
+		return this.post<void>("/config/pending/discard", {});
+	}
+
+	async getAppliedConfig(): Promise<config.ConfigData> {
+		return this.get<config.ConfigData>("/config/applied");
+	}
 }
 
 // Singleton instance
