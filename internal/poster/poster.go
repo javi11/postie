@@ -134,7 +134,7 @@ func (p *poster) Close() {
 			slog.Debug("Connection pool closed successfully")
 		case <-time.After(timeout):
 			// Timeout occurred, log warning but continue
-			slog.Warn("Pool quit timed out, forcing close", 
+			slog.Warn("Pool quit timed out, forcing close",
 				"timeout_seconds", timeout.Seconds(),
 				"os", runtime.GOOS)
 		}
@@ -158,7 +158,7 @@ func (p *poster) Post(
 				"os", runtime.GOOS)
 		}
 	}()
-	
+
 	wg := sync.WaitGroup{}
 	var failedPosts int
 
@@ -219,9 +219,6 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 		default:
 			// Create a pool with error handling - use all available CPU cores
 			pool := pool.New().WithContext(ctx).WithMaxGoroutines(runtime.NumCPU()).WithCancelOnError().WithFirstError()
-			var bytesPosted int64
-			articlesProcessed := 0
-			articleErrors := 0
 
 			// Create progress bar for this file
 			progressText := "Uploading %s..."
@@ -238,17 +235,15 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 
 				pool.Go(func(ctx context.Context) error {
 					if err := p.postArticle(ctx, art, post.file); err != nil {
+						// Update error count atomically
+						progress.AddProgress(0, 0, 1)
 						return err
 					}
 
-					// Update progress
+					progress.AddProgress(int64(art.Size), 1, 0)
+
+					// Add article to NZB generator (still needs mutex for thread safety)
 					post.mu.Lock()
-					bytesPosted += int64(art.Size)
-					articlesProcessed++
-
-					progress.UpdateFileProgress(bytesPosted, int64(articlesProcessed), int64(articleErrors))
-
-					// Add article to NZB generator
 					nzbGen.AddArticle(art)
 					post.mu.Unlock()
 
@@ -317,9 +312,9 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 			var failedArticles []*article.Article
 			var mu sync.Mutex
 
-			// Create progress bar for this file
+			/* // Create progress bar for this file
 			progress := NewFileProgressWithCallback(fmt.Sprintf("Verifying %s...", post.FilePath), post.filesize, int64(len(post.Articles)), p.callback)
-
+			*/
 			// Submit all articles to the pool
 			for _, art := range post.Articles {
 				pool.Go(func(ctx context.Context) error {
@@ -332,12 +327,14 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 						return err
 					}
 
-					// Update progress
+					// Update progress atomically (non-blocking)
 					mu.Lock()
 					articlesChecked++
+					//current := articlesChecked
+					//errors := articleErrors
 					mu.Unlock()
 
-					progress.UpdateFileProgress(0, int64(articlesChecked), int64(articleErrors))
+					//progress.UpdateFileProgress(0, int64(current), int64(errors))
 					return nil
 				})
 			}
@@ -365,7 +362,7 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 						Retries:  post.Retries,
 					}
 
-					progress.FinishFileProgress()
+					//progress.FinishFileProgress()
 					slog.InfoContext(ctx,
 						"Retrying failed articles",
 						"file", post.FilePath,
@@ -409,7 +406,7 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 			post.Status = PostStatusVerified
 			post.mu.Unlock()
 
-			progress.FinishFileProgress()
+			//progress.FinishFileProgress()
 
 			// Close file
 			if post.file != nil {

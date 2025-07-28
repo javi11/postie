@@ -1,8 +1,11 @@
 package poster
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/schollz/progressbar/v3"
@@ -11,12 +14,27 @@ import (
 // ProgressCallback defines the interface for progress notifications
 type ProgressCallback func(stage string, current, total int64, details string, speed float64, secondsLeft float64, elapsedTime float64)
 
+// ProgressUpdate represents a progress update event
+type ProgressUpdate struct {
+	bytesProcessed    int64
+	articlesProcessed int64
+	articleErrors     int64
+	finished          bool
+}
+
 // ProgressManager handles progress tracking and display
 type ProgressManager struct {
-	bar           *progressbar.ProgressBar
-	articlesTotal int64
-	callback      ProgressCallback
-	description   string
+	bar            *progressbar.ProgressBar
+	articlesTotal  int64
+	callback       ProgressCallback
+	description    string
+	updateChan     chan ProgressUpdate
+	cancel         context.CancelFunc
+	wg             sync.WaitGroup
+	// Atomic counters for thread-safe updates
+	bytesProcessed    int64
+	articlesProcessed int64
+	articleErrors     int64
 }
 
 // NewFileProgress creates a new progress bar for a file
@@ -58,45 +76,169 @@ func NewFileProgressWithCallback(
 		progressbar.OptionSetMaxDetailRow(1),
 	)
 
-	return &ProgressManager{
+	ctx, cancel := context.WithCancel(context.Background())
+	pm := &ProgressManager{
 		bar:           bar,
 		articlesTotal: articlesTotal,
 		callback:      callback,
 		description:   description,
+		updateChan:    make(chan ProgressUpdate, 100), // Buffered channel to prevent blocking
+		cancel:        cancel,
+	}
+
+	// Start the progress update goroutine
+	pm.wg.Add(1)
+	go pm.progressUpdateWorker(ctx)
+
+	return pm
+}
+
+// UpdateFileProgress updates the progress bar for a file (non-blocking)
+func (pm *ProgressManager) UpdateFileProgress(bytesProcessed int64, articlesProcessed int64, articleErrors int64) {
+	// Update atomic counters
+	atomic.StoreInt64(&pm.bytesProcessed, bytesProcessed)
+	atomic.StoreInt64(&pm.articlesProcessed, articlesProcessed)
+	atomic.StoreInt64(&pm.articleErrors, articleErrors)
+
+	// Send update to channel (non-blocking)
+	update := ProgressUpdate{
+		bytesProcessed:    bytesProcessed,
+		articlesProcessed: articlesProcessed,
+		articleErrors:     articleErrors,
+		finished:          false,
+	}
+
+	// Non-blocking send to prevent goroutine slowdown
+	select {
+	case pm.updateChan <- update:
+		// Update sent successfully
+	default:
+		// Channel is full, try to drain one old update and send new one
+		select {
+		case <-pm.updateChan: // Remove one old update
+			select {
+			case pm.updateChan <- update: // Try to send new update
+			default: // Still full, skip
+			}
+		default: // Nothing to drain
+		}
 	}
 }
 
-// UpdateFileProgress updates the progress bar for a file
-func (pm *ProgressManager) UpdateFileProgress(bytesProcessed int64, articlesProcessed int64, articleErrors int64) {
+// AddProgress atomically adds to the progress counters (thread-safe)
+func (pm *ProgressManager) AddProgress(bytesProcessed int64, articlesProcessed int64, articleErrors int64) {
+	// Atomically add to counters
+	newBytes := atomic.AddInt64(&pm.bytesProcessed, bytesProcessed)
+	newArticles := atomic.AddInt64(&pm.articlesProcessed, articlesProcessed)
+	newErrors := atomic.AddInt64(&pm.articleErrors, articleErrors)
+
+	// Send update to channel (non-blocking)
+	update := ProgressUpdate{
+		bytesProcessed:    newBytes,
+		articlesProcessed: newArticles,
+		articleErrors:     newErrors,
+		finished:          false,
+	}
+
+	// Non-blocking send
+	select {
+	case pm.updateChan <- update:
+	default:
+		// Channel is full, try to drain one old update and send new one
+		select {
+		case <-pm.updateChan: // Remove one old update
+			select {
+			case pm.updateChan <- update: // Try to send new update
+			default: // Still full, skip
+			}
+		default: // Nothing to drain
+		}
+	}
+}
+
+// progressUpdateWorker handles progress updates in a separate goroutine
+func (pm *ProgressManager) progressUpdateWorker(ctx context.Context) {
+	defer pm.wg.Done()
+
+	// Throttle updates to prevent excessive UI updates
+	ticker := time.NewTicker(25 * time.Millisecond) // Update at most every 25ms for better visibility
+	defer ticker.Stop()
+
+	var lastUpdate ProgressUpdate
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case update := <-pm.updateChan:
+			lastUpdate = update
+			// Always update immediately on new data
+			pm.updateProgressBar(update)
+			if update.finished {
+				return
+			}
+		case <-ticker.C:
+			// Throttled update using atomic values
+			currentUpdate := ProgressUpdate{
+				bytesProcessed:    atomic.LoadInt64(&pm.bytesProcessed),
+				articlesProcessed: atomic.LoadInt64(&pm.articlesProcessed),
+				articleErrors:     atomic.LoadInt64(&pm.articleErrors),
+				finished:          false,
+			}
+			// Only update if values changed
+			if currentUpdate.bytesProcessed != lastUpdate.bytesProcessed ||
+				currentUpdate.articlesProcessed != lastUpdate.articlesProcessed ||
+				currentUpdate.articleErrors != lastUpdate.articleErrors {
+				pm.updateProgressBar(currentUpdate)
+				lastUpdate = currentUpdate
+			}
+		}
+	}
+}
+
+// updateProgressBar updates the actual progress bar and calls callback
+func (pm *ProgressManager) updateProgressBar(update ProgressUpdate) {
 	speed := pm.bar.State().KBsPerSecond
 	details := fmt.Sprintf("Articles: %d/%d | Errors: %d",
-		articlesProcessed,
+		update.articlesProcessed,
 		pm.articlesTotal,
-		articleErrors,
+		update.articleErrors,
 	)
 
 	_ = pm.bar.AddDetail(details)
-	_ = pm.bar.Set64(bytesProcessed)
+	_ = pm.bar.Set64(update.bytesProcessed)
 
 	// Notify callback if available
 	if pm.callback != nil {
 		// Calculate seconds left from progress bar state
 		secondsLeft := pm.bar.State().SecondsLeft
 		elapsedTime := pm.bar.State().SecondsSince
-		pm.callback("uploading", bytesProcessed, int64(pm.bar.GetMax64()), details, speed, secondsLeft, elapsedTime)
+		stage := "uploading"
+		if update.finished {
+			stage = "completed"
+		}
+		pm.callback(stage, update.bytesProcessed, int64(pm.bar.GetMax64()), details, speed, secondsLeft, elapsedTime)
 	}
 }
 
 // FinishFileProgress completes the progress bar for a file
 func (pm *ProgressManager) FinishFileProgress() {
-	_ = pm.bar.Finish()
+	// Send final update
+	finalUpdate := ProgressUpdate{
+		bytesProcessed:    atomic.LoadInt64(&pm.bytesProcessed),
+		articlesProcessed: atomic.LoadInt64(&pm.articlesProcessed),
+		articleErrors:     atomic.LoadInt64(&pm.articleErrors),
+		finished:          true,
+	}
 
-	// Notify callback if available
-	if pm.callback != nil {
-		speed := pm.bar.State().KBsPerSecond
-		details := "Upload completed"
-		secondsLeft := 0.0 // No time left when completed
-		elapsedTime := pm.bar.State().SecondsSince
-		pm.callback("completed", int64(pm.bar.GetMax64()), int64(pm.bar.GetMax64()), details, speed, secondsLeft, elapsedTime)
+	// Cancel the worker and wait for it to finish first
+	pm.cancel()
+	pm.wg.Wait()
+
+	// Update the progress bar one final time with final values
+	pm.updateProgressBar(finalUpdate)
+
+	// Safely finish the progress bar
+	if pm.bar != nil {
+		_ = pm.bar.Finish()
 	}
 }
