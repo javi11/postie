@@ -17,6 +17,7 @@
 			"file": "Archivo",
 			"size": "Tamaño",
 			"status": "Estado",
+			"priority": "Prioridad",
 			"created": "Creado",
 			"actions": "Acciones",
 			"completed_at": "Completado:",

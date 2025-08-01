@@ -23,6 +23,7 @@ type QueueInterface interface {
 	RemoveFromQueue(id string) error
 	ClearQueue() error
 	GetQueueStats() (map[string]interface{}, error)
+	SetQueueItemPriorityWithReorder(ctx context.Context, id string, newPriority int) error
 }
 
 type Queue struct {
@@ -128,7 +129,8 @@ func initGoqiteSchema(db *sql.DB) error {
 		  queue text not null,
 		  body blob not null,
 		  timeout text not null default (strftime('%Y-%m-%dT%H:%M:%fZ')),
-		  received integer not null default 0
+		  received integer not null default 0,
+		  priority integer not null default 0
 		) strict;
 
 		create trigger if not exists goqite_updated_timestamp after update on goqite begin
@@ -200,7 +202,8 @@ func (q *Queue) AddFile(ctx context.Context, path string, size int64) error {
 	slog.InfoContext(ctx, "Adding file to queue", "path", path, "size", size)
 
 	return q.queue.Send(ctx, goqite.Message{
-		Body: jobData,
+		Body:     jobData,
+		Priority: job.Priority,
 	})
 }
 
@@ -223,7 +226,8 @@ func (q *Queue) AddFileWithoutDuplicateCheck(ctx context.Context, path string, s
 	slog.InfoContext(ctx, "Adding file to queue", "path", path, "size", size)
 
 	return q.queue.Send(ctx, goqite.Message{
-		Body: jobData,
+		Body:     jobData,
+		Priority: job.Priority,
 	})
 }
 
@@ -255,7 +259,8 @@ func (q *Queue) AddFileWithPriority(ctx context.Context, path string, size int64
 	slog.InfoContext(ctx, "Adding file to queue", "path", path, "size", size)
 
 	return q.queue.Send(ctx, goqite.Message{
-		Body: jobData,
+		Body:     jobData,
+		Priority: job.Priority,
 	})
 }
 
@@ -278,7 +283,8 @@ func (q *Queue) AddFileWithPriorityWithoutDuplicateCheck(ctx context.Context, pa
 	slog.InfoContext(ctx, "Adding file to queue", "path", path, "size", size)
 
 	return q.queue.Send(ctx, goqite.Message{
-		Body: jobData,
+		Body:     jobData,
+		Priority: job.Priority,
 	})
 }
 
@@ -347,7 +353,7 @@ func (q *Queue) GetQueueItems() ([]QueueItem, error) {
 		SELECT id, created, updated, body, timeout, received
 		FROM goqite 
 		WHERE queue = 'file_jobs'
-		ORDER BY json_extract(body, '$.Priority') DESC, created ASC
+		ORDER BY priority ASC, created ASC
 		LIMIT 100
 	`)
 	if err != nil {
@@ -821,7 +827,8 @@ func (q *Queue) ReaddJob(ctx context.Context, job *FileJob) error {
 	}
 
 	return q.queue.Send(ctx, goqite.Message{
-		Body: jobData,
+		Body:     jobData,
+		Priority: job.Priority,
 	})
 }
 
@@ -853,6 +860,45 @@ func (q *Queue) SetQueueItemPriority(id string, priority int) error {
 	if err != nil {
 		return fmt.Errorf("failed to update queue item priority: %w", err)
 	}
+	return nil
+}
+
+// SetQueueItemPriorityWithReorder updates the priority of a pending queue item using goqite's native priority
+// Higher priority numbers (0, 1, 2, ...) are processed first
+func (q *Queue) SetQueueItemPriorityWithReorder(ctx context.Context, id string, newPriority int) error {
+	// Get the current job data to update it
+	var body []byte
+	err := q.db.QueryRow("SELECT body FROM goqite WHERE id = ? AND queue = 'file_jobs'", id).Scan(&body)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("pending queue item not found: %s", id)
+		}
+		return fmt.Errorf("failed to get queue item: %w", err)
+	}
+
+	// Unmarshal and update priority in job data
+	var job FileJob
+	if err := json.Unmarshal(body, &job); err != nil {
+		return fmt.Errorf("failed to unmarshal job: %w", err)
+	}
+	
+	job.Priority = newPriority
+	newBody, err := json.Marshal(job)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated job: %w", err)
+	}
+
+	// Update both the body and the goqite priority field
+	_, err = q.db.Exec(`
+		UPDATE goqite 
+		SET body = ?, priority = ?, updated = strftime('%Y-%m-%dT%H:%M:%fZ') 
+		WHERE id = ? AND queue = 'file_jobs'
+	`, newBody, newPriority, id)
+	
+	if err != nil {
+		return fmt.Errorf("failed to update queue item priority: %w", err)
+	}
+
 	return nil
 }
 

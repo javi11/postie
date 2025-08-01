@@ -24,7 +24,7 @@ require (
 	golang.org/x/sync v0.16.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
-	maragu.dev/goqite v0.3.1
+	maragu.dev/goqite v0.3.2-0.20250625131501-cacb23e73698
 )
 
 require (
