@@ -277,15 +277,6 @@ func (p *Processor) CancelJob(jobID string) error {
 		return fmt.Errorf("job %s is not currently running", jobID)
 	}
 
-	// Get job details before removing from tracking
-	var fileName string
-	if jobDetails, exists := p.runningJobs[jobID]; exists {
-		fileName = jobDetails.FileName
-	}
-	if fileName == "" {
-		fileName = "Unknown file"
-	}
-
 	// Remove from tracking first to prevent duplicate events
 	delete(p.runningJobs, jobID)
 

@@ -203,12 +203,12 @@ func (p *progress) UpdateProgress(processed int64) {
 		return
 	}
 
-	p.progress.Add64(processed)
+	_ = p.progress.Add64(processed)
 }
 
 func (p *progress) Finish() {
-	p.progress.Finish()
-	p.progress.Close()
+	_ = p.progress.Finish()
+	_ = p.progress.Close()
 }
 
 func (p *progress) GetID() uuid.UUID {

@@ -61,10 +61,46 @@ func (m *mockQueueWithDuplicateCheck) GetQueueStats() (map[string]interface{}, e
 	return map[string]interface{}{}, nil
 }
 
+func (m *mockQueueWithDuplicateCheck) SetQueueItemPriorityWithReorder(ctx context.Context, id string, newPriority int) error {
+	return nil
+}
+
+func (m *mockQueueWithDuplicateCheck) GetMigrationStatus() (*queue.GooseMigrationStatus, error) {
+	return nil, nil
+}
+
+func (m *mockQueueWithDuplicateCheck) RunMigrations() error {
+	return nil
+}
+
+func (m *mockQueueWithDuplicateCheck) RollbackMigration() error {
+	return nil
+}
+
+func (m *mockQueueWithDuplicateCheck) MigrateTo(version int64) error {
+	return nil
+}
+
+func (m *mockQueueWithDuplicateCheck) ResetDatabase() error {
+	return nil
+}
+
+func (m *mockQueueWithDuplicateCheck) IsLegacyDatabase() (bool, error) {
+	return false, nil
+}
+
+func (m *mockQueueWithDuplicateCheck) RecreateDatabase() error {
+	return nil
+}
+
+func (m *mockQueueWithDuplicateCheck) EnsureMigrationCompatibility() error {
+	return nil
+}
+
 // Helper function to create a test watcher
 func createTestWatcher(t *testing.T) (*Watcher, string) {
 	tempDir := t.TempDir()
-	
+
 	cfg := config.WatcherConfig{
 		Enabled:            true,
 		WatchDirectory:     tempDir,
@@ -82,7 +118,7 @@ func createTestWatcher(t *testing.T) (*Watcher, string) {
 		processingPaths: make(map[string]bool),
 	}
 
-	watcher := New(cfg, mockQueue, mockProc, tempDir, nil)
+	watcher := New(cfg, mockQueue, mockProc, tempDir)
 	return watcher, tempDir
 }
 
@@ -93,14 +129,14 @@ func createTestFile(t *testing.T, dir, filename string, content []byte, modTime 
 	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	
+
 	if !modTime.IsZero() {
 		err = os.Chtimes(filePath, modTime, modTime)
 		if err != nil {
 			t.Fatalf("Failed to set file time: %v", err)
 		}
 	}
-	
+
 	return filePath
 }
 
@@ -108,23 +144,23 @@ func TestIsFileStable_ModificationTime(t *testing.T) {
 	watcher, tempDir := createTestWatcher(t)
 
 	tests := []struct {
-		name         string
-		modTime      time.Time
+		name           string
+		modTime        time.Time
 		expectedStable bool
 	}{
 		{
-			name:         "recently modified file should not be stable",
-			modTime:      time.Now().Add(-1 * time.Second),
+			name:           "recently modified file should not be stable",
+			modTime:        time.Now().Add(-1 * time.Second),
 			expectedStable: false,
 		},
 		{
-			name:         "old file should be stable",
-			modTime:      time.Now().Add(-10 * time.Second),
+			name:           "old file should be stable",
+			modTime:        time.Now().Add(-10 * time.Second),
 			expectedStable: true,
 		},
 		{
-			name:         "file modified exactly 2 seconds ago should be stable",
-			modTime:      time.Now().Add(-2 * time.Second),
+			name:           "file modified exactly 2 seconds ago should be stable",
+			modTime:        time.Now().Add(-2 * time.Second),
 			expectedStable: true,
 		},
 	}
@@ -135,7 +171,7 @@ func TestIsFileStable_ModificationTime(t *testing.T) {
 			content := []byte("test content for stability check")
 			// Use unique filename for each test to avoid cache conflicts
 			filePath := createTestFile(t, tempDir, tt.name+".txt", content, tt.modTime)
-			
+
 			// Get file info
 			info, err := os.Stat(filePath)
 			if err != nil {
@@ -150,9 +186,9 @@ func TestIsFileStable_ModificationTime(t *testing.T) {
 
 			// Second call tests the actual stability logic
 			secondCheck := watcher.isFileStable(filePath, info)
-			
+
 			if secondCheck != tt.expectedStable {
-				t.Errorf("Expected stability %v, got %v for file modified at %v", 
+				t.Errorf("Expected stability %v, got %v for file modified at %v",
 					tt.expectedStable, secondCheck, tt.modTime)
 			}
 		})
@@ -174,13 +210,16 @@ func TestCanOpenFileExclusively(t *testing.T) {
 
 	t.Run("cannot open file being written to", func(t *testing.T) {
 		filePath := filepath.Join(tempDir, "writing_file.txt")
-		
+
 		// Open file for writing to simulate file being written
 		file, err := os.Create(filePath)
 		if err != nil {
 			t.Fatalf("Failed to create file: %v", err)
 		}
-		defer file.Close()
+
+		defer func() {
+			_ = file.Close()
+		}()
 
 		// Write some content to make it realistic
 		_, err = file.WriteString("content being written")
@@ -197,7 +236,7 @@ func TestCanOpenFileExclusively(t *testing.T) {
 
 	t.Run("cannot open non-existent file", func(t *testing.T) {
 		nonExistentPath := filepath.Join(tempDir, "does_not_exist.txt")
-		
+
 		canOpen := watcher.canOpenFileExclusively(nonExistentPath)
 		if canOpen {
 			t.Error("Should not be able to open non-existent file")
@@ -242,7 +281,7 @@ func TestCleanupOldCacheEntries(t *testing.T) {
 	watcher, _ := createTestWatcher(t)
 
 	// Add some entries to the cache with different timestamps
-	oldTime := time.Now().Add(-25 * time.Hour) // Older than 24 hours
+	oldTime := time.Now().Add(-25 * time.Hour)   // Older than 24 hours
 	recentTime := time.Now().Add(-1 * time.Hour) // Recent
 
 	watcher.cacheMutex.Lock()
@@ -269,15 +308,15 @@ func TestCleanupOldCacheEntries(t *testing.T) {
 	// Verify only recent entry remains
 	watcher.cacheMutex.RLock()
 	defer watcher.cacheMutex.RUnlock()
-	
+
 	if len(watcher.fileSizeCache) != 1 {
 		t.Errorf("Expected 1 cache entry after cleanup, got %d", len(watcher.fileSizeCache))
 	}
-	
+
 	if _, exists := watcher.fileSizeCache["old_file.txt"]; exists {
 		t.Error("Old cache entry should have been removed")
 	}
-	
+
 	if _, exists := watcher.fileSizeCache["recent_file.txt"]; !exists {
 		t.Error("Recent cache entry should have been preserved")
 	}
@@ -338,9 +377,9 @@ func TestShouldProcessFile_WithStabilityCheck(t *testing.T) {
 			if tt.ignorePattern == "*.tmp" {
 				filename = "test_process.tmp"
 			}
-			
+
 			filePath := createTestFile(t, tempDir, filename, content, tt.modTime)
-			
+
 			// Get file info
 			info, err := os.Stat(filePath)
 			if err != nil {
@@ -356,7 +395,7 @@ func TestShouldProcessFile_WithStabilityCheck(t *testing.T) {
 
 			// Test should process file
 			result := watcher.shouldProcessFile(filePath, info)
-			
+
 			if result != tt.expectedResult {
 				t.Errorf("Expected shouldProcessFile to return %v, got %v", tt.expectedResult, result)
 			}
@@ -369,7 +408,7 @@ func TestIntegrationStabilityCheck(t *testing.T) {
 
 	// Create a file that grows over time
 	filePath := filepath.Join(tempDir, "growing_file.txt")
-	
+
 	// First write - make sure file is large enough to meet size requirements
 	initialContent := make([]byte, 1500) // Larger than SizeThreshold (100) and MinFileSize (10)
 	for i := range initialContent {
@@ -415,7 +454,7 @@ func TestIntegrationStabilityCheck(t *testing.T) {
 
 	// Wait for modification time stability and check again with same size
 	time.Sleep(3 * time.Second)
-	
+
 	info3, err := os.Stat(filePath)
 	if err != nil {
 		t.Fatalf("Failed to stat file: %v", err)
@@ -457,14 +496,14 @@ func TestDuplicatePrevention(t *testing.T) {
 	watcher.queue = mockQueue
 
 	// First scan - file should be processed
-	watcher.shouldProcessFile(filePath, info) // Populate size cache
+	watcher.shouldProcessFile(filePath, info)                   // Populate size cache
 	shouldProcess1 := watcher.shouldProcessFile(filePath, info) // Now stable
 	if !shouldProcess1 {
 		t.Error("Stable file should be processed on first scan")
 	}
 
 	// Simulate adding to queue on first scan
-	err = watcher.queue.AddFile(nil, filePath, info.Size())
+	err = watcher.queue.AddFile(context.TODO(), filePath, info.Size())
 	if err != nil {
 		t.Fatalf("Failed to add file to queue: %v", err)
 	}
@@ -481,7 +520,7 @@ func TestDuplicatePrevention(t *testing.T) {
 	}
 
 	// Simulate adding to queue on second scan (should be prevented by queue)
-	err = watcher.queue.AddFile(nil, filePath, info.Size())
+	err = watcher.queue.AddFile(context.TODO(), filePath, info.Size())
 	if err != nil {
 		t.Errorf("AddFile should not return error for duplicate: %v", err)
 	}
@@ -514,7 +553,7 @@ func TestMultipleScanCycles(t *testing.T) {
 	// Simulate multiple scan cycles
 	for cycle := 0; cycle < 3; cycle++ {
 		t.Logf("Scan cycle %d", cycle+1)
-		
+
 		for _, filename := range files {
 			filePath := filepath.Join(tempDir, filename)
 			info, err := os.Stat(filePath)
@@ -525,7 +564,7 @@ func TestMultipleScanCycles(t *testing.T) {
 			// First call to populate size cache, second to check stability
 			watcher.shouldProcessFile(filePath, info)
 			if watcher.shouldProcessFile(filePath, info) {
-				err = watcher.queue.AddFile(nil, filePath, info.Size())
+				err = watcher.queue.AddFile(context.TODO(), filePath, info.Size())
 				if err != nil {
 					t.Errorf("Cycle %d: AddFile failed for %s: %v", cycle+1, filename, err)
 				}
@@ -535,7 +574,7 @@ func TestMultipleScanCycles(t *testing.T) {
 
 	// Verify each file was only added once despite multiple scans
 	if len(mockQueue.addFileCalls) != len(files) {
-		t.Errorf("Expected %d unique files in queue, got %d calls: %v", 
+		t.Errorf("Expected %d unique files in queue, got %d calls: %v",
 			len(files), len(mockQueue.addFileCalls), mockQueue.addFileCalls)
 	}
 

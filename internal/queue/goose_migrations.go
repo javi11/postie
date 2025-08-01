@@ -42,7 +42,7 @@ func (gmr *GooseMigrationRunner) MigrateUp() error {
 	}
 
 	slog.Info("Running database migrations")
-	
+
 	if err := goose.Up(gmr.db, "migrations"); err != nil {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
@@ -58,7 +58,7 @@ func (gmr *GooseMigrationRunner) MigrateDown() error {
 	}
 
 	slog.Info("Rolling back last migration")
-	
+
 	if err := goose.Down(gmr.db, "migrations"); err != nil {
 		return fmt.Errorf("failed to rollback migration: %w", err)
 	}
@@ -74,7 +74,7 @@ func (gmr *GooseMigrationRunner) MigrateTo(version int64) error {
 	}
 
 	slog.Info("Migrating to specific version", "version", version)
-	
+
 	if err := goose.UpTo(gmr.db, "migrations", version); err != nil {
 		return fmt.Errorf("failed to migrate to version %d: %w", version, err)
 	}
@@ -107,7 +107,7 @@ func (gmr *GooseMigrationRunner) Reset() error {
 	}
 
 	slog.Info("Resetting database - dropping all tables and re-running migrations")
-	
+
 	if err := goose.Reset(gmr.db, "migrations"); err != nil {
 		return fmt.Errorf("failed to reset database: %w", err)
 	}
@@ -126,7 +126,7 @@ func (gmr *GooseMigrationRunner) IsLegacyDatabase() (bool, error) {
 			WHERE type='table' AND name='goqite'
 		)
 	`).Scan(&tableExists)
-	
+
 	if err != nil {
 		return false, fmt.Errorf("failed to check for goqite table: %w", err)
 	}
@@ -144,7 +144,7 @@ func (gmr *GooseMigrationRunner) IsLegacyDatabase() (bool, error) {
 			WHERE type='table' AND name='goose_db_version'
 		)
 	`).Scan(&gooseTableExists)
-	
+
 	if err != nil {
 		return false, fmt.Errorf("failed to check for goose version table: %w", err)
 	}
@@ -165,7 +165,9 @@ func (gmr *GooseMigrationRunner) RecreateDatabase() error {
 	if err != nil {
 		return fmt.Errorf("failed to get table list: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var tables []string
 	for rows.Next() {
@@ -181,7 +183,10 @@ func (gmr *GooseMigrationRunner) RecreateDatabase() error {
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	// Disable foreign key constraints during drop
 	if _, err := tx.Exec("PRAGMA foreign_keys = OFF"); err != nil {

@@ -200,7 +200,9 @@ func (w *Watcher) canOpenFileExclusively(path string) bool {
 		// If we can't open the file, assume it's being used
 		return false
 	}
-	file.Close()
+
+	_ = file.Close()
+
 	return true
 }
 

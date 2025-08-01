@@ -9,10 +9,121 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/javi11/postie/internal/config"
+	"github.com/javi11/postie/internal/progress"
 	"github.com/javi11/postie/pkg/fileinfo"
 )
+
+// mockProgress implements the Progress interface for testing
+type mockProgress struct {
+	id         uuid.UUID
+	name       string
+	progType   progress.ProgressType
+	total      int64
+	current    int64
+	isComplete bool
+	startTime  time.Time
+}
+
+func (m *mockProgress) UpdateProgress(processed int64) {
+	m.current += processed
+	if m.current >= m.total {
+		m.isComplete = true
+	}
+}
+
+func (m *mockProgress) Finish() {
+	m.isComplete = true
+	m.current = m.total
+}
+
+func (m *mockProgress) GetState() progress.ProgressState {
+	return progress.ProgressState{
+		Max:            m.total,
+		CurrentNum:     m.current,
+		CurrentPercent: m.GetPercentage(),
+		CurrentBytes:   float64(m.current),
+		SecondsSince:   time.Since(m.startTime).Seconds(),
+		SecondsLeft:    0, // Simplified for testing
+		KBsPerSecond:   0, // Simplified for testing
+		Description:    m.name,
+		Type:           m.progType,
+		IsStarted:      true,
+	}
+}
+
+func (m *mockProgress) GetID() uuid.UUID               { return m.id }
+func (m *mockProgress) GetName() string                { return m.name }
+func (m *mockProgress) GetType() progress.ProgressType { return m.progType }
+func (m *mockProgress) GetCurrent() int64              { return m.current }
+func (m *mockProgress) GetTotal() int64                { return m.total }
+func (m *mockProgress) GetPercentage() float64 {
+	if m.total == 0 {
+		return 0
+	}
+	return float64(m.current) / float64(m.total) * 100
+}
+func (m *mockProgress) IsComplete() bool        { return m.isComplete }
+func (m *mockProgress) GetStartTime() time.Time { return m.startTime }
+func (m *mockProgress) GetElapsedTime() time.Duration {
+	return time.Since(m.startTime)
+}
+
+// mockJobProgress implements the JobProgress interface for testing
+type mockJobProgress struct {
+	progresses map[uuid.UUID]*mockProgress
+}
+
+func newMockJobProgress() *mockJobProgress {
+	return &mockJobProgress{
+		progresses: make(map[uuid.UUID]*mockProgress),
+	}
+}
+
+func (m *mockJobProgress) AddProgress(id uuid.UUID, name string, pType progress.ProgressType, total int64) progress.Progress {
+	prog := &mockProgress{
+		id:        id,
+		name:      name,
+		progType:  pType,
+		total:     total,
+		current:   0,
+		startTime: time.Now(),
+	}
+	m.progresses[id] = prog
+	return prog
+}
+
+func (m *mockJobProgress) FinishProgress(id uuid.UUID) {
+	if prog, exists := m.progresses[id]; exists {
+		prog.Finish()
+	}
+}
+
+func (m *mockJobProgress) GetProgress(id uuid.UUID) progress.Progress {
+	return m.progresses[id]
+}
+
+func (m *mockJobProgress) GetAllProgress() map[uuid.UUID]progress.Progress {
+	result := make(map[uuid.UUID]progress.Progress)
+	for id, prog := range m.progresses {
+		result[id] = prog
+	}
+	return result
+}
+
+func (m *mockJobProgress) GetAllProgressState() []progress.ProgressState {
+	var states []progress.ProgressState
+	for _, prog := range m.progresses {
+		states = append(states, prog.GetState())
+	}
+	return states
+}
+
+func (m *mockJobProgress) GetJobID() string { return "test-job" }
+func (m *mockJobProgress) Close()           {}
 
 func TestNew(t *testing.T) {
 	ctx := context.Background()
@@ -243,7 +354,8 @@ echo "Processing: 100%%"
 			MaxInputSlices:   2000,
 			ExtraPar2Options: []string{"-q"},
 		},
-		parExeType: par2,
+		parExeType:  par2,
+		jobProgress: newMockJobProgress(),
 	}
 
 	files := []fileinfo.FileInfo{
@@ -330,7 +442,8 @@ echo "Processing: 100%%"
 			MaxInputSlices:   2000,
 			ExtraPar2Options: []string{"-q"},
 		},
-		parExeType: parpar,
+		parExeType:  parpar,
+		jobProgress: newMockJobProgress(),
 	}
 
 	files := []fileinfo.FileInfo{
@@ -400,7 +513,8 @@ func TestCreatePar2CommandFailed(t *testing.T) {
 			MaxInputSlices:   2000,
 			ExtraPar2Options: []string{"-q"},
 		},
-		parExeType: par2,
+		parExeType:  par2,
+		jobProgress: newMockJobProgress(),
 	}
 
 	files := []fileinfo.FileInfo{
