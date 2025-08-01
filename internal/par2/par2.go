@@ -14,11 +14,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
+	"github.com/google/uuid"
 	"github.com/javi11/postie/internal/config"
+	"github.com/javi11/postie/internal/progress"
 	"github.com/javi11/postie/pkg/fileinfo"
-	"github.com/schollz/progressbar/v3"
 )
 
 type parExeType string
@@ -33,13 +33,9 @@ var (
 	parregexp   = regexp.MustCompile(`(?i)(\.vol\d+\+(\d+))?\.par2$`)
 )
 
-// ProgressCallback defines the interface for PAR2 progress notifications
-type ProgressCallback func(stage string, current, total int64, details string, speed float64, secondsLeft float64, elapsedTime float64)
-
 // Par2Executor defines the interface for executing par2 commands.
 type Par2Executor interface {
-	Create(ctx context.Context, tmpPath string) ([]string, error)
-	SetProgressCallback(callback ProgressCallback)
+	Create(ctx context.Context, files []fileinfo.FileInfo) ([]string, error)
 }
 
 // Par2CmdExecutor implements Par2Executor using the command line.
@@ -47,10 +43,10 @@ type Par2CmdExecutor struct {
 	articleSize uint64
 	cfg         *config.Par2Config
 	parExeType  parExeType
-	callback    ProgressCallback
+	jobProgress progress.JobProgress
 }
 
-func New(ctx context.Context, articleSize uint64, cfg *config.Par2Config) *Par2CmdExecutor {
+func New(ctx context.Context, articleSize uint64, cfg *config.Par2Config, jobProgress progress.JobProgress) *Par2CmdExecutor {
 	// detect par executable
 	parExe := filepath.Base(cfg.Par2Path)
 	parExeFileName := strings.ToLower(parExe[:len(parExe)-len(filepath.Ext(parExe))])
@@ -59,12 +55,8 @@ func New(ctx context.Context, articleSize uint64, cfg *config.Par2Config) *Par2C
 		articleSize: articleSize,
 		cfg:         cfg,
 		parExeType:  parExeType(parExeFileName),
+		jobProgress: jobProgress,
 	}
-}
-
-// SetProgressCallback sets the progress callback function
-func (p *Par2CmdExecutor) SetProgressCallback(callback ProgressCallback) {
-	p.callback = callback
 }
 
 // Repair executes the par2 command to repair files in the target folder.
@@ -149,34 +141,15 @@ func (p *Par2CmdExecutor) Create(ctx context.Context, files []fileinfo.FileInfo)
 		scanner.Split(scanLines)
 
 		wg := sync.WaitGroup{}
-		var parProgressBar *progressbar.ProgressBar
+
+		// Initialize progress tracking
+		progressID := uuid.New()
+		progressName := fmt.Sprintf("PAR2: %s", filepath.Base(file.Path))
+		pg := p.jobProgress.AddProgress(progressID, progressName, progress.ProgressTypePar2Generation, 100)
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			processing := false
-			// Ensure parProgressBar is initialized before use
-			parProgressBar = progressbar.NewOptions(100, // Use 100 as max for percentage
-				progressbar.OptionSetDescription(fmt.Sprintf("Creating par2 files for %s...", file.Path)),
-				progressbar.OptionSetRenderBlankState(true),
-				progressbar.OptionThrottle(time.Millisecond*100),
-				progressbar.OptionShowElapsedTimeOnFinish(),
-				progressbar.OptionClearOnFinish(),
-				progressbar.OptionOnCompletion(func() {
-					// new line after progress bar
-					fmt.Println()
-				}),
-			)
-			defer func() {
-				_ = parProgressBar.Finish() // Ensure finish is called on success
-				_ = parProgressBar.Close()  // Close the progress bar when done
-				fmt.Println()
-			}()
-
-			// Notify callback about PAR2 start
-			if p.callback != nil {
-				p.callback("par2_creating", 0, 100, fmt.Sprintf("Creating PAR2 files for %s", filepath.Base(file.Path)), 0.0, 0.0, 0.0)
-			}
 
 			for scanner.Scan() {
 				output := strings.Trim(scanner.Text(), " \r\n")
@@ -186,53 +159,17 @@ func (p *Par2CmdExecutor) Create(ctx context.Context, files []fileinfo.FileInfo)
 
 				exp := regexp.MustCompile(`(\d+)\.?\d*%`)
 				if output != "" && exp.MatchString(output) {
-					if !processing && strings.Contains(output, "Processing:") {
-						processing = true
-						if parProgressBar != nil {
-							_ = parProgressBar.Finish() // Close the progress bar when done
-							_ = parProgressBar.Close()
-							parProgressBar = nil
-						}
-
-						parProgressBar = progressbar.NewOptions(100, // Use 100 as max for percentage
-							progressbar.OptionSetDescription(fmt.Sprintf("Processing par2 files for %s...", file.Path)),
-							progressbar.OptionSetRenderBlankState(true),
-							progressbar.OptionThrottle(time.Millisecond*100),
-							progressbar.OptionShowElapsedTimeOnFinish(),
-							progressbar.OptionClearOnFinish(),
-							progressbar.OptionOnCompletion(func() {
-								// new line after progress bar
-								fmt.Println()
-							}),
-						)
-
-						// Notify callback about processing start
-						if p.callback != nil {
-							p.callback("par2_processing", 0, 100, fmt.Sprintf("Processing PAR2 files for %s", filepath.Base(file.Path)), 0.0, 0.0, 0.0)
-						}
-					}
-
 					percentStr := exp.FindStringSubmatch(output)
 					if len(percentStr) > 1 {
 						percentInt, err := strconv.Atoi(percentStr[1])
 						if err == nil {
-							err = parProgressBar.Set(percentInt)
-							if err != nil {
-								slog.ErrorContext(ctx, "Error setting progress bar", "error", err)
+							if pg.GetCurrent() > int64(percentInt) {
+								p.jobProgress.FinishProgress(progressID)
+								progressName := fmt.Sprintf("PAR2 verification: %s", filepath.Base(file.Path))
+								pg = p.jobProgress.AddProgress(progressID, progressName, progress.ProgressTypePar2Generation, 100)
 							}
 
-							// Notify callback with current progress
-							if p.callback != nil {
-								stage := "par2_creating"
-								if processing {
-									stage = "par2_processing"
-								}
-								speed := parProgressBar.State().KBsPerSecond
-								secondsLeft := parProgressBar.State().SecondsLeft
-								elapsedTime := parProgressBar.State().SecondsSince
-								details := fmt.Sprintf("PAR2 %s: %d%% complete", stage, percentInt)
-								p.callback(stage, int64(percentInt), 100, details, speed, secondsLeft, elapsedTime)
-							}
+							pg.UpdateProgress(int64(percentInt) - pg.GetCurrent())
 						}
 					}
 				}
@@ -257,11 +194,7 @@ func (p *Par2CmdExecutor) Create(ctx context.Context, files []fileinfo.FileInfo)
 		}
 
 		createdPar2Paths = append(createdPar2Paths, par2Path)
-
-		// Notify callback about PAR2 completion
-		if p.callback != nil {
-			p.callback("par2_completed", 100, 100, fmt.Sprintf("PAR2 creation completed for %s", filepath.Base(file.Path)), 0.0, 0.0, 0.0)
-		}
+		p.jobProgress.FinishProgress(progressID)
 
 		slog.InfoContext(ctx, "Par2 creation completed successfully")
 

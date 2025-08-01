@@ -25,7 +25,7 @@ func TestNew(t *testing.T) {
 		ExtraPar2Options: []string{"-q"},
 	}
 
-	par2Executor := New(ctx, articleSize, cfg)
+	par2Executor := New(ctx, articleSize, cfg, nil)
 
 	if par2Executor == nil {
 		t.Fatal("Expected non-nil Par2CmdExecutor")
@@ -55,7 +55,7 @@ func TestNewWithParpar(t *testing.T) {
 		ExtraPar2Options: []string{"-q"},
 	}
 
-	par2Executor := New(ctx, articleSize, cfg)
+	par2Executor := New(ctx, articleSize, cfg, nil)
 
 	if par2Executor == nil {
 		t.Fatal("Expected non-nil Par2CmdExecutor")

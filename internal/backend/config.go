@@ -261,8 +261,8 @@ func (a *App) loadConfig() error {
 		a.postie = nil
 	}
 
-	// Create postie instance
-	a.postie, err = postie.New(context.Background(), cfg)
+	// Create postie instance - pass nil for progress manager since processor doesn't need it
+	a.postie, err = postie.New(context.Background(), cfg, nil)
 	if err != nil {
 		slog.Error("Failed to create postie instance", "error", err)
 		// Don't return error here - allow app to continue without postie

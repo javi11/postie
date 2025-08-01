@@ -15,6 +15,7 @@ import (
 	"github.com/javi11/postie/internal/nzb"
 	"github.com/javi11/postie/internal/par2"
 	"github.com/javi11/postie/internal/poster"
+	"github.com/javi11/postie/internal/progress"
 	"github.com/javi11/postie/pkg/fileinfo"
 	"golang.org/x/sync/errgroup"
 )
@@ -27,11 +28,13 @@ type Postie struct {
 	compressionCfg            config.NzbCompressionConfig
 	postUploadScriptCfg       config.PostUploadScriptConfig
 	maintainOriginalExtension bool
+	jobProgress               progress.JobProgress
 }
 
 func New(
 	ctx context.Context,
 	cfg config.Config,
+	jobProgress progress.JobProgress,
 ) (*Postie, error) {
 	// Ensure par2 executable exists and get its path
 	par2Cfg, err := cfg.GetPar2Config(ctx)
@@ -44,11 +47,11 @@ func New(
 	postUploadScriptConfig := cfg.GetPostUploadScriptConfig()
 	maintainOriginalExtension := cfg.GetMaintainOriginalExtension()
 
-	// Create par2 runner
-	par2runner := par2.New(ctx, postingConfig.ArticleSizeInBytes, par2Cfg)
+	// Create par2 runner with progress manager
+	par2runner := par2.New(ctx, postingConfig.ArticleSizeInBytes, par2Cfg, jobProgress)
 
-	// Create poster
-	p, err := poster.New(ctx, cfg)
+	// Create poster with progress manager
+	p, err := poster.New(ctx, cfg, jobProgress)
 	if err != nil {
 		slog.ErrorContext(ctx, "Error creating poster", "error", err)
 
@@ -63,23 +66,27 @@ func New(
 		compressionCfg:            compressionConfig,
 		postUploadScriptCfg:       postUploadScriptConfig,
 		maintainOriginalExtension: maintainOriginalExtension,
+		jobProgress:               jobProgress,
 	}, nil
 }
 
 func (p *Postie) Close() {
 	p.poster.Close()
+	if p.jobProgress != nil {
+		p.jobProgress.Close()
+	}
 }
 
 // safeRemoveFile attempts to remove a file with retry logic for Windows compatibility
 func safeRemoveFile(ctx context.Context, filePath string) {
 	maxRetries := 3
 	baseDelay := 100 * time.Millisecond
-	
+
 	for i := 0; i < maxRetries; i++ {
 		if err := os.Remove(filePath); err == nil {
 			return // Success
 		}
-		
+
 		// On Windows, files might still be locked. Wait and retry.
 		if i < maxRetries-1 {
 			delay := baseDelay * time.Duration(i+1)
@@ -92,23 +99,14 @@ func safeRemoveFile(ctx context.Context, filePath string) {
 			}
 		}
 	}
-	
+
 	// Final attempt with detailed error logging
 	if err := os.Remove(filePath); err != nil {
-		slog.ErrorContext(ctx, "Failed to remove file after retries", 
-			"file", filePath, 
+		slog.ErrorContext(ctx, "Failed to remove file after retries",
+			"file", filePath,
 			"error", err,
 			"os", runtime.GOOS)
 	}
-}
-
-// SetProgressCallback sets the progress callback function for both poster and par2runner
-func (p *Postie) SetProgressCallback(callback poster.ProgressCallback) {
-	p.poster.SetProgressCallback(callback)
-
-	// Convert poster callback to par2 callback (they have the same signature)
-	par2Callback := par2.ProgressCallback(callback)
-	p.par2runner.SetProgressCallback(par2Callback)
 }
 
 func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir string, outputDir string) (string, error) {
@@ -122,7 +120,7 @@ func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir st
 				"os", runtime.GOOS)
 		}
 	}()
-	
+
 	if len(files) == 0 {
 		return "", fmt.Errorf("no files to post")
 	}
@@ -297,7 +295,6 @@ func (p *Postie) post(
 
 	return finalPath, nil
 }
-
 
 func (p *Postie) executePostUploadScript(ctx context.Context, nzbPath string) error {
 	if !p.postUploadScriptCfg.Enabled || p.postUploadScriptCfg.Command == "" {

@@ -21,13 +21,12 @@ type ProcessorInterface interface {
 }
 
 type Watcher struct {
-	cfg            config.WatcherConfig
-	queue          queue.QueueInterface
-	processor      ProcessorInterface
-	watchFolder    string
-	eventEmitter   func(eventName string, optionalData ...interface{})
-	fileSizeCache  map[string]fileCacheEntry
-	cacheMutex     sync.RWMutex
+	cfg           config.WatcherConfig
+	queue         queue.QueueInterface
+	processor     ProcessorInterface
+	watchFolder   string
+	fileSizeCache map[string]fileCacheEntry
+	cacheMutex    sync.RWMutex
 }
 
 type fileCacheEntry struct {
@@ -40,14 +39,12 @@ func New(
 	q queue.QueueInterface,
 	processor ProcessorInterface,
 	watchFolder string,
-	eventEmitter func(eventName string, optionalData ...interface{}),
 ) *Watcher {
 	return &Watcher{
 		cfg:           cfg,
 		queue:         q,
 		processor:     processor,
 		watchFolder:   watchFolder,
-		eventEmitter:  eventEmitter,
 		fileSizeCache: make(map[string]fileCacheEntry),
 	}
 }
@@ -137,11 +134,6 @@ func (w *Watcher) scanDirectory(ctx context.Context) error {
 		}
 
 		slog.InfoContext(ctx, "Added file to queue", "path", filepath.Base(path), "size", info.Size())
-
-		// Emit queue update event
-		if w.eventEmitter != nil {
-			w.eventEmitter("queue-updated")
-		}
 
 		return nil
 	})

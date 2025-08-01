@@ -6,10 +6,9 @@ import ProgressSection from "$lib/components/dashboard/ProgressSection.svelte";
 import QueueSection from "$lib/components/dashboard/QueueSection.svelte";
 import QueueStats from "$lib/components/dashboard/QueueStats.svelte";
 import { t } from "$lib/i18n";
-import { appStatus, progress } from "$lib/stores/app";
+import { appStatus, runningJobs } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import { uploadActions } from "$lib/stores/upload";
-import type { ProgressStatus } from "$lib/types";
 import { Plus } from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
 
@@ -53,24 +52,10 @@ onMount(() => {
 		toastStore.error($t("common.common.error"), errMessage || "Upload failed");
 	});
 
-	// Listen for progress events
-	apiClient.on("progress", (data) => {
-		const d = data as ProgressStatus;
-		progress.update((jobs) => {
-			// For direct uploads without jobID, use a default key
-			const jobKey = d.jobID;
-
-			// Remove job if not running (completed, cancelled, or error)
-			if (!d.isRunning) {
-				const { [jobKey]: _, ...rest } = jobs;
-				return rest;
-			}
-
-			// Otherwise, update/add job
-			// Ensure jobID is set for UI consistency
-			const jobData = { ...d, jobID: jobKey };
-			return { ...jobs, [jobKey]: jobData };
-		});
+	// Listen for job status events - the ProgressSection component now fetches progress directly
+	apiClient.on("queue-updated", () => {
+		// Refresh progress when queue is updated
+		console.log("Queue updated, progress will be refreshed by ProgressSection");
 	});
 
 	// Subscribe to app status

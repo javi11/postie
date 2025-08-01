@@ -6,11 +6,11 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/javi11/postie/internal/config"
+	"github.com/javi11/postie/internal/progress"
 	"github.com/javi11/postie/internal/queue"
 	"github.com/javi11/postie/pkg/fileinfo"
 	"github.com/javi11/postie/pkg/postie"
@@ -19,50 +19,19 @@ import (
 
 const maxRetries = 3
 
-// isWithinPath checks if a file path is within a given directory path
-func isWithinPath(filePath, dirPath string) bool {
-	if dirPath == "" {
-		return false
-	}
-	
-	// Clean both paths to handle .. and . components
-	cleanFilePath := filepath.Clean(filePath)
-	cleanDirPath := filepath.Clean(dirPath)
-	
-	// Make both paths absolute for proper comparison
-	absFilePath, err := filepath.Abs(cleanFilePath)
-	if err != nil {
-		return false
-	}
-	
-	absDirPath, err := filepath.Abs(cleanDirPath)
-	if err != nil {
-		return false
-	}
-	
-	// Check if the file path starts with the directory path
-	rel, err := filepath.Rel(absDirPath, absFilePath)
-	if err != nil {
-		return false
-	}
-	
-	// If the relative path starts with "..", the file is outside the directory
-	return !filepath.IsAbs(rel) && !strings.HasPrefix(rel, "..")
-}
-
 type Processor struct {
 	queue        *queue.Queue
-	postie       *postie.Postie
+	config       config.Config
 	cfg          config.QueueConfig
 	outputFolder string
-	eventEmitter func(eventName string, optionalData ...interface{})
 	isRunning    bool
 	runningMux   sync.Mutex
 	// Track running jobs and their contexts for cancellation
-	runningJobs map[string]context.CancelFunc
-	// Track detailed information about running jobs
-	runningJobDetails         map[string]*RunningJobDetails
+	runningJobs               map[string]*RunningJob
 	jobsMux                   sync.RWMutex
+	// Track canceled jobs to prevent re-processing
+	canceledJobs              map[string]time.Time
+	canceledJobsMux           sync.RWMutex
 	deleteOriginalFile        bool
 	maintainOriginalExtension bool
 	watchFolder               string // Path to the watch folder for maintaining folder structure
@@ -70,24 +39,28 @@ type Processor struct {
 
 type ProcessorOptions struct {
 	Queue                     *queue.Queue
-	Postie                    *postie.Postie
-	Config                    config.QueueConfig
+	Config                    config.Config
+	QueueConfig               config.QueueConfig
 	OutputFolder              string
-	EventEmitter              func(eventName string, optionalData ...interface{})
 	DeleteOriginalFile        bool
 	MaintainOriginalExtension bool
-	WatchFolder               string // Path to the watch folder for maintaining folder structure
+	WatchFolder               string
 }
 
-// RunningJobDetails stores detailed information about a running job
 type RunningJobDetails struct {
-	ID       string  `json:"id"`
-	Path     string  `json:"path"`
-	FileName string  `json:"fileName"`
-	Size     int64   `json:"size"`
-	Status   string  `json:"status"`
-	Stage    string  `json:"stage"`
-	Progress float64 `json:"progress"`
+	ID       string                   `json:"id"`
+	Path     string                   `json:"path"`
+	FileName string                   `json:"fileName"`
+	Size     int64                    `json:"size"`
+	Status   string                   `json:"status"`
+	Stage    string                   `json:"stage"`
+	Progress []progress.ProgressState `json:"progress"`
+}
+
+type RunningJob struct {
+	RunningJobDetails
+	Progress progress.JobProgress
+	cancel   context.CancelFunc
 }
 
 // RunningJobItem represents a running job for the frontend (kept for backward compatibility)
@@ -99,12 +72,11 @@ type RunningJobItem struct {
 func New(opts ProcessorOptions) *Processor {
 	return &Processor{
 		queue:                     opts.Queue,
-		postie:                    opts.Postie,
-		cfg:                       opts.Config,
+		config:                    opts.Config,
+		cfg:                       opts.QueueConfig,
 		outputFolder:              opts.OutputFolder,
-		eventEmitter:              opts.EventEmitter,
-		runningJobs:               make(map[string]context.CancelFunc),
-		runningJobDetails:         make(map[string]*RunningJobDetails),
+		runningJobs:               make(map[string]*RunningJob),
+		canceledJobs:              make(map[string]time.Time),
 		deleteOriginalFile:        opts.DeleteOriginalFile,
 		maintainOriginalExtension: opts.MaintainOriginalExtension,
 		watchFolder:               opts.WatchFolder,
@@ -115,6 +87,9 @@ func New(opts ProcessorOptions) *Processor {
 func (p *Processor) Start(ctx context.Context) error {
 	processTicker := time.NewTicker(time.Second * 2) // Process queue frequently
 	defer processTicker.Stop()
+	
+	cleanupTicker := time.NewTicker(time.Minute * 5) // Cleanup canceled jobs every 5 minutes
+	defer cleanupTicker.Stop()
 
 	// Main processing loop
 	for {
@@ -125,6 +100,8 @@ func (p *Processor) Start(ctx context.Context) error {
 			if err := p.processQueueItems(ctx); err != nil {
 				slog.ErrorContext(ctx, "Error processing queue", "error", err)
 			}
+		case <-cleanupTicker.C:
+			p.cleanupCanceledJobs()
 		}
 	}
 }
@@ -179,18 +156,29 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 		return nil
 	}
 
+	jobID := string(msg.ID)
+
+	// Check if this job was previously canceled
+	p.canceledJobsMux.RLock()
+	if _, wasCanceled := p.canceledJobs[jobID]; wasCanceled {
+		p.canceledJobsMux.RUnlock()
+		slog.Info("Skipping previously canceled job", "jobID", jobID, "path", job.Path)
+		return nil
+	}
+	p.canceledJobsMux.RUnlock()
+
 	slog.Info("Processing file", "msg", msg.ID, "path", job.Path)
 
 	// Process the file
 	actualNzbPath, err := p.processFile(ctx, msg, job)
 	if err != nil {
 		if err == context.Canceled {
-			// Remove the job from the queue
-			if err := p.queue.RemoveFromQueue(string(msg.ID)); err != nil {
-				slog.Error("Failed to remove job from queue", "error", err, "msg", msg.ID, "path", job.Path)
-			}
-
 			slog.Info("Job cancelled", "msg", msg.ID, "path", job.Path)
+			
+			// Mark job as canceled to prevent re-processing
+			p.canceledJobsMux.Lock()
+			p.canceledJobs[jobID] = time.Now()
+			p.canceledJobsMux.Unlock()
 
 			return nil
 		}
@@ -217,16 +205,20 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 
 	// Track this job for potential cancellation
 	p.jobsMux.Lock()
-	p.runningJobs[jobID] = jobCancel
 	// Track detailed job information
-	p.runningJobDetails[jobID] = &RunningJobDetails{
-		ID:       jobID,
-		Path:     job.Path,
-		FileName: fileName,
-		Size:     job.Size,
-		Status:   "running",
-		Stage:    "Starting",
-		Progress: 0,
+	progressJob := progress.NewProgressJob(jobID)
+	defer progressJob.Close()
+	p.runningJobs[jobID] = &RunningJob{
+		RunningJobDetails: RunningJobDetails{
+			ID:       jobID,
+			Path:     job.Path,
+			FileName: fileName,
+			Size:     job.Size,
+			Status:   "running",
+			Stage:    "Starting",
+		},
+		Progress: progressJob,
+		cancel:   jobCancel,
 	}
 	p.jobsMux.Unlock()
 
@@ -234,27 +226,9 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 	defer func() {
 		p.jobsMux.Lock()
 		delete(p.runningJobs, jobID)
-		delete(p.runningJobDetails, jobID)
 		p.jobsMux.Unlock()
 		jobCancel() // Ensure context is cancelled
 	}()
-
-	// Emit progress start event
-	if p.eventEmitter != nil {
-		progressStatus := config.ProgressStatus{
-			CurrentFile:         fileName,
-			TotalFiles:          1,
-			CompletedFiles:      0,
-			Stage:               "Processing",
-			Details:             fmt.Sprintf("Processing %s", fileName),
-			IsRunning:           true,
-			LastUpdate:          time.Now().Unix(),
-			Percentage:          0,
-			CurrentFileProgress: 0,
-			JobID:               jobID,
-		}
-		p.eventEmitter("progress", progressStatus)
-	}
 
 	// Create file info
 	fileInfo := fileinfo.FileInfo{
@@ -262,135 +236,36 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 		Size: uint64(job.Size),
 	}
 
-	// Set up progress callback for this file
-	progressCallback := func(stage string, current, total int64, details string, speed float64, secondsLeft float64, elapsedTime float64) {
-		var fileProgress float64
-		if total > 0 {
-			fileProgress = float64(current) / float64(total) * 100
-		}
-
-		// Update running job details
-		p.jobsMux.Lock()
-		if jobDetails, exists := p.runningJobDetails[jobID]; exists {
-			jobDetails.Stage = stage
-			jobDetails.Progress = fileProgress
-		}
-		p.jobsMux.Unlock()
-
-		if p.eventEmitter != nil {
-			progressStatus := config.ProgressStatus{
-				CurrentFile:         fileName,
-				TotalFiles:          1,
-				CompletedFiles:      0,
-				Stage:               stage,
-				Details:             details,
-				IsRunning:           true,
-				LastUpdate:          time.Now().Unix(),
-				Percentage:          fileProgress,
-				CurrentFileProgress: fileProgress,
-				JobID:               jobID,
-				Speed:               speed,
-				SecondsLeft:         secondsLeft,
-				ElapsedTime:         elapsedTime,
-			}
-			p.eventEmitter("progress", progressStatus)
-		}
-
-		// Extend timeout for long-running operations
-		if current > 0 && current%1000 == 0 { // Every 1000 progress units
-			if err := p.queue.ExtendTimeout(ctx, msg.ID, time.Minute*5); err != nil {
-				slog.WarnContext(ctx, "Failed to extend timeout", "error", err)
-			}
-		}
+	// Create a postie instance for this job with progress manager
+	jobPostie, err := postie.New(jobCtx, p.config, progressJob)
+	if err != nil {
+		return "", fmt.Errorf("failed to create postie instance for job %s: %w", jobID, err)
 	}
-
-	// Set progress callback on postie
-	if p.postie != nil {
-		p.postie.SetProgressCallback(progressCallback)
-	}
+	defer jobPostie.Close()
 
 	// Determine the input folder for maintaining folder structure
 	var inputFolder string
 	if p.watchFolder != "" && isWithinPath(job.Path, p.watchFolder) {
 		// For files from the watcher, use the watch folder as root to maintain structure
 		inputFolder = p.watchFolder
-		slog.DebugContext(jobCtx, "Using watch folder as root for folder structure", 
+		slog.DebugContext(jobCtx, "Using watch folder as root for folder structure",
 			"watchFolder", p.watchFolder, "filePath", job.Path)
 	} else {
 		// For manually added files, use the directory containing the file
 		inputFolder = filepath.Dir(job.Path)
-		slog.DebugContext(jobCtx, "Using file directory as root", 
+		slog.DebugContext(jobCtx, "Using file directory as root",
 			"inputFolder", inputFolder, "filePath", job.Path)
 	}
 
-	// Post the file using the job-specific context
-	actualNzbPath, err := p.postie.Post(jobCtx, []fileinfo.FileInfo{fileInfo}, inputFolder, p.outputFolder)
+	// Post the file using the job-specific postie instance
+	actualNzbPath, err := jobPostie.Post(jobCtx, []fileinfo.FileInfo{fileInfo}, inputFolder, p.outputFolder)
 	if err != nil {
 		// Check if this was a cancellation
 		if err == context.Canceled {
-			// Emit cancellation event
-			if p.eventEmitter != nil {
-				progressStatus := config.ProgressStatus{
-					CurrentFile:         fileName,
-					TotalFiles:          1,
-					CompletedFiles:      0,
-					Stage:               "Cancelled",
-					Details:             fmt.Sprintf("Cancelled %s", fileName),
-					IsRunning:           false,
-					LastUpdate:          time.Now().Unix(),
-					Percentage:          0,
-					CurrentFileProgress: 0,
-					JobID:               jobID,
-					Speed:               0,
-					SecondsLeft:         0,
-					ElapsedTime:         0,
-				}
-				p.eventEmitter("progress", progressStatus)
-			}
 			return "", context.Canceled
 		}
 
-		// Emit error progress event
-		if p.eventEmitter != nil {
-			progressStatus := config.ProgressStatus{
-				CurrentFile:         fileName,
-				TotalFiles:          1,
-				CompletedFiles:      0,
-				Stage:               "Error",
-				Details:             fmt.Sprintf("Error processing %s: %v", fileName, err),
-				IsRunning:           false,
-				LastUpdate:          time.Now().Unix(),
-				Percentage:          0,
-				CurrentFileProgress: 0,
-				JobID:               jobID,
-				Speed:               0,
-				SecondsLeft:         0,
-				ElapsedTime:         0,
-			}
-			p.eventEmitter("progress", progressStatus)
-		}
-
 		return "", err
-	}
-
-	// Emit completion progress event
-	if p.eventEmitter != nil {
-		progressStatus := config.ProgressStatus{
-			CurrentFile:         fileName,
-			TotalFiles:          1,
-			CompletedFiles:      1,
-			Stage:               "Completed",
-			Details:             fmt.Sprintf("Completed %s", fileName),
-			IsRunning:           false,
-			LastUpdate:          time.Now().Unix(),
-			Percentage:          100,
-			CurrentFileProgress: 100,
-			JobID:               jobID,
-			Speed:               0,
-			SecondsLeft:         0,
-			ElapsedTime:         0,
-		}
-		p.eventEmitter("progress", progressStatus)
 	}
 
 	// Delete the original file
@@ -424,23 +299,6 @@ func (p *Processor) handleProcessingError(ctx context.Context, msg *goqite.Messa
 		}
 	}
 
-	// Emit error event
-	if p.eventEmitter != nil {
-		progressStatus := config.ProgressStatus{
-			CurrentFile:         getFileName(job.Path),
-			TotalFiles:          1,
-			CompletedFiles:      0,
-			Stage:               "Error",
-			Details:             fmt.Sprintf("Error processing %s: %v", getFileName(job.Path), err),
-			IsRunning:           false,
-			LastUpdate:          time.Now().Unix(),
-			Percentage:          0,
-			CurrentFileProgress: 0,
-			JobID:               jobID,
-		}
-		p.eventEmitter("progress", progressStatus)
-	}
-
 	return nil
 }
 
@@ -448,7 +306,7 @@ func (p *Processor) handleProcessingError(ctx context.Context, msg *goqite.Messa
 func (p *Processor) CancelJob(jobID string) error {
 	p.jobsMux.Lock()
 
-	cancelFunc, exists := p.runningJobs[jobID]
+	rj, exists := p.runningJobs[jobID]
 	if !exists {
 		p.jobsMux.Unlock()
 		return fmt.Errorf("job %s is not currently running", jobID)
@@ -456,7 +314,7 @@ func (p *Processor) CancelJob(jobID string) error {
 
 	// Get job details before removing from tracking
 	var fileName string
-	if jobDetails, exists := p.runningJobDetails[jobID]; exists {
+	if jobDetails, exists := p.runningJobs[jobID]; exists {
 		fileName = jobDetails.FileName
 	}
 	if fileName == "" {
@@ -465,32 +323,16 @@ func (p *Processor) CancelJob(jobID string) error {
 
 	// Remove from tracking first to prevent duplicate events
 	delete(p.runningJobs, jobID)
-	delete(p.runningJobDetails, jobID)
 
 	p.jobsMux.Unlock()
 
-	// Cancel the job's context
-	cancelFunc()
+	// Mark job as canceled to prevent re-processing
+	p.canceledJobsMux.Lock()
+	p.canceledJobs[jobID] = time.Now()
+	p.canceledJobsMux.Unlock()
 
-	// Emit immediate cancellation event to frontend
-	if p.eventEmitter != nil {
-		progressStatus := config.ProgressStatus{
-			CurrentFile:         fileName,
-			TotalFiles:          1,
-			CompletedFiles:      0,
-			Stage:               "Cancelled",
-			Details:             fmt.Sprintf("Cancelled %s", fileName),
-			IsRunning:           false,
-			LastUpdate:          time.Now().Unix(),
-			Percentage:          0,
-			CurrentFileProgress: 0,
-			JobID:               jobID,
-			Speed:               0,
-			SecondsLeft:         0,
-			ElapsedTime:         0,
-		}
-		p.eventEmitter("progress", progressStatus)
-	}
+	// Cancel the job's context
+	rj.cancel()
 
 	slog.Info("Job cancelled", "jobID", jobID)
 	return nil
@@ -524,16 +366,23 @@ func (p *Processor) GetRunningJobItems() []RunningJobItem {
 }
 
 // GetRunningJobDetails returns detailed information about currently running jobs
-func (p *Processor) GetRunningJobDetails() []*RunningJobDetails {
+func (p *Processor) GetRunningJobDetails() map[string]RunningJobDetails {
 	p.jobsMux.RLock()
 	defer p.jobsMux.RUnlock()
 
-	var details []*RunningJobDetails
-	for _, jobDetail := range p.runningJobDetails {
-		// Create a copy to avoid race conditions
-		detailCopy := *jobDetail
-		details = append(details, &detailCopy)
+	details := make(map[string]RunningJobDetails)
+	for jobID, jobDetail := range p.runningJobs {
+		details[jobID] = RunningJobDetails{
+			ID:       jobID,
+			Path:     jobDetail.Path,
+			FileName: jobDetail.FileName,
+			Size:     jobDetail.Size,
+			Status:   jobDetail.Status,
+			Stage:    jobDetail.Stage,
+			Progress: jobDetail.Progress.GetAllProgressState(),
+		}
 	}
+
 	return details
 }
 
@@ -542,14 +391,13 @@ func (p *Processor) IsPathBeingProcessed(path string) bool {
 	p.jobsMux.RLock()
 	defer p.jobsMux.RUnlock()
 
-	for _, jobDetails := range p.runningJobDetails {
+	for _, jobDetails := range p.runningJobs {
 		if jobDetails.Path == path {
 			return true
 		}
 	}
 	return false
 }
-
 
 func getFileName(path string) string {
 	// Simple filename extraction
@@ -559,4 +407,24 @@ func getFileName(path string) string {
 		}
 	}
 	return path
+}
+
+// cleanupCanceledJobs removes old canceled job entries (older than 1 hour)
+func (p *Processor) cleanupCanceledJobs() {
+	p.canceledJobsMux.Lock()
+	defer p.canceledJobsMux.Unlock()
+	
+	cutoff := time.Now().Add(-time.Hour) // Remove entries older than 1 hour
+	cleaned := 0
+	
+	for jobID, cancelTime := range p.canceledJobs {
+		if cancelTime.Before(cutoff) {
+			delete(p.canceledJobs, jobID)
+			cleaned++
+		}
+	}
+	
+	if cleaned > 0 {
+		slog.Debug("Cleaned up canceled job entries", "count", cleaned, "remaining", len(p.canceledJobs))
+	}
 }

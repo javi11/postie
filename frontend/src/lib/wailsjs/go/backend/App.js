@@ -78,10 +78,6 @@ export function GetProcessorStatus() {
   return window['go']['backend']['App']['GetProcessorStatus']();
 }
 
-export function GetProgress() {
-  return window['go']['backend']['App']['GetProgress']();
-}
-
 export function GetQueueItems() {
   return window['go']['backend']['App']['GetQueueItems']();
 }
@@ -90,12 +86,12 @@ export function GetQueueStats() {
   return window['go']['backend']['App']['GetQueueStats']();
 }
 
-export function GetRunningJobDetails() {
-  return window['go']['backend']['App']['GetRunningJobDetails']();
-}
-
 export function GetRunningJobs() {
   return window['go']['backend']['App']['GetRunningJobs']();
+}
+
+export function GetRunningJobsDetails() {
+  return window['go']['backend']['App']['GetRunningJobsDetails']();
 }
 
 export function GetWatchDirectory() {

@@ -75,12 +75,6 @@ type App struct {
 	configPath           string
 	appPaths             *AppPaths
 	postie               *postie.Postie
-	progress             *ProgressTracker
-	progressMux          sync.RWMutex
-	uploading            bool
-	uploadingMux         sync.RWMutex
-	uploadCtx            context.Context
-	uploadCancel         context.CancelFunc
 	queue                *queue.Queue
 	processor            *processor.Processor
 	watcher              *watcher.Watcher
@@ -191,10 +185,7 @@ func NewApp() *App {
 	return &App{
 		configPath: appPaths.Config,
 		appPaths:   appPaths,
-		progress: &ProgressTracker{
-			Stage: "Ready",
-		},
-		isWebMode: false,
+		isWebMode:  false,
 	}
 }
 
@@ -368,13 +359,20 @@ func (a *App) GetRunningJobs() ([]processor.RunningJobItem, error) {
 	return a.processor.GetRunningJobItems(), nil
 }
 
-// GetRunningJobDetails returns detailed information about currently running jobs
-func (a *App) GetRunningJobDetails() ([]*processor.RunningJobDetails, error) {
+// GetRunningJobsDetails returns detailed information about currently running jobs
+func (a *App) GetRunningJobsDetails() ([]processor.RunningJobDetails, error) {
 	if a.processor == nil {
-		return []*processor.RunningJobDetails{}, nil
+		return []processor.RunningJobDetails{}, nil
 	}
 
-	return a.processor.GetRunningJobDetails(), nil
+	res := make([]processor.RunningJobDetails, 0, len(a.processor.GetRunningJobDetails()))
+	p := a.processor.GetRunningJobDetails()
+
+	for _, job := range p {
+		res = append(res, job)
+	}
+
+	return res, nil
 }
 
 // RetryJob retries a failed job

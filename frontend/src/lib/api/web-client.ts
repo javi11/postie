@@ -181,8 +181,8 @@ export class WebClient {
 		return this.get<processor.RunningJobItem[]>("/running-jobs");
 	}
 
-	async getProgress(): Promise<backend.ProgressTracker> {
-		return this.get<backend.ProgressTracker>("/progress");
+	async getRunningJobDetails(): Promise<Promise<processor.RunningJobDetails[]>> {
+		return this.get<Promise<processor.RunningJobDetails[]>>("/running-job-details");
 	}
 
 	// Logs

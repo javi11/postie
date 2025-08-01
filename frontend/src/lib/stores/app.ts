@@ -1,4 +1,4 @@
-import type { backend } from "$lib/wailsjs/go/models";
+import type { backend, processor } from "$lib/wailsjs/go/models";
 import { derived, writable } from "svelte/store";
 
 // Create app status store
@@ -17,13 +17,10 @@ export const appStatus = writable<backend.AppStatus>({
 	validServerCount: 0,
 });
 
-export const progress = writable<Record<string, backend.ProgressTracker>>({});
-
+export const runningJobs = writable<processor.RunningJobDetails[]>([]);
 // Create upload state store
-export const isUploading = derived(progress, (progress) => {
-	return Object.values(progress).some(
-		(job: backend.ProgressTracker) => job.isRunning,
-	);
+export const isUploading = derived(runningJobs, (jobs) => {
+	return jobs?.length > 0;
 });
 
 // Create settings store for save functionality

@@ -234,7 +234,6 @@ func (ws *WebServer) setupRoutes() {
 	api.HandleFunc("/nzb/{id}/download", ws.handleDownloadNZB).Methods("GET")
 	api.HandleFunc("/processor/status", ws.handleGetProcessorStatus).Methods("GET")
 	api.HandleFunc("/running-jobs", ws.handleGetRunningJobs).Methods("GET")
-	api.HandleFunc("/progress", ws.handleGetProgress).Methods("GET")
 	api.HandleFunc("/validate-server", ws.handleValidateServer).Methods("POST")
 	api.HandleFunc("/setup/complete", ws.handleSetupComplete).Methods("POST")
 
@@ -575,12 +574,6 @@ func (ws *WebServer) handleGetQueueStats(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(stats)
-}
-
-func (ws *WebServer) handleGetProgress(w http.ResponseWriter, r *http.Request) {
-	progress := ws.app.GetProgress()
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(progress)
 }
 
 func (ws *WebServer) handleValidateServer(w http.ResponseWriter, r *http.Request) {

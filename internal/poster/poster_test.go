@@ -32,7 +32,7 @@ func TestNew(t *testing.T) {
 		mockConfig.EXPECT().GetPostingConfig().Return(createTestConfig())
 		mockConfig.EXPECT().GetPostCheckConfig().Return(createTestPostCheckConfig())
 
-		poster, err := New(ctx, mockConfig)
+		poster, err := New(ctx, mockConfig, nil)
 
 		require.NoError(t, err)
 		assert.NotNil(t, poster)
@@ -48,7 +48,7 @@ func TestNew(t *testing.T) {
 		mockConfig := mocks.NewMockConfig(ctrl)
 		mockConfig.EXPECT().GetNNTPPool().Return(nil, expectedErr)
 
-		poster, err := New(ctx, mockConfig)
+		poster, err := New(ctx, mockConfig, nil)
 
 		assert.Error(t, err)
 		assert.Nil(t, poster)
@@ -805,7 +805,7 @@ func TestPosterInterface(t *testing.T) {
 	mockConfig.EXPECT().GetPostCheckConfig().Return(createTestPostCheckConfig())
 
 	var p Poster
-	poster, err := New(ctx, mockConfig)
+	poster, err := New(ctx, mockConfig, nil)
 	require.NoError(t, err)
 
 	p = poster // This should compile if poster implements Poster interface

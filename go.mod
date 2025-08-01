@@ -5,6 +5,7 @@ go 1.24.5
 require (
 	github.com/andybalholm/brotli v1.1.1
 	github.com/bodgit/sevenzip v1.6.1
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/javi11/nntppool v1.0.1
@@ -60,7 +61,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golangci/swaggoswag v0.0.0-20250504205917-77f2aca3143e // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gookit/color v1.5.4 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/jackmordaunt/icns v1.0.0 // indirect
