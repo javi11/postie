@@ -220,6 +220,10 @@ func (ws *WebServer) setupRoutes() {
 	api.HandleFunc("/status", ws.handleGetStatus).Methods("GET")
 	api.HandleFunc("/config", ws.handleGetConfig).Methods("GET")
 	api.HandleFunc("/config", ws.handleSaveConfig).Methods("POST")
+	api.HandleFunc("/config/pending/status", ws.handleConfigPendingStatus).Methods("GET")
+	api.HandleFunc("/config/pending", ws.handlePendingConfig).Methods("GET")
+	api.HandleFunc("/config/pending/apply", ws.handleApplyPendingConfig).Methods("POST")
+	api.HandleFunc("/config/pending/discard", ws.handleConfigPendingDiscard).Methods("POST")
 	api.HandleFunc("/queue", ws.handleGetQueueItems).Methods("GET")
 	api.HandleFunc("/queue", ws.handleClearQueue).Methods("DELETE")
 	api.HandleFunc("/queue/add-files", ws.handleAddFilesToQueue).Methods("POST")
@@ -234,6 +238,7 @@ func (ws *WebServer) setupRoutes() {
 	api.HandleFunc("/nzb/{id}/download", ws.handleDownloadNZB).Methods("GET")
 	api.HandleFunc("/processor/status", ws.handleGetProcessorStatus).Methods("GET")
 	api.HandleFunc("/running-jobs", ws.handleGetRunningJobs).Methods("GET")
+	api.HandleFunc("/running-job-details", ws.handleGetRunningJobDetails).Methods("GET")
 	api.HandleFunc("/validate-server", ws.handleValidateServer).Methods("POST")
 	api.HandleFunc("/setup/complete", ws.handleSetupComplete).Methods("POST")
 
@@ -348,6 +353,34 @@ func (ws *WebServer) handleCancelJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (ws *WebServer) handleConfigPendingStatus(w http.ResponseWriter, r *http.Request) {
+	status := ws.app.HasPendingConfigChanges()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(status)
+}
+
+func (ws *WebServer) handleApplyPendingConfig(w http.ResponseWriter, r *http.Request) {
+	if err := ws.app.ApplyPendingConfig(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (ws *WebServer) handleConfigPendingDiscard(w http.ResponseWriter, r *http.Request) {
+	if err := ws.app.DiscardPendingConfig(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (ws *WebServer) handlePendingConfig(w http.ResponseWriter, r *http.Request) {
+	pendingConfig := ws.app.GetPendingConfigStatus()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(pendingConfig)
 }
 
 func (ws *WebServer) handleGetLogs(w http.ResponseWriter, r *http.Request) {
@@ -485,6 +518,16 @@ func (ws *WebServer) handleGetRunningJobs(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(jobs)
+}
+
+func (ws *WebServer) handleGetRunningJobDetails(w http.ResponseWriter, r *http.Request) {
+	jobDetails, err := ws.app.GetRunningJobsDetails()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(jobDetails)
 }
 
 func (ws *WebServer) handleClearQueue(w http.ResponseWriter, r *http.Request) {
