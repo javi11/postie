@@ -17,6 +17,7 @@ type ProgressType string
 const (
 	ProgressTypeUploading      ProgressType = "uploading"
 	ProgressTypePar2Generation ProgressType = "par2_generation"
+	ProgressTypeChecking       ProgressType = "checking"
 )
 
 type ProgressState struct {
@@ -29,6 +30,7 @@ type ProgressState struct {
 	KBsPerSecond   float64
 	Description    string
 	Type           ProgressType
+	IsStarted      bool
 }
 
 // EventEmitter is a function type for emitting events to the frontend
@@ -234,6 +236,7 @@ func (p *progress) GetState() ProgressState {
 		KBsPerSecond:   s.KBsPerSecond,
 		Description:    s.Description,
 		Type:           p.pType,
+		IsStarted:      s.CurrentNum > 0,
 	}
 }
 

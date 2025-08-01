@@ -44,14 +44,11 @@ type ProcessorOptions struct {
 	MaintainOriginalExtension bool
 	WatchFolder               string
 }
-
 type RunningJobDetails struct {
 	ID       string                   `json:"id"`
 	Path     string                   `json:"path"`
 	FileName string                   `json:"fileName"`
 	Size     int64                    `json:"size"`
-	Status   string                   `json:"status"`
-	Stage    string                   `json:"stage"`
 	Progress []progress.ProgressState `json:"progress"`
 }
 
@@ -63,8 +60,7 @@ type RunningJob struct {
 
 // RunningJobItem represents a running job for the frontend (kept for backward compatibility)
 type RunningJobItem struct {
-	ID     string `json:"id"`
-	Status string `json:"status"`
+	ID string `json:"id"`
 }
 
 func New(opts ProcessorOptions) *Processor {
@@ -190,8 +186,6 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 			Path:     job.Path,
 			FileName: fileName,
 			Size:     job.Size,
-			Status:   "running",
-			Stage:    "Starting",
 		},
 		Progress: progressJob,
 		cancel:   jobCancel,
@@ -324,8 +318,7 @@ func (p *Processor) GetRunningJobItems() []RunningJobItem {
 	var items []RunningJobItem
 	for jobID := range p.runningJobs {
 		items = append(items, RunningJobItem{
-			ID:     jobID,
-			Status: "running",
+			ID: jobID,
 		})
 	}
 	return items
@@ -343,8 +336,6 @@ func (p *Processor) GetRunningJobDetails() map[string]RunningJobDetails {
 			Path:     jobDetail.Path,
 			FileName: jobDetail.FileName,
 			Size:     jobDetail.Size,
-			Status:   jobDetail.Status,
-			Stage:    jobDetail.Stage,
 			Progress: jobDetail.Progress.GetAllProgressState(),
 		}
 	}

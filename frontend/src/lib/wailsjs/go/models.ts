@@ -563,8 +563,6 @@ export namespace processor {
 	    path: string;
 	    fileName: string;
 	    size: number;
-	    status: string;
-	    stage: string;
 	    progress: progress.ProgressState[];
 	
 	    static createFrom(source: any = {}) {
@@ -577,8 +575,6 @@ export namespace processor {
 	        this.path = source["path"];
 	        this.fileName = source["fileName"];
 	        this.size = source["size"];
-	        this.status = source["status"];
-	        this.stage = source["stage"];
 	        this.progress = this.convertValues(source["progress"], progress.ProgressState);
 	    }
 	
@@ -602,7 +598,6 @@ export namespace processor {
 	}
 	export class RunningJobItem {
 	    id: string;
-	    status: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new RunningJobItem(source);
@@ -611,7 +606,6 @@ export namespace processor {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
-	        this.status = source["status"];
 	    }
 	}
 
@@ -629,6 +623,7 @@ export namespace progress {
 	    KBsPerSecond: number;
 	    Description: string;
 	    Type: string;
+	    IsStarted: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ProgressState(source);
@@ -645,6 +640,7 @@ export namespace progress {
 	        this.KBsPerSecond = source["KBsPerSecond"];
 	        this.Description = source["Description"];
 	        this.Type = source["Type"];
+	        this.IsStarted = source["IsStarted"];
 	    }
 	}
 

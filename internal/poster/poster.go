@@ -325,6 +325,8 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 			var failedArticles []*article.Article
 			var mu sync.Mutex
 
+			post.progress = p.jobProgress.AddProgress(uuid.New(), fmt.Sprintf("%s (check)", filepath.Base(post.FilePath)), progress.ProgressTypeChecking, post.filesize)
+
 			// Submit all articles to the pool
 			for _, art := range post.Articles {
 				pool.Go(func(ctx context.Context) error {
@@ -344,11 +346,10 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 					// Update progress atomically (non-blocking)
 					mu.Lock()
 					articlesChecked++
-					//current := articlesChecked
-					//errors := articleErrors
 					mu.Unlock()
 
-					//progress.UpdateFileProgress(0, int64(current), int64(errors))
+					// Update progress if manager is available
+					post.progress.UpdateProgress(int64(art.Size))
 					return nil
 				})
 			}
@@ -419,6 +420,8 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 			post.mu.Lock()
 			post.Status = PostStatusVerified
 			post.mu.Unlock()
+
+			p.jobProgress.FinishProgress(post.progress.GetID())
 
 			// Close file
 			if post.file != nil {

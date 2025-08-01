@@ -4,7 +4,7 @@ import { t } from "$lib/i18n";
 import { isUploading, runningJobs } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import { formatSpeed, formatTime, formatFileSize } from "$lib/utils";
-import { ChartPie, CheckCircle, Clock, Play, X, Upload, Package } from "lucide-svelte";
+import { ChartPie, CheckCircle, Clock, Play, X, Upload, Package, Check } from "lucide-svelte";
 import { progress } from "$lib/wailsjs/go/models";
 import { onMount, onDestroy } from "svelte";
 
@@ -44,6 +44,8 @@ function getProgressIcon(type: string) {
       return Upload;
     case "par2_generation":
       return Package;
+    case "checking":
+      return Check;
     default:
       return Play;
   }
@@ -56,6 +58,8 @@ function getProgressColor(type: string) {
       return "text-blue-500 bg-blue-500/10";
     case "par2_generation":
       return "text-green-500 bg-green-500/10";
+    case "checking":
+      return "text-yellow-500 bg-yellow-500/10";
     default:
       return "text-primary bg-primary/10";
   }
@@ -150,7 +154,6 @@ function cancelUpload(jobID: string) {
                 <h3 class="text-lg font-semibold text-base-content">
                   {job.fileName}
                 </h3>
-                <p class="text-sm text-base-content/70">{job.stage} - {job.status}</p>
               </div>
             </div>
             <button
@@ -175,9 +178,22 @@ function cancelUpload(jobID: string) {
                         <svelte:component this={getProgressIcon(progressState?.Type)} class="w-4 h-4" />
                       </div>
                       <div>
-                        <p class="text-sm font-medium text-base-content">
-                          {progressState?.Description || progressState?.Type}
-                        </p>
+                        <div class="flex items-center gap-2">
+                          <p class="text-sm font-medium text-base-content">
+                            {progressState?.Description || progressState?.Type}
+                          </p>
+                          <!-- Status indicator based on IsStarted -->
+                          <div class="flex items-center gap-1">
+                            <div class="w-2 h-2 rounded-full {progressState?.IsStarted 
+                              ? 'bg-green-500 animate-pulse' 
+                              : 'bg-yellow-500'}"></div>
+                            <span class="text-xs font-medium {progressState?.IsStarted 
+                              ? 'text-green-600' 
+                              : 'text-yellow-600'}">
+                              {progressState?.IsStarted ? 'In Progress' : 'Pending'}
+                            </span>
+                          </div>
+                        </div>
                         <p class="text-xs text-base-content/60 capitalize">
                           {progressState?.Type.replace('_', ' ')}
                         </p>
@@ -209,7 +225,7 @@ function cancelUpload(jobID: string) {
                     </div>
                     
                     <!-- Show speed for upload tasks -->
-                    {#if progressState.Type === "uploading" && progressState?.KBsPerSecond}
+                    {#if (progressState.Type === "uploading" || progressState.Type === "checking") && progressState?.KBsPerSecond}
                       <div>
                         <span class="block">Speed</span>
                         <span class="font-medium text-base-content">{formatSpeed((progressState.KBsPerSecond || 0) * 1024)}</span>
@@ -221,21 +237,13 @@ function cancelUpload(jobID: string) {
                       <div>
                         <span class="block">Current</span>
                         <span class="font-medium text-base-content">
-                          {#if progressState.Type === "uploading" && progressState?.CurrentBytes}
                             {formatFileSize(progressState.CurrentBytes)}
-                          {:else}
-                            {progressState?.CurrentNum?.toLocaleString() || '0'}
-                          {/if}
                         </span>
                       </div>
                       <div>
                         <span class="block">Total</span>
                         <span class="font-medium text-base-content">
-                          {#if progressState.Type === "uploading" && progressState?.CurrentBytes}
-                            {formatFileSize((progressState.Max || 0) * (progressState.CurrentBytes || 0) / (progressState.CurrentNum || 1))}
-                          {:else}
-                            {progressState?.Max?.toLocaleString() || '0'}
-                          {/if}
+                            {formatFileSize(progressState.Max)}
                         </span>
                       </div>
                     {/if}
@@ -251,16 +259,8 @@ function cancelUpload(jobID: string) {
               <div class="flex justify-between items-center">
                 <span class="text-sm text-base-content/70">File Size</span>
                 <span class="text-sm font-medium text-base-content">
-                  {(job.size / 1024 / 1024).toFixed(2)} MB
+                  {formatFileSize(job.size)}
                 </span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span class="text-sm text-base-content/70">Status</span>
-                <span class="text-sm font-medium text-base-content">{job.status}</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span class="text-sm text-base-content/70">Stage</span>
-                <span class="text-sm font-medium text-base-content">{job.stage}</span>
               </div>
               <div class="flex justify-between items-center">
                 <span class="text-sm text-base-content/70">Path</span>
