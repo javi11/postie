@@ -214,6 +214,7 @@ function changeItemsPerPage(event: Event) {
                 <th>{$t("dashboard.queue.file")}</th>
                 <th>{$t("dashboard.queue.size")}</th>
                 <th>{$t("dashboard.queue.status")}</th>
+                <th>{$t("dashboard.queue.priority")}</th>
                 <th>{$t("dashboard.queue.created")}</th>
                 <th class="text-right">{$t("dashboard.queue.actions")}</th>
               </tr>
@@ -250,22 +251,6 @@ function changeItemsPerPage(event: Event) {
                           {$t("dashboard.queue.retry")} {item.retryCount}
                         </div>
                       {/if}
-                      {#if item.status === "pending"}
-                        <div class="flex items-center gap-1 ml-2">
-                          <button
-                            class="btn btn-xs"
-                            title={$t("dashboard.queue.increase_priority")}
-                            onclick={() => changePriority(item.id, item.priority + 1)}
-                          >▲</button>
-                          <span class="px-1 text-xs font-mono">{item.priority}</span>
-                          <button
-                            class="btn btn-xs"
-                            title={$t("dashboard.queue.decrease_priority")}
-                            onclick={() => changePriority(item.id, item.priority - 1)}
-                            disabled={item.priority <= 0}
-                          >▼</button>
-                        </div>
-                      {/if}
                     </div>
                     {#if item.errorMessage}
                       <div class="alert alert-error alert-sm mt-2" title={item.errorMessage}>
@@ -275,6 +260,26 @@ function changeItemsPerPage(event: Event) {
                             : item.errorMessage}
                         </span>
                       </div>
+                    {/if}
+                  </td>
+                  <td>
+                    {#if item.status === "pending"}
+                      <div class="flex items-center gap-1">
+                        <button
+                          class="btn btn-xs btn-success"
+                          title={$t("dashboard.queue.increase_priority")}
+                          onclick={() => changePriority(item.id, item.priority + 1)}
+                        >▲</button>
+                        <span class="px-2 py-1 text-xs font-mono bg-base-200 rounded min-w-[2rem] text-center">{item.priority}</span>
+                        <button
+                          class="btn btn-xs btn-outline"
+                          title={$t("dashboard.queue.decrease_priority")}
+                          onclick={() => changePriority(item.id, Math.max(0, item.priority - 1))}
+                          disabled={item.priority <= 0}
+                        >▼</button>
+                      </div>
+                    {:else}
+                      <span class="text-xs text-base-content/50">—</span>
                     {/if}
                   </td>
                   <td>

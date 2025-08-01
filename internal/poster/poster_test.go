@@ -10,14 +10,135 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/javi11/nntppool"
 	"github.com/javi11/postie/internal/article"
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/mocks"
+	"github.com/javi11/postie/internal/progress"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
+
+// mockProgress implements the Progress interface for testing
+type mockProgress struct {
+	id         uuid.UUID
+	name       string
+	progType   progress.ProgressType
+	total      int64
+	current    int64
+	isComplete bool
+	startTime  time.Time
+}
+
+func (m *mockProgress) UpdateProgress(processed int64) {
+	m.current += processed
+	if m.current >= m.total {
+		m.isComplete = true
+	}
+}
+
+func (m *mockProgress) Finish() {
+	m.isComplete = true
+	m.current = m.total
+}
+
+func (m *mockProgress) GetState() progress.ProgressState {
+	return progress.ProgressState{
+		Max:            m.total,
+		CurrentNum:     m.current,
+		CurrentPercent: m.GetPercentage(),
+		CurrentBytes:   float64(m.current),
+		SecondsSince:   time.Since(m.startTime).Seconds(),
+		SecondsLeft:    0, // Simplified for testing
+		KBsPerSecond:   0, // Simplified for testing
+		Description:    m.name,
+		Type:           m.progType,
+		IsStarted:      true,
+	}
+}
+
+func (m *mockProgress) GetID() uuid.UUID               { return m.id }
+func (m *mockProgress) GetName() string                { return m.name }
+func (m *mockProgress) GetType() progress.ProgressType { return m.progType }
+func (m *mockProgress) GetCurrent() int64              { return m.current }
+func (m *mockProgress) GetTotal() int64                { return m.total }
+func (m *mockProgress) GetPercentage() float64 {
+	if m.total == 0 {
+		return 0
+	}
+	return float64(m.current) / float64(m.total) * 100
+}
+func (m *mockProgress) IsComplete() bool        { return m.isComplete }
+func (m *mockProgress) GetStartTime() time.Time { return m.startTime }
+func (m *mockProgress) GetElapsedTime() time.Duration {
+	return time.Since(m.startTime)
+}
+
+// mockJobProgress implements the JobProgress interface for testing
+type mockJobProgress struct {
+	progresses map[uuid.UUID]*mockProgress
+	mu         sync.RWMutex
+}
+
+func newMockJobProgress() *mockJobProgress {
+	return &mockJobProgress{
+		progresses: make(map[uuid.UUID]*mockProgress),
+	}
+}
+
+func (m *mockJobProgress) AddProgress(id uuid.UUID, name string, pType progress.ProgressType, total int64) progress.Progress {
+	prog := &mockProgress{
+		id:        id,
+		name:      name,
+		progType:  pType,
+		total:     total,
+		current:   0,
+		startTime: time.Now(),
+	}
+	m.mu.Lock()
+	m.progresses[id] = prog
+	m.mu.Unlock()
+	return prog
+}
+
+func (m *mockJobProgress) FinishProgress(id uuid.UUID) {
+	m.mu.Lock()
+	if prog, exists := m.progresses[id]; exists {
+		prog.Finish()
+	}
+	m.mu.Unlock()
+}
+
+func (m *mockJobProgress) GetProgress(id uuid.UUID) progress.Progress {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.progresses[id]
+}
+
+func (m *mockJobProgress) GetAllProgress() map[uuid.UUID]progress.Progress {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make(map[uuid.UUID]progress.Progress)
+	for id, prog := range m.progresses {
+		result[id] = prog
+	}
+	return result
+}
+
+func (m *mockJobProgress) GetAllProgressState() []progress.ProgressState {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var states []progress.ProgressState
+	for _, prog := range m.progresses {
+		states = append(states, prog.GetState())
+	}
+	return states
+}
+
+func (m *mockJobProgress) GetJobID() string { return "test-job" }
+func (m *mockJobProgress) Close()           {}
 
 func TestNew(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
@@ -32,7 +153,7 @@ func TestNew(t *testing.T) {
 		mockConfig.EXPECT().GetPostingConfig().Return(createTestConfig())
 		mockConfig.EXPECT().GetPostCheckConfig().Return(createTestPostCheckConfig())
 
-		poster, err := New(ctx, mockConfig)
+		poster, err := New(ctx, mockConfig, nil)
 
 		require.NoError(t, err)
 		assert.NotNil(t, poster)
@@ -48,7 +169,7 @@ func TestNew(t *testing.T) {
 		mockConfig := mocks.NewMockConfig(ctrl)
 		mockConfig.EXPECT().GetNNTPPool().Return(nil, expectedErr)
 
-		poster, err := New(ctx, mockConfig)
+		poster, err := New(ctx, mockConfig, nil)
 
 		assert.Error(t, err)
 		assert.Nil(t, poster)
@@ -82,11 +203,12 @@ func TestPost(t *testing.T) {
 		checkCfg.Enabled = &enabled
 
 		p := &poster{
-			cfg:      createTestConfig(),
-			checkCfg: checkCfg,
-			pool:     mockPool,
-			stats:    &Stats{StartTime: time.Now()},
-			throttle: NewThrottle(1024*1024, time.Second),
+			cfg:         createTestConfig(),
+			checkCfg:    checkCfg,
+			pool:        mockPool,
+			stats:       &Stats{StartTime: time.Now()},
+			throttle:    NewThrottle(1024*1024, time.Second),
+			jobProgress: newMockJobProgress(),
 		}
 
 		err := p.Post(ctx, []string{testFile}, "", nzbGen)
@@ -125,11 +247,12 @@ func TestPost(t *testing.T) {
 		checkCfg.Enabled = &enabled
 
 		p := &poster{
-			cfg:      createTestConfig(),
-			checkCfg: checkCfg,
-			pool:     mockPool,
-			stats:    &Stats{StartTime: time.Now()},
-			throttle: NewThrottle(1024*1024, time.Second),
+			cfg:         createTestConfig(),
+			checkCfg:    checkCfg,
+			pool:        mockPool,
+			stats:       &Stats{StartTime: time.Now()},
+			throttle:    NewThrottle(1024*1024, time.Second),
+			jobProgress: newMockJobProgress(),
 		}
 
 		err := p.Post(ctx, []string{testFile1, testFile2}, "", nzbGen)
@@ -162,11 +285,12 @@ func TestPost(t *testing.T) {
 		checkCfg.Enabled = &enabled
 
 		p := &poster{
-			cfg:      createTestConfig(),
-			checkCfg: checkCfg,
-			pool:     mockPool,
-			stats:    &Stats{StartTime: time.Now()},
-			throttle: NewThrottle(1024*1024, time.Second),
+			cfg:         createTestConfig(),
+			checkCfg:    checkCfg,
+			pool:        mockPool,
+			stats:       &Stats{StartTime: time.Now()},
+			throttle:    NewThrottle(1024*1024, time.Second),
+			jobProgress: newMockJobProgress(),
 		}
 
 		err := p.Post(ctx, []string{testFile}, "", nzbGen)
@@ -199,11 +323,12 @@ func TestPost(t *testing.T) {
 		checkCfg.Enabled = &enabled
 
 		p := &poster{
-			cfg:      createTestConfig(),
-			checkCfg: checkCfg,
-			pool:     mockPool,
-			stats:    &Stats{StartTime: time.Now()},
-			throttle: NewThrottle(1024*1024, time.Second),
+			cfg:         createTestConfig(),
+			checkCfg:    checkCfg,
+			pool:        mockPool,
+			stats:       &Stats{StartTime: time.Now()},
+			throttle:    NewThrottle(1024*1024, time.Second),
+			jobProgress: newMockJobProgress(),
 		}
 
 		err := p.Post(ctx, []string{testFile}, "", nzbGen)
@@ -236,11 +361,12 @@ func TestPost(t *testing.T) {
 		checkCfg.MaxRePost = 0 // No retries
 
 		p := &poster{
-			cfg:      createTestConfig(),
-			checkCfg: checkCfg,
-			pool:     mockPool,
-			stats:    &Stats{StartTime: time.Now()},
-			throttle: NewThrottle(1024*1024, time.Second),
+			cfg:         createTestConfig(),
+			checkCfg:    checkCfg,
+			pool:        mockPool,
+			stats:       &Stats{StartTime: time.Now()},
+			throttle:    NewThrottle(1024*1024, time.Second),
+			jobProgress: newMockJobProgress(),
 		}
 
 		err := p.Post(ctx, []string{testFile}, "", nzbGen)
@@ -349,9 +475,10 @@ func TestPost(t *testing.T) {
 		mockPool.EXPECT().Stat(gomock.Any(), gomock.Any(), gomock.Any()).Return(200, nil)
 
 		p := &poster{
-			pool:     mockPool,
-			stats:    &Stats{StartTime: time.Now()},
-			throttle: NewThrottle(1024*1024, time.Second),
+			pool:        mockPool,
+			stats:       &Stats{StartTime: time.Now()},
+			throttle:    NewThrottle(1024*1024, time.Second),
+			jobProgress: newMockJobProgress(),
 		}
 
 		art := &article.Article{
@@ -395,11 +522,12 @@ func TestPost(t *testing.T) {
 		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
 
 		p := &poster{
-			cfg:      createTestConfig(),
-			checkCfg: createTestPostCheckConfig(),
-			pool:     mockPool,
-			stats:    &Stats{StartTime: time.Now()},
-			throttle: NewThrottle(1024*1024, time.Second),
+			cfg:         createTestConfig(),
+			checkCfg:    createTestPostCheckConfig(),
+			pool:        mockPool,
+			stats:       &Stats{StartTime: time.Now()},
+			throttle:    NewThrottle(1024*1024, time.Second),
+			jobProgress: newMockJobProgress(),
 		}
 
 		err := p.Post(ctx, []string{"nonexistent.txt"}, "", nzbGen)
@@ -487,9 +615,10 @@ func TestPostArticle(t *testing.T) {
 		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(nil)
 
 		p := &poster{
-			pool:     mockPool,
-			stats:    &Stats{StartTime: time.Now()},
-			throttle: NewThrottle(1024*1024, time.Second),
+			pool:        mockPool,
+			stats:       &Stats{StartTime: time.Now()},
+			throttle:    NewThrottle(1024*1024, time.Second),
+			jobProgress: newMockJobProgress(),
 		}
 
 		art := &article.Article{
@@ -534,9 +663,10 @@ func TestPostArticle(t *testing.T) {
 		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
 
 		p := &poster{
-			pool:     mockPool,
-			stats:    &Stats{StartTime: time.Now()},
-			throttle: NewThrottle(1024*1024, time.Second),
+			pool:        mockPool,
+			stats:       &Stats{StartTime: time.Now()},
+			throttle:    NewThrottle(1024*1024, time.Second),
+			jobProgress: newMockJobProgress(),
 		}
 
 		art := &article.Article{
@@ -574,9 +704,10 @@ func TestPostArticle(t *testing.T) {
 		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(errors.New("post failed"))
 
 		p := &poster{
-			pool:     mockPool,
-			stats:    &Stats{StartTime: time.Now()},
-			throttle: NewThrottle(1024*1024, time.Second),
+			pool:        mockPool,
+			stats:       &Stats{StartTime: time.Now()},
+			throttle:    NewThrottle(1024*1024, time.Second),
+			jobProgress: newMockJobProgress(),
 		}
 
 		art := &article.Article{
@@ -668,7 +799,8 @@ func TestAddPost(t *testing.T) {
 		cfg.ArticleSizeInBytes = 100 // Small segment size to force multiple segments
 
 		p := &poster{
-			cfg: cfg,
+			cfg:         cfg,
+			jobProgress: newMockJobProgress(),
 		}
 
 		var wg sync.WaitGroup
@@ -805,7 +937,7 @@ func TestPosterInterface(t *testing.T) {
 	mockConfig.EXPECT().GetPostCheckConfig().Return(createTestPostCheckConfig())
 
 	var p Poster
-	poster, err := New(ctx, mockConfig)
+	poster, err := New(ctx, mockConfig, nil)
 	require.NoError(t, err)
 
 	p = poster // This should compile if poster implements Poster interface
@@ -851,11 +983,12 @@ func TestPostIntegration(t *testing.T) {
 		checkCfg.Enabled = &enabled
 
 		p := &poster{
-			cfg:      cfg,
-			checkCfg: checkCfg,
-			pool:     mockPool,
-			stats:    &Stats{StartTime: time.Now()},
-			throttle: NewThrottle(1024*1024, time.Second),
+			cfg:         cfg,
+			checkCfg:    checkCfg,
+			pool:        mockPool,
+			stats:       &Stats{StartTime: time.Now()},
+			throttle:    NewThrottle(1024*1024, time.Second),
+			jobProgress: newMockJobProgress(),
 		}
 
 		// Post the file
@@ -892,11 +1025,12 @@ func TestPostLoop_Basic(t *testing.T) {
 		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
 		p := &poster{
-			cfg:      createTestConfig(),
-			checkCfg: createTestPostCheckConfig(),
-			pool:     mockPool,
-			stats:    &Stats{StartTime: time.Now()},
-			throttle: NewThrottle(1024*1024, time.Second),
+			cfg:         createTestConfig(),
+			checkCfg:    createTestPostCheckConfig(),
+			pool:        mockPool,
+			stats:       &Stats{StartTime: time.Now()},
+			throttle:    NewThrottle(1024*1024, time.Second),
+			jobProgress: newMockJobProgress(),
 		}
 
 		// Test postArticle directly instead of the full loop
@@ -944,9 +1078,10 @@ func TestPostLoop_Basic(t *testing.T) {
 		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(errors.New("posting failed"))
 
 		p := &poster{
-			pool:     mockPool,
-			stats:    &Stats{StartTime: time.Now()},
-			throttle: NewThrottle(1024*1024, time.Second),
+			pool:        mockPool,
+			stats:       &Stats{StartTime: time.Now()},
+			throttle:    NewThrottle(1024*1024, time.Second),
+			jobProgress: newMockJobProgress(),
 		}
 
 		file, err := os.Open(testFile)

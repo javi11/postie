@@ -1,7 +1,7 @@
 // Unified API client that switches between Wails (desktop) and HTTP (web) modes
 
 import { browser } from "$app/environment";
-import type { backend, config } from "$lib/wailsjs/go/models";
+import type { backend, config, processor } from "$lib/wailsjs/go/models";
 import type { WebClient } from "./web-client";
 
 type WailsApp = typeof import("$lib/wailsjs/go/backend/App");
@@ -276,17 +276,17 @@ export class UnifiedClient {
 		throw new Error("No client available");
 	}
 
-	async getProgress(): Promise<backend.ProgressTracker> {
+	async getRunningJobDetails(): Promise<processor.RunningJobDetails[]> {
 		await this.initialize();
 
 		if (this._environment === "wails") {
 			const client = await getWailsClient();
-			return client.App.GetProgress();
+			return client.App.GetRunningJobsDetails();
 		}
 
 		if (this._environment === "web") {
 			const client = await getWebClient();
-			return client.getProgress();
+			return client.getRunningJobDetails();
 		}
 
 		throw new Error("No client available");

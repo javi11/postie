@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -55,101 +56,23 @@ func (a *App) initializeProcessor() error {
 		outputDir = filepath.Join(a.appPaths.Data, outputDir)
 	}
 
-	// Event emitter for progress updates
-	eventEmitter := func(eventName string, optionalData ...interface{}) {
-		if a.ctx != nil {
-			// If this is a progress event, update our internal progress tracker
-			if eventName == "progress" && len(optionalData) > 0 {
-				if progressData, ok := optionalData[0].(map[string]interface{}); ok {
-					a.progressMux.Lock()
-
-					// Update progress tracker with data from processor
-					if currentFile, ok := progressData["currentFile"].(string); ok {
-						a.progress.CurrentFile = currentFile
-					}
-					if totalFiles, ok := progressData["totalFiles"].(int); ok {
-						a.progress.TotalFiles = totalFiles
-					}
-					if completedFiles, ok := progressData["completedFiles"].(int); ok {
-						a.progress.CompletedFiles = completedFiles
-					}
-					if stage, ok := progressData["stage"].(string); ok {
-						a.progress.Stage = stage
-					}
-					if details, ok := progressData["details"].(string); ok {
-						a.progress.Details = details
-					}
-					if speed, ok := progressData["speed"].(float64); ok {
-						a.progress.Speed = speed
-					}
-					if secondsLeft, ok := progressData["secondsLeft"].(float64); ok {
-						a.progress.SecondsLeft = secondsLeft
-					}
-					if isRunning, ok := progressData["isRunning"].(bool); ok {
-						a.progress.IsRunning = isRunning
-					}
-					if lastUpdate, ok := progressData["lastUpdate"].(int64); ok {
-						a.progress.LastUpdate = lastUpdate
-					}
-					if percentage, ok := progressData["percentage"].(float64); ok {
-						a.progress.Percentage = percentage
-					}
-					if currentFileProgress, ok := progressData["currentFileProgress"].(float64); ok {
-						a.progress.CurrentFileProgress = currentFileProgress
-					}
-					if jobID, ok := progressData["jobID"].(string); ok {
-						a.progress.JobID = jobID
-					}
-					if elapsedTime, ok := progressData["elapsedTime"].(float64); ok {
-						a.progress.ElapsedTime = elapsedTime
-					}
-
-					// Clear JobID when job is no longer running
-					if stage, ok := progressData["stage"].(string); ok {
-						if stage == "Completed" || stage == "Cancelled" || stage == "Error" {
-							a.progress.JobID = ""
-							
-							// Check if we should apply pending config changes
-							go a.checkAndApplyPendingConfig()
-						}
-					}
-
-					a.progressMux.Unlock()
-				}
-			}
-
-			// Emit events for both desktop and web modes
-			if !a.isWebMode {
-				runtime.EventsEmit(a.ctx, eventName, optionalData...)
-			} else if a.webEventEmitter != nil {
-				// For web mode, send the data appropriately
-				var data interface{}
-				if len(optionalData) > 0 {
-					data = optionalData[0]
-				}
-				a.webEventEmitter(eventName, data)
-			}
-		}
-	}
-
 	// Get watcher config for delete original file setting
 	watcherCfg := a.config.GetWatcherConfig()
 
 	// Initialize processor (always needed)
 	a.processor = processor.New(processor.ProcessorOptions{
 		Queue:                     a.queue,
-		Postie:                    a.postie,
-		Config:                    queueCfg,
+		Config:                    a.config,
+		QueueConfig:               queueCfg,
 		OutputFolder:              outputDir,
-		EventEmitter:              eventEmitter,
 		DeleteOriginalFile:        watcherCfg.DeleteOriginalFile,
 		MaintainOriginalExtension: a.config.GetMaintainOriginalExtension(),
-		WatchFolder:               watcherCfg.WatchDirectory, // Pass watch folder for folder structure maintenance
+		WatchFolder:               watcherCfg.WatchDirectory,
 	})
 
 	// Start processor
 	go func() {
-		if err := a.processor.Start(a.procCtx); err != nil && err != context.Canceled {
+		if err := a.processor.Start(a.procCtx); err != nil && !errors.Is(err, context.Canceled) {
 			slog.Error("Processor error", "error", err)
 		}
 	}()

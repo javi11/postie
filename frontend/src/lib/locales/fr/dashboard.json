@@ -18,6 +18,7 @@
 			"file": "Fichier",
 			"size": "Taille",
 			"status": "Statut",
+			"priority": "Priorité",
 			"created": "Créé",
 			"actions": "Actions",
 			"completed_at": "Terminé:",

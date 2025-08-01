@@ -43,15 +43,13 @@ export function GetPendingConfigStatus():Promise<Record<string, any>>;
 
 export function GetProcessorStatus():Promise<backend.ProcessorStatus>;
 
-export function GetProgress():Promise<backend.ProgressTracker>;
-
 export function GetQueueItems():Promise<Array<backend.QueueItem>>;
 
 export function GetQueueStats():Promise<backend.QueueStats>;
 
-export function GetRunningJobDetails():Promise<Array<processor.RunningJobDetails>>;
-
 export function GetRunningJobs():Promise<Array<processor.RunningJobItem>>;
+
+export function GetRunningJobsDetails():Promise<Array<processor.RunningJobDetails>>;
 
 export function GetWatchDirectory():Promise<string>;
 

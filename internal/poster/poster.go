@@ -15,12 +15,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/javi11/nntppool"
 	"github.com/javi11/nxg"
 	"github.com/javi11/postie/internal/article"
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/nzb"
 	"github.com/javi11/postie/internal/par2"
+	"github.com/javi11/postie/internal/progress"
 	"github.com/sourcegraph/conc/pool"
 )
 
@@ -30,8 +32,6 @@ type Poster interface {
 	Post(ctx context.Context, files []string, rootDir string, nzbGen nzb.NZBGenerator) error
 	// Stats returns posting statistics
 	Stats() Stats
-	// SetProgressCallback sets the progress callback function
-	SetProgressCallback(callback ProgressCallback)
 	// Close closes the poster
 	Close()
 }
@@ -45,6 +45,7 @@ const (
 	PostStatusVerified
 	PostStatusFailed
 	PostStatusCancelled
+	PostStatusPosting
 )
 
 // Post represents a file to be posted
@@ -59,6 +60,7 @@ type Post struct {
 	filesize int64
 	wg       *sync.WaitGroup
 	failed   *int
+	progress progress.Progress
 }
 
 // Stats tracks posting statistics
@@ -73,16 +75,16 @@ type Stats struct {
 
 // Poster handles posting articles to Usenet
 type poster struct {
-	cfg      config.PostingConfig
-	checkCfg config.PostCheck
-	pool     nntppool.UsenetConnectionPool
-	stats    *Stats
-	throttle *Throttle
-	callback ProgressCallback
+	cfg         config.PostingConfig
+	checkCfg    config.PostCheck
+	pool        nntppool.UsenetConnectionPool
+	stats       *Stats
+	throttle    *Throttle
+	jobProgress progress.JobProgress
 }
 
 // New creates a new poster
-func New(ctx context.Context, cfg config.Config) (Poster, error) {
+func New(ctx context.Context, cfg config.Config, jobProgress progress.JobProgress) (Poster, error) {
 	pool, err := cfg.GetNNTPPool()
 	if err != nil {
 		return nil, fmt.Errorf("error getting NNTP pool: %w", err)
@@ -93,10 +95,11 @@ func New(ctx context.Context, cfg config.Config) (Poster, error) {
 	}
 
 	p := &poster{
-		cfg:      cfg.GetPostingConfig(),
-		checkCfg: cfg.GetPostCheckConfig(),
-		pool:     pool,
-		stats:    stats,
+		cfg:         cfg.GetPostingConfig(),
+		checkCfg:    cfg.GetPostCheckConfig(),
+		pool:        pool,
+		stats:       stats,
+		jobProgress: jobProgress,
 	}
 
 	throttleRate := p.cfg.ThrottleRate
@@ -134,7 +137,7 @@ func (p *poster) Close() {
 			slog.Debug("Connection pool closed successfully")
 		case <-time.After(timeout):
 			// Timeout occurred, log warning but continue
-			slog.Warn("Pool quit timed out, forcing close", 
+			slog.Warn("Pool quit timed out, forcing close",
 				"timeout_seconds", timeout.Seconds(),
 				"os", runtime.GOOS)
 		}
@@ -158,7 +161,7 @@ func (p *poster) Post(
 				"os", runtime.GOOS)
 		}
 	}()
-	
+
 	wg := sync.WaitGroup{}
 	var failedPosts int
 
@@ -194,6 +197,9 @@ func (p *poster) Post(
 	}()
 
 	select {
+	case <-ctx.Done():
+		cancel() // Cancel the context to stop all operations
+		return ctx.Err()
 	case err := <-errChan:
 		cancel() // Cancel the context to stop all operations
 		return err
@@ -217,18 +223,14 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			errChan <- ctx.Err()
 			return
 		default:
+
+			// Set post status to Posting
+			post.mu.Lock()
+			post.Status = PostStatusPosting
+			post.mu.Unlock()
+
 			// Create a pool with error handling - use all available CPU cores
 			pool := pool.New().WithContext(ctx).WithMaxGoroutines(runtime.NumCPU()).WithCancelOnError().WithFirstError()
-			var bytesPosted int64
-			articlesProcessed := 0
-			articleErrors := 0
-
-			// Create progress bar for this file
-			progressText := "Uploading %s..."
-			if post.Retries > 0 {
-				progressText = "Retrying %s (attempt %d)..."
-			}
-			progress := NewFileProgressWithCallback(fmt.Sprintf(progressText, post.FilePath, post.Retries+1), post.filesize, int64(len(post.Articles)), p.callback)
 
 			var combinedHash string
 
@@ -237,18 +239,19 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 				combinedHash += art.Hash
 
 				pool.Go(func(ctx context.Context) error {
+					if ctx.Err() != nil {
+						return ctx.Err()
+					}
+
 					if err := p.postArticle(ctx, art, post.file); err != nil {
 						return err
 					}
 
-					// Update progress
+					// Update progress if manager is available
+					post.progress.UpdateProgress(int64(art.Size))
+
+					// Add article to NZB generator (still needs mutex for thread safety)
 					post.mu.Lock()
-					bytesPosted += int64(art.Size)
-					articlesProcessed++
-
-					progress.UpdateFileProgress(bytesPosted, int64(articlesProcessed), int64(articleErrors))
-
-					// Add article to NZB generator
 					nzbGen.AddArticle(art)
 					post.mu.Unlock()
 
@@ -258,6 +261,8 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 
 			// Wait for all workers to complete and collect errors
 			errs := pool.Wait()
+
+			p.jobProgress.FinishProgress(post.progress.GetID())
 
 			if errs != nil {
 				post.mu.Lock()
@@ -270,14 +275,17 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 				}
 				post.mu.Unlock()
 
-				errChan <- fmt.Errorf("failed to post file %s after %d retries: %v", post.FilePath, p.cfg.MaxRetries, errs)
+				if !errors.Is(errs, context.Canceled) {
+					errChan <- fmt.Errorf("failed to post file %s after %d retries: %v", post.FilePath, p.cfg.MaxRetries, errs)
+				}
+
 				return
 			}
 
 			// Calculate file hash by merging all article hashes
 			post.mu.Lock()
 			post.Status = PostStatusPosted
-			progress.FinishFileProgress()
+
 			post.mu.Unlock()
 
 			// Add file hash to NZB generator
@@ -317,12 +325,15 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 			var failedArticles []*article.Article
 			var mu sync.Mutex
 
-			// Create progress bar for this file
-			progress := NewFileProgressWithCallback(fmt.Sprintf("Verifying %s...", post.FilePath), post.filesize, int64(len(post.Articles)), p.callback)
+			post.progress = p.jobProgress.AddProgress(uuid.New(), fmt.Sprintf("%s (check)", filepath.Base(post.FilePath)), progress.ProgressTypeChecking, post.filesize)
 
 			// Submit all articles to the pool
 			for _, art := range post.Articles {
 				pool.Go(func(ctx context.Context) error {
+					if ctx.Err() != nil {
+						return ctx.Err()
+					}
+
 					if err := p.checkArticle(ctx, art); err != nil {
 						// Track failed article
 						mu.Lock()
@@ -332,12 +343,13 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 						return err
 					}
 
-					// Update progress
+					// Update progress atomically (non-blocking)
 					mu.Lock()
 					articlesChecked++
 					mu.Unlock()
 
-					progress.UpdateFileProgress(0, int64(articlesChecked), int64(articleErrors))
+					// Update progress if manager is available
+					post.progress.UpdateProgress(int64(art.Size))
 					return nil
 				})
 			}
@@ -363,9 +375,9 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 						wg:       post.wg,
 						failed:   post.failed,
 						Retries:  post.Retries,
+						progress: p.jobProgress.AddProgress(uuid.New(), fmt.Sprintf("%s (retry)", filepath.Base(post.FilePath)), progress.ProgressTypeUploading, post.filesize),
 					}
 
-					progress.FinishFileProgress()
 					slog.InfoContext(ctx,
 						"Retrying failed articles",
 						"file", post.FilePath,
@@ -409,7 +421,7 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 			post.Status = PostStatusVerified
 			post.mu.Unlock()
 
-			progress.FinishFileProgress()
+			p.jobProgress.FinishProgress(post.progress.GetID())
 
 			// Close file
 			if post.file != nil {
@@ -599,6 +611,7 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int, wg *sy
 		filesize: fileInfo.Size(),
 		wg:       wg,
 		failed:   failedPosts,
+		progress: p.jobProgress.AddProgress(uuid.New(), filepath.Base(filePath), progress.ProgressTypeUploading, fileInfo.Size()),
 	}
 
 	postQueue <- post
@@ -625,6 +638,10 @@ func (p *poster) postArticle(ctx context.Context, article *article.Article, file
 
 	// Post article
 	if err := p.pool.Post(ctx, buff); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return context.Canceled
+		}
+
 		return fmt.Errorf("error posting article: %w", err)
 	}
 
@@ -669,11 +686,6 @@ func (p *poster) Stats() Stats {
 		ArticleErrors:   p.stats.ArticleErrors,
 		StartTime:       p.stats.StartTime,
 	}
-}
-
-// SetProgressCallback sets the progress callback function
-func (p *poster) SetProgressCallback(callback ProgressCallback) {
-	p.callback = callback
 }
 
 func CalculateHash(buff []byte) string {

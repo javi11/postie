@@ -6,15 +6,15 @@
 			"type": "go",
 			"request": "launch",
 			"mode": "auto",
-			"program": "${workspaceFolder}/main.go",
+			"program": "${workspaceFolder}/cmd/postie/postie.go",
 			"args": [
+				"-i",
+				"${workspaceFolder}/example/watch/test/R4nm4E36-42.rar",
 				"-v",
 				"-c",
-				"${workspaceFolder}/config.yaml",
-				"-d",
-				"${workspaceFolder}/test_files",
+				"${workspaceFolder}/example/config/config.yaml",
 				"-o",
-				"${workspaceFolder}/output"
+				"${workspaceFolder}/example/output"
 			],
 			"cwd": "${workspaceFolder}",
 			"env": {

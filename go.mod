@@ -5,6 +5,7 @@ go 1.24.5
 require (
 	github.com/andybalholm/brotli v1.1.1
 	github.com/bodgit/sevenzip v1.6.1
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/javi11/nntppool v1.0.1
@@ -15,6 +16,7 @@ require (
 	github.com/mholt/archiver v3.1.1+incompatible
 	github.com/mnightingale/rapidyenc v0.0.0-20250628164132-aaf36ba945ef
 	github.com/opencontainers/selinux v1.12.0
+	github.com/pressly/goose/v3 v3.24.3
 	github.com/schollz/progressbar/v3 v3.18.0
 	github.com/sourcegraph/conc v0.3.0
 	github.com/spf13/cobra v1.9.1
@@ -23,7 +25,7 @@ require (
 	golang.org/x/sync v0.16.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
-	maragu.dev/goqite v0.3.1
+	maragu.dev/goqite v0.3.2-0.20250625131501-cacb23e73698
 )
 
 require (
@@ -60,7 +62,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golangci/swaggoswag v0.0.0-20250504205917-77f2aca3143e // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gookit/color v1.5.4 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/jackmordaunt/icns v1.0.0 // indirect
@@ -80,6 +81,7 @@ require (
 	github.com/leaanthony/winicon v1.0.0 // indirect
 	github.com/lithammer/fuzzysearch v1.1.8 // indirect
 	github.com/manuelarte/embeddedstructfieldcheck v0.3.0 // indirect
+	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
@@ -91,6 +93,7 @@ require (
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06 // indirect
 	github.com/samber/lo v1.49.1 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
+	github.com/sethvargo/go-retry v0.3.0 // indirect
 	github.com/skeema/knownhosts v1.3.0 // indirect
 	github.com/tc-hib/winres v0.3.1 // indirect
 	github.com/tidwall/gjson v1.14.2 // indirect
@@ -112,7 +115,7 @@ require (
 	golang.org/x/crypto v0.40.0 // indirect
 	golang.org/x/image v0.12.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
-	howett.net/plist v1.0.0 // indirect
+	howett.net/plist v1.0.1 // indirect
 )
 
 require (
@@ -249,7 +252,7 @@ require (
 	github.com/prometheus/client_golang v1.21.1 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.63.0 // indirect
-	github.com/prometheus/procfs v0.16.0 // indirect
+	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/quasilyte/go-ruleguard v0.4.4 // indirect
 	github.com/quasilyte/go-ruleguard/dsl v0.3.22 // indirect
 	github.com/quasilyte/gogrep v0.5.0 // indirect

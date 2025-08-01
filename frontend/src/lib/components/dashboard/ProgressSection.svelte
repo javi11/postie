@@ -1,56 +1,117 @@
 <script lang="ts">
 import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
-import { isUploading, progress } from "$lib/stores/app";
+import { isUploading, runningJobs } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
-import { formatSpeed, formatTime } from "$lib/utils";
-import { ChartPie, CheckCircle, Clock, Play, X } from "lucide-svelte";
+import { formatSpeed, formatTime, formatFileSize } from "$lib/utils";
+import { ChartPie, CheckCircle, Clock, Play, X, Upload, Package, Check } from "lucide-svelte";
+import { progress } from "$lib/wailsjs/go/models";
+import { onMount, onDestroy } from "svelte";
 
-$: jobs = Object.values($progress);
+// Use the generated types from Wails
+let progressUpdateInterval: NodeJS.Timeout | null = null;
+
+// Fetch progress data from API
+async function fetchProgressData() {
+  try {
+    const jobDetails = await apiClient.getRunningJobDetails();
+    runningJobs.set(jobDetails);
+  } catch (error) {
+    console.error("Failed to fetch progress data:", error);
+  }
+}
+
+// Setup periodic progress updates
+onMount(() => {
+  // Initial fetch
+  fetchProgressData();
+  
+  // Update every 500ms for real-time progress
+  progressUpdateInterval = setInterval(fetchProgressData, 500);
+});
+
+onDestroy(() => {
+  if (progressUpdateInterval) {
+    clearInterval(progressUpdateInterval);
+    progressUpdateInterval = null;
+  }
+});
+
+// Function to get icon for progress type
+function getProgressIcon(type: string) {
+  switch (type) {
+    case "uploading":
+      return Upload;
+    case "par2_generation":
+      return Package;
+    case "checking":
+      return Check;
+    default:
+      return Play;
+  }
+}
+
+// Function to get color for progress type
+function getProgressColor(type: string) {
+  switch (type) {
+    case "uploading":
+      return "text-blue-500 bg-blue-500/10";
+    case "par2_generation":
+      return "text-green-500 bg-green-500/10";
+    case "checking":
+      return "text-yellow-500 bg-yellow-500/10";
+    default:
+      return "text-primary bg-primary/10";
+  }
+}
 
 async function cancelJob(jobID: string) {
-	try {
-		await apiClient.cancelJob(jobID);
+  try {
+    await apiClient.cancelJob(jobID);
 
-		// Immediately remove the job from progress store as a safety measure
-		progress.update((jobs) => {
-			console.log("Force removing cancelled job from progress:", jobID);
-			const { [jobID]: _, ...rest } = jobs;
-			return rest;
-		});
+    // Immediately remove the job from running jobs store as a safety measure
+    runningJobs.update((jobs) => {
+      console.log("Force removing cancelled job from running jobs:", jobID);
+      const index = jobs.findIndex((job) => job.id === jobID);
+      if (index !== -1) {
+        jobs.splice(index, 1);
+      }
+      
+      return jobs;
+    });
 
-		toastStore.success(
-			$t("common.messages.job_cancelled"),
-			$t("common.messages.upload_cancelled_description"),
-		);
-	} catch (error) {
-		console.error("Failed to cancel job:", error);
-		toastStore.error($t("common.messages.failed_to_cancel"), String(error));
-	}
+    toastStore.success(
+      $t("common.messages.job_cancelled"),
+      $t("common.messages.upload_cancelled_description"),
+    );
+  } catch (error) {
+    console.error("Failed to cancel job:", error);
+    toastStore.error($t("common.messages.failed_to_cancel"), String(error));
+  }
 }
 
 async function cancelDirectUpload() {
-	try {
-		await apiClient.cancelUpload();
-		toastStore.success(
-			$t("common.messages.upload_cancelled"),
-			$t("common.messages.upload_cancelled_description"),
-		);
-	} catch (error) {
-		console.error("Failed to cancel upload:", error);
-		toastStore.error(
-			$t("common.messages.failed_to_cancel_upload"),
-			String(error),
-		);
-	}
+  try {
+    await apiClient.cancelUpload();
+    toastStore.success(
+      $t("common.messages.upload_cancelled"),
+      $t("common.messages.upload_cancelled_description"),
+    );
+  } catch (error) {
+    console.error("Failed to cancel upload:", error);
+    toastStore.error(
+      $t("common.messages.failed_to_cancel_upload"),
+      String(error),
+    );
+  }
 }
 
 function cancelUpload(jobID: string) {
-	if (jobID) {
-		cancelJob(jobID);
-	} else {
-		cancelDirectUpload();
-	}
+  if (jobID) {
+    cancelJob(jobID);
+  } else {
+    cancelDirectUpload();
+  }
 }
 </script>
 
@@ -80,7 +141,8 @@ function cancelUpload(jobID: string) {
   </div>
 
   {#if $isUploading}
-    {#each jobs as job (job.jobID)}
+    <!-- Running Jobs with Progress -->
+    {#each $runningJobs as job}
       <div class="card bg-base-100 shadow-xl p-6 hover:shadow-2xl transition-all duration-200">
         <div class="space-y-6">
           <div class="flex items-center justify-between">
@@ -90,137 +152,128 @@ function cancelUpload(jobID: string) {
               </div>
               <div>
                 <h3 class="text-lg font-semibold text-base-content">
-                  {$t("dashboard.progress.job_title", { values: { jobId: job.jobID } })}
+                  {job.fileName}
                 </h3>
-                <p class="text-sm text-base-content/70">Active upload in progress</p>
               </div>
             </div>
             <button
               type="button"
-              onclick={() => cancelUpload(job.jobID)}
-              class="btn btn-outline flex items-center gap-2 px-3 py-1.5 text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200"
+              onclick={() => cancelUpload(job.id)}
+              class="btn btn-outline btn-sm flex items-center gap-2"
             >
-              <CheckCircle class="w-4 h-4" />
+              <X class="w-4 h-4" />
               {$t("dashboard.progress.cancel_upload")}
             </button>
           </div>
-          <!-- Overall Progress -->
-          <div class="bg-gradient-to-r from-primary/5 to-secondary/5 border border-primary/20 rounded-xl p-4">
-            <div class="flex justify-between items-center mb-3">
-              <p class="text-sm font-medium text-primary">
-                {$t("dashboard.progress.overall")}
-              </p>
-              <div class="text-right">
-                <p class="text-2xl font-bold text-primary">
-                  {Math.round(job.percentage)}%
-                </p>
-                <p class="text-xs text-base-content/60">
-                  {job.completedFiles}/{job.totalFiles} files
-                </p>
-              </div>
-            </div>
-            <div class="w-full bg-base-300 rounded-full h-3">
-              <div 
-                class="bg-gradient-to-r from-primary to-secondary h-3 rounded-full transition-all duration-500 ease-out"
-                style="width: {job.percentage}%"
-              ></div>
-            </div>
-          </div>
-          {#if job.currentFile}
-            <!-- Current File Progress -->
-            <div class="bg-base-100 rounded-xl border border-base-300 p-4">
-              <div class="flex justify-between items-center mb-3">
-                <p class="text-sm font-medium text-base-content/70">
-                  {$t("dashboard.progress.current_file")}
-                </p>
-                <span class="text-sm font-semibold text-primary bg-primary/10 px-2 py-1 rounded-md">
-                  {Math.round(job.currentFileProgress)}%
-                </span>
-              </div>
-              <p class="text-sm text-base-content font-medium truncate mb-2" title={job.currentFile}>
-                {job.currentFile}
-              </p>
-              <div class="w-full bg-base-300 rounded-full h-2">
-                <div 
-                  class="bg-primary h-2 rounded-full transition-all duration-300"
-                  style="width: {job.currentFileProgress}%"
-                ></div>
-              </div>
+
+          <!-- Individual Progress Indicators -->
+          {#if job.progress.length > 0}
+            <div class="space-y-4">
+              <h4 class="text-md font-medium text-base-content">Active Tasks</h4>
+              {#each job.progress as progressState}
+                <div class="bg-base-100 rounded-xl border border-base-300 p-4">
+                  <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-3">
+                      <div class="p-2 rounded-full {getProgressColor(progressState?.Type)}">
+                        <svelte:component this={getProgressIcon(progressState?.Type)} class="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div class="flex items-center gap-2">
+                          <p class="text-sm font-medium text-base-content">
+                            {progressState?.Description || progressState?.Type}
+                          </p>
+                          <!-- Status indicator based on IsStarted -->
+                          <div class="flex items-center gap-1">
+                            <div class="w-2 h-2 rounded-full {progressState?.IsStarted 
+                              ? 'bg-green-500 animate-pulse' 
+                              : 'bg-yellow-500'}"></div>
+                            <span class="text-xs font-medium {progressState?.IsStarted 
+                              ? 'text-green-600' 
+                              : 'text-yellow-600'}">
+                              {progressState?.IsStarted ? 'In Progress' : 'Pending'}
+                            </span>
+                          </div>
+                        </div>
+                        <p class="text-xs text-base-content/60 capitalize">
+                          {progressState?.Type.replace('_', ' ')}
+                        </p>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <span class="text-sm font-semibold text-primary bg-primary/10 px-2 py-1 rounded-md">
+                        {Math.round(progressState?.CurrentPercent * 100 || 0)}%
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div class="w-full bg-base-300 rounded-full h-2 mb-3">
+                    <div 
+                      class="bg-primary h-2 rounded-full transition-all duration-300"
+                      style="width: {progressState?.CurrentPercent * 100 || 0}%"
+                    ></div>
+                  </div>
+
+                  <!-- Progress Stats -->
+                  <div class="grid grid-cols-2 gap-4 text-xs text-base-content/70">
+                    <div>
+                      <span class="block">Elapsed</span>
+                      <span class="font-medium text-base-content">{formatTime((progressState?.SecondsSince || 0) * 1000)}</span>
+                    </div>
+                    <div>
+                      <span class="block">Remaining</span>
+                      <span class="font-medium text-base-content">{formatTime((progressState?.SecondsLeft || 0) * 1000)}</span>
+                    </div>
+                    
+                    <!-- Show speed for upload tasks -->
+                    {#if (progressState.Type === "uploading" || progressState.Type === "checking") && progressState?.KBsPerSecond}
+                      <div>
+                        <span class="block">Speed</span>
+                        <span class="font-medium text-base-content">{formatSpeed((progressState.KBsPerSecond || 0) * 1024)}</span>
+                      </div>
+                    {/if}
+                    
+                    <!-- Hide current/total for par2 generation, show as formatted bytes for uploads -->
+                    {#if progressState.Type !== "par2_generation"}
+                      <div>
+                        <span class="block">Current</span>
+                        <span class="font-medium text-base-content">
+                            {formatFileSize(progressState.CurrentBytes)}
+                        </span>
+                      </div>
+                      <div>
+                        <span class="block">Total</span>
+                        <span class="font-medium text-base-content">
+                            {formatFileSize(progressState.Max)}
+                        </span>
+                      </div>
+                    {/if}
+                  </div>
+                </div>
+              {/each}
             </div>
           {/if}
-          <!-- Statistics Grid -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <!-- Elapsed Time -->
-            <div class="bg-base-100 rounded-xl border border-base-300 p-4 shadow-sm hover:shadow-md transition-all duration-200">
-              <div class="flex items-center justify-between">
-                <div>
-                  <p class="text-sm font-medium text-base-content/70">{$t("dashboard.progress.elapsed_time")}</p>
-                  <p class="text-lg font-bold text-success mt-1">{formatTime(job.elapsedTime * 1000)}</p>
-                </div>
-                <div class="p-3 rounded-full bg-success/10">
-                  <Clock class="w-5 h-5 text-success" />
-                </div>
-              </div>
-            </div>
-            <!-- Upload Speed -->
-            <div class="bg-base-100 rounded-xl border border-base-300 p-4 shadow-sm hover:shadow-md transition-all duration-200">
-              <div class="flex items-center justify-between">
-                <div>
-                  <p class="text-sm font-medium text-base-content/70">{$t("dashboard.progress.upload_speed")}</p>
-                  <p class="text-lg font-bold text-info mt-1">{formatSpeed(job.speed * 1024)}</p>
-                </div>
-                <div class="p-3 rounded-full bg-info/10">
-                  <Play class="w-5 h-5 text-info" />
-                </div>
-              </div>
-            </div>
-            <!-- Remaining Time -->
-            <div class="bg-base-100 rounded-xl border border-base-300 p-4 shadow-sm hover:shadow-md transition-all duration-200">
-              <div class="flex items-center justify-between">
-                <div>
-                  <p class="text-sm font-medium text-base-content/70">{$t("dashboard.progress.estimated_remaining")}</p>
-                  <p class="text-lg font-bold text-warning mt-1">{formatTime(job.secondsLeft * 1000)}</p>
-                </div>
-                <div class="p-3 rounded-full bg-warning/10">
-                  <Clock class="w-5 h-5 text-warning" />
-                </div>
-              </div>
-            </div>
-          </div>
-          <!-- Status Information -->
+
+          <!-- Job Information -->
           <div class="bg-base-200/50 rounded-xl p-4 space-y-3">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div class="flex justify-between items-center">
-                <span class="text-sm text-base-content/70">
-                  {$t("dashboard.progress.stage")}
-                </span>
+                <span class="text-sm text-base-content/70">File Size</span>
                 <span class="text-sm font-medium text-base-content">
-                  {job.stage}
+                  {formatFileSize(job.size)}
                 </span>
               </div>
-              {#if job.details}
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-base-content/70">
-                    {$t("dashboard.progress.details")}
-                  </span>
-                  <span class="text-sm font-medium text-base-content">
-                    {job.details}
-                  </span>
-                </div>
-              {/if}
-            </div>
-            <div class="flex justify-between items-center pt-2 border-t border-base-300">
-              <span class="text-sm text-base-content/70">
-                {$t("dashboard.progress.last_update")}
-              </span>
-              <span class="text-sm font-medium text-base-content">
-                {new Date(job.lastUpdate * 1000).toLocaleTimeString()}
-              </span>
+              <div class="flex justify-between items-center">
+                <span class="text-sm text-base-content/70">Path</span>
+                <span class="text-sm font-medium text-base-content truncate" title="{job.path}">
+                  {job.path.split('/').pop()}
+                </span>
+              </div>
             </div>
           </div>
         </div>
       </div>
     {/each}
+
   {:else}
     <!-- Empty State -->
     <div class="text-center py-12">

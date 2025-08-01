@@ -1,4 +1,4 @@
-package postie
+package main
 
 import (
 	"log/slog"
@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/javi11/postie/internal/config"
+	"github.com/javi11/postie/internal/progress"
 	"github.com/javi11/postie/pkg/fileinfo"
 	"github.com/javi11/postie/pkg/postie"
 	"github.com/spf13/cobra"
@@ -36,7 +37,10 @@ It supports configuration via a YAML file and can process multiple files in a di
 
 		setupLogging(verbose)
 
-		poster, err := postie.New(ctx, cfg)
+		jobProgress := progress.NewProgressJob("postie-job")
+		defer jobProgress.Close()
+
+		poster, err := postie.New(ctx, cfg, jobProgress)
 		if err != nil {
 			slog.ErrorContext(ctx, "Error creating postie", "error", err)
 			return err
@@ -88,13 +92,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose logging")
 	rootCmd.PersistentFlags().StringVarP(&outputDir, "output-dir", "o", ".", "Directory to output files to")
 
-	rootCmd.LocalFlags().StringVarP(&inputFile, "input-file", "i", "", "File to upload. If provided, the directory will be ignored.")
-}
-
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
-	}
+	rootCmd.PersistentFlags().StringVarP(&inputFile, "input-file", "i", "", "File to upload. If provided, the directory will be ignored.")
 }
 
 func setupLogging(verbose bool) {
@@ -106,4 +104,10 @@ func setupLogging(verbose bool) {
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(logger)
+}
+
+func main() {
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
 }

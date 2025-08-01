@@ -1,4 +1,4 @@
-package postie
+package main
 
 import (
 	"context"
@@ -11,7 +11,6 @@ import (
 	"github.com/javi11/postie/internal/processor"
 	"github.com/javi11/postie/internal/queue"
 	"github.com/javi11/postie/internal/watcher"
-	"github.com/javi11/postie/pkg/postie"
 	"github.com/spf13/cobra"
 )
 
@@ -33,12 +32,7 @@ The watch command will monitor the configured directory and upload files accordi
 
 		setupLogging(verbose)
 
-		// Create postie instance
-		p, err := postie.New(ctx, cfg)
-		if err != nil {
-			slog.ErrorContext(ctx, "Error creating postie instance", "error", err)
-			return err
-		}
+		// Note: Postie instances are now created per-job within the processor
 
 		// Get configurations
 		watcherCfg := cfg.GetWatcherConfig()
@@ -77,19 +71,15 @@ The watch command will monitor the configured directory and upload files accordi
 			}
 		}()
 
-		// Create no-op event emitter for CLI
-		noopEventEmitter := func(eventName string, optionalData ...interface{}) {
-			// No-op for CLI, events are only used in GUI mode
-		}
-
 		// Initialize processor
 		proc := processor.New(processor.ProcessorOptions{
-			Queue:              q,
-			Postie:             p,
-			Config:             queueCfg,
-			OutputFolder:       outputFolder,
-			EventEmitter:       noopEventEmitter,
-			DeleteOriginalFile: watcherCfg.DeleteOriginalFile,
+			Queue:                     q,
+			Config:                    cfg,
+			QueueConfig:               queueCfg,
+			OutputFolder:              outputFolder,
+			DeleteOriginalFile:        watcherCfg.DeleteOriginalFile,
+			MaintainOriginalExtension: cfg.GetMaintainOriginalExtension(),
+			WatchFolder:               watcherCfg.WatchDirectory,
 		})
 
 		// Start processor in background
@@ -100,7 +90,7 @@ The watch command will monitor the configured directory and upload files accordi
 		}()
 
 		// Create watcher
-		w := watcher.New(watcherCfg, q, proc, watchDir, noopEventEmitter)
+		w := watcher.New(watcherCfg, q, proc, watchDir)
 
 		// Handle shutdown signals
 		sigChan := make(chan os.Signal, 1)
