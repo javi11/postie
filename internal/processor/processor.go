@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -29,9 +30,6 @@ type Processor struct {
 	// Track running jobs and their contexts for cancellation
 	runningJobs               map[string]*RunningJob
 	jobsMux                   sync.RWMutex
-	// Track canceled jobs to prevent re-processing
-	canceledJobs              map[string]time.Time
-	canceledJobsMux           sync.RWMutex
 	deleteOriginalFile        bool
 	maintainOriginalExtension bool
 	watchFolder               string // Path to the watch folder for maintaining folder structure
@@ -76,7 +74,6 @@ func New(opts ProcessorOptions) *Processor {
 		cfg:                       opts.QueueConfig,
 		outputFolder:              opts.OutputFolder,
 		runningJobs:               make(map[string]*RunningJob),
-		canceledJobs:              make(map[string]time.Time),
 		deleteOriginalFile:        opts.DeleteOriginalFile,
 		maintainOriginalExtension: opts.MaintainOriginalExtension,
 		watchFolder:               opts.WatchFolder,
@@ -87,9 +84,6 @@ func New(opts ProcessorOptions) *Processor {
 func (p *Processor) Start(ctx context.Context) error {
 	processTicker := time.NewTicker(time.Second * 2) // Process queue frequently
 	defer processTicker.Stop()
-	
-	cleanupTicker := time.NewTicker(time.Minute * 5) // Cleanup canceled jobs every 5 minutes
-	defer cleanupTicker.Stop()
 
 	// Main processing loop
 	for {
@@ -100,8 +94,6 @@ func (p *Processor) Start(ctx context.Context) error {
 			if err := p.processQueueItems(ctx); err != nil {
 				slog.ErrorContext(ctx, "Error processing queue", "error", err)
 			}
-		case <-cleanupTicker.C:
-			p.cleanupCanceledJobs()
 		}
 	}
 }
@@ -133,7 +125,7 @@ func (p *Processor) processQueueItems(ctx context.Context) error {
 			defer func() { <-semaphore }() // Release
 
 			if err := p.processNextItem(ctx); err != nil {
-				if err != context.Canceled {
+				if !errors.Is(err, context.Canceled) {
 					slog.ErrorContext(ctx, "Error processing item", "error", err)
 				}
 			}
@@ -156,29 +148,13 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 		return nil
 	}
 
-	jobID := string(msg.ID)
-
-	// Check if this job was previously canceled
-	p.canceledJobsMux.RLock()
-	if _, wasCanceled := p.canceledJobs[jobID]; wasCanceled {
-		p.canceledJobsMux.RUnlock()
-		slog.Info("Skipping previously canceled job", "jobID", jobID, "path", job.Path)
-		return nil
-	}
-	p.canceledJobsMux.RUnlock()
-
 	slog.Info("Processing file", "msg", msg.ID, "path", job.Path)
 
 	// Process the file
 	actualNzbPath, err := p.processFile(ctx, msg, job)
 	if err != nil {
-		if err == context.Canceled {
+		if errors.Is(err, context.Canceled) {
 			slog.Info("Job cancelled", "msg", msg.ID, "path", job.Path)
-			
-			// Mark job as canceled to prevent re-processing
-			p.canceledJobsMux.Lock()
-			p.canceledJobs[jobID] = time.Now()
-			p.canceledJobsMux.Unlock()
 
 			return nil
 		}
@@ -260,11 +236,6 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 	// Post the file using the job-specific postie instance
 	actualNzbPath, err := jobPostie.Post(jobCtx, []fileinfo.FileInfo{fileInfo}, inputFolder, p.outputFolder)
 	if err != nil {
-		// Check if this was a cancellation
-		if err == context.Canceled {
-			return "", context.Canceled
-		}
-
 		return "", err
 	}
 
@@ -325,11 +296,6 @@ func (p *Processor) CancelJob(jobID string) error {
 	delete(p.runningJobs, jobID)
 
 	p.jobsMux.Unlock()
-
-	// Mark job as canceled to prevent re-processing
-	p.canceledJobsMux.Lock()
-	p.canceledJobs[jobID] = time.Now()
-	p.canceledJobsMux.Unlock()
 
 	// Cancel the job's context
 	rj.cancel()
@@ -407,24 +373,4 @@ func getFileName(path string) string {
 		}
 	}
 	return path
-}
-
-// cleanupCanceledJobs removes old canceled job entries (older than 1 hour)
-func (p *Processor) cleanupCanceledJobs() {
-	p.canceledJobsMux.Lock()
-	defer p.canceledJobsMux.Unlock()
-	
-	cutoff := time.Now().Add(-time.Hour) // Remove entries older than 1 hour
-	cleaned := 0
-	
-	for jobID, cancelTime := range p.canceledJobs {
-		if cancelTime.Before(cutoff) {
-			delete(p.canceledJobs, jobID)
-			cleaned++
-		}
-	}
-	
-	if cleaned > 0 {
-		slog.Debug("Cleaned up canceled job entries", "count", cleaned, "remaining", len(p.canceledJobs))
-	}
 }

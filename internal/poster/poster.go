@@ -197,6 +197,9 @@ func (p *poster) Post(
 	}()
 
 	select {
+	case <-ctx.Done():
+		cancel() // Cancel the context to stop all operations
+		return ctx.Err()
 	case err := <-errChan:
 		cancel() // Cancel the context to stop all operations
 		return err
@@ -236,6 +239,10 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 				combinedHash += art.Hash
 
 				pool.Go(func(ctx context.Context) error {
+					if ctx.Err() != nil {
+						return ctx.Err()
+					}
+
 					if err := p.postArticle(ctx, art, post.file); err != nil {
 						return err
 					}
@@ -268,7 +275,10 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 				}
 				post.mu.Unlock()
 
-				errChan <- fmt.Errorf("failed to post file %s after %d retries: %v", post.FilePath, p.cfg.MaxRetries, errs)
+				if !errors.Is(errs, context.Canceled) {
+					errChan <- fmt.Errorf("failed to post file %s after %d retries: %v", post.FilePath, p.cfg.MaxRetries, errs)
+				}
+
 				return
 			}
 
@@ -318,6 +328,10 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 			// Submit all articles to the pool
 			for _, art := range post.Articles {
 				pool.Go(func(ctx context.Context) error {
+					if ctx.Err() != nil {
+						return ctx.Err()
+					}
+
 					if err := p.checkArticle(ctx, art); err != nil {
 						// Track failed article
 						mu.Lock()
@@ -621,6 +635,10 @@ func (p *poster) postArticle(ctx context.Context, article *article.Article, file
 
 	// Post article
 	if err := p.pool.Post(ctx, buff); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return context.Canceled
+		}
+
 		return fmt.Errorf("error posting article: %w", err)
 	}
 

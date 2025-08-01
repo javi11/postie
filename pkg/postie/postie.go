@@ -2,6 +2,7 @@ package postie
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -183,7 +184,7 @@ func (p *Postie) postInParallel(
 	errg.Go(func() error {
 		createdPar2Paths, err = p.par2runner.Create(ctx, []fileinfo.FileInfo{f})
 		if err != nil {
-			if err != context.Canceled {
+			if !errors.Is(err, context.Canceled) {
 				slog.ErrorContext(ctx, "Error during par2 creation. Upload will continue without par2.", "error", err)
 			}
 
@@ -191,7 +192,9 @@ func (p *Postie) postInParallel(
 		}
 
 		if err := p.poster.Post(ctx, createdPar2Paths, rootDir, nzbGen); err != nil {
-			slog.ErrorContext(ctx, fmt.Sprintf("Error during upload of par2 files: %s. Upload will continue without par2.", createdPar2Paths), "error", err)
+			if !errors.Is(err, context.Canceled) {
+				slog.ErrorContext(ctx, fmt.Sprintf("Error during upload of par2 files: %s. Upload will continue without par2.", createdPar2Paths), "error", err)
+			}
 
 			return nil
 		}
@@ -201,7 +204,9 @@ func (p *Postie) postInParallel(
 
 	errg.Go(func() error {
 		if err := p.poster.Post(ctx, []string{f.Path}, rootDir, nzbGen); err != nil {
-			slog.ErrorContext(ctx, fmt.Sprintf("Error during upload: %s", f.Path), "error", err)
+			if !errors.Is(err, context.Canceled) {
+				slog.ErrorContext(ctx, fmt.Sprintf("Error during upload: %s", f.Path), "error", err)
+			}
 
 			return err
 		}
@@ -256,7 +261,7 @@ func (p *Postie) post(
 	if *p.par2Cfg.Enabled {
 		createdPar2Paths, err = p.par2runner.Create(ctx, []fileinfo.FileInfo{f})
 		if err != nil {
-			if err != context.Canceled {
+			if !errors.Is(err, context.Canceled) {
 				slog.ErrorContext(ctx, "Error during par2 creation. Upload will continue without par2.", "error", err)
 			}
 
@@ -267,7 +272,9 @@ func (p *Postie) post(
 	}
 
 	if err := p.poster.Post(ctx, filesPath, rootDir, nzbGen); err != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("Error during upload: %s", filesPath), "error", err)
+		if !errors.Is(err, context.Canceled) {
+			slog.ErrorContext(ctx, fmt.Sprintf("Error during upload: %s", filesPath), "error", err)
+		}
 
 		return "", err
 	}

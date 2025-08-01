@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -71,7 +72,7 @@ func (a *App) initializeProcessor() error {
 
 	// Start processor
 	go func() {
-		if err := a.processor.Start(a.procCtx); err != nil && err != context.Canceled {
+		if err := a.processor.Start(a.procCtx); err != nil && !errors.Is(err, context.Canceled) {
 			slog.Error("Processor error", "error", err)
 		}
 	}()
