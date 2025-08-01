@@ -740,3 +740,56 @@ func (a *App) ValidateNNTPServer(serverData ServerData) ValidationResult {
 		Error: "",
 	}
 }
+
+// PauseProcessing pauses the processor to prevent new jobs from starting
+func (a *App) PauseProcessing() error {
+	defer a.recoverPanic("PauseProcessing")
+
+	if a.processor == nil {
+		return fmt.Errorf("processor not initialized")
+	}
+
+	a.processor.PauseProcessing()
+	slog.Info("Processing paused via API")
+	
+	// Emit events for both desktop and web modes
+	if !a.isWebMode {
+		wailsruntime.EventsEmit(a.ctx, "processing:paused")
+	} else if a.webEventEmitter != nil {
+		a.webEventEmitter("processing:paused", nil)
+	}
+	
+	return nil
+}
+
+// ResumeProcessing resumes the processor to allow new jobs to start
+func (a *App) ResumeProcessing() error {
+	defer a.recoverPanic("ResumeProcessing")
+
+	if a.processor == nil {
+		return fmt.Errorf("processor not initialized")
+	}
+
+	a.processor.ResumeProcessing()
+	slog.Info("Processing resumed via API")
+	
+	// Emit events for both desktop and web modes
+	if !a.isWebMode {
+		wailsruntime.EventsEmit(a.ctx, "processing:resumed")
+	} else if a.webEventEmitter != nil {
+		a.webEventEmitter("processing:resumed", nil)
+	}
+	
+	return nil
+}
+
+// IsProcessingPaused returns whether the processor is currently paused
+func (a *App) IsProcessingPaused() bool {
+	defer a.recoverPanic("IsProcessingPaused")
+
+	if a.processor == nil {
+		return false
+	}
+
+	return a.processor.IsPaused()
+}

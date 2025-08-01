@@ -106,6 +106,10 @@ export function HasPendingConfigChanges() {
   return window['go']['backend']['App']['HasPendingConfigChanges']();
 }
 
+export function IsProcessingPaused() {
+  return window['go']['backend']['App']['IsProcessingPaused']();
+}
+
 export function IsUploading() {
   return window['go']['backend']['App']['IsUploading']();
 }
@@ -118,8 +122,16 @@ export function NavigateToSettings() {
   return window['go']['backend']['App']['NavigateToSettings']();
 }
 
+export function PauseProcessing() {
+  return window['go']['backend']['App']['PauseProcessing']();
+}
+
 export function RemoveFromQueue(arg1) {
   return window['go']['backend']['App']['RemoveFromQueue'](arg1);
+}
+
+export function ResumeProcessing() {
+  return window['go']['backend']['App']['ResumeProcessing']();
 }
 
 export function RetryJob(arg1) {

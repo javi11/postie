@@ -51,8 +51,20 @@
 			"title": "Progression de Téléchargement",
 			"status": {
 				"active": "Actif",
-				"idle": "Inactif"
+				"idle": "Inactif",
+				"paused": "En Pause"
 			},
+			"task_status": {
+				"paused": "En Pause",
+				"in_progress": "En Cours",
+				"pending": "En Attente"
+			},
+			"pause_processing": "Mettre en Pause le Traitement",
+			"resume_processing": "Reprendre le Traitement",
+			"paused": "Traitement en Pause",
+			"paused_description": "Toutes les tâches de téléchargement ont été mises en pause",
+			"resumed": "Traitement Repris",
+			"resumed_description": "Les tâches de téléchargement ont été reprises",
 			"job_title": "Tâche {jobId}",
 			"cancel_upload": "Annuler le Téléchargement",
 			"overall": "Progression Générale",

@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/javi11/postie/internal/config"
+	"github.com/javi11/postie/internal/pausable"
 	"github.com/javi11/postie/internal/progress"
 	"github.com/javi11/postie/pkg/fileinfo"
 )
@@ -25,6 +26,7 @@ type mockProgress struct {
 	total      int64
 	current    int64
 	isComplete bool
+	isPaused   bool
 	startTime  time.Time
 }
 
@@ -52,6 +54,7 @@ func (m *mockProgress) GetState() progress.ProgressState {
 		Description:    m.name,
 		Type:           m.progType,
 		IsStarted:      true,
+		IsPaused:       m.isPaused,
 	}
 }
 
@@ -71,6 +74,8 @@ func (m *mockProgress) GetStartTime() time.Time { return m.startTime }
 func (m *mockProgress) GetElapsedTime() time.Duration {
 	return time.Since(m.startTime)
 }
+func (m *mockProgress) SetPaused(paused bool) { m.isPaused = paused }
+func (m *mockProgress) IsPaused() bool        { return m.isPaused }
 
 // mockJobProgress implements the JobProgress interface for testing
 type mockJobProgress struct {
@@ -124,35 +129,72 @@ func (m *mockJobProgress) GetAllProgressState() []progress.ProgressState {
 
 func (m *mockJobProgress) GetJobID() string { return "test-job" }
 func (m *mockJobProgress) Close()           {}
+func (m *mockJobProgress) SetAllPaused(paused bool) {
+	for _, prog := range m.progresses {
+		prog.SetPaused(paused)
+	}
+}
 
 func TestNew(t *testing.T) {
-	ctx := context.Background()
-	articleSize := uint64(512 * 1024) // 512 KB
-	cfg := &config.Par2Config{
-		Par2Path:         "/usr/bin/par2",
-		Redundancy:       "10",
-		VolumeSize:       256 * 1024, // 256 KB
-		MaxInputSlices:   2000,
-		ExtraPar2Options: []string{"-q"},
-	}
+	t.Run("with regular context", func(t *testing.T) {
+		ctx := context.Background()
+		articleSize := uint64(512 * 1024) // 512 KB
+		cfg := &config.Par2Config{
+			Par2Path:         "/usr/bin/par2",
+			Redundancy:       "10",
+			VolumeSize:       256 * 1024, // 256 KB
+			MaxInputSlices:   2000,
+			ExtraPar2Options: []string{"-q"},
+		}
 
-	par2Executor := New(ctx, articleSize, cfg, nil)
+		par2Executor := New(ctx, articleSize, cfg, nil)
 
-	if par2Executor == nil {
-		t.Fatal("Expected non-nil Par2CmdExecutor")
-	}
+		if par2Executor == nil {
+			t.Fatal("Expected non-nil Par2CmdExecutor")
+		}
 
-	if par2Executor.articleSize != articleSize {
-		t.Errorf("Expected articleSize to be %d, got %d", articleSize, par2Executor.articleSize)
-	}
+		if par2Executor.articleSize != articleSize {
+			t.Errorf("Expected articleSize to be %d, got %d", articleSize, par2Executor.articleSize)
+		}
 
-	if par2Executor.cfg != cfg {
-		t.Errorf("Expected cfg to match the provided config")
-	}
+		if par2Executor.cfg != cfg {
+			t.Errorf("Expected cfg to match the provided config")
+		}
 
-	if par2Executor.parExeType != par2 {
-		t.Errorf("Expected parExeType to be %s, got %s", par2, par2Executor.parExeType)
-	}
+		if par2Executor.parExeType != par2 {
+			t.Errorf("Expected parExeType to be %s, got %s", par2, par2Executor.parExeType)
+		}
+	})
+
+	t.Run("with pausable context", func(t *testing.T) {
+		ctx := pausable.NewContext(context.Background())
+		articleSize := uint64(512 * 1024) // 512 KB
+		cfg := &config.Par2Config{
+			Par2Path:         "/usr/bin/par2",
+			Redundancy:       "10",
+			VolumeSize:       256 * 1024, // 256 KB
+			MaxInputSlices:   2000,
+			ExtraPar2Options: []string{"-q"},
+		}
+
+		par2Executor := New(ctx, articleSize, cfg, nil)
+
+		if par2Executor == nil {
+			t.Fatal("Expected non-nil Par2CmdExecutor")
+		}
+
+		if par2Executor.articleSize != articleSize {
+			t.Errorf("Expected articleSize to be %d, got %d", articleSize, par2Executor.articleSize)
+		}
+
+		if par2Executor.cfg != cfg {
+			t.Errorf("Expected cfg to match the provided config")
+		}
+
+		if par2Executor.parExeType != par2 {
+			t.Errorf("Expected parExeType to be %s, got %s", par2, par2Executor.parExeType)
+		}
+	})
 }
 
 func TestNewWithParpar(t *testing.T) {
@@ -527,6 +569,98 @@ func TestCreatePar2CommandFailed(t *testing.T) {
 	_, err = par2Executor.Create(ctx, files)
 	if err == nil {
 		t.Fatal("Expected an error but got nil")
+	}
+}
+
+func TestCreatePar2WithPausableContext(t *testing.T) {
+	// Save and restore the original execCommand
+	originalExecCommand := execCommand
+	defer func() { execCommand = originalExecCommand }()
+
+	pausableCtx := pausable.NewContext(context.Background())
+	tempDir := t.TempDir()
+	testFile := filepath.Join(tempDir, "testfile.bin")
+
+	// Create a test file
+	err := os.WriteFile(testFile, []byte("test content"), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Mock the exec.CommandContext to create a script that creates the expected par2 file
+	execCommand = func(ctx context.Context, command string, args ...string) *exec.Cmd {
+		// Find the output file from the args (the par2 file path for par2 command)
+		var outputFile string
+		if len(args) >= 4 {
+			// For par2 command, the output file is typically one of the later arguments
+			for _, arg := range args {
+				if strings.HasSuffix(arg, ".par2") {
+					outputFile = arg
+					break
+				}
+			}
+		}
+
+		// Create a shell script that creates the par2 file and outputs progress
+		script := fmt.Sprintf(`#!/bin/bash
+touch "%s"
+echo "Processing: 10%%"
+echo "Processing: 50%%"  
+echo "Processing: 100%%"
+`, outputFile)
+
+		cmd := exec.CommandContext(ctx, "sh", "-c", script)
+		return cmd
+	}
+
+	// Create a Par2CmdExecutor with the mock command
+	par2Executor := &Par2CmdExecutor{
+		articleSize: 512 * 1024,
+		cfg: &config.Par2Config{
+			Par2Path:         "/usr/bin/par2",
+			Redundancy:       "10",
+			VolumeSize:       256 * 1024,
+			MaxInputSlices:   2000,
+			ExtraPar2Options: []string{"-q"},
+		},
+		parExeType:  par2,
+		jobProgress: newMockJobProgress(),
+	}
+
+	files := []fileinfo.FileInfo{
+		{
+			Path: testFile,
+			Size: 1024 * 1024, // 1MB
+		},
+	}
+
+	// Test with pausable context - should work the same as regular context
+	createdFiles, err := par2Executor.Create(pausableCtx, files)
+	if err != nil {
+		t.Fatalf("par2Executor.Create failed: %v", err)
+	}
+
+	// Verify that at least one par2 file was created
+	if len(createdFiles) == 0 {
+		t.Fatal("Expected at least one par2 file to be created")
+	}
+
+	// Verify the created file exists
+	expectedPar2File := testFile + ".par2"
+	if _, err := os.Stat(expectedPar2File); os.IsNotExist(err) {
+		t.Fatalf("Expected par2 file %s was not created", expectedPar2File)
+	}
+
+	// Verify the created file is in the returned list
+	found := false
+	for _, createdFile := range createdFiles {
+		if createdFile == expectedPar2File {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("Expected par2 file %s not found in created files list: %v", expectedPar2File, createdFiles)
 	}
 }
 

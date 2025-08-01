@@ -4,18 +4,22 @@ import { t } from "$lib/i18n";
 import { isUploading, runningJobs } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import { formatSpeed, formatTime, formatFileSize } from "$lib/utils";
-import { ChartPie, CheckCircle, Clock, Play, X, Upload, Package, Check } from "lucide-svelte";
-import { progress } from "$lib/wailsjs/go/models";
+import { ChartPie, CheckCircle, Play, X, Upload, Package, Check, Pause } from "lucide-svelte";
 import { onMount, onDestroy } from "svelte";
 
 // Use the generated types from Wails
 let progressUpdateInterval: NodeJS.Timeout | null = null;
+let isPaused = $state(false);
 
 // Fetch progress data from API
 async function fetchProgressData() {
   try {
-    const jobDetails = await apiClient.getRunningJobDetails();
+    const [jobDetails, pausedStatus] = await Promise.all([
+      apiClient.getRunningJobDetails(),
+      apiClient.isProcessingPaused()
+    ]);
     runningJobs.set(jobDetails);
+    isPaused = pausedStatus;
   } catch (error) {
     console.error("Failed to fetch progress data:", error);
   }
@@ -129,11 +133,15 @@ function cancelUpload(jobID: string) {
         <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-base-300/50">
           <div
             class="w-2 h-2 rounded-full transition-all duration-300 {$isUploading
-              ? 'bg-primary animate-pulse shadow-lg shadow-primary/50'
+              ? isPaused ? 'bg-warning animate-pulse shadow-lg shadow-warning/50' : 'bg-primary animate-pulse shadow-lg shadow-primary/50'
               : 'bg-base-content/40'}"
           ></div>
           <span class="text-sm font-medium text-base-content/80">
-            {$isUploading ? $t("dashboard.progress.status.active") : $t("dashboard.progress.status.idle")}
+            {$isUploading 
+              ? isPaused 
+                ? $t("dashboard.progress.status.paused") 
+                : $t("dashboard.progress.status.active") 
+              : $t("dashboard.progress.status.idle")}
           </span>
         </div>
       </div>
@@ -171,26 +179,31 @@ function cancelUpload(jobID: string) {
             <div class="space-y-4">
               <h4 class="text-md font-medium text-base-content">Active Tasks</h4>
               {#each job.progress as progressState}
+                {@const IconComponent = getProgressIcon(progressState?.Type)}
                 <div class="bg-base-100 rounded-xl border border-base-300 p-4">
                   <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center gap-3">
                       <div class="p-2 rounded-full {getProgressColor(progressState?.Type)}">
-                        <svelte:component this={getProgressIcon(progressState?.Type)} class="w-4 h-4" />
+                        <IconComponent class="w-4 h-4" />
                       </div>
                       <div>
                         <div class="flex items-center gap-2">
                           <p class="text-sm font-medium text-base-content">
                             {progressState?.Description || progressState?.Type}
                           </p>
-                          <!-- Status indicator based on IsStarted -->
+                          <!-- Status indicator based on IsStarted and IsPaused -->
                           <div class="flex items-center gap-1">
-                            <div class="w-2 h-2 rounded-full {progressState?.IsStarted 
+                            <div class="w-2 h-2 rounded-full {progressState?.IsPaused 
+                              ? 'bg-orange-500 animate-pulse' 
+                              : progressState?.IsStarted 
                               ? 'bg-green-500 animate-pulse' 
                               : 'bg-yellow-500'}"></div>
-                            <span class="text-xs font-medium {progressState?.IsStarted 
+                            <span class="text-xs font-medium {progressState?.IsPaused 
+                              ? 'text-orange-600' 
+                              : progressState?.IsStarted 
                               ? 'text-green-600' 
                               : 'text-yellow-600'}">
-                              {progressState?.IsStarted ? 'In Progress' : 'Pending'}
+                              {progressState?.IsPaused ? $t("dashboard.progress.task_status.paused") : progressState?.IsStarted ? $t("dashboard.progress.task_status.in_progress") : $t("dashboard.progress.task_status.pending")}
                             </span>
                           </div>
                         </div>
@@ -200,7 +213,7 @@ function cancelUpload(jobID: string) {
                       </div>
                     </div>
                     <div class="text-right">
-                      <span class="text-sm font-semibold text-primary bg-primary/10 px-2 py-1 rounded-md">
+                      <span class="text-sm font-semibold {progressState?.IsPaused ? 'text-orange-600 bg-orange-500/10' : 'text-primary bg-primary/10'} px-2 py-1 rounded-md">
                         {Math.round(progressState?.CurrentPercent * 100 || 0)}%
                       </span>
                     </div>
@@ -208,46 +221,66 @@ function cancelUpload(jobID: string) {
                   
                   <div class="w-full bg-base-300 rounded-full h-2 mb-3">
                     <div 
-                      class="bg-primary h-2 rounded-full transition-all duration-300"
+                      class="{progressState?.IsPaused ? 'bg-orange-500' : 'bg-primary'} h-2 rounded-full transition-all duration-300"
                       style="width: {progressState?.CurrentPercent * 100 || 0}%"
                     ></div>
                   </div>
 
                   <!-- Progress Stats -->
-                  <div class="grid grid-cols-2 gap-4 text-xs text-base-content/70">
-                    <div>
-                      <span class="block">Elapsed</span>
-                      <span class="font-medium text-base-content">{formatTime((progressState?.SecondsSince || 0) * 1000)}</span>
-                    </div>
-                    <div>
-                      <span class="block">Remaining</span>
-                      <span class="font-medium text-base-content">{formatTime((progressState?.SecondsLeft || 0) * 1000)}</span>
-                    </div>
-                    
-                    <!-- Show speed for upload tasks -->
-                    {#if (progressState.Type === "uploading" || progressState.Type === "checking") && progressState?.KBsPerSecond}
+                  {#if !progressState?.IsPaused}
+                    <div class="grid grid-cols-2 gap-4 text-xs text-base-content/70">
                       <div>
-                        <span class="block">Speed</span>
-                        <span class="font-medium text-base-content">{formatSpeed((progressState.KBsPerSecond || 0) * 1024)}</span>
+                        <span class="block">Elapsed</span>
+                        <span class="font-medium text-base-content">{formatTime((progressState?.SecondsSince || 0) * 1000)}</span>
                       </div>
-                    {/if}
-                    
-                    <!-- Hide current/total for par2 generation, show as formatted bytes for uploads -->
+                      <div>
+                        <span class="block">Remaining</span>
+                        <span class="font-medium text-base-content">{formatTime((progressState?.SecondsLeft || 0) * 1000)}</span>
+                      </div>
+                      
+                      <!-- Show speed for upload tasks -->
+                      {#if (progressState.Type === "uploading" || progressState.Type === "checking") && progressState?.KBsPerSecond}
+                        <div>
+                          <span class="block">Speed</span>
+                          <span class="font-medium text-base-content">{formatSpeed((progressState.KBsPerSecond || 0) * 1024)}</span>
+                        </div>
+                      {/if}
+                      
+                      <!-- Hide current/total for par2 generation, show as formatted bytes for uploads -->
+                      {#if progressState.Type !== "par2_generation"}
+                        <div>
+                          <span class="block">Current</span>
+                          <span class="font-medium text-base-content">
+                              {formatFileSize(progressState.CurrentBytes)}
+                          </span>
+                        </div>
+                        <div>
+                          <span class="block">Total</span>
+                          <span class="font-medium text-base-content">
+                              {formatFileSize(progressState.Max)}
+                          </span>
+                        </div>
+                      {/if}
+                    </div>
+                  {:else}
+                    <!-- Show only current/total for paused tasks -->
                     {#if progressState.Type !== "par2_generation"}
-                      <div>
-                        <span class="block">Current</span>
-                        <span class="font-medium text-base-content">
-                            {formatFileSize(progressState.CurrentBytes)}
-                        </span>
-                      </div>
-                      <div>
-                        <span class="block">Total</span>
-                        <span class="font-medium text-base-content">
-                            {formatFileSize(progressState.Max)}
-                        </span>
+                      <div class="grid grid-cols-2 gap-4 text-xs text-base-content/70">
+                        <div>
+                          <span class="block">Current</span>
+                          <span class="font-medium text-base-content">
+                              {formatFileSize(progressState.CurrentBytes)}
+                          </span>
+                        </div>
+                        <div>
+                          <span class="block">Total</span>
+                          <span class="font-medium text-base-content">
+                              {formatFileSize(progressState.Max)}
+                          </span>
+                        </div>
                       </div>
                     {/if}
-                  </div>
+                  {/if}
                 </div>
               {/each}
             </div>

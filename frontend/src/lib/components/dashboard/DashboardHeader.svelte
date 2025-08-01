@@ -3,11 +3,40 @@ import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import { uploadActions, uploadStore } from "$lib/stores/upload";
-import { AlertTriangle, Plus, X } from "lucide-svelte";
+import { isUploading } from "$lib/stores/app";
+import { AlertTriangle, Plus, X, Pause, Play } from "lucide-svelte";
+import { onMount, onDestroy } from "svelte";
 
-export let needsConfiguration: boolean;
-export let criticalConfigError: boolean;
-export let handleUpload: () => Promise<void>;
+let { needsConfiguration, criticalConfigError, handleUpload }: {
+  needsConfiguration: boolean;
+  criticalConfigError: boolean;
+  handleUpload: () => Promise<void>;
+} = $props();
+
+let isPaused = $state(false);
+let pauseCheckInterval: NodeJS.Timeout | null = null;
+
+// Check pause status
+async function checkPauseStatus() {
+  try {
+    isPaused = await apiClient.isProcessingPaused();
+  } catch (error) {
+    console.error("Failed to check pause status:", error);
+  }
+}
+
+// Setup periodic pause status checks
+onMount(() => {
+  checkPauseStatus();
+  pauseCheckInterval = setInterval(checkPauseStatus, 1000);
+});
+
+onDestroy(() => {
+  if (pauseCheckInterval) {
+    clearInterval(pauseCheckInterval);
+    pauseCheckInterval = null;
+  }
+});
 
 function formatFileSize(bytes: number): string {
 	if (bytes === 0) return "0 Bytes";
@@ -40,6 +69,34 @@ async function cancelCurrentUpload() {
 	}
 }
 
+async function pauseProcessing() {
+  try {
+    await apiClient.pauseProcessing();
+    isPaused = true;
+    toastStore.success(
+      $t("dashboard.progress.paused"),
+      $t("dashboard.progress.paused_description")
+    );
+  } catch (error) {
+    console.error("Failed to pause processing:", error);
+    toastStore.error($t("common.messages.error"), String(error));
+  }
+}
+
+async function resumeProcessing() {
+  try {
+    await apiClient.resumeProcessing();
+    isPaused = false;
+    toastStore.success(
+      $t("dashboard.progress.resumed"),
+      $t("dashboard.progress.resumed_description")
+    );
+  } catch (error) {
+    console.error("Failed to resume processing:", error);
+    toastStore.error($t("common.messages.error"), String(error));
+  }  
+}
+
 </script>
 
 <div class="card bg-base-100/60 backdrop-blur-sm border border-base-300/60 shadow-xl animate-fade-in max-w-full">
@@ -70,7 +127,7 @@ async function cancelCurrentUpload() {
                   class="btn btn-error btn-xs w-6 h-6"
                   onclick={cancelCurrentUpload}
                 >
-                  <X class="w-3 h-3" />
+                  <X class="w-5 h-5" />
                 </button>
               </div>
             </div>
@@ -102,6 +159,22 @@ async function cancelCurrentUpload() {
             {$t("dashboard.header.add_files")}
           </button>
         {/if}
+
+        <!-- Pause/Resume Button - Show when there are queue items or active uploads -->
+        <button
+          type="button"
+          onclick={isPaused ? resumeProcessing : pauseProcessing}
+          class="btn {isPaused ? 'btn-warning' : 'btn-success'}"
+          title={isPaused ? $t("dashboard.progress.resume_processing") : $t("dashboard.progress.pause_processing")}
+        >
+          {#if isPaused}
+            <Play class="w-4 h-4" />
+            {$t("dashboard.progress.resume_processing")}
+          {:else}
+            <Pause class="w-4 h-4" />
+            {$t("dashboard.progress.pause_processing")}
+          {/if}
+        </button>
       </div>
     </div>
 

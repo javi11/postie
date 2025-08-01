@@ -624,6 +624,7 @@ export namespace progress {
 	    Description: string;
 	    Type: string;
 	    IsStarted: boolean;
+	    IsPaused: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ProgressState(source);
@@ -641,6 +642,7 @@ export namespace progress {
 	        this.Description = source["Description"];
 	        this.Type = source["Type"];
 	        this.IsStarted = source["IsStarted"];
+	        this.IsPaused = source["IsPaused"];
 	    }
 	}
 

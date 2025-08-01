@@ -177,6 +177,19 @@ export class WebClient {
 		return this.get<backend.ProcessorStatus>("/processor/status");
 	}
 
+	async pauseProcessing(): Promise<void> {
+		return this.post<void>("/processor/pause");
+	}
+
+	async resumeProcessing(): Promise<void> {
+		return this.post<void>("/processor/resume");
+	}
+
+	async isProcessingPaused(): Promise<boolean> {
+		const response = await this.get<{ paused: boolean }>("/processor/paused");
+		return response.paused;
+	}
+
 	async getRunningJobs(): Promise<processor.RunningJobItem[]> {
 		return this.get<processor.RunningJobItem[]>("/running-jobs");
 	}

@@ -31,6 +31,7 @@ type ProgressState struct {
 	Description    string
 	Type           ProgressType
 	IsStarted      bool
+	IsPaused       bool
 }
 
 // EventEmitter is a function type for emitting events to the frontend
@@ -44,6 +45,7 @@ type JobProgress interface {
 	GetAllProgressState() []ProgressState
 	GetJobID() string
 	Close()
+	SetAllPaused(paused bool)
 }
 
 // Progress represents an individual progress indicator
@@ -60,6 +62,8 @@ type Progress interface {
 	IsComplete() bool
 	GetStartTime() time.Time
 	GetElapsedTime() time.Duration
+	SetPaused(paused bool)
+	IsPaused() bool
 }
 
 type jobProgress struct {
@@ -189,6 +193,20 @@ func (pm *jobProgress) Close() {
 	pm.cancel()
 }
 
+func (pm *jobProgress) SetAllPaused(paused bool) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	for _, progress := range pm.activeProgress {
+		if progress.GetType() == ProgressTypePar2Generation {
+			// par2 generation can not be paused
+			continue
+		}
+
+		progress.SetPaused(paused)
+	}
+}
+
 type progress struct {
 	id        uuid.UUID
 	name      string
@@ -196,6 +214,8 @@ type progress struct {
 	total     int64
 	startTime time.Time
 	progress  *progressbar.ProgressBar
+	paused    bool
+	mu        sync.RWMutex
 }
 
 func (p *progress) UpdateProgress(processed int64) {
@@ -225,6 +245,9 @@ func (p *progress) GetType() ProgressType {
 
 func (p *progress) GetState() ProgressState {
 	s := p.progress.State()
+	p.mu.RLock()
+	paused := p.paused
+	p.mu.RUnlock()
 
 	return ProgressState{
 		Max:            s.Max,
@@ -237,6 +260,7 @@ func (p *progress) GetState() ProgressState {
 		Description:    s.Description,
 		Type:           p.pType,
 		IsStarted:      s.CurrentNum > 0,
+		IsPaused:       paused,
 	}
 }
 
@@ -266,4 +290,16 @@ func (p *progress) GetElapsedTime() time.Duration {
 
 func (p *progress) GetLeftTime() time.Duration {
 	return time.Duration(p.progress.State().SecondsLeft) * time.Second
+}
+
+func (p *progress) SetPaused(paused bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.paused = paused
+}
+
+func (p *progress) IsPaused() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.paused
 }

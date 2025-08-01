@@ -50,8 +50,20 @@
 			"title": "Upload Progress",
 			"status": {
 				"active": "Active",
-				"idle": "Idle"
+				"idle": "Idle",
+				"paused": "Paused"
 			},
+			"task_status": {
+				"paused": "Paused",
+				"in_progress": "In Progress",
+				"pending": "Pending"
+			},
+			"pause_processing": "Pause Processing",
+			"resume_processing": "Resume Processing",
+			"paused": "Processing Paused",
+			"paused_description": "All upload tasks have been paused",
+			"resumed": "Processing Resumed", 
+			"resumed_description": "Upload tasks have been resumed",
 			"job_title": "Job {jobId}",
 			"cancel_upload": "Cancel Upload",
 			"overall": "Overall Progress",
