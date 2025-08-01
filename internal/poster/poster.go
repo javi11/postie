@@ -22,6 +22,7 @@ import (
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/nzb"
 	"github.com/javi11/postie/internal/par2"
+	"github.com/javi11/postie/internal/pausable"
 	"github.com/javi11/postie/internal/progress"
 	"github.com/sourcegraph/conc/pool"
 )
@@ -223,6 +224,11 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			errChan <- ctx.Err()
 			return
 		default:
+			// Check if we should pause before processing the post
+			if err := pausable.CheckPause(ctx); err != nil {
+				errChan <- err
+				return
+			}
 
 			// Set post status to Posting
 			post.mu.Lock()
@@ -241,6 +247,11 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 				pool.Go(func(ctx context.Context) error {
 					if ctx.Err() != nil {
 						return ctx.Err()
+					}
+
+					// Check for pause before processing article
+					if err := pausable.CheckPause(ctx); err != nil {
+						return err
 					}
 
 					if err := p.postArticle(ctx, art, post.file); err != nil {
@@ -318,6 +329,11 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 			errChan <- ctx.Err()
 			return
 		default:
+			// Check if we should pause before processing the check
+			if err := pausable.CheckPause(ctx); err != nil {
+				errChan <- err
+				return
+			}
 			// Create a pool with error handling - use all available CPU cores
 			pool := pool.New().WithContext(ctx).WithMaxGoroutines(runtime.NumCPU()).WithCancelOnError().WithFirstError()
 			articlesChecked := 0
@@ -332,6 +348,11 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 				pool.Go(func(ctx context.Context) error {
 					if ctx.Err() != nil {
 						return ctx.Err()
+					}
+
+					// Check for pause before checking article
+					if err := pausable.CheckPause(ctx); err != nil {
+						return err
 					}
 
 					if err := p.checkArticle(ctx, art); err != nil {
@@ -620,6 +641,11 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int, wg *sy
 
 // postArticle posts an article to Usenet
 func (p *poster) postArticle(ctx context.Context, article *article.Article, file *os.File) error {
+	// Check if we should pause before posting
+	if err := pausable.CheckPause(ctx); err != nil {
+		return err
+	}
+
 	// Read article body
 	body := make([]byte, article.Size)
 	if _, err := file.ReadAt(body, article.Offset); err != nil {
@@ -661,6 +687,11 @@ func (p *poster) postArticle(ctx context.Context, article *article.Article, file
 
 // checkArticle checks if an article exists
 func (p *poster) checkArticle(ctx context.Context, art *article.Article) error {
+	// Check if we should pause before checking
+	if err := pausable.CheckPause(ctx); err != nil {
+		return err
+	}
+
 	_, err := p.pool.Stat(ctx, art.MessageID, art.Groups)
 	if err != nil {
 		return fmt.Errorf("article not found: %w", err)

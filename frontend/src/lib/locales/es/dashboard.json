@@ -52,8 +52,20 @@
 			"title": "Progreso de Carga",
 			"status": {
 				"active": "Activo",
-				"idle": "Inactivo"
+				"idle": "Inactivo",
+				"paused": "Pausado"
 			},
+			"task_status": {
+				"paused": "Pausado",
+				"in_progress": "En Progreso",
+				"pending": "Pendiente"
+			},
+			"pause_processing": "Pausar Procesamiento",
+			"resume_processing": "Reanudar Procesamiento",
+			"paused": "Procesamiento Pausado",
+			"paused_description": "Todas las tareas de carga han sido pausadas",
+			"resumed": "Procesamiento Reanudado",
+			"resumed_description": "Las tareas de carga han sido reanudadas",
 			"job_title": "Trabajo {jobId}",
 			"cancel_upload": "Cancelar Carga",
 			"overall": "Progreso General",

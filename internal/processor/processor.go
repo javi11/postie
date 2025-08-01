@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/javi11/postie/internal/config"
+	"github.com/javi11/postie/internal/pausable"
 	"github.com/javi11/postie/internal/progress"
 	"github.com/javi11/postie/internal/queue"
 	"github.com/javi11/postie/pkg/fileinfo"
@@ -33,6 +34,9 @@ type Processor struct {
 	deleteOriginalFile        bool
 	maintainOriginalExtension bool
 	watchFolder               string // Path to the watch folder for maintaining folder structure
+	// Pause/resume functionality
+	isPaused   bool
+	pausedMux  sync.RWMutex
 }
 
 type ProcessorOptions struct {
@@ -54,8 +58,9 @@ type RunningJobDetails struct {
 
 type RunningJob struct {
 	RunningJobDetails
-	Progress progress.JobProgress
-	cancel   context.CancelFunc
+	Progress       progress.JobProgress
+	cancel         context.CancelFunc
+	pausableCtx    *pausable.Context
 }
 
 // RunningJobItem represents a running job for the frontend (kept for backward compatibility)
@@ -95,6 +100,15 @@ func (p *Processor) Start(ctx context.Context) error {
 }
 
 func (p *Processor) processQueueItems(ctx context.Context) error {
+	// Check if processor is paused
+	p.pausedMux.RLock()
+	paused := p.isPaused
+	p.pausedMux.RUnlock()
+	
+	if paused {
+		return nil // Skip processing when paused
+	}
+
 	if p.isRunning {
 		return nil
 	}
@@ -174,8 +188,11 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 
 	// Create a context for this specific job that can be cancelled independently
 	jobCtx, jobCancel := context.WithCancel(ctx)
+	
+	// Create a pausable context wrapper
+	pausableCtx := pausable.NewContext(jobCtx)
 
-	// Track this job for potential cancellation
+	// Track this job for potential cancellation and pausing
 	p.jobsMux.Lock()
 	// Track detailed job information
 	progressJob := progress.NewProgressJob(jobID)
@@ -187,8 +204,16 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 			FileName: fileName,
 			Size:     job.Size,
 		},
-		Progress: progressJob,
-		cancel:   jobCancel,
+		Progress:    progressJob,
+		cancel:      jobCancel,
+		pausableCtx: pausableCtx,
+	}
+	
+	// Apply current pause state to new job
+	if p.isPaused {
+		pausableCtx.Pause()
+		// Also set progress as paused for new jobs
+		progressJob.SetAllPaused(true)
 	}
 	p.jobsMux.Unlock()
 
@@ -227,8 +252,8 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 			"inputFolder", inputFolder, "filePath", job.Path)
 	}
 
-	// Post the file using the job-specific postie instance
-	actualNzbPath, err := jobPostie.Post(jobCtx, []fileinfo.FileInfo{fileInfo}, inputFolder, p.outputFolder)
+	// Post the file using the job-specific postie instance with pausable context
+	actualNzbPath, err := jobPostie.Post(pausableCtx, []fileinfo.FileInfo{fileInfo}, inputFolder, p.outputFolder)
 	if err != nil {
 		return "", err
 	}
@@ -345,6 +370,65 @@ func (p *Processor) IsPathBeingProcessed(path string) bool {
 		}
 	}
 	return false
+}
+
+// PauseProcessing pauses the processor, preventing new jobs from starting and pausing active jobs
+func (p *Processor) PauseProcessing() {
+	p.pausedMux.Lock()
+	defer p.pausedMux.Unlock()
+	
+	if !p.isPaused {
+		p.isPaused = true
+		
+		// Pause all currently running jobs
+		p.jobsMux.RLock()
+		for jobID, job := range p.runningJobs {
+			if job.pausableCtx != nil {
+				job.pausableCtx.Pause()
+				// Also set progress as paused
+				if job.Progress != nil {
+					job.Progress.SetAllPaused(true)
+				}
+				slog.Info("Paused running job", "jobID", jobID)
+			}
+		}
+		p.jobsMux.RUnlock()
+		
+		slog.Info("Processor paused - new jobs blocked, active jobs suspended")
+	}
+}
+
+// ResumeProcessing resumes the processor, allowing new jobs to start and resuming active jobs
+func (p *Processor) ResumeProcessing() {
+	p.pausedMux.Lock()
+	defer p.pausedMux.Unlock()
+	
+	if p.isPaused {
+		p.isPaused = false
+		
+		// Resume all currently running jobs
+		p.jobsMux.RLock()
+		for jobID, job := range p.runningJobs {
+			if job.pausableCtx != nil {
+				job.pausableCtx.Resume()
+				// Also set progress as resumed
+				if job.Progress != nil {
+					job.Progress.SetAllPaused(false)
+				}
+				slog.Info("Resumed running job", "jobID", jobID)
+			}
+		}
+		p.jobsMux.RUnlock()
+		
+		slog.Info("Processor resumed - new jobs allowed, active jobs resumed")
+	}
+}
+
+// IsPaused returns whether the processor is currently paused
+func (p *Processor) IsPaused() bool {
+	p.pausedMux.RLock()
+	defer p.pausedMux.RUnlock()
+	return p.isPaused
 }
 
 func getFileName(path string) string {

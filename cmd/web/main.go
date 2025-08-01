@@ -237,6 +237,9 @@ func (ws *WebServer) setupRoutes() {
 	api.HandleFunc("/upload/cancel", ws.handleCancelUpload).Methods("POST")
 	api.HandleFunc("/nzb/{id}/download", ws.handleDownloadNZB).Methods("GET")
 	api.HandleFunc("/processor/status", ws.handleGetProcessorStatus).Methods("GET")
+	api.HandleFunc("/processor/pause", ws.handlePauseProcessing).Methods("POST")
+	api.HandleFunc("/processor/resume", ws.handleResumeProcessing).Methods("POST")
+	api.HandleFunc("/processor/paused", ws.handleIsProcessingPaused).Methods("GET")
 	api.HandleFunc("/running-jobs", ws.handleGetRunningJobs).Methods("GET")
 	api.HandleFunc("/running-job-details", ws.handleGetRunningJobDetails).Methods("GET")
 	api.HandleFunc("/validate-server", ws.handleValidateServer).Methods("POST")
@@ -644,6 +647,30 @@ func (ws *WebServer) handleSetupComplete(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (ws *WebServer) handlePauseProcessing(w http.ResponseWriter, r *http.Request) {
+	if err := ws.app.PauseProcessing(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (ws *WebServer) handleResumeProcessing(w http.ResponseWriter, r *http.Request) {
+	if err := ws.app.ResumeProcessing(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (ws *WebServer) handleIsProcessingPaused(w http.ResponseWriter, r *http.Request) {
+	paused := ws.app.IsProcessingPaused()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"paused": paused})
 }
 
 func main() {

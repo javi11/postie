@@ -57,13 +57,19 @@ export function HandleDroppedFiles(arg1:Array<string>):Promise<void>;
 
 export function HasPendingConfigChanges():Promise<boolean>;
 
+export function IsProcessingPaused():Promise<boolean>;
+
 export function IsUploading():Promise<boolean>;
 
 export function NavigateToDashboard():Promise<void>;
 
 export function NavigateToSettings():Promise<void>;
 
+export function PauseProcessing():Promise<void>;
+
 export function RemoveFromQueue(arg1:string):Promise<void>;
+
+export function ResumeProcessing():Promise<void>;
 
 export function RetryJob(arg1:string):Promise<void>;
 
