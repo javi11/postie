@@ -144,7 +144,7 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 		return nil
 	}
 
-	slog.Info("Processing file", "msg", msg.ID, "path", job.Path)
+	slog.Info("Processing file", "msg", msg.ID, "path", job.Path, "priority", job.Priority)
 
 	// Process the file
 	actualNzbPath, err := p.processFile(ctx, msg, job)

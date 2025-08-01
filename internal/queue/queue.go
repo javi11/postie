@@ -24,6 +24,14 @@ type QueueInterface interface {
 	ClearQueue() error
 	GetQueueStats() (map[string]interface{}, error)
 	SetQueueItemPriorityWithReorder(ctx context.Context, id string, newPriority int) error
+	GetMigrationStatus() (*GooseMigrationStatus, error)
+	RunMigrations() error
+	RollbackMigration() error
+	MigrateTo(version int64) error
+	ResetDatabase() error
+	IsLegacyDatabase() (bool, error)
+	RecreateDatabase() error
+	EnsureMigrationCompatibility() error
 }
 
 type Queue struct {
@@ -97,9 +105,10 @@ func New(ctx context.Context, cfg config.QueueConfig) (*Queue, error) {
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
-	// Initialize goqite schema and completed items table
-	if err := initGoqiteSchema(db); err != nil {
-		return nil, fmt.Errorf("failed to initialize goqite schema: %w", err)
+	// Run database migrations using goose (handles legacy database recreation)
+	migrationRunner := NewGooseMigrationRunner(db)
+	if err := migrationRunner.EnsureMigrationCompatibility(); err != nil {
+		return nil, fmt.Errorf("failed to ensure database compatibility: %w", err)
 	}
 
 	// Create goqite queue
@@ -119,59 +128,52 @@ func New(ctx context.Context, cfg config.QueueConfig) (*Queue, error) {
 	}, nil
 }
 
-func initGoqiteSchema(db *sql.DB) error {
-	// Use the goqite SQLite schema
-	schema := `
-		create table if not exists goqite (
-		  id text primary key default ('m_' || lower(hex(randomblob(16)))),
-		  created text not null default (strftime('%Y-%m-%dT%H:%M:%fZ')),
-		  updated text not null default (strftime('%Y-%m-%dT%H:%M:%fZ')),
-		  queue text not null,
-		  body blob not null,
-		  timeout text not null default (strftime('%Y-%m-%dT%H:%M:%fZ')),
-		  received integer not null default 0,
-		  priority integer not null default 0
-		) strict;
+// GetMigrationStatus returns the current migration status using goose
+func (q *Queue) GetMigrationStatus() (*GooseMigrationStatus, error) {
+	migrationRunner := NewGooseMigrationRunner(q.db)
+	return migrationRunner.GetStatus()
+}
 
-		create trigger if not exists goqite_updated_timestamp after update on goqite begin
-		  update goqite set updated = strftime('%Y-%m-%dT%H:%M:%fZ') where id = old.id;
-		end;
+// RunMigrations runs all pending migrations using goose
+func (q *Queue) RunMigrations() error {
+	migrationRunner := NewGooseMigrationRunner(q.db)
+	return migrationRunner.MigrateUp()
+}
 
-		create index if not exists goqite_queue_created_idx on goqite (queue, created);
+// RollbackMigration rolls back the last applied migration using goose
+func (q *Queue) RollbackMigration() error {
+	migrationRunner := NewGooseMigrationRunner(q.db)
+	return migrationRunner.MigrateDown()
+}
 
-		-- Table for completed items
-		create table if not exists completed_items (
-		  id text primary key,
-		  path text not null,
-		  size integer not null,
-		  priority integer not null default 0,
-		  nzb_path text not null,
-		  created_at text not null,
-		  completed_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ')),
-		  job_data blob not null
-		);
+// MigrateTo migrates to a specific version using goose
+func (q *Queue) MigrateTo(version int64) error {
+	migrationRunner := NewGooseMigrationRunner(q.db)
+	return migrationRunner.MigrateTo(version)
+}
 
-		create index if not exists completed_items_completed_at_idx on completed_items (completed_at);
-		create index if not exists completed_items_path_idx on completed_items (path);
+// ResetDatabase drops all tables and re-runs all migrations using goose
+func (q *Queue) ResetDatabase() error {
+	migrationRunner := NewGooseMigrationRunner(q.db)
+	return migrationRunner.Reset()
+}
 
-		-- Table for errored items
-		create table if not exists errored_items (
-			id text primary key,
-			path text not null,
-			size integer not null,
-			priority integer not null default 0,
-			error_message text not null,
-			created_at text not null,
-			errored_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ')),
-			job_data blob not null
-		);
+// IsLegacyDatabase checks if the database is a legacy (non-goose) database
+func (q *Queue) IsLegacyDatabase() (bool, error) {
+	migrationRunner := NewGooseMigrationRunner(q.db)
+	return migrationRunner.IsLegacyDatabase()
+}
 
-		create index if not exists errored_items_errored_at_idx on errored_items (errored_at);
-		create index if not exists errored_items_path_idx on errored_items (path);
-	`
+// RecreateDatabase drops all tables and recreates them using goose migrations
+func (q *Queue) RecreateDatabase() error {
+	migrationRunner := NewGooseMigrationRunner(q.db)
+	return migrationRunner.RecreateDatabase()
+}
 
-	_, err := db.Exec(schema)
-	return err
+// EnsureMigrationCompatibility ensures the database is compatible with goose migrations
+func (q *Queue) EnsureMigrationCompatibility() error {
+	migrationRunner := NewGooseMigrationRunner(q.db)
+	return migrationRunner.EnsureMigrationCompatibility()
 }
 
 // AddFile adds a file to the queue for processing
@@ -349,11 +351,12 @@ func (q *Queue) GetQueueItems() ([]QueueItem, error) {
 	var items []QueueItem
 
 	// Get active queue items (only pending items, not running ones)
+	// goqite uses higher numbers for higher priority, so ORDER BY priority DESC
 	rows, err := q.db.Query(`
 		SELECT id, created, updated, body, timeout, received
 		FROM goqite 
 		WHERE queue = 'file_jobs'
-		ORDER BY priority ASC, created ASC
+		ORDER BY priority DESC, created ASC
 		LIMIT 100
 	`)
 	if err != nil {

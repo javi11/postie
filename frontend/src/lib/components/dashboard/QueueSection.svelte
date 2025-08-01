@@ -268,14 +268,14 @@ function changeItemsPerPage(event: Event) {
                         <button
                           class="btn btn-xs btn-success"
                           title={$t("dashboard.queue.increase_priority")}
-                          onclick={() => changePriority(item.id, Math.max(0, item.priority - 1))}
-                          disabled={item.priority <= 0}
+                          onclick={() => changePriority(item.id, item.priority + 1)}
                         >▲</button>
                         <span class="px-2 py-1 text-xs font-mono bg-base-200 rounded min-w-[2rem] text-center">{item.priority}</span>
                         <button
                           class="btn btn-xs btn-outline"
                           title={$t("dashboard.queue.decrease_priority")}
-                          onclick={() => changePriority(item.id, item.priority + 1)}
+                          onclick={() => changePriority(item.id, Math.max(0, item.priority - 1))}
+                          disabled={item.priority <= 0}
                         >▼</button>
                       </div>
                     {:else}
