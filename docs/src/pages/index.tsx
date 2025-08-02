@@ -32,7 +32,7 @@ function HomepageHeader() {
         </div>
         <div className={styles.buttons} style={{ marginTop: '20px' }}>
           <Link
-            to="https://github.com/javi11/postie/releases/latest/download/postie-gui-windows-amd64.zip"
+            to="https://github.com/javi11/postie/releases/latest/download/postie-gui-windows-amd64.tar.gz"
             style={{ margin: '5px', display: 'inline-block' }}>
             <img 
               src="/img/download-for-windows.webp" 
@@ -41,7 +41,7 @@ function HomepageHeader() {
             />
           </Link>
           <Link
-            to="https://github.com/javi11/postie/releases/latest/download/postie-gui-macos-universal.zip"
+            to="https://github.com/javi11/postie/releases/latest/download/postie-gui-macos-universal.tar.gz"
             style={{ margin: '5px', display: 'inline-block' }}>
             <img 
               src="/img/download-for-mac.png" 

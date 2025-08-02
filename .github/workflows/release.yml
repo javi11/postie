@@ -193,23 +193,25 @@ jobs:
           name: postie-gui-macos-universal
           path: ./macos-gui
 
-      # Create archives for GUI artifacts
+      # Create archives for GUI artifacts with proper permissions preserved
       - name: Create Windows GUI archive
         run: |
           cd windows-gui
-          zip -r ../postie-gui-windows-amd64.zip .
+          # Create archive preserving all attributes
+          tar -czf ../postie-gui-windows-amd64.tar.gz .
 
-      - name: Create macOS GUI archive
+      - name: Create macOS GUI archive  
         run: |
           cd macos-gui
-           zip -r ../postie-gui-macos-universal.zip .
+          # Use tar to preserve all permissions and extended attributes
+          tar -czf ../postie-gui-macos-universal.tar.gz .
 
       # Upload GUI artifacts to release
       - name: Upload GUI artifacts to release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            postie-gui-windows-amd64.zip
-            postie-gui-macos-universal.zip
+            postie-gui-windows-amd64.tar.gz
+            postie-gui-macos-universal.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
