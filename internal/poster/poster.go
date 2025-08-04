@@ -23,6 +23,7 @@ import (
 	"github.com/javi11/postie/internal/nzb"
 	"github.com/javi11/postie/internal/par2"
 	"github.com/javi11/postie/internal/pausable"
+	poolmanager "github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/progress"
 	"github.com/sourcegraph/conc/pool"
 )
@@ -84,11 +85,16 @@ type poster struct {
 	jobProgress progress.JobProgress
 }
 
-// New creates a new poster
-func New(ctx context.Context, cfg config.Config, jobProgress progress.JobProgress) (Poster, error) {
-	pool, err := cfg.GetNNTPPool()
-	if err != nil {
-		return nil, fmt.Errorf("error getting NNTP pool: %w", err)
+// New creates a new poster using dependency injection for the connection pool manager
+func New(ctx context.Context, cfg config.Config, poolManager *poolmanager.Manager, jobProgress progress.JobProgress) (Poster, error) {
+	if poolManager == nil {
+		return nil, fmt.Errorf("pool manager cannot be nil")
+	}
+
+	// Get the pool from the manager
+	nntpPool := poolManager.GetPool()
+	if nntpPool == nil {
+		return nil, fmt.Errorf("connection pool is not available")
 	}
 
 	stats := &Stats{
@@ -98,7 +104,7 @@ func New(ctx context.Context, cfg config.Config, jobProgress progress.JobProgres
 	p := &poster{
 		cfg:         cfg.GetPostingConfig(),
 		checkCfg:    cfg.GetPostCheckConfig(),
-		pool:        pool,
+		pool:        nntpPool,
 		stats:       stats,
 		jobProgress: jobProgress,
 	}
@@ -113,37 +119,6 @@ func New(ctx context.Context, cfg config.Config, jobProgress progress.JobProgres
 
 func (p *poster) Close() {
 	slog.Info("Closing poster")
-
-	if p.pool != nil {
-		done := make(chan struct{})
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					slog.Error("Panic during pool quit", "panic", r)
-				}
-				close(done)
-			}()
-			p.pool.Quit()
-		}()
-
-		// Use longer timeout on Windows due to slower networking cleanup
-		timeout := 5 * time.Second
-		if runtime.GOOS == "windows" {
-			timeout = 10 * time.Second
-		}
-
-		select {
-		case <-done:
-			// Quit completed successfully
-			slog.Debug("Connection pool closed successfully")
-		case <-time.After(timeout):
-			// Timeout occurred, log warning but continue
-			slog.Warn("Pool quit timed out, forcing close",
-				"timeout_seconds", timeout.Seconds(),
-				"os", runtime.GOOS)
-		}
-		p.pool = nil
-	}
 }
 
 // Post posts files from a directory to Usenet

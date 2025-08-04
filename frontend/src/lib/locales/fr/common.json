@@ -4,8 +4,9 @@
 		"nav": {
 			"dashboard": "Tableau de bord",
 			"settings": "Paramètres",
-			"language": "Langue",
-			"logs": "Logs"
+			"metrics": "Métriques",
+			"logs": "Logs",
+			"language": "Langue"
 		},
 		"actions": {
 			"save": "Sauvegarder",

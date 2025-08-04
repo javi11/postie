@@ -9,7 +9,6 @@ import (
 
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/pkg/parpardownloader"
-	"github.com/javi11/postie/pkg/postie"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -135,11 +134,6 @@ func (a *App) SaveConfig(configData *config.ConfigData) error {
 
 // applyConfigChanges applies the configuration changes immediately
 func (a *App) applyConfigChanges(configData *config.ConfigData) error {
-	if a.postie != nil {
-		a.postie.Close()
-		a.postie = nil
-	}
-
 	if err := config.SaveConfig(configData, a.configPath); err != nil {
 		return err
 	}
@@ -147,6 +141,16 @@ func (a *App) applyConfigChanges(configData *config.ConfigData) error {
 	// Reload configuration
 	if err := a.loadConfig(); err != nil {
 		return err
+	}
+
+	// Update the connection pool manager with new configuration
+	if a.poolManager != nil {
+		if err := a.poolManager.UpdateConfig(a.config); err != nil {
+			slog.Error("Failed to update connection pool manager with new config", "error", err)
+			// Don't fail the entire config update for this, but log the error
+		} else {
+			slog.Info("Connection pool manager updated with new configuration")
+		}
 	}
 
 	// Clear any pending config since we just applied changes
@@ -252,23 +256,6 @@ func (a *App) loadConfig() error {
 	// Only create postie instance if we have valid servers
 	if validServers == 0 {
 		slog.Info("No valid servers configured, skipping postie instance creation")
-		a.postie = nil
-		return nil
-	}
-
-	if a.postie != nil {
-		a.postie.Close()
-		a.postie = nil
-	}
-
-	// Create postie instance - pass nil for progress manager since processor doesn't need it
-	a.postie, err = postie.New(context.Background(), cfg, nil)
-	if err != nil {
-		slog.Error("Failed to create postie instance", "error", err)
-		// Don't return error here - allow app to continue without postie
-		// The user can configure servers later and restart
-		a.criticalErrorMessage = err.Error()
-		a.postie = nil
 		return nil
 	}
 

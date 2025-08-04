@@ -1,0 +1,50 @@
+{
+	"metrics": {
+		"title": "NNTP Pool Metrics",
+		"description": "Real-time performance and connection metrics for your NNTP servers",
+		"auto_refresh": "Auto-refresh",
+		"refresh": "Refresh",
+		"error_loading": "Failed to load metrics",
+		"error_title": "Unable to load metrics",
+		
+		"active_connections": "Active Connections",
+		"download_speed": "Download Speed",
+		"upload_speed": "Upload Speed",
+		"uptime": "Pool Uptime",
+		
+		"performance": "Performance Metrics",
+		"error_rate": "Error Rate",
+		"total_acquires": "Total Acquires",
+		"total_articles": "Articles Retrieved",
+		"avg_wait_time": "Avg Wait Time",
+		"total_errors": "Total Errors",
+		
+		"data_transfer": "Data Transfer",
+		"total_downloaded": "Total Downloaded",
+		"total_uploaded": "Total Uploaded",
+		
+		"providers": "NNTP Providers",
+		"provider_host": "Host/Server",
+		"status": "Status",
+		"connections": "Connections",
+		"success_rate": "Success Rate",
+		"avg_age": "Avg Connection Age",
+
+		"articles_posted": "Articles Posted",
+		"pool_uptime": "Pool Uptime",
+		"posting_performance": "Posting Performance",
+		"posting_success_rate": "Posting Success Rate",
+		"posting_error_rate": "Posting Error Rate",
+		"connection_acquires": "Connection Acquires",
+		"avg_connection_wait": "Avg Connection Wait Time",
+		"posting_errors": "Posting Errors",
+		"upload_statistics": "Upload Statistics",
+		"total_data_posted": "Total Data Posted",
+		"current_upload_speed": "Current Upload Speed",
+		"average_article_size": "Average Article Size",
+		"nntp_servers": "NNTP Servers",
+		"server_host": "Server Host",
+		"data_posted": "Data Posted",
+		"connection_age": "Connection Age"
+	}
+}

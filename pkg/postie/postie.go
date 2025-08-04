@@ -15,6 +15,7 @@ import (
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/nzb"
 	"github.com/javi11/postie/internal/par2"
+	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/poster"
 	"github.com/javi11/postie/internal/progress"
 	"github.com/javi11/postie/pkg/fileinfo"
@@ -35,6 +36,7 @@ type Postie struct {
 func New(
 	ctx context.Context,
 	cfg config.Config,
+	poolManager *pool.Manager,
 	jobProgress progress.JobProgress,
 ) (*Postie, error) {
 	// Ensure par2 executable exists and get its path
@@ -52,7 +54,7 @@ func New(
 	par2runner := par2.New(ctx, postingConfig.ArticleSizeInBytes, par2Cfg, jobProgress)
 
 	// Create poster with progress manager
-	p, err := poster.New(ctx, cfg, jobProgress)
+	p, err := poster.New(ctx, cfg, poolManager, jobProgress)
 	if err != nil {
 		slog.ErrorContext(ctx, "Error creating poster", "error", err)
 

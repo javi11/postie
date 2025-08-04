@@ -66,6 +66,10 @@ export function GetNZBContent(arg1) {
   return window['go']['backend']['App']['GetNZBContent'](arg1);
 }
 
+export function GetNntpPoolMetrics() {
+  return window['go']['backend']['App']['GetNntpPoolMetrics']();
+}
+
 export function GetOutputDirectory() {
   return window['go']['backend']['App']['GetOutputDirectory']();
 }
@@ -172,6 +176,10 @@ export function SetWebMode(arg1) {
 
 export function SetupWizardComplete(arg1) {
   return window['go']['backend']['App']['SetupWizardComplete'](arg1);
+}
+
+export function Shutdown() {
+  return window['go']['backend']['App']['Shutdown']();
 }
 
 export function Startup(arg1) {

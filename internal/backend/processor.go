@@ -36,11 +36,6 @@ func (a *App) initializeProcessor() error {
 		return nil
 	}
 
-	if a.postie == nil {
-		slog.Info("No postie instance available, skipping processor initialization")
-		return nil
-	}
-
 	if a.queue == nil {
 		slog.Warn("Queue not available, skipping processor initialization")
 		return nil
@@ -64,6 +59,7 @@ func (a *App) initializeProcessor() error {
 		Queue:                     a.queue,
 		Config:                    a.config,
 		QueueConfig:               queueCfg,
+		PoolManager:               a.poolManager,
 		OutputFolder:              outputDir,
 		DeleteOriginalFile:        watcherCfg.DeleteOriginalFile,
 		MaintainOriginalExtension: a.config.GetMaintainOriginalExtension(),

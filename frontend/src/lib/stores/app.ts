@@ -9,7 +9,6 @@ export const appStatus = writable<backend.AppStatus>({
 	configValid: false,
 	error: "",
 	hasConfig: false,
-	hasPostie: false,
 	hasServers: false,
 	isFirstStart: false,
 	serverCount: 0,

@@ -8,7 +8,7 @@ import { t } from "$lib/i18n";
 import { appStatus } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import type { Par2DownloadStatus } from "$lib/types";
-import { ChartPie, FileText, Settings } from "lucide-svelte";
+import { ChartPie, FileText, Settings, Activity } from "lucide-svelte";
 import { onMount } from "svelte";
 import "../style.css";
 
@@ -171,6 +171,15 @@ function handler(error: unknown, _reset: () => void) {
 						>
 							<Settings class="w-4 h-4" />
 							<span class="hidden md:inline font-medium">{$t('common.nav.settings')}</span>
+						</button>
+						<button
+							class="btn btn-sm {page.route.id === "/metrics" ? "btn-info shadow-lg" : "btn-ghost hover:bg-base-200"} transition-all duration-200"
+							onclick={() => goto("/metrics")}
+							disabled={needsConfiguration || criticalConfigError}
+							aria-current={page.route.id === "/metrics" ? "page" : undefined}
+						>
+							<Activity class="w-4 h-4" />
+							<span class="hidden md:inline font-medium">{$t('common.nav.metrics')}</span>
 						</button>
 						<button
 							class="btn btn-sm {page.route.id === "/logs" ? "btn-accent shadow-lg" : "btn-ghost hover:bg-base-200"} transition-all duration-200"

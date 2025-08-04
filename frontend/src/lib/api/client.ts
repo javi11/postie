@@ -2,6 +2,7 @@
 
 import { browser } from "$app/environment";
 import type { backend, config, processor } from "$lib/wailsjs/go/models";
+import type { NntpPoolMetrics } from "$lib/types";
 import type { WebClient } from "./web-client";
 
 type WailsApp = typeof import("$lib/wailsjs/go/backend/App");
@@ -681,6 +682,23 @@ export class UnifiedClient {
 		if (this._environment === "wails") {
 			const client = await getWailsClient();
 			return client.App.SelectOutputDirectory();
+		}
+
+		throw new Error("No client available");
+	}
+
+	// NNTP Pool Metrics
+	async getNntpPoolMetrics(): Promise<NntpPoolMetrics> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			return client.App.GetNntpPoolMetrics();
+		}
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.getNntpPoolMetrics();
 		}
 
 		throw new Error("No client available");

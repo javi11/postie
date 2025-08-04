@@ -3,8 +3,9 @@
 		"nav": {
 			"dashboard": "Panel de Control",
 			"settings": "Configuración",
-			"language": "Idioma",
-			"logs": "Logs"
+			"metrics": "Métricas",
+			"logs": "Logs",
+			"language": "Idioma"
 		},
 		"actions": {
 			"save": "Guardar",

@@ -1,7 +1,6 @@
 export namespace backend {
 	
 	export class AppStatus {
-	    hasPostie: boolean;
 	    hasConfig: boolean;
 	    configPath: string;
 	    uploading: boolean;
@@ -20,7 +19,6 @@ export namespace backend {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.hasPostie = source["hasPostie"];
 	        this.hasConfig = source["hasConfig"];
 	        this.configPath = source["configPath"];
 	        this.uploading = source["uploading"];
@@ -34,6 +32,93 @@ export namespace backend {
 	        this.needsConfiguration = source["needsConfiguration"];
 	    }
 	}
+	export class NntpProviderMetrics {
+	    host: string;
+	    username: string;
+	    state: string;
+	    totalConnections: number;
+	    maxConnections: number;
+	    acquiredConnections: number;
+	    idleConnections: number;
+	    totalBytesUploaded: number;
+	    totalArticlesPosted: number;
+	    successRate: number;
+	    averageConnectionAge: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new NntpProviderMetrics(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.host = source["host"];
+	        this.username = source["username"];
+	        this.state = source["state"];
+	        this.totalConnections = source["totalConnections"];
+	        this.maxConnections = source["maxConnections"];
+	        this.acquiredConnections = source["acquiredConnections"];
+	        this.idleConnections = source["idleConnections"];
+	        this.totalBytesUploaded = source["totalBytesUploaded"];
+	        this.totalArticlesPosted = source["totalArticlesPosted"];
+	        this.successRate = source["successRate"];
+	        this.averageConnectionAge = source["averageConnectionAge"];
+	    }
+	}
+	export class NntpPoolMetrics {
+	    timestamp: string;
+	    uptime: number;
+	    activeConnections: number;
+	    uploadSpeed: number;
+	    commandSuccessRate: number;
+	    errorRate: number;
+	    totalAcquires: number;
+	    totalBytesUploaded: number;
+	    totalArticlesRetrieved: number;
+	    totalArticlesPosted: number;
+	    averageAcquireWaitTime: number;
+	    totalErrors: number;
+	    providers: NntpProviderMetrics[];
+	
+	    static createFrom(source: any = {}) {
+	        return new NntpPoolMetrics(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.timestamp = source["timestamp"];
+	        this.uptime = source["uptime"];
+	        this.activeConnections = source["activeConnections"];
+	        this.uploadSpeed = source["uploadSpeed"];
+	        this.commandSuccessRate = source["commandSuccessRate"];
+	        this.errorRate = source["errorRate"];
+	        this.totalAcquires = source["totalAcquires"];
+	        this.totalBytesUploaded = source["totalBytesUploaded"];
+	        this.totalArticlesRetrieved = source["totalArticlesRetrieved"];
+	        this.totalArticlesPosted = source["totalArticlesPosted"];
+	        this.averageAcquireWaitTime = source["averageAcquireWaitTime"];
+	        this.totalErrors = source["totalErrors"];
+	        this.providers = this.convertValues(source["providers"], NntpProviderMetrics);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class ProcessorStatus {
 	    hasProcessor: boolean;
 	    runningJobs: number;

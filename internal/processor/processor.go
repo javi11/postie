@@ -12,6 +12,7 @@ import (
 
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/pausable"
+	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/progress"
 	"github.com/javi11/postie/internal/queue"
 	"github.com/javi11/postie/pkg/fileinfo"
@@ -25,6 +26,7 @@ type Processor struct {
 	queue        *queue.Queue
 	config       config.Config
 	cfg          config.QueueConfig
+	poolManager  *pool.Manager
 	outputFolder string
 	isRunning    bool
 	runningMux   sync.Mutex
@@ -43,6 +45,7 @@ type ProcessorOptions struct {
 	Queue                     *queue.Queue
 	Config                    config.Config
 	QueueConfig               config.QueueConfig
+	PoolManager               *pool.Manager
 	OutputFolder              string
 	DeleteOriginalFile        bool
 	MaintainOriginalExtension bool
@@ -73,6 +76,7 @@ func New(opts ProcessorOptions) *Processor {
 		queue:                     opts.Queue,
 		config:                    opts.Config,
 		cfg:                       opts.QueueConfig,
+		poolManager:               opts.PoolManager,
 		outputFolder:              opts.OutputFolder,
 		runningJobs:               make(map[string]*RunningJob),
 		deleteOriginalFile:        opts.DeleteOriginalFile,
@@ -232,7 +236,7 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 	}
 
 	// Create a postie instance for this job with progress manager
-	jobPostie, err := postie.New(jobCtx, p.config, progressJob)
+	jobPostie, err := postie.New(jobCtx, p.config, p.poolManager, progressJob)
 	if err != nil {
 		return "", fmt.Errorf("failed to create postie instance for job %s: %w", jobID, err)
 	}

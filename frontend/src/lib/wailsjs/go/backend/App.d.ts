@@ -37,6 +37,8 @@ export function GetLogsPaginated(arg1:number,arg2:number):Promise<string>;
 
 export function GetNZBContent(arg1:string):Promise<string>;
 
+export function GetNntpPoolMetrics():Promise<backend.NntpPoolMetrics>;
+
 export function GetOutputDirectory():Promise<string>;
 
 export function GetPendingConfigStatus():Promise<Record<string, any>>;
@@ -90,6 +92,8 @@ export function SetWebEventEmitter(arg1:any):Promise<void>;
 export function SetWebMode(arg1:boolean):Promise<void>;
 
 export function SetupWizardComplete(arg1:backend.SetupWizardData):Promise<void>;
+
+export function Shutdown():Promise<void>;
 
 export function Startup(arg1:context.Context):Promise<void>;
 
