@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/javi11/postie/internal/config"
+	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/processor"
 	"github.com/javi11/postie/internal/queue"
 	"github.com/javi11/postie/internal/watcher"
@@ -59,6 +60,18 @@ The watch command will monitor the configured directory and upload files accordi
 			return err
 		}
 
+		// Initialize connection pool manager
+		poolManager, err := pool.New(cfg)
+		if err != nil {
+			slog.ErrorContext(ctx, "Error creating connection pool manager", "error", err)
+			return err
+		}
+		defer func() {
+			if err := poolManager.Close(); err != nil {
+				slog.ErrorContext(ctx, "Error closing connection pool manager", "error", err)
+			}
+		}()
+
 		// Initialize queue
 		q, err := queue.New(ctx, queueCfg)
 		if err != nil {
@@ -76,6 +89,7 @@ The watch command will monitor the configured directory and upload files accordi
 			Queue:                     q,
 			Config:                    cfg,
 			QueueConfig:               queueCfg,
+			PoolManager:               poolManager,
 			OutputFolder:              outputFolder,
 			DeleteOriginalFile:        watcherCfg.DeleteOriginalFile,
 			MaintainOriginalExtension: cfg.GetMaintainOriginalExtension(),

@@ -407,7 +407,7 @@
                       for="insecure-ssl-{index}"
                       class="label-text cursor-pointer"
                     >
-                      {$t("settings.server.insecure_ssl")}
+                      {$t("settings.server.allow_insecure_ssl")}
                     </label>
                   </div>
                 {/if}
@@ -417,7 +417,7 @@
                 <div>
                   <label for="idle-time-{index}" class="label">
                     <span class="label-text"
-                      >{$t("settings.server.max_connection_idle_time")}</span
+                      >{$t("settings.server.connection_idle_timeout")}</span
                     >
                   </label>
                   <input
@@ -433,14 +433,14 @@
                     onchange={() => onServerFieldChange(index)}
                   />
                   <p class="text-sm text-base-content/70 mt-1">
-                    {$t("settings.server.max_connection_idle_time_description")}
+                    {$t("settings.server.connection_idle_timeout_description")}
                   </p>
                 </div>
 
                 <div>
                   <label for="ttl-{index}" class="label">
                     <span class="label-text"
-                      >{$t("settings.server.max_connection_ttl")}</span
+                      >{$t("settings.server.connection_ttl")}</span
                     >
                   </label>
                   <input
@@ -456,7 +456,7 @@
                     onchange={() => onServerFieldChange(index)}
                   />
                   <p class="text-sm text-base-content/70 mt-1">
-                    {$t("settings.server.max_connection_ttl_description")}
+                    {$t("settings.server.connection_ttl_description")}
                   </p>
                 </div>
               {/if}

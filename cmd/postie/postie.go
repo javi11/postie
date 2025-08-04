@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/javi11/postie/internal/config"
+	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/progress"
 	"github.com/javi11/postie/pkg/fileinfo"
 	"github.com/javi11/postie/pkg/postie"
@@ -37,10 +38,22 @@ It supports configuration via a YAML file and can process multiple files in a di
 
 		setupLogging(verbose)
 
+		// Initialize connection pool manager
+		poolManager, err := pool.New(cfg)
+		if err != nil {
+			slog.ErrorContext(ctx, "Error creating connection pool manager", "error", err)
+			return err
+		}
+		defer func() {
+			if err := poolManager.Close(); err != nil {
+				slog.ErrorContext(ctx, "Error closing connection pool manager", "error", err)
+			}
+		}()
+
 		jobProgress := progress.NewProgressJob("postie-job")
 		defer jobProgress.Close()
 
-		poster, err := postie.New(ctx, cfg, jobProgress)
+		poster, err := postie.New(ctx, cfg, poolManager, jobProgress)
 		if err != nil {
 			slog.ErrorContext(ctx, "Error creating postie", "error", err)
 			return err

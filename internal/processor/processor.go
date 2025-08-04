@@ -12,6 +12,7 @@ import (
 
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/pausable"
+	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/progress"
 	"github.com/javi11/postie/internal/queue"
 	"github.com/javi11/postie/pkg/fileinfo"
@@ -25,24 +26,27 @@ type Processor struct {
 	queue        *queue.Queue
 	config       config.Config
 	cfg          config.QueueConfig
+	poolManager  *pool.Manager
 	outputFolder string
 	isRunning    bool
 	runningMux   sync.Mutex
 	// Track running jobs and their contexts for cancellation
 	runningJobs               map[string]*RunningJob
 	jobsMux                   sync.RWMutex
+	jobsWg                    sync.WaitGroup // WaitGroup to track running jobs
 	deleteOriginalFile        bool
 	maintainOriginalExtension bool
 	watchFolder               string // Path to the watch folder for maintaining folder structure
 	// Pause/resume functionality
-	isPaused   bool
-	pausedMux  sync.RWMutex
+	isPaused  bool
+	pausedMux sync.RWMutex
 }
 
 type ProcessorOptions struct {
 	Queue                     *queue.Queue
 	Config                    config.Config
 	QueueConfig               config.QueueConfig
+	PoolManager               *pool.Manager
 	OutputFolder              string
 	DeleteOriginalFile        bool
 	MaintainOriginalExtension bool
@@ -58,9 +62,9 @@ type RunningJobDetails struct {
 
 type RunningJob struct {
 	RunningJobDetails
-	Progress       progress.JobProgress
-	cancel         context.CancelFunc
-	pausableCtx    *pausable.Context
+	Progress    progress.JobProgress
+	cancel      context.CancelFunc
+	pausableCtx *pausable.Context
 }
 
 // RunningJobItem represents a running job for the frontend (kept for backward compatibility)
@@ -73,6 +77,7 @@ func New(opts ProcessorOptions) *Processor {
 		queue:                     opts.Queue,
 		config:                    opts.Config,
 		cfg:                       opts.QueueConfig,
+		poolManager:               opts.PoolManager,
 		outputFolder:              opts.OutputFolder,
 		runningJobs:               make(map[string]*RunningJob),
 		deleteOriginalFile:        opts.DeleteOriginalFile,
@@ -104,7 +109,7 @@ func (p *Processor) processQueueItems(ctx context.Context) error {
 	p.pausedMux.RLock()
 	paused := p.isPaused
 	p.pausedMux.RUnlock()
-	
+
 	if paused {
 		return nil // Skip processing when paused
 	}
@@ -188,7 +193,7 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 
 	// Create a context for this specific job that can be cancelled independently
 	jobCtx, jobCancel := context.WithCancel(ctx)
-	
+
 	// Create a pausable context wrapper
 	pausableCtx := pausable.NewContext(jobCtx)
 
@@ -197,6 +202,10 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 	// Track detailed job information
 	progressJob := progress.NewProgressJob(jobID)
 	defer progressJob.Close()
+
+	// Add to WaitGroup before adding to running jobs
+	p.jobsWg.Add(1)
+
 	p.runningJobs[jobID] = &RunningJob{
 		RunningJobDetails: RunningJobDetails{
 			ID:       jobID,
@@ -208,7 +217,7 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 		cancel:      jobCancel,
 		pausableCtx: pausableCtx,
 	}
-	
+
 	// Apply current pause state to new job
 	if p.isPaused {
 		pausableCtx.Pause()
@@ -222,7 +231,8 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 		p.jobsMux.Lock()
 		delete(p.runningJobs, jobID)
 		p.jobsMux.Unlock()
-		jobCancel() // Ensure context is cancelled
+		jobCancel()     // Ensure context is cancelled
+		p.jobsWg.Done() // Signal job completion to WaitGroup
 	}()
 
 	// Create file info
@@ -232,7 +242,7 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 	}
 
 	// Create a postie instance for this job with progress manager
-	jobPostie, err := postie.New(jobCtx, p.config, progressJob)
+	jobPostie, err := postie.New(jobCtx, p.config, p.poolManager, progressJob)
 	if err != nil {
 		return "", fmt.Errorf("failed to create postie instance for job %s: %w", jobID, err)
 	}
@@ -376,10 +386,10 @@ func (p *Processor) IsPathBeingProcessed(path string) bool {
 func (p *Processor) PauseProcessing() {
 	p.pausedMux.Lock()
 	defer p.pausedMux.Unlock()
-	
+
 	if !p.isPaused {
 		p.isPaused = true
-		
+
 		// Pause all currently running jobs
 		p.jobsMux.RLock()
 		for jobID, job := range p.runningJobs {
@@ -393,7 +403,7 @@ func (p *Processor) PauseProcessing() {
 			}
 		}
 		p.jobsMux.RUnlock()
-		
+
 		slog.Info("Processor paused - new jobs blocked, active jobs suspended")
 	}
 }
@@ -402,10 +412,10 @@ func (p *Processor) PauseProcessing() {
 func (p *Processor) ResumeProcessing() {
 	p.pausedMux.Lock()
 	defer p.pausedMux.Unlock()
-	
+
 	if p.isPaused {
 		p.isPaused = false
-		
+
 		// Resume all currently running jobs
 		p.jobsMux.RLock()
 		for jobID, job := range p.runningJobs {
@@ -419,7 +429,7 @@ func (p *Processor) ResumeProcessing() {
 			}
 		}
 		p.jobsMux.RUnlock()
-		
+
 		slog.Info("Processor resumed - new jobs allowed, active jobs resumed")
 	}
 }
@@ -429,6 +439,59 @@ func (p *Processor) IsPaused() bool {
 	p.pausedMux.RLock()
 	defer p.pausedMux.RUnlock()
 	return p.isPaused
+}
+
+func (p *Processor) Close() error {
+	slog.Info("Processor shutdown initiated")
+
+	// Get a snapshot of running jobs and cancel them
+	p.jobsMux.Lock()
+	runningJobsCount := len(p.runningJobs)
+
+	// Cancel all running jobs
+	for jobID, job := range p.runningJobs {
+		job.cancel() // Cancel the job's context
+		slog.Info("Cancelled running job", "jobID", jobID)
+	}
+	p.jobsMux.Unlock()
+
+	if runningJobsCount == 0 {
+		slog.Info("No running jobs to wait for")
+		return nil
+	}
+
+	slog.Info("Waiting for running jobs to be cancelled", "count", runningJobsCount)
+
+	// Wait for all jobs to complete with a timeout using WaitGroup
+	timeout := 30 * time.Second
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		p.jobsWg.Wait() // Wait for all jobs to call Done()
+	}()
+
+	// Wait for jobs to complete or timeout
+	select {
+	case <-done:
+		slog.Info("All running jobs where cancelled successfully")
+	case <-time.After(timeout):
+		p.jobsMux.RLock()
+		remainingJobs := len(p.runningJobs)
+		p.jobsMux.RUnlock()
+
+		slog.Warn("Timeout waiting for jobs to complete",
+			"remainingJobs", remainingJobs,
+			"timeout", timeout)
+	}
+
+	// Force clear any remaining jobs after timeout
+	p.jobsMux.Lock()
+	p.runningJobs = make(map[string]*RunningJob)
+	p.jobsMux.Unlock()
+
+	slog.Info("Processor shutdown completed")
+	return nil
 }
 
 func getFileName(path string) string {

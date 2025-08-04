@@ -1,6 +1,7 @@
 // Web API client for browser environment (replaces Wails bindings)
 
 import type { backend, config, processor } from "$lib/wailsjs/go/models";
+import type { NntpPoolMetrics } from "$lib/types";
 
 const API_BASE = "/api";
 
@@ -339,6 +340,11 @@ export class WebClient {
 
 	async getAppliedConfig(): Promise<config.ConfigData> {
 		return this.get<config.ConfigData>("/config/applied");
+	}
+
+	// NNTP Pool Metrics
+	async getNntpPoolMetrics(): Promise<NntpPoolMetrics> {
+		return this.get<NntpPoolMetrics>("/metrics/nntp-pool");
 	}
 }
 

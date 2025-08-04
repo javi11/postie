@@ -179,6 +179,10 @@ func main() {
 				}
 			})
 		},
+		OnShutdown: func(ctx context.Context) {
+			// Gracefully shutdown the app and cleanup resources
+			app.Shutdown()
+		},
 		LogLevelProduction: logger.DEBUG,
 		Bind: []interface{}{
 			app,

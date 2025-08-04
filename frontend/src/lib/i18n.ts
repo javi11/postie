@@ -9,16 +9,19 @@ register('en', () => import('./locales/en/common.json'));
 register('en', () => import('./locales/en/setup.json'));
 register('en', () => import('./locales/en/dashboard.json'));
 register('en', () => import('./locales/en/settings.json'));
+register('en', () => import('./locales/en/metrics.json'));
 
 register('es', () => import('./locales/es/common.json'));
 register('es', () => import('./locales/es/setup.json'));
 register('es', () => import('./locales/es/dashboard.json'));
 register('es', () => import('./locales/es/settings.json'));
+register('es', () => import('./locales/es/metrics.json'));
 
 register('fr', () => import('./locales/fr/common.json'));
 register('fr', () => import('./locales/fr/setup.json'));
 register('fr', () => import('./locales/fr/dashboard.json'));
 register('fr', () => import('./locales/fr/settings.json'));
+register('fr', () => import('./locales/fr/metrics.json'));
 
 // Initialize the i18n library
 init({

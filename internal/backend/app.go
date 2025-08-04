@@ -11,12 +11,13 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/javi11/postie/internal/config"
+	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/processor"
 	"github.com/javi11/postie/internal/queue"
 	"github.com/javi11/postie/internal/watcher"
-	"github.com/javi11/postie/pkg/postie"
 	_ "github.com/mattn/go-sqlite3"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -47,7 +48,6 @@ type ValidationResult struct {
 
 // AppStatus represents the current application status
 type AppStatus struct {
-	HasPostie           bool   `json:"hasPostie"`
 	HasConfig           bool   `json:"hasConfig"`
 	ConfigPath          string `json:"configPath"`
 	Uploading           bool   `json:"uploading"`
@@ -68,13 +68,45 @@ type ProcessorStatus struct {
 	RunningJobIDs []string `json:"runningJobIDs"`
 }
 
+// NntpPoolMetrics represents NNTP connection pool metrics
+type NntpPoolMetrics struct {
+	Timestamp              string                `json:"timestamp"`
+	Uptime                 float64               `json:"uptime"`
+	ActiveConnections      int                   `json:"activeConnections"`
+	UploadSpeed            float64               `json:"uploadSpeed"`
+	CommandSuccessRate     float64               `json:"commandSuccessRate"`
+	ErrorRate              float64               `json:"errorRate"`
+	TotalAcquires          int64                 `json:"totalAcquires"`
+	TotalBytesUploaded     int64                 `json:"totalBytesUploaded"`
+	TotalArticlesRetrieved int64                 `json:"totalArticlesRetrieved"`
+	TotalArticlesPosted    int64                 `json:"totalArticlesPosted"`
+	AverageAcquireWaitTime float64               `json:"averageAcquireWaitTime"`
+	TotalErrors            int64                 `json:"totalErrors"`
+	Providers              []NntpProviderMetrics `json:"providers"`
+}
+
+// NntpProviderMetrics represents metrics for individual NNTP providers
+type NntpProviderMetrics struct {
+	Host                 string  `json:"host"`
+	Username             string  `json:"username"`
+	State                string  `json:"state"`
+	TotalConnections     int     `json:"totalConnections"`
+	MaxConnections       int     `json:"maxConnections"`
+	AcquiredConnections  int     `json:"acquiredConnections"`
+	IdleConnections      int     `json:"idleConnections"`
+	TotalBytesUploaded   int64   `json:"totalBytesUploaded"`
+	TotalArticlesPosted  int64   `json:"totalArticlesPosted"`
+	SuccessRate          float64 `json:"successRate"`
+	AverageConnectionAge float64 `json:"averageConnectionAge"`
+}
+
 // App struct for the Wails application
 type App struct {
 	ctx                  context.Context
 	config               *config.ConfigData
 	configPath           string
 	appPaths             *AppPaths
-	postie               *postie.Postie
+	poolManager          *pool.Manager
 	queue                *queue.Queue
 	processor            *processor.Processor
 	watcher              *watcher.Watcher
@@ -236,6 +268,18 @@ func (a *App) Startup(ctx context.Context) {
 		slog.Info("Config loaded successfully", "path", a.configPath)
 	}
 
+	// Initialize connection pool manager if we have a valid configuration
+	if a.config != nil {
+		poolManager, err := pool.New(a.config)
+		if err != nil {
+			slog.Error("Failed to create connection pool manager", "error", err)
+			a.criticalErrorMessage = fmt.Sprintf("Failed to create connection pool: %v", err)
+		} else {
+			a.poolManager = poolManager
+			slog.Info("Connection pool manager created successfully")
+		}
+	}
+
 	// Initialize queue (always available)
 	if err := a.initializeQueue(); err != nil {
 		slog.Error("Failed to initialize queue", "error", err)
@@ -256,12 +300,40 @@ func (a *App) Startup(ctx context.Context) {
 	go a.ensurePar2Executable(ctx)
 }
 
+// Shutdown gracefully shuts down the application and closes all resources
+func (a *App) Shutdown() {
+	defer a.recoverPanic("Shutdown")
+
+	slog.Info("Application shutdown initiated")
+
+	// Stop watcher if running
+	if a.watcher != nil {
+		slog.Info("Stopping watcher")
+		_ = a.watcher.Close()
+	}
+
+	// Stop processor if running
+	if a.processor != nil {
+		slog.Info("Stopping processor")
+		_ = a.processor.Close()
+	}
+
+	// Close the connection pool manager if it exists
+	if a.poolManager != nil {
+		slog.Info("Closing connection pool manager")
+		if err := a.poolManager.Close(); err != nil {
+			slog.Error("Failed to close connection pool manager", "error", err)
+		}
+	}
+
+	slog.Info("Application shutdown completed")
+}
+
 // GetAppStatus returns the current application status
 func (a *App) GetAppStatus() AppStatus {
 	defer a.recoverPanic("GetAppStatus")
 
 	status := AppStatus{
-		HasPostie:           a.postie != nil,
 		HasConfig:           a.config != nil,
 		ConfigPath:          a.configPath,
 		Uploading:           a.IsUploading(),
@@ -286,12 +358,6 @@ func (a *App) GetAppStatus() AppStatus {
 		status.ValidServerCount = validServers
 		status.ConfigValid = hasServers && validServers > 0
 		status.NeedsConfiguration = !hasServers || validServers == 0
-
-		// Set criticalConfigError if we have servers configured but postie instance creation failed
-		if hasServers && validServers > 0 && a.postie == nil {
-			status.CriticalConfigError = true
-			status.Error = a.criticalErrorMessage
-		}
 	} else {
 		status.HasServers = false
 		status.ServerCount = 0
@@ -751,14 +817,14 @@ func (a *App) PauseProcessing() error {
 
 	a.processor.PauseProcessing()
 	slog.Info("Processing paused via API")
-	
+
 	// Emit events for both desktop and web modes
 	if !a.isWebMode {
 		wailsruntime.EventsEmit(a.ctx, "processing:paused")
 	} else if a.webEventEmitter != nil {
 		a.webEventEmitter("processing:paused", nil)
 	}
-	
+
 	return nil
 }
 
@@ -772,14 +838,14 @@ func (a *App) ResumeProcessing() error {
 
 	a.processor.ResumeProcessing()
 	slog.Info("Processing resumed via API")
-	
+
 	// Emit events for both desktop and web modes
 	if !a.isWebMode {
 		wailsruntime.EventsEmit(a.ctx, "processing:resumed")
 	} else if a.webEventEmitter != nil {
 		a.webEventEmitter("processing:resumed", nil)
 	}
-	
+
 	return nil
 }
 
@@ -792,4 +858,79 @@ func (a *App) IsProcessingPaused() bool {
 	}
 
 	return a.processor.IsPaused()
+}
+
+// GetNntpPoolMetrics returns NNTP connection pool metrics from the singleton pool manager
+func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
+	defer a.recoverPanic("GetNntpPoolMetrics")
+
+	// Default empty metrics if no pool available
+	emptyMetrics := NntpPoolMetrics{
+		Timestamp:              time.Now().Format(time.RFC3339),
+		Uptime:                 0,
+		ActiveConnections:      0,
+		UploadSpeed:            0,
+		CommandSuccessRate:     0,
+		ErrorRate:              0,
+		TotalAcquires:          0,
+		TotalBytesUploaded:     0,
+		TotalArticlesRetrieved: 0,
+		AverageAcquireWaitTime: 0,
+		TotalErrors:            0,
+		Providers:              []NntpProviderMetrics{},
+	}
+
+	// Get metrics from the connection pool manager
+	if a.poolManager == nil {
+		slog.Warn("Connection pool manager not available for metrics")
+		return emptyMetrics, nil
+	}
+
+	// Get metrics from the pool manager
+	snapshot, err := a.poolManager.GetMetrics()
+	if err != nil {
+		slog.Error("Failed to get metrics from pool manager", "error", err)
+		return emptyMetrics, fmt.Errorf("failed to get pool metrics: %w", err)
+	}
+
+	// Convert pool metrics to our metrics structure
+	metrics := NntpPoolMetrics{
+		Timestamp:              snapshot.Timestamp.Format(time.RFC3339),
+		Uptime:                 snapshot.Uptime.Seconds(),
+		ActiveConnections:      int(snapshot.ActiveConnections),
+		UploadSpeed:            snapshot.UploadSpeed,
+		CommandSuccessRate:     snapshot.CommandSuccessRate,
+		ErrorRate:              snapshot.ErrorRate,
+		TotalAcquires:          snapshot.TotalAcquires,
+		TotalBytesUploaded:     snapshot.TotalBytesUploaded,
+		TotalArticlesRetrieved: snapshot.TotalArticlesRetrieved,
+		AverageAcquireWaitTime: float64(snapshot.AverageAcquireWaitTime.Milliseconds()), // Convert to milliseconds
+		TotalErrors:            snapshot.TotalErrors,
+		TotalArticlesPosted:    snapshot.TotalArticlesPosted,
+	}
+
+	// Convert provider metrics
+	providers := make([]NntpProviderMetrics, len(snapshot.ProviderMetrics))
+	for i, provider := range snapshot.ProviderMetrics {
+		providers[i] = NntpProviderMetrics{
+			Host:                 provider.Host,
+			Username:             provider.Username,
+			State:                provider.State,
+			TotalConnections:     int(provider.TotalConnections),    // Convert int32 to int
+			MaxConnections:       int(provider.MaxConnections),      // Convert int32 to int
+			AcquiredConnections:  int(provider.AcquiredConnections), // Convert int32 to int
+			IdleConnections:      int(provider.IdleConnections),     // Convert int32 to int
+			TotalBytesUploaded:   provider.TotalBytesUploaded,
+			SuccessRate:          provider.SuccessRate,
+			AverageConnectionAge: provider.AverageConnectionAge.Seconds(),
+			TotalArticlesPosted:  provider.TotalArticlesPosted,
+		}
+	}
+	metrics.Providers = providers
+
+	slog.Debug("Retrieved NNTP pool metrics successfully",
+		"activeConnections", metrics.ActiveConnections,
+		"providerCount", len(metrics.Providers))
+
+	return metrics, nil
 }

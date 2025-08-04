@@ -8,9 +8,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"sync"
+	"syscall"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -244,6 +247,7 @@ func (ws *WebServer) setupRoutes() {
 	api.HandleFunc("/running-job-details", ws.handleGetRunningJobDetails).Methods("GET")
 	api.HandleFunc("/validate-server", ws.handleValidateServer).Methods("POST")
 	api.HandleFunc("/setup/complete", ws.handleSetupComplete).Methods("POST")
+	api.HandleFunc("/metrics/nntp-pool", ws.handleGetNntpPoolMetrics).Methods("GET")
 
 	// Serve static files (catch-all)
 	ws.router.PathPrefix("/").Handler(ws.getStaticFileHandler())
@@ -673,6 +677,17 @@ func (ws *WebServer) handleIsProcessingPaused(w http.ResponseWriter, r *http.Req
 	_ = json.NewEncoder(w).Encode(map[string]bool{"paused": paused})
 }
 
+func (ws *WebServer) handleGetNntpPoolMetrics(w http.ResponseWriter, r *http.Request) {
+	metrics, err := ws.app.GetNntpPoolMetrics()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(metrics)
+}
+
 func main() {
 	Execute()
 }
@@ -692,11 +707,47 @@ It serves the frontend application and provides REST API endpoints for managing 
 		addr := fmt.Sprintf("%s:%s", host, port)
 		log.Printf("Starting web server on %s", addr)
 
-		if err := http.ListenAndServe(addr, server.router); err != nil {
-			return fmt.Errorf("failed to start web server: %w", err)
+		// Create HTTP server
+		httpServer := &http.Server{
+			Addr:    addr,
+			Handler: server.router,
 		}
 
-		return nil
+		// Create channel to listen for interrupt signals
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+		// Start server in a goroutine
+		serverErrChan := make(chan error, 1)
+		go func() {
+			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				serverErrChan <- fmt.Errorf("failed to start web server: %w", err)
+			}
+		}()
+
+		// Wait for interrupt signal or server error
+		select {
+		case err := <-serverErrChan:
+			return err
+		case <-sigChan:
+			log.Println("Received interrupt signal, shutting down gracefully...")
+
+			// Shutdown the app first
+			server.app.Shutdown()
+
+			// Create a timeout context for server shutdown
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			// Shutdown HTTP server
+			if err := httpServer.Shutdown(shutdownCtx); err != nil {
+				log.Printf("Server shutdown error: %v", err)
+				return err
+			}
+
+			log.Println("Server shut down successfully")
+			return nil
+		}
 	},
 }
 

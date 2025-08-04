@@ -1,0 +1,50 @@
+{
+	"metrics": {
+		"title": "Métriques du Pool NNTP",
+		"description": "Métriques de performance et de connexion en temps réel pour vos serveurs NNTP",
+		"auto_refresh": "Actualisation automatique",
+		"refresh": "Actualiser",
+		"error_loading": "Échec du chargement des métriques",
+		"error_title": "Impossible de charger les métriques",
+		
+		"active_connections": "Connexions Actives",
+		"download_speed": "Vitesse de Téléchargement",
+		"upload_speed": "Vitesse d'Upload approximative",
+		"uptime": "Temps de Fonctionnement du Pool",
+		
+		"performance": "Métriques de Performance",
+		"error_rate": "Taux d'Erreur",
+		"total_acquires": "Total des Acquisitions",
+		"total_articles": "Articles Récupérés",
+		"avg_wait_time": "Temps d'Attente Moyen",
+		"total_errors": "Total des Erreurs",
+		
+		"data_transfer": "Transfert de Données",
+		"total_downloaded": "Total Téléchargé",
+		"total_uploaded": "Total Uploadé",
+		
+		"providers": "Fournisseurs NNTP",
+		"provider_host": "Hôte/Serveur",
+		"status": "Statut",
+		"connections": "Connexions",
+		"success_rate": "Taux de Réussite",
+		"avg_age": "Âge Moyen des Connexions",
+
+		"articles_posted": "Articles Publiés",
+		"pool_uptime": "Temps de Fonctionnement du Pool",
+		"posting_performance": "Rendement de Publication",
+		"posting_success_rate": "Taux de Réussite de Publication",
+		"posting_error_rate": "Taux d'Erreur de Publication",
+		"connection_acquires": "Acquisitions de Connexion",
+		"avg_connection_wait": "Temps d'Attente Moyen de Connexion",
+		"posting_errors": "Erreurs de Publication",
+		"upload_statistics": "Statistiques de Téléversement",
+		"total_data_posted": "Total de Données Téléversées",
+		"current_upload_speed": "Vitesse d'Upload approximative",
+		"average_article_size": "Taille Moyenne de l'Article",
+		"nntp_servers": "Serveurs NNTP",
+		"server_host": "Hôte du Serveur",
+		"data_posted": "Données Publiées",
+		"connection_age": "Âge de Connexion"
+	}
+}
