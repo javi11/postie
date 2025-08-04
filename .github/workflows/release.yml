@@ -85,19 +85,11 @@ jobs:
         env:
           CC: gcc
 
-      - name: Build Linux Web Interface (arm64)
-        run: |
-          sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
-          CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -a -ldflags '-linkmode external -extldflags "-static"' -o build/postie-web-linux-arm64 cmd/web/main.go
-        env:
-          CC: aarch64-linux-gnu-gcc
-
       # Create archives
       - name: Create Linux Web Interface archives
         run: |
           mkdir -p dist
           tar -czf dist/postie-web-linux-amd64.tar.gz -C build postie-web-linux-amd64
-          tar -czf dist/postie-web-linux-arm64.tar.gz -C build postie-web-linux-arm64
 
       # Upload Linux Web Interface artifacts
       - name: Upload Linux Web Interface artifacts
