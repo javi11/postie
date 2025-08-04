@@ -44,8 +44,8 @@ docker-compose up -d
 ### Binary Download
 
 [![Download for Windows](https://img.shields.io/badge/Windows-Download-0078d4?style=for-the-badge&logo=windows)](https://github.com/javi11/postie/releases/latest/download/postie_windows_amd64.zip)
-[![Download for macOS](https://img.shields.io/badge/macOS-Download-0078d4?style=for-the-badge&logo=apple)](https://github.com/javi11/postie/releases/latest/download/postie_darwin_amd64.tar.gz)
-[![Download for Linux](https://img.shields.io/badge/Linux-Download-0078d4?style=for-the-badge&logo=linux)](https://github.com/javi11/postie/releases/latest/download/postie_linux_amd64.tar.gz)
+[![Download for macOS](https://img.shields.io/badge/macOS-Download-0078d4?style=for-the-badge&logo=apple)](https://github.com/javi11/postie/releases/latest/download/postie_darwin_amd64.zip)
+[![Download for Linux](https://img.shields.io/badge/Linux-Download-0078d4?style=for-the-badge&logo=linux)](https://github.com/javi11/postie/releases/latest/download/postie_linux_amd64.zip)
 
 ## Screenshots
 
