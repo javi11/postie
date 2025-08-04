@@ -113,6 +113,7 @@
 			}
 		},
 		"connection_pool": {
+			"save_button": "Guardar Configuración del Pool de Conexiones",
 			"title": "Configuración del Pool de Conexiones",
 			"min_connections": "Conexiones Mínimas",
 			"min_connections_description": "Número mínimo de conexiones a mantener en el pool",

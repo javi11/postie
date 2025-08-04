@@ -3,6 +3,7 @@ package progress
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"sort"
 	"sync"
@@ -93,6 +94,11 @@ func (pm *jobProgress) AddProgress(
 ) Progress {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
+
+	// Ensure total is never 0 to prevent division by zero errors
+	if total <= 0 {
+		total = 1
+	}
 
 	var OptionShowBytes progressbar.Option
 	if pType == ProgressTypeUploading {
@@ -249,14 +255,40 @@ func (p *progress) GetState() ProgressState {
 	paused := p.paused
 	p.mu.RUnlock()
 
+	// Sanitize float64 values to prevent NaN in JSON serialization
+	currentPercent := s.CurrentPercent
+	if math.IsNaN(currentPercent) || math.IsInf(currentPercent, 0) {
+		currentPercent = 0.0
+	}
+
+	currentBytes := s.CurrentBytes
+	if math.IsNaN(currentBytes) || math.IsInf(currentBytes, 0) {
+		currentBytes = 0.0
+	}
+
+	secondsSince := s.SecondsSince
+	if math.IsNaN(secondsSince) || math.IsInf(secondsSince, 0) {
+		secondsSince = 0.0
+	}
+
+	secondsLeft := s.SecondsLeft
+	if math.IsNaN(secondsLeft) || math.IsInf(secondsLeft, 0) {
+		secondsLeft = 0.0
+	}
+
+	kbsPerSecond := s.KBsPerSecond
+	if math.IsNaN(kbsPerSecond) || math.IsInf(kbsPerSecond, 0) {
+		kbsPerSecond = 0.0
+	}
+
 	return ProgressState{
 		Max:            s.Max,
 		CurrentNum:     s.CurrentNum,
-		CurrentPercent: s.CurrentPercent,
-		CurrentBytes:   s.CurrentBytes,
-		SecondsSince:   s.SecondsSince,
-		SecondsLeft:    s.SecondsLeft,
-		KBsPerSecond:   s.KBsPerSecond,
+		CurrentPercent: currentPercent,
+		CurrentBytes:   currentBytes,
+		SecondsSince:   secondsSince,
+		SecondsLeft:    secondsLeft,
+		KBsPerSecond:   kbsPerSecond,
 		Description:    s.Description,
 		Type:           p.pType,
 		IsStarted:      s.CurrentNum > 0,
@@ -273,7 +305,11 @@ func (p *progress) GetTotal() int64 {
 }
 
 func (p *progress) GetPercentage() float64 {
-	return p.progress.State().CurrentPercent
+	percentage := p.progress.State().CurrentPercent
+	if math.IsNaN(percentage) || math.IsInf(percentage, 0) {
+		return 0.0
+	}
+	return percentage
 }
 
 func (p *progress) IsComplete() bool {

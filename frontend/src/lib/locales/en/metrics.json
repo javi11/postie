@@ -8,8 +8,8 @@
 		"error_title": "Unable to load metrics",
 		
 		"active_connections": "Active Connections",
-		"download_speed": "Download Speed",
-		"upload_speed": "Upload Speed",
+		"download_speed": "AVG download Speed",
+		"upload_speed": "AVG upload Speed",
 		"uptime": "Pool Uptime",
 		
 		"performance": "Performance Metrics",
@@ -40,7 +40,7 @@
 		"posting_errors": "Posting Errors",
 		"upload_statistics": "Upload Statistics",
 		"total_data_posted": "Total Data Posted",
-		"current_upload_speed": "Current Upload Speed",
+		"current_upload_speed": "AVG upload Speed",
 		"average_article_size": "Average Article Size",
 		"nntp_servers": "NNTP Servers",
 		"server_host": "Server Host",

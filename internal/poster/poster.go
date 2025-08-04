@@ -23,10 +23,14 @@ import (
 	"github.com/javi11/postie/internal/nzb"
 	"github.com/javi11/postie/internal/par2"
 	"github.com/javi11/postie/internal/pausable"
-	poolmanager "github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/progress"
-	"github.com/sourcegraph/conc/pool"
+	concpool "github.com/sourcegraph/conc/pool"
 )
+
+// PoolManager defines the interface for connection pool management
+type PoolManager interface {
+	GetPool() nntppool.UsenetConnectionPool
+}
 
 // Poster defines the interface for posting articles to Usenet
 type Poster interface {
@@ -86,7 +90,7 @@ type poster struct {
 }
 
 // New creates a new poster using dependency injection for the connection pool manager
-func New(ctx context.Context, cfg config.Config, poolManager *poolmanager.Manager, jobProgress progress.JobProgress) (Poster, error) {
+func New(ctx context.Context, cfg config.Config, poolManager PoolManager, jobProgress progress.JobProgress) (Poster, error) {
 	if poolManager == nil {
 		return nil, fmt.Errorf("pool manager cannot be nil")
 	}
@@ -193,6 +197,12 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 	defer close(postQueue)
 	defer close(checkQueue)
 
+	numOfConnections := 0
+
+	for _, pr := range p.pool.GetProvidersInfo() {
+		numOfConnections += pr.MaxConnections
+	}
+
 	for post := range postQueue {
 		select {
 		case <-ctx.Done():
@@ -211,7 +221,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			post.mu.Unlock()
 
 			// Create a pool with error handling - use all available CPU cores
-			pool := pool.New().WithContext(ctx).WithMaxGoroutines(runtime.NumCPU()).WithCancelOnError().WithFirstError()
+			pool := concpool.New().WithContext(ctx).WithMaxGoroutines(numOfConnections).WithCancelOnError().WithFirstError()
 
 			var combinedHash string
 
@@ -298,6 +308,12 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 
 // checkLoop processes posts from the check queue
 func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue chan *Post, errChan chan<- error, nzbGen nzb.NZBGenerator) {
+	numOfConnections := 0
+
+	for _, pr := range p.pool.GetProvidersInfo() {
+		numOfConnections += pr.MaxConnections
+	}
+
 	for post := range checkQueue {
 		select {
 		case <-ctx.Done():
@@ -310,7 +326,7 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 				return
 			}
 			// Create a pool with error handling - use all available CPU cores
-			pool := pool.New().WithContext(ctx).WithMaxGoroutines(runtime.NumCPU()).WithCancelOnError().WithFirstError()
+			pool := concpool.New().WithContext(ctx).WithMaxGoroutines(numOfConnections).WithCancelOnError().WithFirstError()
 			articlesChecked := 0
 			articleErrors := 0
 			var failedArticles []*article.Article

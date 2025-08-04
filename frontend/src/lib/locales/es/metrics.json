@@ -9,7 +9,7 @@
 		
 		"active_connections": "Conexiones Activas",
 		"download_speed": "Velocidad de Descarga",
-		"upload_speed": "Velocidad de Subida",
+		"upload_speed": "Velocidad de Subida aproximada",
 		"uptime": "Tiempo Activo del Pool",
 		
 		"performance": "Métricas de Rendimiento",
@@ -40,7 +40,7 @@
 		"posting_errors": "Errores de Publicación",
 		"upload_statistics": "Estadísticas de Subida",
 		"total_data_posted": "Total de Datos Publicados",
-		"current_upload_speed": "Velocidad de Subida Actual",
+		"current_upload_speed": "Velocidad de Subida aproximada",
 		"average_article_size": "Tamaño Promedio de Artículo",
 		"nntp_servers": "Servidores NNTP",
 		"server_host": "Host del Servidor",

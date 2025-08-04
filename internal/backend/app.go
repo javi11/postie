@@ -307,15 +307,15 @@ func (a *App) Shutdown() {
 	slog.Info("Application shutdown initiated")
 
 	// Stop watcher if running
-	if a.watchCancel != nil {
+	if a.watcher != nil {
 		slog.Info("Stopping watcher")
-		a.watchCancel()
+		_ = a.watcher.Close()
 	}
 
 	// Stop processor if running
-	if a.procCancel != nil {
+	if a.processor != nil {
 		slog.Info("Stopping processor")
-		a.procCancel()
+		_ = a.processor.Close()
 	}
 
 	// Close the connection pool manager if it exists

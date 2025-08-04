@@ -400,8 +400,8 @@ github.com/javi11/nntp-server-mock v0.0.1 h1:05KbUlFSnzk82CG/sHWLp9s6Vg8exL3wvdA
 github.com/javi11/nntp-server-mock v0.0.1/go.mod h1:+QBpPor0q44ttab8kWo08+/t5C26IHhUpBTC1lZqujA=
 github.com/javi11/nntpcli v1.1.1 h1:uX7uIm40o/fpa1XbdfWTJgyExm3Wyx1SX9eFDIhVpu0=
 github.com/javi11/nntpcli v1.1.1/go.mod h1:ZDb9BCQVrG1UT0XN6ikfOlYYzqrYNxXISIuLg30ZpK0=
-github.com/javi11/nntppool v1.1.2-0.20250804094214-56018451ecdd h1:6FcRnjJtARc8qdCVDz3LLWxZiHWh1f/AHY48kcsK3C8=
-github.com/javi11/nntppool v1.1.2-0.20250804094214-56018451ecdd/go.mod h1:lZYpeUrFMGtjIJBTEDAZlQ4Su2wD+BylSk9Np/1aRHs=
+github.com/javi11/nntppool v1.1.2 h1:Ub7qwMWouXAM5sHl2Dive7NPCH5aVq9LpY3gDDiiADo=
+github.com/javi11/nntppool v1.1.2/go.mod h1:lZYpeUrFMGtjIJBTEDAZlQ4Su2wD+BylSk9Np/1aRHs=
 github.com/javi11/nxg v0.1.0 h1:CTThldYlaVIPIhpkrMw0HcTD0NLrW1uYMoDILjjEOtM=
 github.com/javi11/nxg v0.1.0/go.mod h1:+GvYpp+y1oq+qBOWxFMvfTjtin/0zCeomWfjiPkiu8A=
 github.com/javi11/nzbparser v0.2.1 h1:GDedRhh/N6f3YrcIw98ZBFbv3bFgTi1t2WSHiHhpWBA=

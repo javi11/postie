@@ -246,8 +246,8 @@ function getProviderStatusColor(state: string): string {
 						<div class="flex justify-between text-sm">
 							<span>{$t('metrics.average_article_size')}</span>
 							<span class="font-mono">
-								{metrics.totalArticlesRetrieved > 0 
-									? formatBytes(Math.round(metrics.totalBytesUploaded / metrics.totalArticlesRetrieved))
+								{metrics.totalArticlesPosted > 0 
+									? formatBytes(Math.round(metrics.totalBytesUploaded / metrics.totalArticlesPosted))
 									: "0 B"
 								}
 							</span>

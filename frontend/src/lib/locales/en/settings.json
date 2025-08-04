@@ -118,6 +118,7 @@
 			"save_button": "Save NZB Compression Settings"
 		},
 		"connection_pool": {
+			"save_button": "Save Connection Pool Settings",
 			"title": "Connection Pool Configuration",
 			"min_connections": "Minimum Connections",
 			"min_connections_description": "Minimum number of connections to maintain in the pool",
