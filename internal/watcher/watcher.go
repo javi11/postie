@@ -124,8 +124,19 @@ func (w *Watcher) scanDirectory(ctx context.Context) error {
 			return nil
 		}
 
-		// Add file to queue with duplicate checking
-		// Always check for duplicates to prevent queue pollution, regardless of DeleteOriginalFile setting
+		// Check if file is already in queue (pending, completed, or errored)
+		inQueue, err := w.queue.IsPathInQueue(path)
+		if err != nil {
+			slog.ErrorContext(ctx, "Error checking if path is in queue", "path", path, "error", err)
+			return nil // Continue processing other files
+		}
+
+		if inQueue {
+			slog.InfoContext(ctx, "File already exists in queue, ignoring", "path", path)
+			return nil
+		}
+
+		// Add file to queue - no need for duplicate checking since we already checked above
 		err = w.queue.AddFile(ctx, path, info.Size())
 
 		if err != nil {
