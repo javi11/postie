@@ -32,6 +32,7 @@ type QueueInterface interface {
 	IsLegacyDatabase() (bool, error)
 	RecreateDatabase() error
 	EnsureMigrationCompatibility() error
+	IsPathInQueue(path string) (bool, error)
 }
 
 type Queue struct {
@@ -179,7 +180,7 @@ func (q *Queue) EnsureMigrationCompatibility() error {
 // AddFile adds a file to the queue for processing
 func (q *Queue) AddFile(ctx context.Context, path string, size int64) error {
 	// Check if the path already exists in pending queue, completed items, or errored items
-	exists, err := q.pathExists(path)
+	exists, err := q.IsPathInQueue(path)
 	if err != nil {
 		return fmt.Errorf("failed to check if path exists: %w", err)
 	}
@@ -236,7 +237,7 @@ func (q *Queue) AddFileWithoutDuplicateCheck(ctx context.Context, path string, s
 // AddFileWithPriority adds a file to the queue with a specific priority
 func (q *Queue) AddFileWithPriority(ctx context.Context, path string, size int64, priority int) error {
 	// Check if the path already exists in pending queue, completed items, or errored items
-	exists, err := q.pathExists(path)
+	exists, err := q.IsPathInQueue(path)
 	if err != nil {
 		return fmt.Errorf("failed to check if path exists: %w", err)
 	}
@@ -720,13 +721,13 @@ func (q *Queue) Close() error {
 	return nil
 }
 
-// pathExists checks if a file path already exists in pending queue, completed items, or errored items
-func (q *Queue) pathExists(path string) (bool, error) {
+// IsPathInQueue checks if a file path already exists in pending queue, completed items, or errored items
+func (q *Queue) IsPathInQueue(path string) (bool, error) {
 	// Check pending queue items
 	var count int
 	err := q.db.QueryRow(`
 		SELECT COUNT(*) FROM goqite 
-		WHERE queue = 'file_jobs' AND json_extract(body, '$.Path') = ?
+		WHERE queue = 'file_jobs' AND json_extract(body, '$.path') = ?
 	`, path).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("failed to check pending queue: %w", err)

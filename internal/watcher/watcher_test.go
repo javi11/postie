@@ -97,6 +97,16 @@ func (m *mockQueueWithDuplicateCheck) EnsureMigrationCompatibility() error {
 	return nil
 }
 
+func (m *mockQueueWithDuplicateCheck) IsPathInQueue(path string) (bool, error) {
+	// Check if this path has already been added to our mock queue
+	for _, addedPath := range m.addFileCalls {
+		if addedPath == path {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // Helper function to create a test watcher
 func createTestWatcher(t *testing.T) (*Watcher, string) {
 	tempDir := t.TempDir()
