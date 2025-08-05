@@ -172,14 +172,14 @@ chmod +x postie
 ./postie -config config.yaml -d ./upload -o ./output
 ```
 
-### Web Interface with Binary
+#### Web Interface with Binary
 
-When running the binary version, you can also access the web interface:
-
-1. Start Postie with the web server enabled (this is the default)
-2. Open your web browser
-3. Navigate to `http://localhost:8080` (or the port specified in your configuration)
-4. Use the same web interface features as the Docker version
+1. Download [postie-web](https://github.com/javi11/postie/releases/latest/download/postie-web-linux-amd64.tar.gz)
+2. Extract the file
+3. Start Postie with the web server enabled `./postie-web --port 80080`
+4. Open your web browser
+5. Navigate to `http://localhost:8080` (or the port specified in your configuration)
+6. Use the same web interface features as the Docker version
 
 ## Building from Source
 
