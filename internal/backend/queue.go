@@ -65,9 +65,13 @@ func (a *App) initializeQueue() error {
 		outputDir = filepath.Join(a.appPaths.Data, outputDir)
 	}
 
-	// Ensure output directory exists (always needed for queue operations)
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
-		return fmt.Errorf("failed to create output directory: %w", err)
+	// Ensure watch directory exists - only set permissions if creating new directory
+	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(outputDir, 0755); err != nil {
+			return fmt.Errorf("failed to create output directory: %w", err)
+		}
+	} else if err != nil {
+		return fmt.Errorf("failed to check output directory: %w", err)
 	}
 
 	// Create context for queue and processor
@@ -87,7 +91,7 @@ func (a *App) initializeQueue() error {
 // AddFilesToQueue adds multiple files to the queue for processing
 func (a *App) AddFilesToQueue() error {
 	defer a.recoverPanic("AddFilesToQueue")
-	
+
 	if a.queue == nil {
 		slog.Error("Queue not initialized - this should not happen")
 		return fmt.Errorf("queue not initialized - please restart the application")
@@ -140,7 +144,7 @@ func (a *App) AddFilesToQueue() error {
 // GetQueueItems returns the current queue items from the queue
 func (a *App) GetQueueItems() ([]QueueItem, error) {
 	defer a.recoverPanic("GetQueueItems")
-	
+
 	if a.queue == nil {
 		return []QueueItem{}, nil
 	}
