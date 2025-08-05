@@ -182,17 +182,22 @@ onMount(() => {
 {#if isOpen}
   <!-- Modal backdrop -->
   <div 
-    class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+    class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
     onclick={onClose}
     onkeydown={handleBackdropKeydown}
+    role="presentation"
+    tabindex="-1"
+  ></div>
+  
+  <!-- Modal content -->
+  <div 
+    class="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
     role="dialog"
     aria-modal="true"
     aria-labelledby="file-explorer-title"
-    tabindex="-1"
   >
-    <!-- Modal content -->
     <div 
-      class="bg-base-100 rounded-lg shadow-2xl border border-base-300 w-full max-w-6xl h-[80vh] flex flex-col"
+      class="bg-base-100 rounded-lg shadow-2xl border border-base-300 w-full max-w-6xl h-[80vh] flex flex-col pointer-events-auto"
     >
       <!-- Header -->
       <div class="flex items-center justify-between p-4 border-b border-base-300">

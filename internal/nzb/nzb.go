@@ -145,8 +145,12 @@ func (g *Generator) Generate(outputPath string) (string, error) {
 	})
 
 	// Create output directory if it doesn't exist
-	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
-		return "", fmt.Errorf("error creating output directory: %w", err)
+	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
+		if err := os.MkdirAll(outputPath, 0755); err != nil {
+			return "", fmt.Errorf("failed to create output directory: %w", err)
+		}
+	} else if err != nil {
+		return "", fmt.Errorf("failed to check output directory: %w", err)
 	}
 
 	// Write NZB file
@@ -283,7 +287,7 @@ func (g *Generator) compressWithZip(data []byte, outputPath string, originalNzbP
 		Name:   nzbFilename,
 		Method: zip.Deflate,
 	}
-	
+
 	// Set compression level by manipulating the extra field
 	// This is a workaround since Go's zip package doesn't expose compression level directly
 	w.RegisterCompressor(zip.Deflate, func(out io.Writer) (io.WriteCloser, error) {

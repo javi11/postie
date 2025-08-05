@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -51,13 +52,20 @@ The watch command will monitor the configured directory and upload files accordi
 		}
 
 		// Ensure directories exist
-		if err := os.MkdirAll(watchDir, 0755); err != nil {
-			slog.ErrorContext(ctx, "Error creating watch directory", "error", err)
-			return err
+		if _, err := os.Stat(watchDir); os.IsNotExist(err) {
+			if err := os.MkdirAll(watchDir, 0755); err != nil {
+				return fmt.Errorf("failed to create watch directory: %w", err)
+			}
+		} else if err != nil {
+			return fmt.Errorf("failed to check watch directory: %w", err)
 		}
-		if err := os.MkdirAll(outputFolder, 0755); err != nil {
-			slog.ErrorContext(ctx, "Error creating output directory", "error", err)
-			return err
+
+		if _, err := os.Stat(outputFolder); os.IsNotExist(err) {
+			if err := os.MkdirAll(outputFolder, 0755); err != nil {
+				return fmt.Errorf("failed to create output directory: %w", err)
+			}
+		} else if err != nil {
+			return fmt.Errorf("failed to check output directory: %w", err)
 		}
 
 		// Initialize connection pool manager
