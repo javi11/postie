@@ -55,7 +55,7 @@ Web interface dashboard showing upload progress and queue management
 
 ## Documentation
 
-For detailed documentation, installation instructions, configuration options, and usage examples, please visit the [Postie Documentation Site](https://postie.nzbtools.top).
+For detailed documentation, installation instructions, configuration options, and usage examples, please visit the [Postie Documentation Site](https://postie.kipsilabs.top).
 
 ## Quick Links
 

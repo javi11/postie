@@ -703,6 +703,50 @@ export class UnifiedClient {
 
 		throw new Error("No client available");
 	}
+
+	// Filesystem operations (web-only)
+	async browseFilesystem(path: string): Promise<{
+		path: string;
+		items: Array<{
+			name: string;
+			path: string;
+			isDir: boolean;
+			size: number;
+			modTime: string;
+		}>;
+	}> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			throw new Error("Filesystem browsing not supported in Wails mode");
+		}
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.browseFilesystem(path);
+		}
+
+		throw new Error("No client available");
+	}
+
+	async importFiles(filePaths: string[]): Promise<{
+		success: boolean;
+		importedCount: number;
+		message: string;
+	}> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			throw new Error("File import not supported in Wails mode");
+		}
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.importFiles(filePaths);
+		}
+
+		throw new Error("No client available");
+	}
 }
 
 // Export singleton instance

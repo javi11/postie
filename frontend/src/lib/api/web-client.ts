@@ -346,6 +346,29 @@ export class WebClient {
 	async getNntpPoolMetrics(): Promise<NntpPoolMetrics> {
 		return this.get<NntpPoolMetrics>("/metrics/nntp-pool");
 	}
+
+	// Filesystem operations
+	async browseFilesystem(path: string): Promise<{
+		path: string;
+		items: Array<{
+			name: string;
+			path: string;
+			isDir: boolean;
+			size: number;
+			modTime: string;
+		}>;
+	}> {
+		const params = new URLSearchParams({ path });
+		return this.get(`/filesystem/browse?${params}`);
+	}
+
+	async importFiles(filePaths: string[]): Promise<{
+		success: boolean;
+		importedCount: number;
+		message: string;
+	}> {
+		return this.post("/filesystem/import", { filePaths });
+	}
 }
 
 // Singleton instance

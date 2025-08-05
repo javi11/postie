@@ -1,0 +1,414 @@
+<script lang="ts">
+import { t } from "$lib/i18n";
+import { toastStore } from "$lib/stores/toast";
+import apiClient from "$lib/api/client";
+import { X, Upload, Loader, ArrowLeft, Home } from "lucide-svelte";
+import { onMount } from "svelte";
+
+interface FileSystemItem {
+  name: string;
+  path: string;
+  isDir: boolean;
+  size: number;
+  modTime: string;
+}
+
+interface FileManagerItem {
+  id: string;
+  size: number;
+  date: Date;
+  type: "folder" | "file";
+}
+
+interface Props {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+let { isOpen, onClose }: Props = $props();
+
+let fileManagerData = $state<FileManagerItem[]>([]);
+let selectedFiles = $state<Set<string>>(new Set());
+let importing = $state(false);
+let loading = $state(false);
+let pathInput = $state("");
+let pathHistory = $state<string[]>([]);
+
+let selectedFileCount = $derived(selectedFiles.size);
+let hasSelectedFiles = $derived(selectedFiles.size > 0);
+
+let currentPath = $state("/");
+
+async function loadDirectory(path: string = "/"): Promise<FileManagerItem[]> {
+  console.log("Loading directory:", path);
+  try {
+    const response = await apiClient.browseFilesystem(path);
+    console.log("API response:", response);
+    
+    // Convert our API response to SVAR FileManager format
+    const items: FileManagerItem[] = response.items.map((item: FileSystemItem) => ({
+      id: item.path,
+      size: item.size,
+      date: new Date(item.modTime),
+      type: item.isDir ? "folder" : "file"
+    }));
+
+    console.log("Converted items:", items);
+    return items;
+  } catch (error) {
+    console.error("Failed to load directory:", error);
+    toastStore.error($t("common.messages.error"), String(error));
+    return [];
+  }
+}
+
+async function navigateToPath(path: string) {
+  if (path !== currentPath) {
+    pathHistory.push(currentPath);
+  }
+  
+  loading = true;
+  try {
+    const items = await loadDirectory(path);
+    fileManagerData = items;
+    currentPath = path;
+    pathInput = path;
+    
+    // Clear selection when navigating
+    selectedFiles.clear();
+    selectedFiles = new Set(selectedFiles);
+  } finally {
+    loading = false;
+  }
+}
+
+async function loadInitialData() {
+  loading = true;
+  try {
+    fileManagerData = await loadDirectory("/");
+    pathInput = "/";
+  } finally {
+    loading = false;
+  }
+}
+
+function goBack() {
+  if (pathHistory.length > 0) {
+    const previousPath = pathHistory.pop()!;
+    navigateToPath(previousPath);
+  }
+}
+
+function goHome() {
+  pathHistory = [];
+  navigateToPath("/");
+}
+
+function handlePathInputKeydown(event: KeyboardEvent) {
+  if (event.key === "Enter") {
+    navigateToPath(pathInput);
+  }
+}
+
+async function importSelectedFiles() {
+  if (selectedFiles.size === 0) {
+    toastStore.error($t("common.messages.error"), "No files selected");
+    return;
+  }
+
+  importing = true;
+  try {
+    const filePaths = Array.from(selectedFiles);
+    await apiClient.importFiles(filePaths);
+    
+    toastStore.success(
+      $t("dashboard.file_explorer.import_success"),
+      `Successfully added ${filePaths.length} file${filePaths.length !== 1 ? 's' : ''} to queue`
+    );
+    
+    // Clear selection and close modal
+    selectedFiles.clear();
+    selectedFiles = new Set(selectedFiles);
+    onClose();
+  } catch (error) {
+    console.error("Failed to import files:", error);
+    toastStore.error($t("common.messages.error"), String(error));
+  } finally {
+    importing = false;
+  }
+}
+
+function selectAllFiles() {
+  const fileItems = fileManagerData.filter(item => item.type === "file");
+  for (const item of fileItems) {
+    selectedFiles.add(item.id);
+  }
+  selectedFiles = new Set(selectedFiles);
+}
+
+function clearSelection() {
+  selectedFiles.clear();
+  selectedFiles = new Set(selectedFiles);
+}
+
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === "Escape") {
+    onClose();
+  }
+}
+
+function handleBackdropKeydown(event: KeyboardEvent) {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    onClose();
+  }
+}
+
+// Load initial data when modal opens
+$effect(() => {
+  if (isOpen) {
+    loadInitialData();
+  }
+});
+
+onMount(() => {
+  document.addEventListener("keydown", handleKeydown);
+  return () => {
+    document.removeEventListener("keydown", handleKeydown);
+  };
+});
+</script>
+
+{#if isOpen}
+  <!-- Modal backdrop -->
+  <div 
+    class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+    onclick={onClose}
+    onkeydown={handleBackdropKeydown}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="file-explorer-title"
+    tabindex="-1"
+  >
+    <!-- Modal content -->
+    <div 
+      class="bg-base-100 rounded-lg shadow-2xl border border-base-300 w-full max-w-6xl h-[80vh] flex flex-col"
+    >
+      <!-- Header -->
+      <div class="flex items-center justify-between p-4 border-b border-base-300">
+        <h2 id="file-explorer-title" class="text-xl font-semibold text-base-content">
+          {$t("dashboard.file_explorer.title")}
+        </h2>
+        <button
+          class="btn btn-ghost btn-sm"
+          onclick={onClose}
+          aria-label="Close"
+        >
+          <X class="w-5 h-5" />
+        </button>
+      </div>
+
+      <!-- Navigation Toolbar -->
+      <div class="p-3 bg-base-50 border-b border-base-300 space-y-3">
+        <!-- Navigation Controls -->
+        <div class="flex items-center gap-2">
+          <button
+            class="btn btn-ghost btn-sm"
+            onclick={goBack}
+            disabled={pathHistory.length === 0}
+            title="Go back"
+          >
+            <ArrowLeft class="w-4 h-4" />
+          </button>
+          
+          <button
+            class="btn btn-ghost btn-sm"
+            onclick={goHome}
+            title="Go to root"
+          >
+            <Home class="w-4 h-4" />
+          </button>
+
+          <!-- Path Input -->
+          <div class="flex-1">
+            <input
+              type="text"
+              class="input input-bordered input-sm w-full"
+              bind:value={pathInput}
+              onkeydown={handlePathInputKeydown}
+              placeholder="Enter path (e.g., /home/user/documents)"
+            />
+          </div>
+          
+          <button
+            class="btn btn-primary btn-sm"
+            onclick={() => navigateToPath(pathInput)}
+            disabled={loading}
+          >
+            Go
+          </button>
+        </div>
+
+        <!-- Selection Controls -->
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            {#if hasSelectedFiles}
+              <span class="text-sm text-base-content/70">
+                {selectedFileCount} file{selectedFileCount !== 1 ? 's' : ''} selected
+              </span>
+              <button
+                class="btn btn-ghost btn-xs"
+                onclick={clearSelection}
+              >
+                Clear
+              </button>
+            {/if}
+            
+            <button
+              class="btn btn-ghost btn-xs"
+              onclick={selectAllFiles}
+              disabled={fileManagerData.filter(item => item.type === "file").length === 0}
+            >
+              Select All Files
+            </button>
+          </div>
+          
+          <div class="text-sm text-base-content/70">
+            Current: {currentPath}
+          </div>
+        </div>
+      </div>
+
+      <!-- File Browser -->
+      <div class="flex-1 overflow-hidden relative">
+        {#if loading}
+          <div class="absolute inset-0 bg-base-100/80 flex items-center justify-center z-10">
+            <div class="flex items-center gap-2">
+              <Loader class="w-6 h-6 animate-spin text-primary" />
+              <span class="text-base-content/70">Loading...</span>
+            </div>
+          </div>
+        {/if}
+        
+        <div class="h-full overflow-y-auto">
+          {#if fileManagerData.length === 0 && !loading}
+            <div class="flex items-center justify-center h-full text-base-content/50">
+              <div class="text-center">
+                <div class="text-6xl mb-4">📁</div>
+                <p>This directory is empty</p>
+              </div>
+            </div>
+          {:else}
+            <div class="divide-y divide-base-300">
+              {#each fileManagerData as item}
+                <div class="flex items-center gap-3 p-3 hover:bg-base-100 transition-colors">
+                  <div class="text-2xl flex-shrink-0">
+                    {item.type === "folder" ? "📁" : "📄"}
+                  </div>
+                  
+                  <button 
+                    onclick={() => {
+                      if (item.type === "folder") {
+                        navigateToPath(item.id);
+                      } else {
+                        // Toggle file selection
+                        if (selectedFiles.has(item.id)) {
+                          selectedFiles.delete(item.id);
+                        } else {
+                          selectedFiles.add(item.id);
+                        }
+                        selectedFiles = new Set(selectedFiles);
+                      }
+                    }}
+                    class={`flex-1 text-left min-w-0 ${
+                      selectedFiles.has(item.id) 
+                        ? "text-primary font-medium" 
+                        : "text-base-content hover:text-primary"
+                    }`}
+                  >
+                    <div class="font-medium truncate">{item.id.split('/').pop()}</div>
+                    <div class="text-sm text-base-content/70 flex items-center gap-2 mt-1">
+                      <span>
+                        {item.type === "file" ? `${(item.size / 1024).toFixed(1)} KB` : "Folder"}
+                      </span>
+                      <span>•</span>
+                      <span>{item.date.toLocaleDateString()}</span>
+                    </div>
+                  </button>
+                  
+                  {#if item.type === "file"}
+                    <div class="flex-shrink-0">
+                      <input
+                        type="checkbox"
+                        class="checkbox checkbox-primary"
+                        checked={selectedFiles.has(item.id)}
+                        onchange={() => {
+                          if (selectedFiles.has(item.id)) {
+                            selectedFiles.delete(item.id);
+                          } else {
+                            selectedFiles.add(item.id);
+                          }
+                          selectedFiles = new Set(selectedFiles);
+                        }}
+                      />
+                    </div>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="flex items-center justify-between p-4 border-t border-base-300 bg-base-50">
+        <div class="text-sm text-base-content/70">
+          {#if hasSelectedFiles}
+            {selectedFileCount} file{selectedFileCount !== 1 ? 's' : ''} selected
+          {:else}
+            {fileManagerData.length} item{fileManagerData.length !== 1 ? 's' : ''}
+          {/if}
+        </div>
+        
+        <div class="flex gap-2">
+          <button
+            class="btn btn-ghost"
+            onclick={onClose}
+          >
+            Cancel
+          </button>
+          
+          <button
+            class="btn btn-primary"
+            onclick={importSelectedFiles}
+            disabled={!hasSelectedFiles || importing}
+          >
+            {#if importing}
+              <Loader class="w-4 h-4 animate-spin" />
+              Adding to Queue...
+            {:else}
+              <Upload class="w-4 h-4" />
+              Add {selectedFileCount > 0 ? selectedFileCount : ''} File{selectedFileCount !== 1 ? 's' : ''} to Queue
+            {/if}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<style>
+  /* Override SVAR FileManager styles to fit our design */
+  :global(.wx-filemanager) {
+    height: 100% !important;
+    border: none !important;
+  }
+  
+  :global(.wx-filemanager .wx-panel) {
+    border: none !important;
+  }
+  
+  :global(.wx-filemanager .wx-toolbar) {
+    display: none !important; /* Hide the built-in toolbar */
+  }
+</style>

@@ -5,6 +5,8 @@
 			"title": "Tableau de Téléchargement",
 			"description": "Gérez vos téléchargements de fichiers et surveillez le progrès",
 			"add_files": "Ajouter des Fichiers",
+			"import_files": "Importer des Fichiers",
+			"import_files_tooltip": "Explorer et importer des fichiers depuis le serveur distant",
 			"clear_completed": "Vider les Terminés"
 		},
 		"queue": {
@@ -111,6 +113,10 @@
 			"config_required": "Configuration Requise",
 			"config_required_description": "Veuillez configurer au moins un serveur dans la page {settingsLink} avant de télécharger des fichiers.",
 			"settings_link": "Paramètres"
+		},
+		"file_explorer": {
+			"title": "Ajouter des Fichiers du Serveur à la File",
+			"import_success": "Fichiers ajoutés à la file avec succès"
 		}
 	}
 }
