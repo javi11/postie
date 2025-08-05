@@ -48,9 +48,13 @@ func (a *App) initializeWatcher() error {
 		watchDir = filepath.Join(a.appPaths.Data, "watch")
 	}
 
-	// Ensure watch directory exists
-	if err := os.MkdirAll(watchDir, 0755); err != nil {
-		return fmt.Errorf("failed to create watch directory: %w", err)
+	// Ensure watch directory exists - only set permissions if creating new directory
+	if _, err := os.Stat(watchDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(watchDir, 0755); err != nil {
+			return fmt.Errorf("failed to create watch directory: %w", err)
+		}
+	} else if err != nil {
+		return fmt.Errorf("failed to check watch directory: %w", err)
 	}
 
 	// Create separate context for watcher
