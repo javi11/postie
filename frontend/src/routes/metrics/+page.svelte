@@ -2,11 +2,11 @@
 import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
-import type { NntpPoolMetrics } from "$lib/types";
 import { onMount, onDestroy } from "svelte";
-import { Activity, Upload, Server, Zap, Clock, AlertCircle, CheckCircle, FileText } from "lucide-svelte";
+import { Activity, Upload, Server, Zap, Clock, AlertCircle, FileText } from "lucide-svelte";
+  import type { backend } from "$lib/wailsjs/go/models";
 
-let metrics = $state<NntpPoolMetrics | null>(null);
+let metrics = $state<backend.NntpPoolMetrics | null>(null);
 let loading = $state(true);
 let error = $state<string | null>(null);
 let refreshInterval = $state<NodeJS.Timeout | null>(null);

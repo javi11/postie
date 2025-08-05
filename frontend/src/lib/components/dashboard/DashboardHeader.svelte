@@ -4,8 +4,9 @@ import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import { uploadActions, uploadStore } from "$lib/stores/upload";
 import { isUploading } from "$lib/stores/app";
-import { AlertTriangle, Plus, X, Pause, Play } from "lucide-svelte";
+import { AlertTriangle, Plus, X, Pause, Play, FolderOpen } from "lucide-svelte";
 import { onMount, onDestroy } from "svelte";
+import FileExplorerModal from "./FileExplorerModal.svelte";
 
 let { needsConfiguration, criticalConfigError, handleUpload }: {
   needsConfiguration: boolean;
@@ -15,6 +16,8 @@ let { needsConfiguration, criticalConfigError, handleUpload }: {
 
 let isPaused = $state(false);
 let pauseCheckInterval: NodeJS.Timeout | null = null;
+let showFileExplorer = $state(false);
+let isWebMode = $state(false);
 
 // Check pause status
 async function checkPauseStatus() {
@@ -25,10 +28,14 @@ async function checkPauseStatus() {
   }
 }
 
-// Setup periodic pause status checks
-onMount(() => {
+// Check environment and setup periodic pause status checks
+onMount(async () => {
   checkPauseStatus();
   pauseCheckInterval = setInterval(checkPauseStatus, 1000);
+  
+  // Check if we're in web mode
+  await apiClient.initialize();
+  isWebMode = apiClient.environment === "web";
 });
 
 onDestroy(() => {
@@ -97,6 +104,14 @@ async function resumeProcessing() {
   }  
 }
 
+function openFileExplorer() {
+  showFileExplorer = true;
+}
+
+function closeFileExplorer() {
+  showFileExplorer = false;
+}
+
 </script>
 
 <div class="card bg-base-100/60 backdrop-blur-sm border border-base-300/60 shadow-xl animate-fade-in max-w-full">
@@ -158,6 +173,19 @@ async function resumeProcessing() {
             <Plus class="w-4 h-4" />
             {$t("dashboard.header.add_files")}
           </button>
+
+          <!-- Import Files Button (Web mode only) -->
+          {#if isWebMode}
+            <button
+              class="btn btn-secondary"
+              onclick={openFileExplorer}
+              disabled={needsConfiguration}
+              title={$t("dashboard.header.import_files_tooltip")}
+            >
+              <FolderOpen class="w-4 h-4" />
+              {$t("dashboard.header.import_files")}
+            </button>
+          {/if}
         {/if}
 
         <!-- Pause/Resume Button - Show when there are queue items or active uploads -->
@@ -197,3 +225,9 @@ async function resumeProcessing() {
     {/if}
   </div>
 </div>
+
+<!-- File Explorer Modal -->
+<FileExplorerModal 
+  isOpen={showFileExplorer} 
+  onClose={closeFileExplorer} 
+/>

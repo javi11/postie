@@ -5,6 +5,8 @@
 			"title": "Panel de Subidas",
 			"description": "Gestiona tus cargas de archivos y monitorea el progreso",
 			"add_files": "Agregar Archivos",
+			"import_files": "Importar Archivos",
+			"import_files_tooltip": "Explorar e importar archivos desde el servidor remoto",
 			"clear_completed": "Limpiar Completados"
 		},
 		"queue": {
@@ -112,6 +114,10 @@
 			"config_required": "Configuración Requerida",
 			"config_required_description": "Por favor configura al menos un servidor en la página de {settingsLink} antes de subir archivos.",
 			"settings_link": "Configuración"
+		},
+		"file_explorer": {
+			"title": "Agregar Archivos del Servidor a la Cola",
+			"import_success": "Archivos agregados a la cola exitosamente"
 		}
 	}
 }

@@ -5,6 +5,8 @@
 			"title": "Upload Dashboard",
 			"description": "Manage your file uploads and monitor progress",
 			"add_files": "Add Files",
+			"import_files": "Import Files",
+			"import_files_tooltip": "Browse and import files from the remote server",
 			"clear_completed": "Clear Completed"
 		},
 		"queue": {
@@ -110,6 +112,10 @@
 			"config_required": "Configuration Required",
 			"config_required_description": "Please configure at least one server in the {settingsLink} page before uploading files.",
 			"settings_link": "Settings"
+		},
+		"file_explorer": {
+			"title": "Add Files from Server to Queue",
+			"import_success": "Files added to queue successfully"
 		}
 	}
 }

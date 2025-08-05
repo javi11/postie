@@ -248,6 +248,8 @@ func (ws *WebServer) setupRoutes() {
 	api.HandleFunc("/validate-server", ws.handleValidateServer).Methods("POST")
 	api.HandleFunc("/setup/complete", ws.handleSetupComplete).Methods("POST")
 	api.HandleFunc("/metrics/nntp-pool", ws.handleGetNntpPoolMetrics).Methods("GET")
+	api.HandleFunc("/filesystem/browse", ws.handleBrowseFilesystem).Methods("GET")
+	api.HandleFunc("/filesystem/import", ws.handleImportFiles).Methods("POST")
 
 	// Serve static files (catch-all)
 	ws.router.PathPrefix("/").Handler(ws.getStaticFileHandler())
@@ -686,6 +688,162 @@ func (ws *WebServer) handleGetNntpPoolMetrics(w http.ResponseWriter, r *http.Req
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(metrics)
+}
+
+// FileSystemItem represents a file or directory in the filesystem
+type FileSystemItem struct {
+	Name     string           `json:"name"`
+	Path     string           `json:"path"`
+	IsDir    bool             `json:"isDir"`
+	Size     int64            `json:"size"`
+	ModTime  string           `json:"modTime"`
+	Children []FileSystemItem `json:"children,omitempty"`
+}
+
+func (ws *WebServer) handleBrowseFilesystem(w http.ResponseWriter, r *http.Request) {
+	targetPath := r.URL.Query().Get("path")
+	if targetPath == "" {
+		targetPath = "/"
+	}
+
+	// Security: Clean the path and prevent directory traversal
+	targetPath = filepath.Clean(targetPath)
+
+	// Additional security: restrict to safe directories (configure as needed)
+	// For now, allow browsing from root but this could be restricted
+	if !filepath.IsAbs(targetPath) {
+		targetPath = filepath.Join("/", targetPath)
+	}
+
+	items, err := ws.browseDirectory(targetPath)
+	if err != nil {
+		log.Printf("Error browsing directory %s: %v", targetPath, err)
+		http.Error(w, fmt.Sprintf("Failed to browse directory: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"path":  targetPath,
+		"items": items,
+	})
+}
+
+func (ws *WebServer) browseDirectory(dirPath string) ([]FileSystemItem, error) {
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var items []FileSystemItem
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			continue // Skip items we can't read
+		}
+
+		fullPath := filepath.Join(dirPath, entry.Name())
+		item := FileSystemItem{
+			Name:    entry.Name(),
+			Path:    fullPath,
+			IsDir:   entry.IsDir(),
+			Size:    info.Size(),
+			ModTime: info.ModTime().Format(time.RFC3339),
+		}
+
+		items = append(items, item)
+	}
+
+	return items, nil
+}
+
+func (ws *WebServer) handleImportFiles(w http.ResponseWriter, r *http.Request) {
+	var requestBody struct {
+		FilePaths []string `json:"filePaths"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if len(requestBody.FilePaths) == 0 {
+		http.Error(w, "No file paths provided", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("Importing %d files from remote filesystem", len(requestBody.FilePaths))
+
+	// Emit initial import progress
+	ws.wsHub.EmitEvent("import-progress", map[string]interface{}{
+		"stage":     "validating",
+		"progress":  0,
+		"fileCount": len(requestBody.FilePaths),
+	})
+
+	// Validate that all files exist and are accessible
+	var validFiles []string
+	for i, filePath := range requestBody.FilePaths {
+		// Security: Clean the path and validate
+		cleanPath := filepath.Clean(filePath)
+		if !filepath.IsAbs(cleanPath) {
+			log.Printf("Skipping relative path: %s", filePath)
+			continue
+		}
+
+		// Check if file exists and is readable
+		if info, err := os.Stat(cleanPath); err != nil {
+			log.Printf("Skipping inaccessible file: %s (%v)", filePath, err)
+			continue
+		} else if info.IsDir() {
+			log.Printf("Skipping directory: %s", filePath)
+			continue
+		}
+
+		validFiles = append(validFiles, cleanPath)
+
+		// Emit validation progress
+		progress := float64(i+1) / float64(len(requestBody.FilePaths)) * 50 // 50% for validation
+		ws.wsHub.EmitEvent("import-progress", map[string]interface{}{
+			"stage":       "validating",
+			"progress":    progress,
+			"currentFile": filepath.Base(filePath),
+			"fileCount":   len(requestBody.FilePaths),
+		})
+	}
+
+	if len(validFiles) == 0 {
+		ws.wsHub.EmitEvent("import-error", "No valid files found to import")
+		http.Error(w, "No valid files found to import", http.StatusBadRequest)
+		return
+	}
+
+	// Emit processing stage
+	ws.wsHub.EmitEvent("import-progress", map[string]interface{}{
+		"stage":     "processing",
+		"progress":  75,
+		"fileCount": len(validFiles),
+	})
+
+	// Add files directly to the queue using their original paths
+	if err := ws.app.HandleDroppedFiles(validFiles); err != nil {
+		ws.wsHub.EmitEvent("import-error", fmt.Sprintf("Failed to process imported files: %v", err))
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Emit completion
+	ws.wsHub.EmitEvent("import-complete", map[string]interface{}{
+		"fileCount": len(validFiles),
+		"message":   fmt.Sprintf("Successfully imported %d files from remote filesystem", len(validFiles)),
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":       true,
+		"importedCount": len(validFiles),
+		"message":       fmt.Sprintf("Successfully imported %d files", len(validFiles)),
+	})
 }
 
 func main() {
