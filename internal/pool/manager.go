@@ -19,6 +19,7 @@ type Manager struct {
 }
 
 // New creates a new connection pool manager with the given configuration.
+// The pool is always created successfully, even if providers are misconfigured.
 func New(cfg *config.ConfigData) (*Manager, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("configuration cannot be nil")
@@ -27,6 +28,7 @@ func New(cfg *config.ConfigData) (*Manager, error) {
 	slog.Info("Creating NNTP connection pool manager")
 
 	// Create the NNTP pool using the configuration
+	// With nntppool v1.2.0+, this always succeeds regardless of provider status
 	pool, err := cfg.GetNNTPPool()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create NNTP pool: %w", err)
@@ -75,9 +77,10 @@ func (m *Manager) UpdateConfig(newCfg *config.ConfigData) error {
 	}
 
 	// Create new pool with updated configuration
+	// With nntppool v1.2.0+, this always succeeds regardless of provider status
 	newPool, err := newCfg.GetNNTPPool()
 	if err != nil {
-		// If new pool creation fails, keep the manager in a closed state
+		// This should not happen with the new library, but keep error handling for safety
 		slog.Error("Failed to create new NNTP pool", "error", err)
 		return fmt.Errorf("failed to create new NNTP pool: %w", err)
 	}

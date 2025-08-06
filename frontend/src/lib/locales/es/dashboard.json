@@ -118,6 +118,28 @@
 		"file_explorer": {
 			"title": "Agregar Archivos del Servidor a la Cola",
 			"import_success": "Archivos agregados a la cola exitosamente"
+		},
+		"provider": {
+			"title": "Estado del Proveedor",
+			"error": "Error al cargar el estado del proveedor",
+			"anonymous": "Anónimo",
+			"connections": "Conexiones",
+			"success_rate": "Tasa de Éxito",
+			"uploaded": "Subido",
+			"articles": "Artículos",
+			"idle_connections": "Inactivas",
+			"pool_summary": "Resumen del Pool",
+			"active_connections": "conexiones activas",
+			"total_uploaded": "Total Subido",
+			"no_providers": "No hay proveedores configurados",
+			"status": {
+				"connected": "Conectado",
+				"connecting": "Conectando",
+				"reconnecting": "Reconectando",
+				"failed": "Falló",
+				"disconnected": "Desconectado",
+				"unknown": "Desconocido"
+			}
 		}
 	}
 }

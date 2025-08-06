@@ -3,6 +3,7 @@ import { goto } from "$app/navigation";
 import apiClient from "$lib/api/client";
 import DashboardHeader from "$lib/components/dashboard/DashboardHeader.svelte";
 import ProgressSection from "$lib/components/dashboard/ProgressSection.svelte";
+import ProviderStatus from "$lib/components/dashboard/ProviderStatus.svelte";
 import QueueSection from "$lib/components/dashboard/QueueSection.svelte";
 import QueueStats from "$lib/components/dashboard/QueueStats.svelte";
 import { t } from "$lib/i18n";
@@ -263,6 +264,7 @@ async function handleUpload() {
 
 			<!-- Sidebar -->
 			<div class="space-y-8">
+				<ProviderStatus />
 				<QueueStats />
 			</div>
 		</div>

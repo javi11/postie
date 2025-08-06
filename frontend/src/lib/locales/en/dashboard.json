@@ -116,6 +116,28 @@
 		"file_explorer": {
 			"title": "Add Files from Server to Queue",
 			"import_success": "Files added to queue successfully"
+		},
+		"provider": {
+			"title": "Provider Status",
+			"error": "Error loading provider status",
+			"anonymous": "Anonymous",
+			"connections": "Connections",
+			"success_rate": "Success Rate",
+			"uploaded": "Uploaded",
+			"articles": "Articles",
+			"idle_connections": "Idle",
+			"pool_summary": "Pool Summary",
+			"active_connections": "active connections",
+			"total_uploaded": "Total Uploaded",
+			"no_providers": "No providers configured",
+			"status": {
+				"connected": "Connected",
+				"connecting": "Connecting",
+				"reconnecting": "Reconnecting",
+				"failed": "Failed",
+				"disconnected": "Disconnected",
+				"unknown": "Unknown"
+			}
 		}
 	}
 }

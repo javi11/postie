@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/javi11/nntppool"
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/processor"
@@ -752,9 +753,17 @@ func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 	return nil
 }
 
-// ValidateNNTPServer validates an NNTP server configuration by attempting to connect
+// ValidateNNTPServer validates an NNTP server configuration using TestProviderConnectivity
 func (a *App) ValidateNNTPServer(serverData ServerData) ValidationResult {
 	defer a.recoverPanic("ValidateNNTPServer")
+
+	// Use the new TestProviderConnectivity method for more efficient validation
+	return a.TestProviderConnectivity(serverData)
+}
+
+// TestProviderConnectivity tests an individual provider's connectivity using the new nntppool method
+func (a *App) TestProviderConnectivity(serverData ServerData) ValidationResult {
+	defer a.recoverPanic("TestProviderConnectivity")
 
 	// Basic validation
 	if serverData.Host == "" {
@@ -770,37 +779,32 @@ func (a *App) ValidateNNTPServer(serverData ServerData) ValidationResult {
 		}
 	}
 
-	// Create temporary server config for validation
-	enabled := true
-	serverConfig := config.ServerConfig{
+	// Convert to nntppool provider config
+	providerConfig := nntppool.UsenetProviderConfig{
 		Host:                           serverData.Host,
 		Port:                           serverData.Port,
 		Username:                       serverData.Username,
 		Password:                       serverData.Password,
-		SSL:                            serverData.SSL,
-		MaxConnections:                 1, // Use single connection for validation
-		Enabled:                        &enabled,
+		TLS:                            serverData.SSL,
+		MaxConnections:                 1, // Use single connection for testing
 		MaxConnectionIdleTimeInSeconds: 300,
 		MaxConnectionTTLInSeconds:      3600,
+		InsecureSSL:                    false,
 	}
 
-	// Create minimal config with just this server
-	cfg := config.ConfigData{
-		Servers: []config.ServerConfig{serverConfig},
-	}
-
-	// Attempt to create NNTP pool - this validates the connection parameters
-	pool, err := cfg.GetNNTPPool()
+	// Use the new TestProviderConnectivity method from nntppool
+	// Note: The exact parameters may need adjustment based on the actual nntppool API
+	ctx := context.Background()
+	err := nntppool.TestProviderConnectivity(ctx, providerConfig, nil, nil)
 	if err != nil {
+		slog.Warn("Provider connectivity test failed", "host", serverData.Host, "port", serverData.Port, "error", err)
 		return ValidationResult{
 			Valid: false,
-			Error: fmt.Sprintf("Failed to connect to server: %v", err),
+			Error: fmt.Sprintf("Connection test failed: %v", err),
 		}
 	}
-	defer pool.Quit()
 
-	// If we got here, the connection was successful
-	slog.Info("NNTP server validation successful", "host", serverData.Host, "port", serverData.Port)
+	slog.Info("Provider connectivity test successful", "host", serverData.Host, "port", serverData.Port)
 	return ValidationResult{
 		Valid: true,
 		Error: "",

@@ -576,6 +576,24 @@ export class UnifiedClient {
 		throw new Error("No client available");
 	}
 
+	async testProviderConnectivity(
+		serverData: backend.ServerData,
+	): Promise<backend.ValidationResult> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			return client.App.TestProviderConnectivity(serverData);
+		}
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.testProviderConnectivity(serverData);
+		}
+
+		throw new Error("No client available");
+	}
+
 	async setupWizardComplete(
 		wizardData: backend.SetupWizardData,
 	): Promise<void> {

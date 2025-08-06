@@ -132,7 +132,7 @@ func (w *Watcher) scanDirectory(ctx context.Context) error {
 		}
 
 		if inQueue {
-			slog.InfoContext(ctx, "File already exists in queue, ignoring", "path", path)
+			slog.DebugContext(ctx, "File already exists in queue, ignoring", "path", path)
 			return nil
 		}
 
