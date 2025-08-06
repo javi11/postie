@@ -341,6 +341,38 @@ export class UnifiedClient {
 		throw new Error("No client available");
 	}
 
+	async isProcessingAutoPaused(): Promise<boolean> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			return client.App.IsProcessingAutoPaused();
+		}
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.isProcessingAutoPaused();
+		}
+
+		throw new Error("No client available");
+	}
+
+	async getAutoPauseReason(): Promise<string> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			return client.App.GetAutoPauseReason();
+		}
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.getAutoPauseReason();
+		}
+
+		throw new Error("No client available");
+	}
+
 	async uploadFiles(): Promise<void> {
 		await this.initialize();
 

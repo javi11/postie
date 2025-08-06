@@ -111,6 +111,7 @@
 			"config_error_description": "There was an error with your server configuration (e.g., invalid hostname, connection failure). Please check your {settingsLink} to fix the configuration.",
 			"config_required": "Configuration Required",
 			"config_required_description": "Please configure at least one server in the {settingsLink} page before uploading files.",
+			"auto_paused": "Processing Auto-Paused",
 			"settings_link": "Settings"
 		},
 		"file_explorer": {

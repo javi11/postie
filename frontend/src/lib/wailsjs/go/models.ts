@@ -532,7 +532,6 @@ export namespace config {
 	export class ConnectionPoolConfig {
 	    min_connections: number;
 	    health_check_interval: string;
-	    skip_providers_verification_on_creation: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ConnectionPoolConfig(source);
@@ -542,7 +541,6 @@ export namespace config {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.min_connections = source["min_connections"];
 	        this.health_check_interval = source["health_check_interval"];
-	        this.skip_providers_verification_on_creation = source["skip_providers_verification_on_creation"];
 	    }
 	}
 	export class ServerConfig {

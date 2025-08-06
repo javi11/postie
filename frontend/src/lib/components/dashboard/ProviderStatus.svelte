@@ -1,11 +1,11 @@
 <script lang="ts">
 import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
-import type { NntpPoolMetrics, NntpProviderMetrics } from "$lib/types";
+  import { backend } from "$lib/wailsjs/go/models";
 import { CheckCircle, Clock, AlertCircle, WifiOff } from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
 
-let poolMetrics = $state<NntpPoolMetrics | null>(null);
+let poolMetrics = $state<backend.NntpPoolMetrics | null>(null);
 let loading = $state(true);
 let error = $state("");
 let refreshInterval: NodeJS.Timeout | null = null;
@@ -27,7 +27,7 @@ async function fetchProviderStatus() {
 	}
 }
 
-function getProviderStatusIcon(provider: NntpProviderMetrics) {
+function getProviderStatusIcon(provider: backend.NntpProviderMetrics) {
 	switch (provider.state?.toLowerCase()) {
 		case "connected":
 		case "active":
@@ -45,7 +45,7 @@ function getProviderStatusIcon(provider: NntpProviderMetrics) {
 	}
 }
 
-function getProviderStatusClass(provider: NntpProviderMetrics) {
+function getProviderStatusClass(provider: backend.NntpProviderMetrics) {
 	switch (provider.state?.toLowerCase()) {
 		case "connected":
 		case "active":
@@ -63,7 +63,7 @@ function getProviderStatusClass(provider: NntpProviderMetrics) {
 	}
 }
 
-function getProviderStatusText(provider: NntpProviderMetrics) {
+function getProviderStatusText(provider: backend.NntpProviderMetrics) {
 	const state = provider.state?.toLowerCase() || "unknown";
 	switch (state) {
 		case "connected":

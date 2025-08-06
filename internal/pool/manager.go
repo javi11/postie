@@ -138,3 +138,4 @@ func (m *Manager) IsClosed() bool {
 	defer m.mu.RUnlock()
 	return m.closed
 }
+

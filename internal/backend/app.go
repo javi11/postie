@@ -864,6 +864,28 @@ func (a *App) IsProcessingPaused() bool {
 	return a.processor.IsPaused()
 }
 
+// IsProcessingAutoPaused returns whether the processor was automatically paused due to provider unavailability
+func (a *App) IsProcessingAutoPaused() bool {
+	defer a.recoverPanic("IsProcessingAutoPaused")
+
+	if a.processor == nil {
+		return false
+	}
+
+	return a.processor.IsAutoPaused()
+}
+
+// GetAutoPauseReason returns the reason for automatic pause, if any
+func (a *App) GetAutoPauseReason() string {
+	defer a.recoverPanic("GetAutoPauseReason")
+
+	if a.processor == nil {
+		return ""
+	}
+
+	return a.processor.GetAutoPauseReason()
+}
+
 // GetNntpPoolMetrics returns NNTP connection pool metrics from the singleton pool manager
 func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 	defer a.recoverPanic("GetNntpPoolMetrics")
@@ -919,7 +941,7 @@ func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 		providers[i] = NntpProviderMetrics{
 			Host:                 provider.Host,
 			Username:             provider.Username,
-			State:                provider.State,
+			State:                provider.State.String(),
 			TotalConnections:     int(provider.TotalConnections),    // Convert int32 to int
 			MaxConnections:       int(provider.MaxConnections),      // Convert int32 to int
 			AcquiredConnections:  int(provider.AcquiredConnections), // Convert int32 to int

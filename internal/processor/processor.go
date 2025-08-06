@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/javi11/nntppool"
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/pausable"
 	"github.com/javi11/postie/internal/pool"
@@ -40,6 +41,13 @@ type Processor struct {
 	// Pause/resume functionality
 	isPaused  bool
 	pausedMux sync.RWMutex
+	// Auto-pause functionality
+	isAutoPaused        bool
+	autoPauseReason     string
+	autoPausedMux       sync.RWMutex
+	providerCheckTicker *time.Ticker
+	providerCheckCtx    context.Context
+	providerCheckCancel context.CancelFunc
 }
 
 type ProcessorOptions struct {
@@ -73,7 +81,10 @@ type RunningJobItem struct {
 }
 
 func New(opts ProcessorOptions) *Processor {
-	return &Processor{
+	// Create context for provider monitoring
+	providerCtx, providerCancel := context.WithCancel(context.Background())
+
+	processor := &Processor{
 		queue:                     opts.Queue,
 		config:                    opts.Config,
 		cfg:                       opts.QueueConfig,
@@ -83,7 +94,16 @@ func New(opts ProcessorOptions) *Processor {
 		deleteOriginalFile:        opts.DeleteOriginalFile,
 		maintainOriginalExtension: opts.MaintainOriginalExtension,
 		watchFolder:               opts.WatchFolder,
+		providerCheckCtx:          providerCtx,
+		providerCheckCancel:       providerCancel,
 	}
+
+	// Start provider availability monitoring if we have a pool manager
+	if opts.PoolManager != nil {
+		go processor.monitorProviderAvailability()
+	}
+
+	return processor
 }
 
 // Start begins processing files from the queue
@@ -444,6 +464,11 @@ func (p *Processor) IsPaused() bool {
 func (p *Processor) Close() error {
 	slog.Info("Processor shutdown initiated")
 
+	// Stop provider monitoring
+	if p.providerCheckCancel != nil {
+		p.providerCheckCancel()
+	}
+
 	// Get a snapshot of running jobs and cancel them
 	p.jobsMux.Lock()
 	runningJobsCount := len(p.runningJobs)
@@ -492,6 +517,101 @@ func (p *Processor) Close() error {
 
 	slog.Info("Processor shutdown completed")
 	return nil
+}
+
+// IsAutoPaused returns true if the processor was automatically paused due to provider unavailability
+func (p *Processor) IsAutoPaused() bool {
+	p.autoPausedMux.RLock()
+	defer p.autoPausedMux.RUnlock()
+	return p.isAutoPaused
+}
+
+// GetAutoPauseReason returns the reason for automatic pause, if any
+func (p *Processor) GetAutoPauseReason() string {
+	p.autoPausedMux.RLock()
+	defer p.autoPausedMux.RUnlock()
+	return p.autoPauseReason
+}
+
+// monitorProviderAvailability monitors provider status and pauses/resumes processing accordingly
+func (p *Processor) monitorProviderAvailability() {
+	ticker := time.NewTicker(10 * time.Second) // Check every 10 seconds
+	defer ticker.Stop()
+
+	p.providerCheckTicker = ticker
+
+	slog.Info("Started provider availability monitoring")
+
+	for {
+		select {
+		case <-p.providerCheckCtx.Done():
+			slog.Info("Provider monitoring stopped")
+			return
+		case <-ticker.C:
+			p.checkAndHandleProviderAvailability()
+		}
+	}
+}
+
+// checkAndHandleProviderAvailability checks provider availability and pauses/resumes as needed
+func (p *Processor) checkAndHandleProviderAvailability() {
+	if p.poolManager == nil {
+		return
+	}
+
+	// Get pool metrics to check provider status
+	metrics, err := p.poolManager.GetMetrics()
+	if err != nil {
+		slog.Error("Failed to get pool metrics for provider check", "error", err)
+		return
+	}
+
+	// Count connected/active providers
+	activeProviders := 0
+	totalProviders := len(metrics.ProviderMetrics)
+
+	for _, provider := range metrics.ProviderMetrics {
+		// Consider a provider active if it's connected or has a good state
+		if provider.State == nntppool.ProviderStateActive {
+			activeProviders++
+		}
+	}
+
+	p.autoPausedMux.Lock()
+	wasAutoPaused := p.isAutoPaused
+	p.autoPausedMux.Unlock()
+
+	slog.Debug("Provider availability check",
+		"activeProviders", activeProviders,
+		"totalProviders", totalProviders,
+		"wasAutoPaused", wasAutoPaused)
+
+	// If no providers are available and we haven't auto-paused yet
+	if activeProviders == 0 && totalProviders > 0 && !wasAutoPaused {
+		slog.Warn("No providers available - auto-pausing processing")
+		p.PauseProcessing()
+
+		p.autoPausedMux.Lock()
+		p.isAutoPaused = true
+		p.autoPauseReason = "All NNTP providers are unavailable"
+		p.autoPausedMux.Unlock()
+	}
+
+	// If providers are available and we were auto-paused
+	if activeProviders > 0 && wasAutoPaused {
+		// Only resume if the processor was paused by us (auto-pause)
+		// Check if it's still paused - if user manually resumed, don't override
+		if p.IsPaused() {
+			slog.Info("Providers available - auto-resuming processing",
+				"activeProviders", activeProviders)
+			p.ResumeProcessing()
+		}
+
+		p.autoPausedMux.Lock()
+		p.isAutoPaused = false
+		p.autoPauseReason = ""
+		p.autoPausedMux.Unlock()
+	}
 }
 
 func getFileName(path string) string {

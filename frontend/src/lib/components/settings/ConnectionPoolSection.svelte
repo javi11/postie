@@ -17,14 +17,12 @@ if (!config.connection_pool) {
 	config.connection_pool = {
 		min_connections: 5,
 		health_check_interval: "1m",
-		skip_providers_verification_on_creation: false,
 	};
 }
 
 // Reactive local state
 let minConnections = $state(config.connection_pool.min_connections || 5);
 let healthCheckInterval = $state(config.connection_pool.health_check_interval || "1m");
-let skipProvidersVerification = $state(config.connection_pool.skip_providers_verification_on_creation ?? false);
 let saving = $state(false);
 
 // Derived state
@@ -44,9 +42,6 @@ $effect(() => {
 	config.connection_pool.health_check_interval = healthCheckInterval;
 });
 
-$effect(() => {
-	config.connection_pool.skip_providers_verification_on_creation = skipProvidersVerification;
-});
 
 async function saveConnectionPoolSettings() {
 	if (!canSave) return;
@@ -71,7 +66,6 @@ async function saveConnectionPoolSettings() {
 			...currentConfig.connection_pool,
 			min_connections: minConnections,
 			health_check_interval: healthCheckInterval.trim(),
-			skip_providers_verification_on_creation: skipProvidersVerification,
 		};
 
 		await apiClient.saveConfig(currentConfig);
@@ -129,21 +123,6 @@ const healthCheckPresets = [
       />
     </div>
 
-    <div class="form-control">
-      <label class="label cursor-pointer justify-start gap-3">
-        <input
-          type="checkbox"
-          class="checkbox"
-          bind:checked={skipProvidersVerification}
-        />
-        <span class="label-text">{$t('settings.connection_pool.skip_providers_verification_on_creation')}</span>
-      </label>
-      <div class="label">
-        <span class="label-text-alt ml-8">
-          {$t('settings.connection_pool.skip_providers_verification_on_creation_description')}
-        </span>
-      </div>
-    </div>
 
     <div class="alert alert-info">
       <span class="text-sm">

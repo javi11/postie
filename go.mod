@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.3
-	github.com/javi11/nntppool v1.2.1-0.20250806110012-f81ae1cd4b62
+	github.com/javi11/nntppool v1.3.0
 	github.com/javi11/nxg v0.1.0
 	github.com/javi11/nzbparser v0.2.1
 	github.com/klauspost/compress v1.18.0

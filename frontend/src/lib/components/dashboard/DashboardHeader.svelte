@@ -15,14 +15,18 @@ let { needsConfiguration, criticalConfigError, handleUpload }: {
 } = $props();
 
 let isPaused = $state(false);
+let isAutoPaused = $state(false);
+let autoPauseReason = $state("");
 let pauseCheckInterval: NodeJS.Timeout | null = null;
 let showFileExplorer = $state(false);
 let isWebMode = $state(false);
 
-// Check pause status
+// Check pause status and auto-pause status
 async function checkPauseStatus() {
   try {
     isPaused = await apiClient.isProcessingPaused();
+    isAutoPaused = await apiClient.isProcessingAutoPaused();
+    autoPauseReason = await apiClient.getAutoPauseReason();
   } catch (error) {
     console.error("Failed to check pause status:", error);
   }
@@ -220,6 +224,16 @@ function closeFileExplorer() {
         <span>
           <span class="font-semibold">{$t("dashboard.alerts.config_required")}</span>
           {@html $t("dashboard.alerts.config_required_description", { values: { settingsLink: `<a href="/settings" class="font-medium underline hover:no-underline transition-all">${$t("dashboard.alerts.settings_link")}</a>` } })}
+        </span>
+      </div>
+    {/if}
+    
+    {#if isAutoPaused && autoPauseReason}
+      <div class="alert alert-warning mt-6">
+        <Pause class="w-5 h-5" />
+        <span>
+          <span class="font-semibold">{$t("dashboard.alerts.auto_paused")}</span>
+          {autoPauseReason}
         </span>
       </div>
     {/if}
