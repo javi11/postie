@@ -111,11 +111,34 @@
 			"config_error_description": "There was an error with your server configuration (e.g., invalid hostname, connection failure). Please check your {settingsLink} to fix the configuration.",
 			"config_required": "Configuration Required",
 			"config_required_description": "Please configure at least one server in the {settingsLink} page before uploading files.",
+			"auto_paused": "Processing Auto-Paused",
 			"settings_link": "Settings"
 		},
 		"file_explorer": {
 			"title": "Add Files from Server to Queue",
 			"import_success": "Files added to queue successfully"
+		},
+		"provider": {
+			"title": "Provider Status",
+			"error": "Error loading provider status",
+			"anonymous": "Anonymous",
+			"connections": "Connections",
+			"success_rate": "Success Rate",
+			"uploaded": "Uploaded",
+			"articles": "Articles",
+			"idle_connections": "Idle",
+			"pool_summary": "Pool Summary",
+			"active_connections": "active connections",
+			"total_uploaded": "Total Uploaded",
+			"no_providers": "No providers configured",
+			"status": {
+				"connected": "Connected",
+				"connecting": "Connecting",
+				"reconnecting": "Reconnecting",
+				"failed": "Failed",
+				"disconnected": "Disconnected",
+				"unknown": "Unknown"
+			}
 		}
 	}
 }

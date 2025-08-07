@@ -191,6 +191,16 @@ export class WebClient {
 		return response.paused;
 	}
 
+	async isProcessingAutoPaused(): Promise<boolean> {
+		const response = await this.get<{ autoPaused: boolean }>("/processor/auto-paused");
+		return response.autoPaused;
+	}
+
+	async getAutoPauseReason(): Promise<string> {
+		const response = await this.get<{ reason: string }>("/processor/auto-pause-reason");
+		return response.reason;
+	}
+
 	async getRunningJobs(): Promise<processor.RunningJobItem[]> {
 		return this.get<processor.RunningJobItem[]>("/running-jobs");
 	}
@@ -313,6 +323,12 @@ export class WebClient {
 		serverData: backend.ServerData,
 	): Promise<backend.ValidationResult> {
 		return this.post<backend.ValidationResult>("/validate-server", serverData);
+	}
+
+	async testProviderConnectivity(
+		serverData: backend.ServerData,
+	): Promise<backend.ValidationResult> {
+		return this.post<backend.ValidationResult>("/test-provider-connectivity", serverData);
 	}
 
 	async setupWizardComplete(

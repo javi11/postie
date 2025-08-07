@@ -42,6 +42,10 @@ export function GetAppliedConfig() {
   return window['go']['backend']['App']['GetAppliedConfig']();
 }
 
+export function GetAutoPauseReason() {
+  return window['go']['backend']['App']['GetAutoPauseReason']();
+}
+
 export function GetConfig() {
   return window['go']['backend']['App']['GetConfig']();
 }
@@ -108,6 +112,10 @@ export function HandleDroppedFiles(arg1) {
 
 export function HasPendingConfigChanges() {
   return window['go']['backend']['App']['HasPendingConfigChanges']();
+}
+
+export function IsProcessingAutoPaused() {
+  return window['go']['backend']['App']['IsProcessingAutoPaused']();
 }
 
 export function IsProcessingPaused() {
@@ -184,6 +192,10 @@ export function Shutdown() {
 
 export function Startup(arg1) {
   return window['go']['backend']['App']['Startup'](arg1);
+}
+
+export function TestProviderConnectivity(arg1) {
+  return window['go']['backend']['App']['TestProviderConnectivity'](arg1);
 }
 
 export function UploadFiles() {

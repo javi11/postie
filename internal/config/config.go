@@ -141,9 +141,8 @@ type Config interface {
 }
 
 type ConnectionPoolConfig struct {
-	MinConnections                      int      `yaml:"min_connections" json:"min_connections"`
-	HealthCheckInterval                 Duration `yaml:"health_check_interval" json:"health_check_interval"`
-	SkipProvidersVerificationOnCreation bool     `yaml:"skip_providers_verification_on_creation" json:"skip_providers_verification_on_creation"`
+	MinConnections      int      `yaml:"min_connections" json:"min_connections"`
+	HealthCheckInterval Duration `yaml:"health_check_interval" json:"health_check_interval"`
 }
 
 // config is the internal implementation of the Config interface
@@ -567,13 +566,12 @@ func (c *ConfigData) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
 	}
 
 	config := nntppool.Config{
-		Providers:                           providers,
-		HealthCheckInterval:                 c.ConnectionPool.HealthCheckInterval.ToDuration(),
-		MinConnections:                      c.ConnectionPool.MinConnections,
-		MaxRetries:                          uint(c.Posting.MaxRetries),
-		DelayType:                           nntppool.DelayTypeExponential,
-		RetryDelay:                          c.Posting.RetryDelay.ToDuration(),
-		SkipProvidersVerificationOnCreation: c.ConnectionPool.SkipProvidersVerificationOnCreation,
+		Providers:           providers,
+		HealthCheckInterval: c.ConnectionPool.HealthCheckInterval.ToDuration(),
+		MinConnections:      c.ConnectionPool.MinConnections,
+		MaxRetries:          uint(c.Posting.MaxRetries),
+		DelayType:           nntppool.DelayTypeExponential,
+		RetryDelay:          c.Posting.RetryDelay.ToDuration(),
 	}
 
 	pool, err := nntppool.NewConnectionPool(config)
@@ -665,9 +663,8 @@ func GetDefaultConfig() ConfigData {
 		Version: CurrentConfigVersion,
 		Servers: []ServerConfig{},
 		ConnectionPool: ConnectionPoolConfig{
-			MinConnections:                      0,
-			HealthCheckInterval:                 Duration("1m"),
-			SkipProvidersVerificationOnCreation: false,
+			MinConnections:      0,
+			HealthCheckInterval: Duration("1m"),
 		},
 		Posting: PostingConfig{
 			WaitForPar2:        &enabled,

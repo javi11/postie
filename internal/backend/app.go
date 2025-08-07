@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/javi11/nntppool"
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/processor"
@@ -83,6 +84,45 @@ type NntpPoolMetrics struct {
 	AverageAcquireWaitTime float64               `json:"averageAcquireWaitTime"`
 	TotalErrors            int64                 `json:"totalErrors"`
 	Providers              []NntpProviderMetrics `json:"providers"`
+	// Daily and Weekly compressed metrics from nntppool v1.3.1+
+	DailyMetrics  *MetricSummary `json:"dailyMetrics,omitempty"`
+	WeeklyMetrics *MetricSummary `json:"weeklyMetrics,omitempty"`
+}
+
+// MetricSummary represents aggregated metrics for a time period
+type MetricSummary struct {
+	StartTime                 string  `json:"startTime"`
+	EndTime                   string  `json:"endTime"`
+	TotalConnectionsCreated   int64   `json:"totalConnectionsCreated"`
+	TotalConnectionsDestroyed int64   `json:"totalConnectionsDestroyed"`
+	TotalAcquires             int64   `json:"totalAcquires"`
+	TotalReleases             int64   `json:"totalReleases"`
+	TotalErrors               int64   `json:"totalErrors"`
+	TotalRetries              int64   `json:"totalRetries"`
+	TotalAcquireWaitTime      int64   `json:"totalAcquireWaitTime"`
+	TotalBytesDownloaded      int64   `json:"totalBytesDownloaded"`
+	TotalBytesUploaded        int64   `json:"totalBytesUploaded"`
+	TotalArticlesRetrieved    int64   `json:"totalArticlesRetrieved"`
+	TotalArticlesPosted       int64   `json:"totalArticlesPosted"`
+	TotalCommandCount         int64   `json:"totalCommandCount"`
+	TotalCommandErrors        int64   `json:"totalCommandErrors"`
+	AverageConnectionsPerHour float64 `json:"averageConnectionsPerHour"`
+	AverageErrorRate          float64 `json:"averageErrorRate"`
+	AverageSuccessRate        float64 `json:"averageSuccessRate"`
+	AverageAcquireWaitTime    int64   `json:"averageAcquireWaitTime"`
+	WindowCount               int     `json:"windowCount"`
+}
+
+// CompressedMetrics represents compressed historical metrics for daily/weekly periods (legacy)
+type CompressedMetrics struct {
+	Timestamp           string  `json:"timestamp"`
+	Period              string  `json:"period"` // "daily" or "weekly"
+	TotalBytesUploaded  int64   `json:"totalBytesUploaded"`
+	TotalArticlesPosted int64   `json:"totalArticlesPosted"`
+	AverageUploadSpeed  float64 `json:"averageUploadSpeed"`
+	AverageSuccessRate  float64 `json:"averageSuccessRate"`
+	TotalErrors         int64   `json:"totalErrors"`
+	AverageConnections  float64 `json:"averageConnections"`
 }
 
 // NntpProviderMetrics represents metrics for individual NNTP providers
@@ -752,9 +792,17 @@ func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 	return nil
 }
 
-// ValidateNNTPServer validates an NNTP server configuration by attempting to connect
+// ValidateNNTPServer validates an NNTP server configuration using TestProviderConnectivity
 func (a *App) ValidateNNTPServer(serverData ServerData) ValidationResult {
 	defer a.recoverPanic("ValidateNNTPServer")
+
+	// Use the new TestProviderConnectivity method for more efficient validation
+	return a.TestProviderConnectivity(serverData)
+}
+
+// TestProviderConnectivity tests an individual provider's connectivity using the new nntppool method
+func (a *App) TestProviderConnectivity(serverData ServerData) ValidationResult {
+	defer a.recoverPanic("TestProviderConnectivity")
 
 	// Basic validation
 	if serverData.Host == "" {
@@ -770,37 +818,32 @@ func (a *App) ValidateNNTPServer(serverData ServerData) ValidationResult {
 		}
 	}
 
-	// Create temporary server config for validation
-	enabled := true
-	serverConfig := config.ServerConfig{
+	// Convert to nntppool provider config
+	providerConfig := nntppool.UsenetProviderConfig{
 		Host:                           serverData.Host,
 		Port:                           serverData.Port,
 		Username:                       serverData.Username,
 		Password:                       serverData.Password,
-		SSL:                            serverData.SSL,
-		MaxConnections:                 1, // Use single connection for validation
-		Enabled:                        &enabled,
+		TLS:                            serverData.SSL,
+		MaxConnections:                 1, // Use single connection for testing
 		MaxConnectionIdleTimeInSeconds: 300,
 		MaxConnectionTTLInSeconds:      3600,
+		InsecureSSL:                    false,
 	}
 
-	// Create minimal config with just this server
-	cfg := config.ConfigData{
-		Servers: []config.ServerConfig{serverConfig},
-	}
-
-	// Attempt to create NNTP pool - this validates the connection parameters
-	pool, err := cfg.GetNNTPPool()
+	// Use the new TestProviderConnectivity method from nntppool
+	// Note: The exact parameters may need adjustment based on the actual nntppool API
+	ctx := context.Background()
+	err := nntppool.TestProviderConnectivity(ctx, providerConfig, nil, nil)
 	if err != nil {
+		slog.Warn("Provider connectivity test failed", "host", serverData.Host, "port", serverData.Port, "error", err)
 		return ValidationResult{
 			Valid: false,
-			Error: fmt.Sprintf("Failed to connect to server: %v", err),
+			Error: fmt.Sprintf("Connection test failed: %v", err),
 		}
 	}
-	defer pool.Quit()
 
-	// If we got here, the connection was successful
-	slog.Info("NNTP server validation successful", "host", serverData.Host, "port", serverData.Port)
+	slog.Info("Provider connectivity test successful", "host", serverData.Host, "port", serverData.Port)
 	return ValidationResult{
 		Valid: true,
 		Error: "",
@@ -860,6 +903,28 @@ func (a *App) IsProcessingPaused() bool {
 	return a.processor.IsPaused()
 }
 
+// IsProcessingAutoPaused returns whether the processor was automatically paused due to provider unavailability
+func (a *App) IsProcessingAutoPaused() bool {
+	defer a.recoverPanic("IsProcessingAutoPaused")
+
+	if a.processor == nil {
+		return false
+	}
+
+	return a.processor.IsAutoPaused()
+}
+
+// GetAutoPauseReason returns the reason for automatic pause, if any
+func (a *App) GetAutoPauseReason() string {
+	defer a.recoverPanic("GetAutoPauseReason")
+
+	if a.processor == nil {
+		return ""
+	}
+
+	return a.processor.GetAutoPauseReason()
+}
+
 // GetNntpPoolMetrics returns NNTP connection pool metrics from the singleton pool manager
 func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 	defer a.recoverPanic("GetNntpPoolMetrics")
@@ -909,13 +974,65 @@ func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 		TotalArticlesPosted:    snapshot.TotalArticlesPosted,
 	}
 
+	// Convert daily summary directly from snapshot.DailySummary
+	if snapshot.DailySummary != nil {
+		metrics.DailyMetrics = &MetricSummary{
+			StartTime:                 snapshot.DailySummary.StartTime.Format(time.RFC3339),
+			EndTime:                   snapshot.DailySummary.EndTime.Format(time.RFC3339),
+			TotalConnectionsCreated:   snapshot.DailySummary.TotalConnectionsCreated,
+			TotalConnectionsDestroyed: snapshot.DailySummary.TotalConnectionsDestroyed,
+			TotalAcquires:             snapshot.DailySummary.TotalAcquires,
+			TotalReleases:             snapshot.DailySummary.TotalReleases,
+			TotalErrors:               snapshot.DailySummary.TotalErrors,
+			TotalRetries:              snapshot.DailySummary.TotalRetries,
+			TotalAcquireWaitTime:      snapshot.DailySummary.TotalAcquireWaitTime,
+			TotalBytesDownloaded:      snapshot.DailySummary.TotalBytesDownloaded,
+			TotalBytesUploaded:        snapshot.DailySummary.TotalBytesUploaded,
+			TotalArticlesRetrieved:    snapshot.DailySummary.TotalArticlesRetrieved,
+			TotalArticlesPosted:       snapshot.DailySummary.TotalArticlesPosted,
+			TotalCommandCount:         snapshot.DailySummary.TotalCommandCount,
+			TotalCommandErrors:        snapshot.DailySummary.TotalCommandErrors,
+			AverageConnectionsPerHour: snapshot.DailySummary.AverageConnectionsPerHour,
+			AverageErrorRate:          snapshot.DailySummary.AverageErrorRate,
+			AverageSuccessRate:        snapshot.DailySummary.AverageSuccessRate,
+			AverageAcquireWaitTime:    snapshot.DailySummary.AverageAcquireWaitTime,
+			WindowCount:               snapshot.DailySummary.WindowCount,
+		}
+	}
+
+	// Convert weekly summary directly from snapshot.WeeklySummary
+	if snapshot.WeeklySummary != nil {
+		metrics.WeeklyMetrics = &MetricSummary{
+			StartTime:                 snapshot.WeeklySummary.StartTime.Format(time.RFC3339),
+			EndTime:                   snapshot.WeeklySummary.EndTime.Format(time.RFC3339),
+			TotalConnectionsCreated:   snapshot.WeeklySummary.TotalConnectionsCreated,
+			TotalConnectionsDestroyed: snapshot.WeeklySummary.TotalConnectionsDestroyed,
+			TotalAcquires:             snapshot.WeeklySummary.TotalAcquires,
+			TotalReleases:             snapshot.WeeklySummary.TotalReleases,
+			TotalErrors:               snapshot.WeeklySummary.TotalErrors,
+			TotalRetries:              snapshot.WeeklySummary.TotalRetries,
+			TotalAcquireWaitTime:      snapshot.WeeklySummary.TotalAcquireWaitTime,
+			TotalBytesDownloaded:      snapshot.WeeklySummary.TotalBytesDownloaded,
+			TotalBytesUploaded:        snapshot.WeeklySummary.TotalBytesUploaded,
+			TotalArticlesRetrieved:    snapshot.WeeklySummary.TotalArticlesRetrieved,
+			TotalArticlesPosted:       snapshot.WeeklySummary.TotalArticlesPosted,
+			TotalCommandCount:         snapshot.WeeklySummary.TotalCommandCount,
+			TotalCommandErrors:        snapshot.WeeklySummary.TotalCommandErrors,
+			AverageConnectionsPerHour: snapshot.WeeklySummary.AverageConnectionsPerHour,
+			AverageErrorRate:          snapshot.WeeklySummary.AverageErrorRate,
+			AverageSuccessRate:        snapshot.WeeklySummary.AverageSuccessRate,
+			AverageAcquireWaitTime:    snapshot.WeeklySummary.AverageAcquireWaitTime,
+			WindowCount:               snapshot.WeeklySummary.WindowCount,
+		}
+	}
+
 	// Convert provider metrics
 	providers := make([]NntpProviderMetrics, len(snapshot.ProviderMetrics))
 	for i, provider := range snapshot.ProviderMetrics {
 		providers[i] = NntpProviderMetrics{
 			Host:                 provider.Host,
 			Username:             provider.Username,
-			State:                provider.State,
+			State:                provider.State.String(),
 			TotalConnections:     int(provider.TotalConnections),    // Convert int32 to int
 			MaxConnections:       int(provider.MaxConnections),      // Convert int32 to int
 			AcquiredConnections:  int(provider.AcquiredConnections), // Convert int32 to int

@@ -112,11 +112,34 @@
 			"config_error_description": "Il y a eu une erreur avec la configuration de votre serveur (ex. nom d'hôte invalide, échec de connexion). Veuillez vérifier vos {settingsLink} pour corriger la configuration.",
 			"config_required": "Configuration Requise",
 			"config_required_description": "Veuillez configurer au moins un serveur dans la page {settingsLink} avant de télécharger des fichiers.",
+			"auto_paused": "Traitement Automatiquement Mis en Pause",
 			"settings_link": "Paramètres"
 		},
 		"file_explorer": {
 			"title": "Ajouter des Fichiers du Serveur à la File",
 			"import_success": "Fichiers ajoutés à la file avec succès"
+		},
+		"provider": {
+			"title": "État du Fournisseur",
+			"error": "Erreur lors du chargement de l'état du fournisseur",
+			"anonymous": "Anonyme",
+			"connections": "Connexions",
+			"success_rate": "Taux de Réussite",
+			"uploaded": "Téléchargé",
+			"articles": "Articles",
+			"idle_connections": "Inactives",
+			"pool_summary": "Résumé du Pool",
+			"active_connections": "connexions actives",
+			"total_uploaded": "Total Téléchargé",
+			"no_providers": "Aucun fournisseur configuré",
+			"status": {
+				"connected": "Connecté",
+				"connecting": "Connexion",
+				"reconnecting": "Reconnexion",
+				"failed": "Échec",
+				"disconnected": "Déconnecté",
+				"unknown": "Inconnu"
+			}
 		}
 	}
 }

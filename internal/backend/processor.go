@@ -64,6 +64,7 @@ func (a *App) initializeProcessor() error {
 		DeleteOriginalFile:        watcherCfg.DeleteOriginalFile,
 		MaintainOriginalExtension: a.config.GetMaintainOriginalExtension(),
 		WatchFolder:               watcherCfg.WatchDirectory,
+		CanProcessNextItem:        a.canProcessNextItem,
 	})
 
 	// Start processor

@@ -3,13 +3,14 @@ import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import { onMount, onDestroy } from "svelte";
-import { Activity, Upload, Server, Zap, Clock, AlertCircle, FileText } from "lucide-svelte";
+import { Activity, Upload, Server, Zap, Clock, AlertCircle, FileText, TrendingUp, Archive } from "lucide-svelte";
   import type { backend } from "$lib/wailsjs/go/models";
 
 let metrics = $state<backend.NntpPoolMetrics | null>(null);
 let loading = $state(true);
 let error = $state<string | null>(null);
 let refreshInterval = $state<NodeJS.Timeout | null>(null);
+let selectedPeriod = $state<'current' | 'daily' | 'weekly'>('current');
 
 // Auto-refresh every 5 seconds
 const REFRESH_INTERVAL = 5000;
@@ -24,9 +25,12 @@ onDestroy(() => {
 });
 
 function startAutoRefresh() {
-	refreshInterval = setInterval(async () => {
-		await loadMetrics(false); // Don't show loading state on auto-refresh
-	}, REFRESH_INTERVAL);
+	// Only auto-refresh for current metrics, not compressed historical data
+	if (selectedPeriod === 'current') {
+		refreshInterval = setInterval(async () => {
+			await loadMetrics(false); // Don't show loading state on auto-refresh
+		}, REFRESH_INTERVAL);
+	}
 }
 
 function stopAutoRefresh() {
@@ -43,7 +47,55 @@ async function loadMetrics(showLoading = true) {
 		}
 		error = null;
 		
-		metrics = await apiClient.getNntpPoolMetrics();
+		const allMetrics = await apiClient.getNntpPoolMetrics();
+		
+		// Filter metrics based on selected period
+		if (selectedPeriod === 'daily' && allMetrics.dailyMetrics) {
+			// Show daily compressed metrics from the summary
+			const dailySummary = allMetrics.dailyMetrics;
+			// Calculate upload speed from total bytes and duration
+			const durationSeconds = (new Date(dailySummary.endTime).getTime() - new Date(dailySummary.startTime).getTime()) / 1000;
+			const uploadSpeed = durationSeconds > 0 ? dailySummary.totalBytesUploaded / durationSeconds : 0;
+			const averageConnections = dailySummary.averageConnectionsPerHour / 24; // Convert hourly to daily average
+			
+			metrics = {
+				...allMetrics,
+				// Override current metrics with daily summary data
+				uploadSpeed: uploadSpeed,
+				commandSuccessRate: dailySummary.averageSuccessRate,
+				errorRate: dailySummary.averageErrorRate,
+				totalBytesUploaded: dailySummary.totalBytesUploaded,
+				totalArticlesPosted: dailySummary.totalArticlesPosted,
+				totalErrors: dailySummary.totalErrors,
+				activeConnections: Math.round(averageConnections),
+				totalAcquires: dailySummary.totalAcquires,
+				averageAcquireWaitTime: dailySummary.averageAcquireWaitTime / 1000000, // Convert nanoseconds to milliseconds
+			};
+		} else if (selectedPeriod === 'weekly' && allMetrics.weeklyMetrics) {
+			// Show weekly compressed metrics from the summary
+			const weeklySummary = allMetrics.weeklyMetrics;
+			// Calculate upload speed from total bytes and duration
+			const durationSeconds = (new Date(weeklySummary.endTime).getTime() - new Date(weeklySummary.startTime).getTime()) / 1000;
+			const uploadSpeed = durationSeconds > 0 ? weeklySummary.totalBytesUploaded / durationSeconds : 0;
+			const averageConnections = weeklySummary.averageConnectionsPerHour / (24 * 7); // Convert hourly to weekly average
+			
+			metrics = {
+				...allMetrics,
+				// Override current metrics with weekly summary data
+				uploadSpeed: uploadSpeed,
+				commandSuccessRate: weeklySummary.averageSuccessRate,
+				errorRate: weeklySummary.averageErrorRate,
+				totalBytesUploaded: weeklySummary.totalBytesUploaded,
+				totalArticlesPosted: weeklySummary.totalArticlesPosted,
+				totalErrors: weeklySummary.totalErrors,
+				activeConnections: Math.round(averageConnections),
+				totalAcquires: weeklySummary.totalAcquires,
+				averageAcquireWaitTime: weeklySummary.averageAcquireWaitTime / 1000000, // Convert nanoseconds to milliseconds
+			};
+		} else {
+			// Show real-time current metrics
+			metrics = allMetrics;
+		}
 	} catch (err) {
 		console.error("Failed to load NNTP pool metrics:", err);
 		error = String(err);
@@ -102,32 +154,122 @@ function getProviderStatusColor(state: string): string {
 			return "badge-neutral";
 	}
 }
+
+function handlePeriodChange() {
+	// Stop any existing refresh
+	stopAutoRefresh();
+	
+	// Restart refresh only for current metrics
+	if (selectedPeriod === 'current') {
+		startAutoRefresh();
+	}
+	
+	// Load metrics for the new period
+	loadMetrics(true);
+}
+
 </script>
 
 <div class="space-y-6">
 	<!-- Header -->
-	<div class="flex items-center justify-between">
+	<div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
 		<div>
 			<h1 class="text-3xl font-bold text-base-content">{$t('metrics.title')}</h1>
 			<p class="text-base-content/70 mt-1">{$t('metrics.description')}</p>
 		</div>
 		
-		<div class="flex items-center gap-3">
-			<!-- Auto-refresh indicator -->
-			<div class="flex items-center gap-2 text-sm text-base-content/60">
-				<Activity class="w-4 h-4 {refreshInterval ? 'animate-pulse text-primary' : ''}" />
-				<span>{$t('metrics.auto_refresh')}</span>
+		<div class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+			<!-- Period Selection -->
+			<div class="form-control">
+				<label for="period-select" class="label">
+					<span class="label-text text-sm">{$t('metrics.time_period')}</span>
+				</label>
+				<select 
+					id="period-select"
+					class="select select-bordered select-sm w-full sm:w-40"
+					bind:value={selectedPeriod}
+					onchange={handlePeriodChange}
+				>
+					<option value="current">
+						{$t('metrics.periods.current')}
+					</option>
+					<option value="daily">
+						{$t('metrics.periods.daily')}
+					</option>
+					<option value="weekly">
+						{$t('metrics.periods.weekly')}
+					</option>
+				</select>
 			</div>
 			
-			<button 
-				class="btn btn-primary btn-sm" 
-				onclick={() => loadMetrics(true)}
-				disabled={loading}
-			>
-				{loading ? $t('common.common.loading') : $t('metrics.refresh')}
-			</button>
+			<div class="flex items-center gap-3">
+				<!-- Auto-refresh indicator (only for current metrics) -->
+				{#if selectedPeriod === 'current'}
+					<div class="flex items-center gap-2 text-sm text-base-content/60">
+						<Activity class="w-4 h-4 {refreshInterval ? 'animate-pulse text-primary' : ''}" />
+						<span>{$t('metrics.auto_refresh')}</span>
+					</div>
+				{:else}
+					<div class="flex items-center gap-2 text-sm text-base-content/60">
+						<Archive class="w-4 h-4 text-info" />
+						<span>{$t('metrics.compressed_data')}</span>
+					</div>
+				{/if}
+				
+				<button 
+					class="btn btn-primary btn-sm" 
+					onclick={() => loadMetrics(true)}
+					disabled={loading}
+				>
+					{loading ? $t('common.common.loading') : $t('metrics.refresh')}
+				</button>
+			</div>
 		</div>
 	</div>
+
+	<!-- Compressed Metrics Info Banner -->
+	{#if selectedPeriod !== 'current'}
+		{@const hasCompressedData = selectedPeriod === 'daily' ? !!metrics?.dailyMetrics : !!metrics?.weeklyMetrics}
+		<div class="alert {hasCompressedData ? 'alert-info' : 'alert-warning'}">
+			<div class="flex items-start gap-3">
+				<TrendingUp class="w-6 h-6 flex-shrink-0 mt-0.5" />
+				<div class="flex-1">
+					<h3 class="font-medium">
+						{hasCompressedData 
+							? $t('metrics.compressed_metrics_title')
+							: $t('metrics.no_compressed_data_title')
+						}
+					</h3>
+					<p class="text-sm mt-1 opacity-90">
+						{#if hasCompressedData}
+							{selectedPeriod === 'daily' 
+								? $t('metrics.daily_metrics_description')
+								: $t('metrics.weekly_metrics_description')
+							}
+						{:else}
+							{selectedPeriod === 'daily'
+								? $t('metrics.no_daily_data_description')  
+								: $t('metrics.no_weekly_data_description')
+							}
+						{/if}
+					</p>
+					{#if hasCompressedData}
+						<div class="mt-2 text-sm">
+							<span class="badge badge-info badge-sm">
+								{$t('metrics.data_source')}: nntppool v1.3.1+
+							</span>
+						</div>
+					{:else}
+						<div class="mt-2 text-sm">
+							<span class="badge badge-warning badge-sm">
+								{$t('metrics.showing_current_data')}
+							</span>
+						</div>
+					{/if}
+				</div>
+			</div>
+		</div>
+	{/if}
 
 	{#if loading && !metrics}
 		<div class="flex items-center justify-center py-12">

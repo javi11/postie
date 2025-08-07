@@ -185,7 +185,7 @@ func (q *Queue) AddFile(ctx context.Context, path string, size int64) error {
 		return fmt.Errorf("failed to check if path exists: %w", err)
 	}
 	if exists {
-		slog.InfoContext(ctx, "File already exists in queue, ignoring", "path", path)
+		slog.DebugContext(ctx, "File already exists in queue, ignoring", "path", path)
 		return nil
 	}
 
@@ -242,7 +242,7 @@ func (q *Queue) AddFileWithPriority(ctx context.Context, path string, size int64
 		return fmt.Errorf("failed to check if path exists: %w", err)
 	}
 	if exists {
-		slog.InfoContext(ctx, "File already exists in queue, ignoring", "path", path)
+		slog.DebugContext(ctx, "File already exists in queue, ignoring", "path", path)
 		return nil
 	}
 
@@ -885,7 +885,7 @@ func (q *Queue) SetQueueItemPriorityWithReorder(ctx context.Context, id string, 
 	if err := json.Unmarshal(body, &job); err != nil {
 		return fmt.Errorf("failed to unmarshal job: %w", err)
 	}
-	
+
 	job.Priority = newPriority
 	newBody, err := json.Marshal(job)
 	if err != nil {
@@ -898,7 +898,7 @@ func (q *Queue) SetQueueItemPriorityWithReorder(ctx context.Context, id string, 
 		SET body = ?, priority = ?, updated = strftime('%Y-%m-%dT%H:%M:%fZ') 
 		WHERE id = ? AND queue = 'file_jobs'
 	`, newBody, newPriority, id)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to update queue item priority: %w", err)
 	}

@@ -25,6 +25,8 @@ export function GetAppStatus():Promise<backend.AppStatus>;
 
 export function GetAppliedConfig():Promise<config.ConfigData>;
 
+export function GetAutoPauseReason():Promise<string>;
+
 export function GetConfig():Promise<config.ConfigData>;
 
 export function GetConfigPath():Promise<string>;
@@ -58,6 +60,8 @@ export function GetWatchDirectory():Promise<string>;
 export function HandleDroppedFiles(arg1:Array<string>):Promise<void>;
 
 export function HasPendingConfigChanges():Promise<boolean>;
+
+export function IsProcessingAutoPaused():Promise<boolean>;
 
 export function IsProcessingPaused():Promise<boolean>;
 
@@ -96,6 +100,8 @@ export function SetupWizardComplete(arg1:backend.SetupWizardData):Promise<void>;
 export function Shutdown():Promise<void>;
 
 export function Startup(arg1:context.Context):Promise<void>;
+
+export function TestProviderConnectivity(arg1:backend.ServerData):Promise<backend.ValidationResult>;
 
 export function UploadFiles():Promise<void>;
 
