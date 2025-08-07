@@ -50,10 +50,12 @@ FROM ghcr.io/linuxserver/baseimage-ubuntu:arm64v8-jammy
 ARG DEBIAN_FRONTEND="noninteractive"
 ARG BUILD_DATE
 ARG VERSION
+ARG PUID=1000
+ARG PGID=1000
 
 # Set up environment variables for PUID and PGID
-ENV PUID=1000
-ENV PGID=1000
+ENV PUID=${PUID}
+ENV PGID=${PGID}
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -67,7 +69,7 @@ RUN echo '#!/bin/bash\n\
     PGID=${PGID:-1000}\n\
     groupmod -o -g "$PGID" abc\n\
     usermod -o -u "$PUID" abc\n\
-    chown -R abc:abc /app /config /watch /output\n\
+    chown -R abc:abc /app /config\n\
     exec s6-setuidgid abc /app/postie-web\n\
     ' > /entrypoint.sh && chmod +x /entrypoint.sh
 

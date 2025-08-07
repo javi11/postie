@@ -68,7 +68,7 @@ RUN echo '#!/bin/bash\n\
     PGID=${PGID:-1000}\n\
     groupmod -o -g "$PGID" abc\n\
     usermod -o -u "$PUID" abc\n\
-    chown -R abc:abc /app /config /watch /output\n\
+    chown -R abc:abc /app /config\n\
     exec s6-setuidgid abc /app/postie-web\n\
     ' > /entrypoint.sh && chmod +x /entrypoint.sh
 
