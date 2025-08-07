@@ -48,6 +48,8 @@ type Processor struct {
 	providerCheckTicker *time.Ticker
 	providerCheckCtx    context.Context
 	providerCheckCancel context.CancelFunc
+	// Callback to check if processor can start new items
+	canProcessNextItem func() bool
 }
 
 type ProcessorOptions struct {
@@ -59,6 +61,7 @@ type ProcessorOptions struct {
 	DeleteOriginalFile        bool
 	MaintainOriginalExtension bool
 	WatchFolder               string
+	CanProcessNextItem        func() bool // Callback to check if processor can start new items
 }
 type RunningJobDetails struct {
 	ID       string                   `json:"id"`
@@ -96,6 +99,7 @@ func New(opts ProcessorOptions) *Processor {
 		watchFolder:               opts.WatchFolder,
 		providerCheckCtx:          providerCtx,
 		providerCheckCancel:       providerCancel,
+		canProcessNextItem:        opts.CanProcessNextItem,
 	}
 
 	// Start provider availability monitoring if we have a pool manager
@@ -132,6 +136,12 @@ func (p *Processor) processQueueItems(ctx context.Context) error {
 
 	if paused {
 		return nil // Skip processing when paused
+	}
+
+	// Check if we can process next item (e.g., pending config changes)
+	if p.canProcessNextItem != nil && !p.canProcessNextItem() {
+		slog.DebugContext(ctx, "Processor waiting - cannot process new items (callback returned false)")
+		return nil // Skip processing when callback indicates we should wait
 	}
 
 	if p.isRunning {

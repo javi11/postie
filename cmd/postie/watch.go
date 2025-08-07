@@ -102,6 +102,7 @@ The watch command will monitor the configured directory and upload files accordi
 			DeleteOriginalFile:        watcherCfg.DeleteOriginalFile,
 			MaintainOriginalExtension: cfg.GetMaintainOriginalExtension(),
 			WatchFolder:               watcherCfg.WatchDirectory,
+			CanProcessNextItem:        nil, // CLI version doesn't need pending config management
 		})
 
 		// Start processor in background

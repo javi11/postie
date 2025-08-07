@@ -501,3 +501,36 @@ func (a *App) DiscardPendingConfig() error {
 	slog.Info("Pending configuration changes discarded")
 	return nil
 }
+
+// canProcessNextItem returns false if there are pending config changes that prevent new items from being processed
+func (a *App) canProcessNextItem() bool {
+	a.pendingConfigMux.RLock()
+	defer a.pendingConfigMux.RUnlock()
+	
+	// If there's no pending config, processing can continue
+	if a.pendingConfig == nil {
+		return true
+	}
+	
+	// If there are pending configs, check if we can apply them now
+	hasActiveWork := a.IsUploading()
+	if a.processor != nil {
+		runningJobs := a.processor.GetRunningJobs()
+		hasActiveWork = hasActiveWork || len(runningJobs) > 0
+	}
+	
+	// If no active work, try to apply pending config automatically
+	if !hasActiveWork {
+		slog.Info("No active work detected, attempting to apply pending configuration")
+		
+		// Apply pending config in background to avoid blocking the processor
+		go func() {
+			if err := a.ApplyPendingConfig(); err != nil {
+				slog.Error("Failed to auto-apply pending configuration", "error", err)
+			}
+		}()
+	}
+	
+	// Don't process new items while pending config exists
+	return false
+}
