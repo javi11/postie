@@ -63,14 +63,14 @@ WORKDIR /app
 RUN apt-get update -y && apt-get install --reinstall mime-support -y && apt-get install -y wget
 
 # Create the entrypoint script for web mode
-RUN echo '#!/bin/bash\n\
-    PUID=${PUID:-1000}\n\
-    PGID=${PGID:-1000}\n\
-    groupmod -o -g "$PGID" abc\n\
-    usermod -o -u "$PUID" abc\n\
-    chown -R abc:abc /app /config\n\
-    exec s6-setuidgid abc /app/postie-web\n\
-    ' > /entrypoint.sh && chmod +x /entrypoint.sh
+RUN mkdir -p /etc/services.d/postie-web && \
+    echo '#!/usr/bin/with-contenv bash\n\
+groupmod -o -g "$PGID" abc\n\
+usermod -o -u "$PUID" abc\n\
+chown -R abc:abc /app /config\n\
+exec s6-setuidgid abc /app/postie-web\n\
+' > /etc/services.d/postie-web/run && \
+    chmod +x /etc/services.d/postie-web/run
 
 # Copy web binary from builder
 COPY --from=backend-builder /app/postie-web /app/postie-web
@@ -94,9 +94,6 @@ VOLUME ["/config", "/watch", "/output"]
 
 # Default command for web mode
 CMD ["/app/postie-web"]
-
-# Set the entrypoint
-ENTRYPOINT ["/entrypoint.sh"]
 
 LABEL org.opencontainers.image.source="https://github.com/javi11/postie"
 LABEL build_version="version: Build-date:- ${VERSION}  ${BUILD_DATE}"
