@@ -2,7 +2,7 @@
 import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
   import { backend } from "$lib/wailsjs/go/models";
-import { CheckCircle, Clock, AlertCircle, WifiOff } from "lucide-svelte";
+import { CheckCircle, Clock, AlertCircle, Server, WifiOff } from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
 
 let poolMetrics = $state<backend.NntpPoolMetrics | null>(null);
@@ -113,7 +113,7 @@ onDestroy(() => {
 <div class="card bg-base-100 shadow-sm">
 	<div class="card-body">
 		<h2 class="card-title text-base-content flex items-center gap-2">
-			<WifiOff class="w-5 h-5" />
+			<Server class="w-5 h-5" />
 			{$t("dashboard.provider.title")}
 		</h2>
 

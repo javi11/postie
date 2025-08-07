@@ -7,6 +7,24 @@
 		"error_loading": "Error al cargar métricas",
 		"error_title": "No se pueden cargar las métricas",
 		
+		"time_period": "Período de Tiempo",
+		"compressed_data": "Datos Comprimidos",
+		"data_source": "Fuente de Datos",
+		"compressed_metrics_title": "Métricas Históricas Comprimidas",
+		"daily_metrics_description": "Ver métricas diarias comprimidas agregadas en períodos de 24 horas. Estos datos están optimizados para almacenamiento y proporcionan información sobre patrones de uso diarios.",
+		"weekly_metrics_description": "Ver métricas semanales comprimidas agregadas en períodos de 7 días. Estos datos muestran tendencias a largo plazo y patrones de uso semanal.",
+		
+		"no_compressed_data_title": "No Hay Datos Comprimidos Disponibles",
+		"no_daily_data_description": "Aún no hay métricas diarias comprimidas disponibles. El sistema necesita tiempo para acumular datos diarios, o la versión de nntppool puede no soportar esta función.",
+		"no_weekly_data_description": "Aún no hay métricas semanales comprimidas disponibles. El sistema necesita tiempo para acumular datos semanales, o la versión de nntppool puede no soportar esta función.",
+		"showing_current_data": "Mostrando datos actuales en tiempo real",
+		
+		"periods": {
+			"current": "Tiempo Real",
+			"daily": "Historial Diario",
+			"weekly": "Historial Semanal"
+		},
+		
 		"active_connections": "Conexiones Activas",
 		"download_speed": "Velocidad de Descarga",
 		"upload_speed": "Velocidad de Subida aproximada",

@@ -121,7 +121,7 @@
 			"import_success": "Archivos agregados a la cola exitosamente"
 		},
 		"provider": {
-			"title": "Estado del Proveedor",
+			"title": "Estado de los Proveedores",
 			"error": "Error al cargar el estado del proveedor",
 			"anonymous": "Anónimo",
 			"connections": "Conexiones",

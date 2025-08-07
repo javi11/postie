@@ -40,11 +40,8 @@ let hasSelectedFiles = $derived(selectedFiles.size > 0);
 let currentPath = $state("/");
 
 async function loadDirectory(path: string = "/"): Promise<FileManagerItem[]> {
-  console.log("Loading directory:", path);
   try {
     const response = await apiClient.browseFilesystem(path);
-    console.log("API response:", response);
-    
     // Convert our API response to SVAR FileManager format
     const items: FileManagerItem[] = response.items.map((item: FileSystemItem) => ({
       id: item.path,
@@ -53,7 +50,6 @@ async function loadDirectory(path: string = "/"): Promise<FileManagerItem[]> {
       type: item.isDir ? "folder" : "file"
     }));
 
-    console.log("Converted items:", items);
     return items;
   } catch (error) {
     console.error("Failed to load directory:", error);

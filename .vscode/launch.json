@@ -77,7 +77,21 @@
 			}
 		},
 		{
-			"name": "Debug Web App (Full Stack)",
+			"name": "Debug Web Backend",
+			"type": "go",
+			"request": "launch",
+			"mode": "auto",
+			"program": "${workspaceFolder}/cmd/web/main.go",
+			"args": ["-p", "8080"],
+			"cwd": "${workspaceFolder}",
+			"env": {
+				"GO111MODULE": "on"
+			},
+			"showLog": true,
+			"trace": "verbose"
+		},
+		{
+			"name": "Debug Web Frontend",
 			"type": "node",
 			"request": "launch",
 			"runtimeExecutable": "npm",
@@ -87,11 +101,18 @@
 			"env": {
 				"NODE_ENV": "development",
 				"VITE_WS_PROXY": "true"
-			},
-			"preLaunchTask": "Start Web Backend",
-			"postDebugTask": "Stop Web Backend"
+			}
 		}
 	],
+	"compounds": [
+		{
+			"name": "Debug Web and Backend",
+			"configurations": [
+				"Debug Web Backend",
+				"Debug Web Frontend"
+			]
+		}
+	],				
 	"inputs": [
 		{
 			"id": "configPath",

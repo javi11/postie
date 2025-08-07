@@ -32,6 +32,32 @@ export namespace backend {
 	        this.needsConfiguration = source["needsConfiguration"];
 	    }
 	}
+	export class CompressedMetrics {
+	    timestamp: string;
+	    period: string;
+	    totalBytesUploaded: number;
+	    totalArticlesPosted: number;
+	    averageUploadSpeed: number;
+	    averageSuccessRate: number;
+	    totalErrors: number;
+	    averageConnections: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CompressedMetrics(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.timestamp = source["timestamp"];
+	        this.period = source["period"];
+	        this.totalBytesUploaded = source["totalBytesUploaded"];
+	        this.totalArticlesPosted = source["totalArticlesPosted"];
+	        this.averageUploadSpeed = source["averageUploadSpeed"];
+	        this.averageSuccessRate = source["averageSuccessRate"];
+	        this.totalErrors = source["totalErrors"];
+	        this.averageConnections = source["averageConnections"];
+	    }
+	}
 	export class NntpProviderMetrics {
 	    host: string;
 	    username: string;
@@ -78,6 +104,8 @@ export namespace backend {
 	    averageAcquireWaitTime: number;
 	    totalErrors: number;
 	    providers: NntpProviderMetrics[];
+	    dailyMetrics?: CompressedMetrics[];
+	    weeklyMetrics?: CompressedMetrics[];
 	
 	    static createFrom(source: any = {}) {
 	        return new NntpPoolMetrics(source);
@@ -98,6 +126,8 @@ export namespace backend {
 	        this.averageAcquireWaitTime = source["averageAcquireWaitTime"];
 	        this.totalErrors = source["totalErrors"];
 	        this.providers = this.convertValues(source["providers"], NntpProviderMetrics);
+	        this.dailyMetrics = this.convertValues(source["dailyMetrics"], CompressedMetrics);
+	        this.weeklyMetrics = this.convertValues(source["weeklyMetrics"], CompressedMetrics);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

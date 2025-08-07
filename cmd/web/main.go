@@ -243,6 +243,8 @@ func (ws *WebServer) setupRoutes() {
 	api.HandleFunc("/processor/pause", ws.handlePauseProcessing).Methods("POST")
 	api.HandleFunc("/processor/resume", ws.handleResumeProcessing).Methods("POST")
 	api.HandleFunc("/processor/paused", ws.handleIsProcessingPaused).Methods("GET")
+	api.HandleFunc("/processor/auto-paused", ws.handleIsProcessingAutoPaused).Methods("GET")
+	api.HandleFunc("/processor/auto-pause-reason", ws.handleGetAutoPauseReason).Methods("GET")
 	api.HandleFunc("/running-jobs", ws.handleGetRunningJobs).Methods("GET")
 	api.HandleFunc("/running-job-details", ws.handleGetRunningJobDetails).Methods("GET")
 	api.HandleFunc("/validate-server", ws.handleValidateServer).Methods("POST")
@@ -677,6 +679,18 @@ func (ws *WebServer) handleIsProcessingPaused(w http.ResponseWriter, r *http.Req
 	paused := ws.app.IsProcessingPaused()
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]bool{"paused": paused})
+}
+
+func (ws *WebServer) handleIsProcessingAutoPaused(w http.ResponseWriter, r *http.Request) {
+	autoPaused := ws.app.IsProcessingAutoPaused()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"autoPaused": autoPaused})
+}
+
+func (ws *WebServer) handleGetAutoPauseReason(w http.ResponseWriter, r *http.Request) {
+	reason := ws.app.GetAutoPauseReason()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"reason": reason})
 }
 
 func (ws *WebServer) handleGetNntpPoolMetrics(w http.ResponseWriter, r *http.Request) {

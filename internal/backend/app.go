@@ -84,6 +84,21 @@ type NntpPoolMetrics struct {
 	AverageAcquireWaitTime float64               `json:"averageAcquireWaitTime"`
 	TotalErrors            int64                 `json:"totalErrors"`
 	Providers              []NntpProviderMetrics `json:"providers"`
+	// Daily and Weekly compressed metrics from nntppool v1.3.1+
+	DailyMetrics           []CompressedMetrics   `json:"dailyMetrics,omitempty"`
+	WeeklyMetrics          []CompressedMetrics   `json:"weeklyMetrics,omitempty"`
+}
+
+// CompressedMetrics represents compressed historical metrics for daily/weekly periods
+type CompressedMetrics struct {
+	Timestamp              string  `json:"timestamp"`
+	Period                 string  `json:"period"` // "daily" or "weekly"
+	TotalBytesUploaded     int64   `json:"totalBytesUploaded"`
+	TotalArticlesPosted    int64   `json:"totalArticlesPosted"`
+	AverageUploadSpeed     float64 `json:"averageUploadSpeed"`
+	AverageSuccessRate     float64 `json:"averageSuccessRate"`
+	TotalErrors            int64   `json:"totalErrors"`
+	AverageConnections     float64 `json:"averageConnections"`
 }
 
 // NntpProviderMetrics represents metrics for individual NNTP providers
@@ -934,6 +949,52 @@ func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 		TotalErrors:            snapshot.TotalErrors,
 		TotalArticlesPosted:    snapshot.TotalArticlesPosted,
 	}
+
+	// TODO: Convert daily compressed metrics once available in nntppool snapshot
+	// When nntppool exposes snapshot.DailyMetrics, uncomment and adapt:
+	/*
+	if len(snapshot.DailyMetrics) > 0 {
+		dailyMetrics := make([]CompressedMetrics, len(snapshot.DailyMetrics))
+		for i, daily := range snapshot.DailyMetrics {
+			dailyMetrics[i] = CompressedMetrics{
+				Timestamp:              daily.Timestamp.Format(time.RFC3339),
+				Period:                 "daily",
+				TotalBytesUploaded:     daily.TotalBytesUploaded,
+				TotalArticlesPosted:    daily.TotalArticlesPosted,
+				AverageUploadSpeed:     daily.AverageUploadSpeed,
+				AverageSuccessRate:     daily.AverageSuccessRate,
+				TotalErrors:            daily.TotalErrors,
+				AverageConnections:     daily.AverageConnections,
+			}
+		}
+		metrics.DailyMetrics = dailyMetrics
+	}
+	*/
+
+	// TODO: Convert weekly compressed metrics once available in nntppool snapshot  
+	// When nntppool exposes snapshot.WeeklyMetrics, uncomment and adapt:
+	/*
+	if len(snapshot.WeeklyMetrics) > 0 {
+		weeklyMetrics := make([]CompressedMetrics, len(snapshot.WeeklyMetrics))
+		for i, weekly := range snapshot.WeeklyMetrics {
+			weeklyMetrics[i] = CompressedMetrics{
+				Timestamp:              weekly.Timestamp.Format(time.RFC3339),
+				Period:                 "weekly",
+				TotalBytesUploaded:     weekly.TotalBytesUploaded,
+				TotalArticlesPosted:    weekly.TotalArticlesPosted,
+				AverageUploadSpeed:     weekly.AverageUploadSpeed,
+				AverageSuccessRate:     weekly.AverageSuccessRate,
+				TotalErrors:            weekly.TotalErrors,
+				AverageConnections:     weekly.AverageConnections,
+			}
+		}
+		metrics.WeeklyMetrics = weeklyMetrics
+	}
+	*/
+
+	// Initialize empty slices for now (will be populated when nntppool adds the fields)
+	metrics.DailyMetrics = []CompressedMetrics{}
+	metrics.WeeklyMetrics = []CompressedMetrics{}
 
 	// Convert provider metrics
 	providers := make([]NntpProviderMetrics, len(snapshot.ProviderMetrics))
