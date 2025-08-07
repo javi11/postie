@@ -32,30 +32,54 @@ export namespace backend {
 	        this.needsConfiguration = source["needsConfiguration"];
 	    }
 	}
-	export class CompressedMetrics {
-	    timestamp: string;
-	    period: string;
-	    totalBytesUploaded: number;
-	    totalArticlesPosted: number;
-	    averageUploadSpeed: number;
-	    averageSuccessRate: number;
+	export class MetricSummary {
+	    startTime: string;
+	    endTime: string;
+	    totalConnectionsCreated: number;
+	    totalConnectionsDestroyed: number;
+	    totalAcquires: number;
+	    totalReleases: number;
 	    totalErrors: number;
-	    averageConnections: number;
+	    totalRetries: number;
+	    totalAcquireWaitTime: number;
+	    totalBytesDownloaded: number;
+	    totalBytesUploaded: number;
+	    totalArticlesRetrieved: number;
+	    totalArticlesPosted: number;
+	    totalCommandCount: number;
+	    totalCommandErrors: number;
+	    averageConnectionsPerHour: number;
+	    averageErrorRate: number;
+	    averageSuccessRate: number;
+	    averageAcquireWaitTime: number;
+	    windowCount: number;
 	
 	    static createFrom(source: any = {}) {
-	        return new CompressedMetrics(source);
+	        return new MetricSummary(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.timestamp = source["timestamp"];
-	        this.period = source["period"];
-	        this.totalBytesUploaded = source["totalBytesUploaded"];
-	        this.totalArticlesPosted = source["totalArticlesPosted"];
-	        this.averageUploadSpeed = source["averageUploadSpeed"];
-	        this.averageSuccessRate = source["averageSuccessRate"];
+	        this.startTime = source["startTime"];
+	        this.endTime = source["endTime"];
+	        this.totalConnectionsCreated = source["totalConnectionsCreated"];
+	        this.totalConnectionsDestroyed = source["totalConnectionsDestroyed"];
+	        this.totalAcquires = source["totalAcquires"];
+	        this.totalReleases = source["totalReleases"];
 	        this.totalErrors = source["totalErrors"];
-	        this.averageConnections = source["averageConnections"];
+	        this.totalRetries = source["totalRetries"];
+	        this.totalAcquireWaitTime = source["totalAcquireWaitTime"];
+	        this.totalBytesDownloaded = source["totalBytesDownloaded"];
+	        this.totalBytesUploaded = source["totalBytesUploaded"];
+	        this.totalArticlesRetrieved = source["totalArticlesRetrieved"];
+	        this.totalArticlesPosted = source["totalArticlesPosted"];
+	        this.totalCommandCount = source["totalCommandCount"];
+	        this.totalCommandErrors = source["totalCommandErrors"];
+	        this.averageConnectionsPerHour = source["averageConnectionsPerHour"];
+	        this.averageErrorRate = source["averageErrorRate"];
+	        this.averageSuccessRate = source["averageSuccessRate"];
+	        this.averageAcquireWaitTime = source["averageAcquireWaitTime"];
+	        this.windowCount = source["windowCount"];
 	    }
 	}
 	export class NntpProviderMetrics {
@@ -104,8 +128,8 @@ export namespace backend {
 	    averageAcquireWaitTime: number;
 	    totalErrors: number;
 	    providers: NntpProviderMetrics[];
-	    dailyMetrics?: CompressedMetrics[];
-	    weeklyMetrics?: CompressedMetrics[];
+	    dailyMetrics?: MetricSummary;
+	    weeklyMetrics?: MetricSummary;
 	
 	    static createFrom(source: any = {}) {
 	        return new NntpPoolMetrics(source);
@@ -126,8 +150,8 @@ export namespace backend {
 	        this.averageAcquireWaitTime = source["averageAcquireWaitTime"];
 	        this.totalErrors = source["totalErrors"];
 	        this.providers = this.convertValues(source["providers"], NntpProviderMetrics);
-	        this.dailyMetrics = this.convertValues(source["dailyMetrics"], CompressedMetrics);
-	        this.weeklyMetrics = this.convertValues(source["weeklyMetrics"], CompressedMetrics);
+	        this.dailyMetrics = this.convertValues(source["dailyMetrics"], MetricSummary);
+	        this.weeklyMetrics = this.convertValues(source["weeklyMetrics"], MetricSummary);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

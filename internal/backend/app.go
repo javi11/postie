@@ -85,20 +85,44 @@ type NntpPoolMetrics struct {
 	TotalErrors            int64                 `json:"totalErrors"`
 	Providers              []NntpProviderMetrics `json:"providers"`
 	// Daily and Weekly compressed metrics from nntppool v1.3.1+
-	DailyMetrics           []CompressedMetrics   `json:"dailyMetrics,omitempty"`
-	WeeklyMetrics          []CompressedMetrics   `json:"weeklyMetrics,omitempty"`
+	DailyMetrics  *MetricSummary `json:"dailyMetrics,omitempty"`
+	WeeklyMetrics *MetricSummary `json:"weeklyMetrics,omitempty"`
 }
 
-// CompressedMetrics represents compressed historical metrics for daily/weekly periods
+// MetricSummary represents aggregated metrics for a time period
+type MetricSummary struct {
+	StartTime                 string  `json:"startTime"`
+	EndTime                   string  `json:"endTime"`
+	TotalConnectionsCreated   int64   `json:"totalConnectionsCreated"`
+	TotalConnectionsDestroyed int64   `json:"totalConnectionsDestroyed"`
+	TotalAcquires             int64   `json:"totalAcquires"`
+	TotalReleases             int64   `json:"totalReleases"`
+	TotalErrors               int64   `json:"totalErrors"`
+	TotalRetries              int64   `json:"totalRetries"`
+	TotalAcquireWaitTime      int64   `json:"totalAcquireWaitTime"`
+	TotalBytesDownloaded      int64   `json:"totalBytesDownloaded"`
+	TotalBytesUploaded        int64   `json:"totalBytesUploaded"`
+	TotalArticlesRetrieved    int64   `json:"totalArticlesRetrieved"`
+	TotalArticlesPosted       int64   `json:"totalArticlesPosted"`
+	TotalCommandCount         int64   `json:"totalCommandCount"`
+	TotalCommandErrors        int64   `json:"totalCommandErrors"`
+	AverageConnectionsPerHour float64 `json:"averageConnectionsPerHour"`
+	AverageErrorRate          float64 `json:"averageErrorRate"`
+	AverageSuccessRate        float64 `json:"averageSuccessRate"`
+	AverageAcquireWaitTime    int64   `json:"averageAcquireWaitTime"`
+	WindowCount               int     `json:"windowCount"`
+}
+
+// CompressedMetrics represents compressed historical metrics for daily/weekly periods (legacy)
 type CompressedMetrics struct {
-	Timestamp              string  `json:"timestamp"`
-	Period                 string  `json:"period"` // "daily" or "weekly"
-	TotalBytesUploaded     int64   `json:"totalBytesUploaded"`
-	TotalArticlesPosted    int64   `json:"totalArticlesPosted"`
-	AverageUploadSpeed     float64 `json:"averageUploadSpeed"`
-	AverageSuccessRate     float64 `json:"averageSuccessRate"`
-	TotalErrors            int64   `json:"totalErrors"`
-	AverageConnections     float64 `json:"averageConnections"`
+	Timestamp           string  `json:"timestamp"`
+	Period              string  `json:"period"` // "daily" or "weekly"
+	TotalBytesUploaded  int64   `json:"totalBytesUploaded"`
+	TotalArticlesPosted int64   `json:"totalArticlesPosted"`
+	AverageUploadSpeed  float64 `json:"averageUploadSpeed"`
+	AverageSuccessRate  float64 `json:"averageSuccessRate"`
+	TotalErrors         int64   `json:"totalErrors"`
+	AverageConnections  float64 `json:"averageConnections"`
 }
 
 // NntpProviderMetrics represents metrics for individual NNTP providers
@@ -950,51 +974,57 @@ func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 		TotalArticlesPosted:    snapshot.TotalArticlesPosted,
 	}
 
-	// TODO: Convert daily compressed metrics once available in nntppool snapshot
-	// When nntppool exposes snapshot.DailyMetrics, uncomment and adapt:
-	/*
-	if len(snapshot.DailyMetrics) > 0 {
-		dailyMetrics := make([]CompressedMetrics, len(snapshot.DailyMetrics))
-		for i, daily := range snapshot.DailyMetrics {
-			dailyMetrics[i] = CompressedMetrics{
-				Timestamp:              daily.Timestamp.Format(time.RFC3339),
-				Period:                 "daily",
-				TotalBytesUploaded:     daily.TotalBytesUploaded,
-				TotalArticlesPosted:    daily.TotalArticlesPosted,
-				AverageUploadSpeed:     daily.AverageUploadSpeed,
-				AverageSuccessRate:     daily.AverageSuccessRate,
-				TotalErrors:            daily.TotalErrors,
-				AverageConnections:     daily.AverageConnections,
-			}
+	// Convert daily summary directly from snapshot.DailySummary
+	if snapshot.DailySummary != nil {
+		metrics.DailyMetrics = &MetricSummary{
+			StartTime:                 snapshot.DailySummary.StartTime.Format(time.RFC3339),
+			EndTime:                   snapshot.DailySummary.EndTime.Format(time.RFC3339),
+			TotalConnectionsCreated:   snapshot.DailySummary.TotalConnectionsCreated,
+			TotalConnectionsDestroyed: snapshot.DailySummary.TotalConnectionsDestroyed,
+			TotalAcquires:             snapshot.DailySummary.TotalAcquires,
+			TotalReleases:             snapshot.DailySummary.TotalReleases,
+			TotalErrors:               snapshot.DailySummary.TotalErrors,
+			TotalRetries:              snapshot.DailySummary.TotalRetries,
+			TotalAcquireWaitTime:      snapshot.DailySummary.TotalAcquireWaitTime,
+			TotalBytesDownloaded:      snapshot.DailySummary.TotalBytesDownloaded,
+			TotalBytesUploaded:        snapshot.DailySummary.TotalBytesUploaded,
+			TotalArticlesRetrieved:    snapshot.DailySummary.TotalArticlesRetrieved,
+			TotalArticlesPosted:       snapshot.DailySummary.TotalArticlesPosted,
+			TotalCommandCount:         snapshot.DailySummary.TotalCommandCount,
+			TotalCommandErrors:        snapshot.DailySummary.TotalCommandErrors,
+			AverageConnectionsPerHour: snapshot.DailySummary.AverageConnectionsPerHour,
+			AverageErrorRate:          snapshot.DailySummary.AverageErrorRate,
+			AverageSuccessRate:        snapshot.DailySummary.AverageSuccessRate,
+			AverageAcquireWaitTime:    snapshot.DailySummary.AverageAcquireWaitTime,
+			WindowCount:               snapshot.DailySummary.WindowCount,
 		}
-		metrics.DailyMetrics = dailyMetrics
 	}
-	*/
 
-	// TODO: Convert weekly compressed metrics once available in nntppool snapshot  
-	// When nntppool exposes snapshot.WeeklyMetrics, uncomment and adapt:
-	/*
-	if len(snapshot.WeeklyMetrics) > 0 {
-		weeklyMetrics := make([]CompressedMetrics, len(snapshot.WeeklyMetrics))
-		for i, weekly := range snapshot.WeeklyMetrics {
-			weeklyMetrics[i] = CompressedMetrics{
-				Timestamp:              weekly.Timestamp.Format(time.RFC3339),
-				Period:                 "weekly",
-				TotalBytesUploaded:     weekly.TotalBytesUploaded,
-				TotalArticlesPosted:    weekly.TotalArticlesPosted,
-				AverageUploadSpeed:     weekly.AverageUploadSpeed,
-				AverageSuccessRate:     weekly.AverageSuccessRate,
-				TotalErrors:            weekly.TotalErrors,
-				AverageConnections:     weekly.AverageConnections,
-			}
+	// Convert weekly summary directly from snapshot.WeeklySummary
+	if snapshot.WeeklySummary != nil {
+		metrics.WeeklyMetrics = &MetricSummary{
+			StartTime:                 snapshot.WeeklySummary.StartTime.Format(time.RFC3339),
+			EndTime:                   snapshot.WeeklySummary.EndTime.Format(time.RFC3339),
+			TotalConnectionsCreated:   snapshot.WeeklySummary.TotalConnectionsCreated,
+			TotalConnectionsDestroyed: snapshot.WeeklySummary.TotalConnectionsDestroyed,
+			TotalAcquires:             snapshot.WeeklySummary.TotalAcquires,
+			TotalReleases:             snapshot.WeeklySummary.TotalReleases,
+			TotalErrors:               snapshot.WeeklySummary.TotalErrors,
+			TotalRetries:              snapshot.WeeklySummary.TotalRetries,
+			TotalAcquireWaitTime:      snapshot.WeeklySummary.TotalAcquireWaitTime,
+			TotalBytesDownloaded:      snapshot.WeeklySummary.TotalBytesDownloaded,
+			TotalBytesUploaded:        snapshot.WeeklySummary.TotalBytesUploaded,
+			TotalArticlesRetrieved:    snapshot.WeeklySummary.TotalArticlesRetrieved,
+			TotalArticlesPosted:       snapshot.WeeklySummary.TotalArticlesPosted,
+			TotalCommandCount:         snapshot.WeeklySummary.TotalCommandCount,
+			TotalCommandErrors:        snapshot.WeeklySummary.TotalCommandErrors,
+			AverageConnectionsPerHour: snapshot.WeeklySummary.AverageConnectionsPerHour,
+			AverageErrorRate:          snapshot.WeeklySummary.AverageErrorRate,
+			AverageSuccessRate:        snapshot.WeeklySummary.AverageSuccessRate,
+			AverageAcquireWaitTime:    snapshot.WeeklySummary.AverageAcquireWaitTime,
+			WindowCount:               snapshot.WeeklySummary.WindowCount,
 		}
-		metrics.WeeklyMetrics = weeklyMetrics
 	}
-	*/
-
-	// Initialize empty slices for now (will be populated when nntppool adds the fields)
-	metrics.DailyMetrics = []CompressedMetrics{}
-	metrics.WeeklyMetrics = []CompressedMetrics{}
 
 	// Convert provider metrics
 	providers := make([]NntpProviderMetrics, len(snapshot.ProviderMetrics))

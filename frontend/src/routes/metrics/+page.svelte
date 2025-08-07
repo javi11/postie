@@ -50,31 +50,47 @@ async function loadMetrics(showLoading = true) {
 		const allMetrics = await apiClient.getNntpPoolMetrics();
 		
 		// Filter metrics based on selected period
-		if (selectedPeriod === 'daily' && allMetrics.dailyMetrics?.length > 0) {
-			// Show daily compressed metrics - take the latest daily data
-			const latestDaily = allMetrics.dailyMetrics[allMetrics.dailyMetrics.length - 1];
+		if (selectedPeriod === 'daily' && allMetrics.dailyMetrics) {
+			// Show daily compressed metrics from the summary
+			const dailySummary = allMetrics.dailyMetrics;
+			// Calculate upload speed from total bytes and duration
+			const durationSeconds = (new Date(dailySummary.endTime).getTime() - new Date(dailySummary.startTime).getTime()) / 1000;
+			const uploadSpeed = durationSeconds > 0 ? dailySummary.totalBytesUploaded / durationSeconds : 0;
+			const averageConnections = dailySummary.averageConnectionsPerHour / 24; // Convert hourly to daily average
+			
 			metrics = {
 				...allMetrics,
-				// Override current metrics with compressed daily averages
-				uploadSpeed: latestDaily.averageUploadSpeed,
-				commandSuccessRate: latestDaily.averageSuccessRate,
-				totalBytesUploaded: latestDaily.totalBytesUploaded,
-				totalArticlesPosted: latestDaily.totalArticlesPosted,
-				totalErrors: latestDaily.totalErrors,
-				activeConnections: Math.round(latestDaily.averageConnections),
+				// Override current metrics with daily summary data
+				uploadSpeed: uploadSpeed,
+				commandSuccessRate: dailySummary.averageSuccessRate,
+				errorRate: dailySummary.averageErrorRate,
+				totalBytesUploaded: dailySummary.totalBytesUploaded,
+				totalArticlesPosted: dailySummary.totalArticlesPosted,
+				totalErrors: dailySummary.totalErrors,
+				activeConnections: Math.round(averageConnections),
+				totalAcquires: dailySummary.totalAcquires,
+				averageAcquireWaitTime: dailySummary.averageAcquireWaitTime / 1000000, // Convert nanoseconds to milliseconds
 			};
-		} else if (selectedPeriod === 'weekly' && allMetrics.weeklyMetrics?.length > 0) {
-			// Show weekly compressed metrics - take the latest weekly data
-			const latestWeekly = allMetrics.weeklyMetrics[allMetrics.weeklyMetrics.length - 1];
+		} else if (selectedPeriod === 'weekly' && allMetrics.weeklyMetrics) {
+			// Show weekly compressed metrics from the summary
+			const weeklySummary = allMetrics.weeklyMetrics;
+			// Calculate upload speed from total bytes and duration
+			const durationSeconds = (new Date(weeklySummary.endTime).getTime() - new Date(weeklySummary.startTime).getTime()) / 1000;
+			const uploadSpeed = durationSeconds > 0 ? weeklySummary.totalBytesUploaded / durationSeconds : 0;
+			const averageConnections = weeklySummary.averageConnectionsPerHour / (24 * 7); // Convert hourly to weekly average
+			
 			metrics = {
 				...allMetrics,
-				// Override current metrics with compressed weekly averages
-				uploadSpeed: latestWeekly.averageUploadSpeed,
-				commandSuccessRate: latestWeekly.averageSuccessRate,
-				totalBytesUploaded: latestWeekly.totalBytesUploaded,
-				totalArticlesPosted: latestWeekly.totalArticlesPosted,
-				totalErrors: latestWeekly.totalErrors,
-				activeConnections: Math.round(latestWeekly.averageConnections),
+				// Override current metrics with weekly summary data
+				uploadSpeed: uploadSpeed,
+				commandSuccessRate: weeklySummary.averageSuccessRate,
+				errorRate: weeklySummary.averageErrorRate,
+				totalBytesUploaded: weeklySummary.totalBytesUploaded,
+				totalArticlesPosted: weeklySummary.totalArticlesPosted,
+				totalErrors: weeklySummary.totalErrors,
+				activeConnections: Math.round(averageConnections),
+				totalAcquires: weeklySummary.totalAcquires,
+				averageAcquireWaitTime: weeklySummary.averageAcquireWaitTime / 1000000, // Convert nanoseconds to milliseconds
 			};
 		} else {
 			// Show real-time current metrics
@@ -213,7 +229,7 @@ function handlePeriodChange() {
 
 	<!-- Compressed Metrics Info Banner -->
 	{#if selectedPeriod !== 'current'}
-		{@const hasCompressedData = selectedPeriod === 'daily' ? (metrics?.dailyMetrics?.length || 0) > 0 : (metrics?.weeklyMetrics?.length || 0) > 0}
+		{@const hasCompressedData = selectedPeriod === 'daily' ? !!metrics?.dailyMetrics : !!metrics?.weeklyMetrics}
 		<div class="alert {hasCompressedData ? 'alert-info' : 'alert-warning'}">
 			<div class="flex items-start gap-3">
 				<TrendingUp class="w-6 h-6 flex-shrink-0 mt-0.5" />
