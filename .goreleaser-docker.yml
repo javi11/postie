@@ -27,7 +27,6 @@ dockers:
       - --platform=linux/amd64
       - --cache-from=type=gha
       - --cache-to=type=gha,mode=max
-      - --cache-from=type=registry,ref={{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:buildcache-amd64
       - --cache-to=type=registry,ref={{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:buildcache-amd64,mode=max
     extra_files:
       - go.mod
@@ -46,7 +45,6 @@ dockers:
       - --platform=linux/arm64
       - --cache-from=type=gha
       - --cache-to=type=gha,mode=max
-      - --cache-from=type=registry,ref={{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:buildcache-arm64
       - --cache-to=type=registry,ref={{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:buildcache-arm64,mode=max
     extra_files:
       - go.mod

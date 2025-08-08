@@ -8,17 +8,12 @@ FROM --platform=$BUILDPLATFORM oven/bun:1 AS frontend-builder
 # Set working directory for frontend
 WORKDIR /app/frontend
 
-# Copy frontend package files first for better caching
-COPY frontend/package.json frontend/bun.lock* ./
-
-# Install dependencies (cached layer)
-RUN --mount=type=cache,target=/root/.bun \
-    bun install --frozen-lockfile
-
-# Copy frontend source
+# Copy frontend source (single step to avoid missing paths in GoReleaser context)
 COPY frontend/ ./
 
-# Build frontend
+# Install dependencies (cached layer) and build
+RUN --mount=type=cache,target=/root/.bun \
+    bun install --frozen-lockfile
 RUN bun run build
 
 # Backend build stage with multi-arch support
