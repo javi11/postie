@@ -74,12 +74,16 @@ snapshot:
 publish:
 	goreleaser --rm-dist
 
-.PHONY: docker
+.PHONY: docker docker-build
 docker: snapshot
 	mkdir -p ./example/watch
 	mkdir -p ./example/config
 	mkdir -p ./example/output
 	docker-compose up
+
+# Build Docker images using GoReleaser with optimizations
+docker-build: build-frontend
+	REGISTRY=ghcr.io IMAGE_NAME=javi11/postie goreleaser release --config .goreleaser-docker.yml --snapshot --skip-publish --clean
 
 # Build targets
 .PHONY: dev

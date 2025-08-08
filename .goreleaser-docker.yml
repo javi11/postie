@@ -5,7 +5,7 @@ checksum:
   name_template: 'checksums-server.txt'
   algorithm: sha512
 
-# Skip building binaries
+# Skip building binaries - we build inside Docker
 builds:
   - skip: true
 
@@ -16,16 +16,20 @@ changelog:
       - '^test:'
       - '^Merge branch'
 
-# Docker
+# Optimized Docker builds with caching
 dockers:
   - image_templates:
       - '{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:v{{ .Version }}-amd64'
+      - '{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:latest-amd64'
     use: buildx
     dockerfile: ./docker/Dockerfile
     build_flag_templates:
       - --platform=linux/amd64
+      - --cache-from=type=gha
+      - --cache-to=type=gha,mode=max
+      - --cache-from=type=registry,ref={{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:buildcache-amd64
+      - --cache-to=type=registry,ref={{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:buildcache-amd64,mode=max
     extra_files:
-      - docker
       - go.mod
       - go.sum
       - frontend
@@ -34,13 +38,17 @@ dockers:
       - pkg
   - image_templates:
       - '{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:v{{ .Version }}-arm64'
+      - '{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:latest-arm64'
     use: buildx
     goarch: arm64
-    dockerfile: ./docker/Dockerfile.aarch64
+    dockerfile: ./docker/Dockerfile
     build_flag_templates:
       - --platform=linux/arm64
+      - --cache-from=type=gha
+      - --cache-to=type=gha,mode=max
+      - --cache-from=type=registry,ref={{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:buildcache-arm64
+      - --cache-to=type=registry,ref={{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:buildcache-arm64,mode=max
     extra_files:
-      - docker
       - go.mod
       - go.sum
       - frontend

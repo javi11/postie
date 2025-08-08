@@ -4,6 +4,10 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+      cache_from:
+        - postie:buildcache
+      target: final  # Optional: specify final stage
+    image: postie:latest
     ports:
       - "8081:8081"
     volumes:

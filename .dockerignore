@@ -1,0 +1,73 @@
+# Git
+.git
+.gitignore
+.github
+
+# Build artifacts
+build/
+dist/
+*.exe
+*.app
+
+# Documentation
+*.md
+docs/
+CLAUDE.md
+CONTRIBUTING.md
+
+# Configuration examples and development files
+config-example.yaml
+docker-compose.yml
+Makefile
+.goreleaser*
+wails.json
+
+# Frontend development files (keep what's needed)
+frontend/node_modules/
+frontend/.svelte-kit/
+frontend/src/
+frontend/static/
+frontend/svelte.config.js
+frontend/vite.config.ts
+frontend/tsconfig.json
+frontend/README.md
+frontend/package.json.md5
+
+# Only keep essential frontend files for GoReleaser
+!frontend/build/
+!frontend/embed.go
+!frontend/package.json
+!frontend/bun.lock*
+
+# Test files
+*_test.go
+**/*_test.go
+testdata/
+
+# Example and development directories
+example/
+
+# Development tools
+tools/
+scripts/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
+.buildx-cache/
+
+# Docker
+docker-compose*.yml
