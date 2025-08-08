@@ -104,10 +104,6 @@ ENV HOST=0.0.0.0
 # Expose port for web interface
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/live || exit 1
-
 # Volume
 VOLUME ["/config", "/watch", "/output"]
 
