@@ -213,6 +213,8 @@ func (ws *WebServer) setupRoutes() {
 		})
 	})
 
+	ws.router.HandleFunc("/live", ws.LiveHandler).Methods("GET")
+
 	// API routes - register WebSocket first with explicit path
 	ws.router.HandleFunc("/api/ws", ws.handleWebSocket)
 
@@ -273,6 +275,19 @@ func (ws *WebServer) getStaticFileHandler() http.Handler {
 	}
 
 	return http.StripPrefix("/", http.FileServer(http.FS(buildFS)))
+}
+
+// LiveHandler returns a simple response to indicate the server is live
+func (ws *WebServer) LiveHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]string{"status": "live"}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding live response: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 }
 
 func (ws *WebServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {

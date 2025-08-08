@@ -22,6 +22,9 @@ frontend/build
 !build/windows/icon.ico
 postie-web
 postie-cli
+*.db
+*.db-shm
+*.db-wal
 
 # ClaudPoint checkpoint system
 .checkpoints/
