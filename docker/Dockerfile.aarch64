@@ -50,12 +50,10 @@ FROM ghcr.io/linuxserver/baseimage-ubuntu:arm64v8-jammy
 ARG DEBIAN_FRONTEND="noninteractive"
 ARG BUILD_DATE
 ARG VERSION
-ARG PUID=1000
-ARG PGID=1000
 
 # Set up environment variables for PUID and PGID
-ENV PUID=${PUID}
-ENV PGID=${PGID}
+ENV PUID=1000
+ENV PGID=1000
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -64,14 +62,14 @@ WORKDIR /app
 RUN apt-get update -y && apt-get install --reinstall mime-support -y && apt-get install -y wget
 
 # Create the entrypoint script for web mode
-RUN mkdir -p /etc/services.d/postie-web && \
-    echo '#!/usr/bin/with-contenv bash\n\
-groupmod -o -g "$PGID" abc\n\
-usermod -o -u "$PUID" abc\n\
-chown -R abc:abc /app /config\n\
-exec s6-setuidgid abc /app/postie-web\n\
-' > /etc/services.d/postie-web/run && \
-    chmod +x /etc/services.d/postie-web/run
+RUN echo '#!/bin/bash\n\
+    PUID=${PUID:-1000}\n\
+    PGID=${PGID:-1000}\n\
+    groupmod -o -g "$PGID" abc\n\
+    usermod -o -u "$PUID" abc\n\
+    chown -R abc:abc /app /config /watch /output\n\
+    exec s6-setuidgid abc /app/postie-web\n\
+    ' > /entrypoint.sh && chmod +x /entrypoint.sh
 
 # Copy web binary from builder
 COPY --from=backend-builder /app/postie-web /app/postie-web
@@ -88,13 +86,16 @@ EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/live || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/status || exit 1
 
 # Set volumes for configuration and nzbs
 VOLUME ["/config", "/watch", "/output"]
 
 # Default command for web mode
 CMD ["/app/postie-web"]
+
+# Set the entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
 
 # Add metadata labels
 LABEL org.opencontainers.image.source="https://github.com/javi11/postie"
