@@ -1,19 +1,19 @@
 # Multi-stage build for Postie Web (ARM64)
-FROM oven/bun AS frontend-builder
+# syntax=docker/dockerfile:1.4
+FROM oven/bun:1 AS frontend-builder
 
 # Set working directory for frontend
 WORKDIR /app/frontend
 
-# Copy frontend package files
+# Copy frontend package files first to leverage caching
 COPY frontend/package.json frontend/bun.lock* ./
 
-# Install dependencies
-RUN bun install
+# Install dependencies with cache
+RUN --mount=type=cache,target=/root/.bun \
+    bun install --frozen-lockfile
 
-# Copy frontend source
+# Copy frontend source and build
 COPY frontend/ ./
-
-# Build frontend
 RUN bun run build
 
 # Backend build stage
@@ -28,8 +28,10 @@ WORKDIR /app
 # Copy go module files
 COPY go.mod go.sum ./
 
-# Download dependencies
-RUN go mod download
+# Download dependencies with cache
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go mod download
 
 # Copy source code
 COPY ./cmd ./cmd
@@ -40,8 +42,11 @@ COPY ./frontend/embed.go ./frontend/embed.go
 # Copy built frontend from previous stage
 COPY --from=frontend-builder /app/frontend/build ./frontend/build
 
-# Build web binary for ARM64
-RUN CGO_ENABLED=1 GOOS=linux go build -a -ldflags '-linkmode external -extldflags "-static"' -o postie-web cmd/web/main.go
+# Build web binary for ARM64 with caching and optimized flags
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
+    go build -trimpath -ldflags '-s -w -linkmode external -extldflags "-static"' -o postie-web cmd/web/main.go
 
 # Use Ubuntu as a parent image
 FROM ghcr.io/linuxserver/baseimage-ubuntu:arm64v8-jammy
@@ -58,8 +63,13 @@ ENV PGID=1000
 # Set the working directory inside the container
 WORKDIR /app
 
-# Update mime types and install wget
-RUN apt-get update -y && apt-get install --reinstall mime-support -y && apt-get install -y wget
+# Update mime types and install wget using apt caches
+RUN --mount=type=cache,target=/var/cache/apt \
+    --mount=type=cache,target=/var/lib/apt \
+    apt-get update -y && \
+    apt-get install --reinstall mime-support -y && \
+    apt-get install -y wget && \
+    rm -rf /var/lib/apt/lists/*
 
 # Create the entrypoint script for web mode
 RUN echo '#!/bin/bash\n\

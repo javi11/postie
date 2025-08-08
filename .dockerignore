@@ -6,8 +6,10 @@
 # Build artifacts
 build/
 dist/
-*.exe
-*.app
+**/*.exe
+**/*.app
+**/*.zip
+**/*.tar.gz
 
 # Documentation
 *.md
@@ -39,17 +41,12 @@ frontend/package.json.md5
 !frontend/package.json
 !frontend/bun.lock*
 
-# Test files
-*_test.go
+# Go tests and fixtures
 **/*_test.go
 testdata/
 
 # Example and development directories
 example/
-
-# Development tools
-tools/
-scripts/
 
 # IDE files
 .vscode/
@@ -65,9 +62,14 @@ Thumbs.db
 *.log
 
 # Temporary files
+.tmp/
 tmp/
 temp/
+.cache/
 .buildx-cache/
 
+# Databases and runtime
+postie_queue.db*
+
 # Docker
-docker-compose*.yml
+**/docker-compose*.yml

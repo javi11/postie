@@ -67,6 +67,26 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Cache Go modules
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      # Cache bun
+      - name: Cache Bun
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun
+          key: ${{ runner.os }}-bun-${{ hashFiles('frontend/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
       # Install Bun for frontend build
       - name: Install Bun
         run: npm install -g bun
@@ -75,13 +95,13 @@ jobs:
       - name: Build Frontend
         run: |
           cd frontend
-          bun install
+          bun install --frozen-lockfile
           bun run build
 
       # Build Linux web interface for multiple architectures
       - name: Build Linux Web Interface (amd64)
         run: |
-          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -a -ldflags '-linkmode external -extldflags "-static"' -o build/postie-web-linux-amd64 cmd/web/main.go
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags '-s -w -linkmode external -extldflags "-static"' -o build/postie-web-linux-amd64 cmd/web/main.go
         env:
           CC: gcc
 
@@ -162,27 +182,7 @@ jobs:
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
       # Install Bun
-      - name: Install Bun
-        run: npm install -g bun
-
-      # Build macOS GUI using Wails config (Universal Binary)
-      - name: Build macOS GUI
-        run: wails build -platform darwin/universal
-        env:
-          CGO_ENABLED: 1
-
-      # Upload macOS artifact
-      - name: Upload macOS GUI artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: postie-gui-macos-universal
-          path: build/bin
-
-  build-images:
-    runs-on: ubuntu-latest
-    needs: test
-    permissions:
-      contents: write
+      - name: Install
       packages: write
     steps:
       # dependencies

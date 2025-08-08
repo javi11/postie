@@ -8,12 +8,15 @@ FROM --platform=$BUILDPLATFORM oven/bun:1 AS frontend-builder
 # Set working directory for frontend
 WORKDIR /app/frontend
 
-# Copy frontend source (single step to avoid missing paths in GoReleaser context)
-COPY frontend/ ./
+# Copy only dependency manifests first to leverage caching for bun install
+COPY frontend/bun.lock frontend/package.json ./
 
-# Install dependencies (cached layer) and build
+# Install dependencies (cached layer)
 RUN --mount=type=cache,target=/root/.bun \
     bun install --frozen-lockfile
+
+# Copy the rest of the frontend sources and build
+COPY frontend/ ./
 RUN bun run build
 
 # Backend build stage with multi-arch support
@@ -51,7 +54,7 @@ ARG TARGETARCH
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=1 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -a -ldflags '-linkmode external -extldflags "-static"' \
+    go build -trimpath -ldflags '-s -w -linkmode external -extldflags "-static"' \
     -o postie-web cmd/web/main.go
 
 # Final stage - use architecture-specific base image

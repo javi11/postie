@@ -24,6 +24,8 @@ dockers:
     dockerfile: ./docker/Dockerfile
     build_flag_templates:
       - --platform=linux/amd64
+      - --cache-from=type=gha
+      - --cache-to=type=gha,mode=max
     extra_files:
       - docker
       - go.mod
@@ -39,6 +41,8 @@ dockers:
     dockerfile: ./docker/Dockerfile.aarch64
     build_flag_templates:
       - --platform=linux/arm64
+      - --cache-from=type=gha
+      - --cache-to=type=gha,mode=max
     extra_files:
       - docker
       - go.mod
