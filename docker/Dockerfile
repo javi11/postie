@@ -11,9 +11,8 @@ WORKDIR /app/frontend
 # Copy only dependency manifests first to leverage caching for bun install
 COPY frontend/bun.lock frontend/package.json ./
 
-# Install dependencies (cached layer)
-RUN --mount=type=cache,target=/root/.bun \
-    bun install --frozen-lockfile
+# Install dependencies (cached layer removed)
+RUN bun install --frozen-lockfile
 
 # Copy the rest of the frontend sources and build
 COPY frontend/ ./
@@ -31,10 +30,8 @@ WORKDIR /app
 # Copy go module files first for better caching
 COPY go.mod go.sum ./
 
-# Download dependencies (cached layer)
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    go mod download
+# Download dependencies (cache mounts removed)
+RUN go mod download
 
 # Copy source code
 COPY ./cmd ./cmd
@@ -50,10 +47,8 @@ ARG TARGETPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
 
-# Build web binary with caching
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=1 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+# Build web binary (cache mounts removed)
+RUN CGO_ENABLED=1 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -trimpath -ldflags '-s -w -linkmode external -extldflags "-static"' \
     -o postie-web cmd/web/main.go
 
@@ -72,14 +67,6 @@ ENV PGID=${PGID}
 
 # Set the working directory inside the container
 WORKDIR /app
-
-# Install necessary packages with cache mount for faster builds
-RUN --mount=type=cache,target=/var/cache/apt \
-    rm -rf /var/lib/apt/lists/* && \
-    mkdir -p /var/lib/apt/lists/partial && \
-    apt-get update -y && \
-    apt-get install -y --no-install-recommends mime-support wget ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
 
 # Create the entrypoint script for web mode
 RUN mkdir -p /etc/services.d/postie-web && \

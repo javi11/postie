@@ -8,9 +8,8 @@ WORKDIR /app/frontend
 # Copy frontend package files first to leverage caching
 COPY frontend/package.json frontend/bun.lock* ./
 
-# Install dependencies with cache
-RUN --mount=type=cache,target=/root/.bun \
-    bun install --frozen-lockfile
+# Install dependencies (cache mounts removed)
+RUN bun install --frozen-lockfile
 
 # Copy frontend source and build
 COPY frontend/ ./
@@ -28,10 +27,8 @@ WORKDIR /app
 # Copy go module files
 COPY go.mod go.sum ./
 
-# Download dependencies with cache
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    go mod download
+# Download dependencies (cache mounts removed)
+RUN go mod download
 
 # Copy source code
 COPY ./cmd ./cmd
@@ -42,10 +39,8 @@ COPY ./frontend/embed.go ./frontend/embed.go
 # Copy built frontend from previous stage
 COPY --from=frontend-builder /app/frontend/build ./frontend/build
 
-# Build web binary for ARM64 with caching and optimized flags
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
+# Build web binary for ARM64 (cache mounts removed)
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
     go build -trimpath -ldflags '-s -w -linkmode external -extldflags "-static"' -o postie-web cmd/web/main.go
 
 # Use Ubuntu as a parent image
@@ -62,14 +57,6 @@ ENV PGID=1000
 
 # Set the working directory inside the container
 WORKDIR /app
-
-# Update mime types and install wget using apt caches
-RUN --mount=type=cache,target=/var/cache/apt \
-    rm -rf /var/lib/apt/lists/* && \
-    mkdir -p /var/lib/apt/lists/partial && \
-    apt-get update -y && \
-    apt-get install -y --no-install-recommends mime-support wget ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
 
 # Create the entrypoint script for web mode
 RUN echo '#!/bin/bash\n\
