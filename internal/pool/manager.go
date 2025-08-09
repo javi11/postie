@@ -77,10 +77,8 @@ func (m *Manager) UpdateConfig(newCfg *config.ConfigData) error {
 	}
 
 	// Create new pool with updated configuration
-	// With nntppool v1.2.0+, this always succeeds regardless of provider status
 	newPool, err := newCfg.GetNNTPPool()
 	if err != nil {
-		// This should not happen with the new library, but keep error handling for safety
 		slog.Error("Failed to create new NNTP pool", "error", err)
 		return fmt.Errorf("failed to create new NNTP pool: %w", err)
 	}

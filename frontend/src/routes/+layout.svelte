@@ -133,15 +133,15 @@ function handler(error: unknown, _reset: () => void) {
 			<div class="navbar bg-base-100/95 backdrop-blur-md shadow-lg border-b border-base-300/50 sticky top-0 z-50">
 				<div class="navbar-start">
 					<!-- Logo and Brand -->
-					<div class="flex items-center gap-3 px-4">
+					<div class="flex items-center gap-2 px-2 md:gap-3 md:px-4">
 						<div class="avatar">
-							<div class="w-15 h-10">
+							<div class="w-8 h-8 md:w-12 md:h-10">
 								<img src={logo} alt="Postie UI" class="w-full h-full object-contain" loading="lazy" />
 							</div>
 						</div>
-						<div>
+						<div class="hidden sm:block">
 							<div class="flex items-center gap-2">
-								<h1 class="text-xl font-bold bg-clip-text">
+								<h1 class="text-lg md:text-xl font-bold bg-clip-text">
 									Postie
 								</h1>
 							</div>
@@ -156,40 +156,48 @@ function handler(error: unknown, _reset: () => void) {
 					<!-- Navigation -->
 					<div class="flex items-center gap-1">
 						<button
-							class="btn btn-sm {page.route.id === "/" ? "btn-primary shadow-lg" : "btn-ghost hover:bg-base-200"} transition-all duration-200"
+							class="btn btn-xs sm:btn-sm {page.route.id === "/" ? "btn-primary shadow-lg" : "btn-ghost hover:bg-base-200"} transition-all duration-200"
 							onclick={() => goto("/")}
 							disabled={needsConfiguration || criticalConfigError}
 							aria-current={page.route.id === "/" ? "page" : undefined}
+							title={$t('common.nav.dashboard')}
 						>
 							<ChartPie class="w-4 h-4" />
-							<span class="font-medium">{$t('common.nav.dashboard')}</span>
+							<span class="hidden sm:inline font-medium">{$t('common.nav.dashboard')}</span>
 						</button>
 						<button
-							class="btn btn-sm {page.route.id === "/settings" ? "btn-secondary shadow-lg" : "btn-ghost hover:bg-base-200"} transition-all duration-200"
+							class="btn btn-xs sm:btn-sm {page.route.id === "/settings" ? "btn-secondary shadow-lg" : "btn-ghost hover:bg-base-200"} transition-all duration-200"
 							onclick={() => goto("/settings")}
 							aria-current={page.route.id === "/settings" ? "page" : undefined}
+							title={$t('common.nav.settings')}
 						>
 							<Settings class="w-4 h-4" />
-							<span class="hidden md:inline font-medium">{$t('common.nav.settings')}</span>
+							<span class="hidden sm:inline font-medium">{$t('common.nav.settings')}</span>
 						</button>
 						<button
-							class="btn btn-sm {page.route.id === "/metrics" ? "btn-info shadow-lg" : "btn-ghost hover:bg-base-200"} transition-all duration-200"
+							class="btn btn-xs sm:btn-sm {page.route.id === "/metrics" ? "btn-info shadow-lg" : "btn-ghost hover:bg-base-200"} transition-all duration-200"
 							onclick={() => goto("/metrics")}
 							disabled={needsConfiguration || criticalConfigError}
 							aria-current={page.route.id === "/metrics" ? "page" : undefined}
+							title={$t('common.nav.metrics')}
 						>
 							<Activity class="w-4 h-4" />
-							<span class="hidden md:inline font-medium">{$t('common.nav.metrics')}</span>
+							<span class="hidden sm:inline font-medium">{$t('common.nav.metrics')}</span>
 						</button>
 						<button
-							class="btn btn-sm {page.route.id === "/logs" ? "btn-accent shadow-lg" : "btn-ghost hover:bg-base-200"} transition-all duration-200"
+							class="btn btn-xs sm:btn-sm {page.route.id === "/logs" ? "btn-accent shadow-lg" : "btn-ghost hover:bg-base-200"} transition-all duration-200"
 							onclick={() => goto("/logs")}
 							aria-current={page.route.id === "/logs" ? "page" : undefined}
+							title={$t('common.nav.logs')}
 						>
 							<FileText class="w-4 h-4" />
-							<span class="hidden md:inline font-medium">{$t('common.nav.logs')}</span>
+							<span class="hidden sm:inline font-medium">{$t('common.nav.logs')}</span>
 						</button>
 					</div>
+				</div>
+
+				<div class="navbar-end">
+					<!-- Empty for now, can be used for user menu or other actions -->
 				</div>
 			</div>
 

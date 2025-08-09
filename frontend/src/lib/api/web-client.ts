@@ -309,9 +309,10 @@ export class WebClient {
 		// Create a blob from the response and trigger download
 		const blob = await response.blob();
 		const url = window.URL.createObjectURL(blob);
+		const filename = response.headers.get("Content-Disposition")?.match(/filename="(.+?)"/)?.[1] || `${id}.nzb`;
 		const a = document.createElement("a");
 		a.href = url;
-		a.download = `${id}.nzb`;
+		a.download = filename;
 		document.body.appendChild(a);
 		a.click();
 		window.URL.revokeObjectURL(url);

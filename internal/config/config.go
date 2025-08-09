@@ -519,8 +519,8 @@ func (c *ConfigData) validate() error {
 	return nil
 }
 
-// GetNNTPPool returns the NNTP connection pool
-func (c *ConfigData) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
+// GetNNTPPoolConfig returns the nntppool configuration without creating the actual pool
+func (c *ConfigData) GetNNTPPoolConfig() (nntppool.Config, error) {
 	// Filter enabled servers
 	var enabledServers []ServerConfig
 	for _, s := range c.Servers {
@@ -572,6 +572,16 @@ func (c *ConfigData) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
 		MaxRetries:          uint(c.Posting.MaxRetries),
 		DelayType:           nntppool.DelayTypeExponential,
 		RetryDelay:          c.Posting.RetryDelay.ToDuration(),
+	}
+
+	return config, nil
+}
+
+// GetNNTPPool returns the NNTP connection pool
+func (c *ConfigData) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
+	config, err := c.GetNNTPPoolConfig()
+	if err != nil {
+		return nil, err
 	}
 
 	pool, err := nntppool.NewConnectionPool(config)

@@ -316,29 +316,31 @@ func (a *App) DownloadNZB(id string) error {
 }
 
 // GetNZBContent returns the content of an NZB file for a completed item
-func (a *App) GetNZBContent(id string) (string, error) {
+func (a *App) GetNZB(id string) (content string, fileName string, err error) {
 	if a.queue == nil {
-		return "", fmt.Errorf("queue not initialized")
+		return "", "", fmt.Errorf("queue not initialized")
 	}
 
 	// Get the NZB path for the completed item
 	nzbPath, err := a.queue.GetCompletedItemNzbPath(id)
 	if err != nil {
-		return "", fmt.Errorf("failed to get NZB path: %w", err)
+		return "", "", fmt.Errorf("failed to get NZB path: %w", err)
 	}
 
 	// Check if the NZB file exists
 	if _, err := os.Stat(nzbPath); os.IsNotExist(err) {
-		return "", fmt.Errorf("NZB file not found: %s", nzbPath)
+		return "", "", fmt.Errorf("NZB file not found: %s", nzbPath)
 	}
 
 	// Read the NZB file content
 	nzbContent, err := os.ReadFile(nzbPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read NZB file: %w", err)
+		return "", "", fmt.Errorf("failed to read NZB file: %w", err)
 	}
 
-	return string(nzbContent), nil
+	f := filepath.Base(nzbPath)
+
+	return string(nzbContent), f, nil
 }
 
 // SetQueueItemPriority updates the priority of a pending queue item by id and reorders the queue

@@ -132,25 +132,74 @@ func (a *App) SaveConfig(configData *config.ConfigData) error {
 	return a.applyConfigChanges(configData)
 }
 
+// poolConfigChanged checks if pool-related configuration has changed
+func (a *App) poolConfigChanged(newConfig *config.ConfigData) bool {
+	if a.config == nil {
+		return true // No existing config, so pool needs to be created
+	}
+
+	oldConfig := a.config
+
+	// Compare servers
+	if len(oldConfig.Servers) != len(newConfig.Servers) {
+		return true
+	}
+
+	for i, newServer := range newConfig.Servers {
+		oldServer := oldConfig.Servers[i]
+		if newServer.Host != oldServer.Host ||
+			newServer.Port != oldServer.Port ||
+			newServer.Username != oldServer.Username ||
+			newServer.Password != oldServer.Password ||
+			newServer.SSL != oldServer.SSL ||
+			newServer.MaxConnections != oldServer.MaxConnections ||
+			newServer.MaxConnectionIdleTimeInSeconds != oldServer.MaxConnectionIdleTimeInSeconds ||
+			newServer.MaxConnectionTTLInSeconds != oldServer.MaxConnectionTTLInSeconds ||
+			newServer.InsecureSSL != oldServer.InsecureSSL ||
+			((newServer.Enabled == nil) != (oldServer.Enabled == nil)) ||
+			(newServer.Enabled != nil && oldServer.Enabled != nil && *newServer.Enabled != *oldServer.Enabled) {
+			return true
+		}
+	}
+
+	// Compare connection pool settings
+	if oldConfig.ConnectionPool.MinConnections != newConfig.ConnectionPool.MinConnections ||
+		oldConfig.ConnectionPool.HealthCheckInterval != newConfig.ConnectionPool.HealthCheckInterval {
+		return true
+	}
+
+	// Compare posting settings that affect the pool
+	if oldConfig.Posting.MaxRetries != newConfig.Posting.MaxRetries ||
+		oldConfig.Posting.RetryDelay != newConfig.Posting.RetryDelay {
+		return true
+	}
+
+	return false
+}
+
 // applyConfigChanges applies the configuration changes immediately
 func (a *App) applyConfigChanges(configData *config.ConfigData) error {
 	if err := config.SaveConfig(configData, a.configPath); err != nil {
 		return err
 	}
 
+	poolCfgChanged := a.poolConfigChanged(configData)
+
 	// Reload configuration
 	if err := a.loadConfig(); err != nil {
 		return err
 	}
 
-	// Update the connection pool manager with new configuration
-	if a.poolManager != nil {
+	// Update the connection pool manager only if pool-related configuration has changed
+	if a.poolManager != nil && poolCfgChanged {
 		if err := a.poolManager.UpdateConfig(a.config); err != nil {
 			slog.Error("Failed to update connection pool manager with new config", "error", err)
 			// Don't fail the entire config update for this, but log the error
 		} else {
 			slog.Info("Connection pool manager updated with new configuration")
 		}
+	} else if a.poolManager != nil {
+		slog.Info("Pool configuration unchanged, skipping pool update")
 	}
 
 	// Clear any pending config since we just applied changes
@@ -506,23 +555,23 @@ func (a *App) DiscardPendingConfig() error {
 func (a *App) canProcessNextItem() bool {
 	a.pendingConfigMux.RLock()
 	defer a.pendingConfigMux.RUnlock()
-	
+
 	// If there's no pending config, processing can continue
 	if a.pendingConfig == nil {
 		return true
 	}
-	
+
 	// If there are pending configs, check if we can apply them now
 	hasActiveWork := a.IsUploading()
 	if a.processor != nil {
 		runningJobs := a.processor.GetRunningJobs()
 		hasActiveWork = hasActiveWork || len(runningJobs) > 0
 	}
-	
+
 	// If no active work, try to apply pending config automatically
 	if !hasActiveWork {
 		slog.Info("No active work detected, attempting to apply pending configuration")
-		
+
 		// Apply pending config in background to avoid blocking the processor
 		go func() {
 			if err := a.ApplyPendingConfig(); err != nil {
@@ -530,7 +579,7 @@ func (a *App) canProcessNextItem() bool {
 			}
 		}()
 	}
-	
+
 	// Don't process new items while pending config exists
 	return false
 }
