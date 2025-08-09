@@ -1,6 +1,6 @@
 # Multi-stage build for Postie Web (ARM64)
 # syntax=docker/dockerfile:1.4
-FROM oven/bun:1 AS frontend-builder
+FROM --platform=$BUILDPLATFORM oven/bun:1 AS frontend-builder
 
 # Set working directory for frontend
 WORKDIR /app/frontend
@@ -17,7 +17,7 @@ COPY frontend/ ./
 RUN bun run build
 
 # Backend build stage
-FROM --platform=linux/arm64 golang:1.24-alpine AS backend-builder
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS backend-builder
 
 # Install build dependencies
 RUN apk add --no-cache git gcc g++ musl-dev libstdc++ sqlite-dev
@@ -49,7 +49,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go build -trimpath -ldflags '-s -w -linkmode external -extldflags "-static"' -o postie-web cmd/web/main.go
 
 # Use Ubuntu as a parent image
-FROM ghcr.io/linuxserver/baseimage-ubuntu:arm64v8-jammy
+FROM --platform=$TARGETPLATFORM ghcr.io/linuxserver/baseimage-ubuntu:jammy
 
 # Arguments for non-interactive builds
 ARG DEBIAN_FRONTEND="noninteractive"
@@ -65,11 +65,10 @@ WORKDIR /app
 
 # Update mime types and install wget using apt caches
 RUN --mount=type=cache,target=/var/cache/apt \
-    --mount=type=cache,target=/var/lib/apt \
-    rm -f /var/lib/apt/lists/lock && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /var/lib/apt/lists/partial && \
     apt-get update -y && \
-    apt-get install --reinstall mime-support -y && \
-    apt-get install -y wget && \
+    apt-get install -y --no-install-recommends mime-support wget ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 # Create the entrypoint script for web mode

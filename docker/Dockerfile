@@ -58,7 +58,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     -o postie-web cmd/web/main.go
 
 # Final stage - use architecture-specific base image
-FROM ghcr.io/linuxserver/baseimage-ubuntu:jammy AS final
+FROM --platform=$TARGETPLATFORM ghcr.io/linuxserver/baseimage-ubuntu:jammy AS final
 
 ARG DEBIAN_FRONTEND="noninteractive"
 ARG BUILD_DATE
@@ -75,11 +75,10 @@ WORKDIR /app
 
 # Install necessary packages with cache mount for faster builds
 RUN --mount=type=cache,target=/var/cache/apt \
-    --mount=type=cache,target=/var/lib/apt \
-    rm -f /var/lib/apt/lists/lock && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /var/lib/apt/lists/partial && \
     apt-get update -y && \
-    apt-get install --reinstall mime-support -y && \
-    apt-get install -y wget && \
+    apt-get install -y --no-install-recommends mime-support wget ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 # Create the entrypoint script for web mode
