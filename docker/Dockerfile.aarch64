@@ -1,6 +1,6 @@
 # Multi-stage build for Postie Web (ARM64)
 # syntax=docker/dockerfile:1.4
-FROM --platform=$BUILDPLATFORM oven/bun:1 AS frontend-builder
+FROM oven/bun:1 AS frontend-builder
 
 # Set working directory for frontend
 WORKDIR /app/frontend
@@ -16,7 +16,7 @@ COPY frontend/ ./
 RUN bun run build
 
 # Backend build stage
-FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS backend-builder
+FROM golang:1.24-alpine AS backend-builder
 
 # Install build dependencies
 RUN apk add --no-cache git gcc g++ musl-dev libstdc++ sqlite-dev
@@ -40,11 +40,10 @@ COPY ./frontend/embed.go ./frontend/embed.go
 COPY --from=frontend-builder /app/frontend/build ./frontend/build
 
 # Build web binary for ARM64 (cache mounts removed)
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
-    go build -trimpath -ldflags '-s -w -linkmode external -extldflags "-static"' -o postie-web cmd/web/main.go
+RUN CGO_ENABLED=1 GOOS=linux go build -a -ldflags '-linkmode external -extldflags "-static"' -o postie-web cmd/web/main.go
 
 # Use Ubuntu as a parent image
-FROM --platform=$TARGETPLATFORM ghcr.io/linuxserver/baseimage-ubuntu:jammy
+FROM ghcr.io/linuxserver/baseimage-ubuntu:arm64v8-jammy
 
 # Arguments for non-interactive builds
 ARG DEBIAN_FRONTEND="noninteractive"

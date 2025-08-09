@@ -3,7 +3,7 @@
 # syntax=docker/dockerfile:1.4
 
 # Frontend build stage
-FROM --platform=$BUILDPLATFORM oven/bun:1 AS frontend-builder
+FROM oven/bun AS frontend-builder
 
 # Set working directory for frontend
 WORKDIR /app/frontend
@@ -19,7 +19,7 @@ COPY frontend/ ./
 RUN bun run build
 
 # Backend build stage with multi-arch support
-FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS backend-builder
+FROM golang:1.24-alpine AS backend-builder
 
 # Install build dependencies
 RUN apk add --no-cache git gcc g++ musl-dev libstdc++ sqlite-dev
@@ -42,18 +42,11 @@ COPY ./frontend/embed.go ./frontend/embed.go
 # Copy built frontend from previous stage
 COPY --from=frontend-builder /app/frontend/build ./frontend/build
 
-# Build arguments for cross-compilation
-ARG TARGETPLATFORM
-ARG TARGETOS
-ARG TARGETARCH
-
 # Build web binary (cache mounts removed)
-RUN CGO_ENABLED=1 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -trimpath -ldflags '-s -w -linkmode external -extldflags "-static"' \
-    -o postie-web cmd/web/main.go
+RUN CGO_ENABLED=1 GOOS=linux go build -a -ldflags '-linkmode external -extldflags "-static"' -o postie-web cmd/web/main.go
 
 # Final stage - use architecture-specific base image
-FROM --platform=$TARGETPLATFORM ghcr.io/linuxserver/baseimage-ubuntu:jammy AS final
+FROM ghcr.io/linuxserver/baseimage-ubuntu:jammy
 
 ARG DEBIAN_FRONTEND="noninteractive"
 ARG BUILD_DATE
