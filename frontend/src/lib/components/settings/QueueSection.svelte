@@ -12,8 +12,6 @@ interface Props {
 const { config }: Props = $props();
 
 // Reactive local state
-let databaseType = $state(config.queue?.database_type || "sqlite");
-let databasePath = $state(config.queue?.database_path || "./postie_queue.db");
 let maxConcurrentUploads = $state(config.queue?.max_concurrent_uploads || 3);
 let saving = $state(false);
 let showClearModal = $state(false);
@@ -21,35 +19,18 @@ let clearing = $state(false);
 
 // Derived state
 let canSave = $derived(
-	databaseType && 
-	databasePath.trim() && 
 	maxConcurrentUploads > 0 && 
 	maxConcurrentUploads <= 20 && 
 	!saving
 );
 
-// Database types available
-const databaseTypes = [
-	{ value: "sqlite", name: $t("settings.queue.database_types.sqlite") },
-] as const;
-
 // Sync local state back to config
 $effect(() => {
 	if (!config.queue) {
 		config.queue = {
-			database_type: "sqlite",
-			database_path: "./postie_queue.db",
 			max_concurrent_uploads: 3,
 		};
 	}
-	config.queue.database_type = databaseType;
-});
-
-$effect(() => {
-	config.queue.database_path = databasePath;
-});
-
-$effect(() => {
 	config.queue.max_concurrent_uploads = maxConcurrentUploads;
 });
 
@@ -60,10 +41,6 @@ async function saveQueueSettings() {
 		saving = true;
 
 		// Validation
-		if (!databasePath.trim()) {
-			throw new Error("Database path is required");
-		}
-		
 		if (maxConcurrentUploads < 1 || maxConcurrentUploads > 20) {
 			throw new Error("Max concurrent uploads must be between 1 and 20");
 		}
@@ -74,12 +51,15 @@ async function saveQueueSettings() {
 		// Update only queue section
 		currentConfig.queue = {
 			...currentConfig.queue,
-			database_type: databaseType,
-			database_path: databasePath.trim(),
 			max_concurrent_uploads: maxConcurrentUploads,
 		};
 
 		await apiClient.saveConfig(currentConfig);
+
+		toastStore.success(
+			$t("settings.queue.saved_success"),
+			$t("settings.queue.saved_success_description")
+		);
 	} catch (error) {
 		console.error("Failed to save queue settings:", error);
 		toastStore.error($t("common.messages.error_saving"), String(error));
@@ -122,47 +102,6 @@ async function clearQueue() {
 
     <div class="space-y-6">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div class="form-control">
-          <label class="label" for="database-type">
-            <span class="label-text">{$t('settings.queue.database_type')}</span>
-          </label>
-          <select
-            id="database-type"
-            class="select select-bordered"
-            bind:value={databaseType}
-          >
-            {#each databaseTypes as type}
-              <option value={type.value}>{type.name}</option>
-            {/each}
-          </select>
-          <div class="label">
-            <span class="label-text-alt">
-              {$t('settings.queue.database_type_description')}
-            </span>
-          </div>
-        </div>
-
-        <div class="form-control">
-          <label class="label" for="database-path">
-            <span class="label-text">{$t('settings.queue.database_path')}</span>
-          </label>
-          <input
-            id="database-path"
-            class="input input-bordered"
-            bind:value={databasePath}
-            placeholder={databaseType === "sqlite"
-              ? $t('settings.queue.database_path_placeholder_sqlite')
-              : $t('settings.queue.database_path_placeholder_network')}
-          />
-          <div class="label">
-            <span class="label-text-alt">
-              {databaseType === "sqlite"
-                ? $t('settings.queue.database_path_description_sqlite')
-                : $t('settings.queue.database_path_description_network')}
-            </span>
-          </div>
-        </div>
-
         <div class="form-control">
           <label class="label" for="max-concurrent">
             <span class="label-text">{$t('settings.queue.max_concurrent_uploads')}</span>

@@ -66,6 +66,10 @@ export function GetLogsPaginated(arg1, arg2) {
   return window['go']['backend']['App']['GetLogsPaginated'](arg1, arg2);
 }
 
+export function GetMigrationStatus() {
+  return window['go']['backend']['App']['GetMigrationStatus']();
+}
+
 export function GetNZB(arg1) {
   return window['go']['backend']['App']['GetNZB'](arg1);
 }
@@ -114,6 +118,10 @@ export function HasPendingConfigChanges() {
   return window['go']['backend']['App']['HasPendingConfigChanges']();
 }
 
+export function IsLegacyDatabase() {
+  return window['go']['backend']['App']['IsLegacyDatabase']();
+}
+
 export function IsProcessingAutoPaused() {
   return window['go']['backend']['App']['IsProcessingAutoPaused']();
 }
@@ -124,6 +132,10 @@ export function IsProcessingPaused() {
 
 export function IsUploading() {
   return window['go']['backend']['App']['IsUploading']();
+}
+
+export function MigrateTo(arg1) {
+  return window['go']['backend']['App']['MigrateTo'](arg1);
 }
 
 export function NavigateToDashboard() {
@@ -138,8 +150,16 @@ export function PauseProcessing() {
   return window['go']['backend']['App']['PauseProcessing']();
 }
 
+export function RecreateDatabase() {
+  return window['go']['backend']['App']['RecreateDatabase']();
+}
+
 export function RemoveFromQueue(arg1) {
   return window['go']['backend']['App']['RemoveFromQueue'](arg1);
+}
+
+export function ResetDatabase() {
+  return window['go']['backend']['App']['ResetDatabase']();
 }
 
 export function ResumeProcessing() {
@@ -148,6 +168,14 @@ export function ResumeProcessing() {
 
 export function RetryJob(arg1) {
   return window['go']['backend']['App']['RetryJob'](arg1);
+}
+
+export function RollbackMigration() {
+  return window['go']['backend']['App']['RollbackMigration']();
+}
+
+export function RunMigrations() {
+  return window['go']['backend']['App']['RunMigrations']();
 }
 
 export function SaveConfig(arg1) {

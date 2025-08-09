@@ -353,20 +353,12 @@
 		},
 		"queue": {
 			"title": "Configuración de Cola",
-			"database_type": "Tipo de Base de Datos",
 			"save_button": "Guardar Configuración de Cola",
-			"database_type_description": "Sistema de base de datos a usar para la cola de carga",
-			"database_path": "Ruta/Conexión de Base de Datos",
-			"database_path_description_sqlite": "Ruta del archivo para la base de datos SQLite",
-			"database_path_description_network": "Cadena de conexión para la base de datos",
-			"database_path_placeholder_sqlite": "./postie_queue.db",
-			"database_path_placeholder_network": "host=localhost user=postie dbname=postie",
 			"max_concurrent_uploads": "Máx. Cargas Concurrentes",
 			"max_concurrent_uploads_description": "Número máximo de cargas simultáneas desde la cola",
-			"database_types": {
-				"sqlite": "SQLite - Base de datos basada en archivo"
-			},
-			"info": "<strong>Cola de Carga:</strong> Gestiona las cargas de archivos con persistencia, lógica de reintento y procesamiento concurrente."
+			"info": "<strong>Cola de Carga:</strong> Gestiona las cargas de archivos con procesamiento concurrente y lógica de reintentos.",
+			"saved_success": "Configuración de cola guardada",
+			"saved_success_description": "¡Su configuración de cola se ha guardado exitosamente!"
 		},
 		"server": {
 			"title": "Servidores NNTP",

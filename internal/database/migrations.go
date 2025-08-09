@@ -1,4 +1,4 @@
-package queue
+package database
 
 import (
 	"database/sql"
@@ -12,18 +12,18 @@ import (
 //go:embed migrations/*.sql
 var embedMigrations embed.FS
 
-// GooseMigrationRunner handles database migrations using goose
-type GooseMigrationRunner struct {
+// MigrationRunner handles database migrations using goose
+type MigrationRunner struct {
 	db *sql.DB
 }
 
-// NewGooseMigrationRunner creates a new goose migration runner
-func NewGooseMigrationRunner(db *sql.DB) *GooseMigrationRunner {
-	return &GooseMigrationRunner{db: db}
+// NewMigrationRunner creates a new migration runner
+func NewMigrationRunner(db *sql.DB) *MigrationRunner {
+	return &MigrationRunner{db: db}
 }
 
 // SetupGoose initializes goose with embedded migrations
-func (gmr *GooseMigrationRunner) SetupGoose() error {
+func (mr *MigrationRunner) SetupGoose() error {
 	// Set goose to use embedded migrations
 	goose.SetBaseFS(embedMigrations)
 
@@ -36,14 +36,14 @@ func (gmr *GooseMigrationRunner) SetupGoose() error {
 }
 
 // MigrateUp runs all pending migrations
-func (gmr *GooseMigrationRunner) MigrateUp() error {
-	if err := gmr.SetupGoose(); err != nil {
+func (mr *MigrationRunner) MigrateUp() error {
+	if err := mr.SetupGoose(); err != nil {
 		return err
 	}
 
 	slog.Info("Running database migrations")
 
-	if err := goose.Up(gmr.db, "migrations"); err != nil {
+	if err := goose.Up(mr.db, "migrations"); err != nil {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
@@ -52,14 +52,14 @@ func (gmr *GooseMigrationRunner) MigrateUp() error {
 }
 
 // MigrateDown rolls back the last migration
-func (gmr *GooseMigrationRunner) MigrateDown() error {
-	if err := gmr.SetupGoose(); err != nil {
+func (mr *MigrationRunner) MigrateDown() error {
+	if err := mr.SetupGoose(); err != nil {
 		return err
 	}
 
 	slog.Info("Rolling back last migration")
 
-	if err := goose.Down(gmr.db, "migrations"); err != nil {
+	if err := goose.Down(mr.db, "migrations"); err != nil {
 		return fmt.Errorf("failed to rollback migration: %w", err)
 	}
 
@@ -68,14 +68,14 @@ func (gmr *GooseMigrationRunner) MigrateDown() error {
 }
 
 // MigrateTo migrates to a specific version
-func (gmr *GooseMigrationRunner) MigrateTo(version int64) error {
-	if err := gmr.SetupGoose(); err != nil {
+func (mr *MigrationRunner) MigrateTo(version int64) error {
+	if err := mr.SetupGoose(); err != nil {
 		return err
 	}
 
 	slog.Info("Migrating to specific version", "version", version)
 
-	if err := goose.UpTo(gmr.db, "migrations", version); err != nil {
+	if err := goose.UpTo(mr.db, "migrations", version); err != nil {
 		return fmt.Errorf("failed to migrate to version %d: %w", version, err)
 	}
 
@@ -84,31 +84,31 @@ func (gmr *GooseMigrationRunner) MigrateTo(version int64) error {
 }
 
 // GetStatus returns the current migration status
-func (gmr *GooseMigrationRunner) GetStatus() (*GooseMigrationStatus, error) {
-	if err := gmr.SetupGoose(); err != nil {
+func (mr *MigrationRunner) GetStatus() (*MigrationStatus, error) {
+	if err := mr.SetupGoose(); err != nil {
 		return nil, err
 	}
 
 	// Get current version
-	currentVersion, err := goose.GetDBVersion(gmr.db)
+	currentVersion, err := goose.GetDBVersion(mr.db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current version: %w", err)
 	}
 
-	return &GooseMigrationStatus{
+	return &MigrationStatus{
 		CurrentVersion: currentVersion,
 	}, nil
 }
 
 // Reset drops all tables and re-runs all migrations
-func (gmr *GooseMigrationRunner) Reset() error {
-	if err := gmr.SetupGoose(); err != nil {
+func (mr *MigrationRunner) Reset() error {
+	if err := mr.SetupGoose(); err != nil {
 		return err
 	}
 
 	slog.Info("Resetting database - dropping all tables and re-running migrations")
 
-	if err := goose.Reset(gmr.db, "migrations"); err != nil {
+	if err := goose.Reset(mr.db, "migrations"); err != nil {
 		return fmt.Errorf("failed to reset database: %w", err)
 	}
 
@@ -117,10 +117,10 @@ func (gmr *GooseMigrationRunner) Reset() error {
 }
 
 // IsLegacyDatabase checks if the database exists but doesn't have goose migrations table
-func (gmr *GooseMigrationRunner) IsLegacyDatabase() (bool, error) {
+func (mr *MigrationRunner) IsLegacyDatabase() (bool, error) {
 	// Check if goqite table exists (indicating an existing database)
 	var tableExists bool
-	err := gmr.db.QueryRow(`
+	err := mr.db.QueryRow(`
 		SELECT EXISTS(
 			SELECT name FROM sqlite_master 
 			WHERE type='table' AND name='goqite'
@@ -138,7 +138,7 @@ func (gmr *GooseMigrationRunner) IsLegacyDatabase() (bool, error) {
 
 	// Check if goose version table exists
 	var gooseTableExists bool
-	err = gmr.db.QueryRow(`
+	err = mr.db.QueryRow(`
 		SELECT EXISTS(
 			SELECT name FROM sqlite_master 
 			WHERE type='table' AND name='goose_db_version'
@@ -154,11 +154,11 @@ func (gmr *GooseMigrationRunner) IsLegacyDatabase() (bool, error) {
 }
 
 // RecreateDatabase drops all existing tables and recreates them using goose migrations
-func (gmr *GooseMigrationRunner) RecreateDatabase() error {
+func (mr *MigrationRunner) RecreateDatabase() error {
 	slog.Info("Recreating database - dropping all existing tables")
 
 	// Get all table names
-	rows, err := gmr.db.Query(`
+	rows, err := mr.db.Query(`
 		SELECT name FROM sqlite_master 
 		WHERE type='table' AND name NOT LIKE 'sqlite_%'
 	`)
@@ -179,7 +179,7 @@ func (gmr *GooseMigrationRunner) RecreateDatabase() error {
 	}
 
 	// Drop all tables in a transaction
-	tx, err := gmr.db.Begin()
+	tx, err := mr.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -213,26 +213,26 @@ func (gmr *GooseMigrationRunner) RecreateDatabase() error {
 	slog.Info("All tables dropped successfully")
 
 	// Now run goose migrations to recreate everything
-	return gmr.MigrateUp()
+	return mr.MigrateUp()
 }
 
 // EnsureMigrationCompatibility checks for legacy database and recreates if needed
-func (gmr *GooseMigrationRunner) EnsureMigrationCompatibility() error {
-	isLegacy, err := gmr.IsLegacyDatabase()
+func (mr *MigrationRunner) EnsureMigrationCompatibility() error {
+	isLegacy, err := mr.IsLegacyDatabase()
 	if err != nil {
 		return fmt.Errorf("failed to check for legacy database: %w", err)
 	}
 
 	if isLegacy {
 		slog.Warn("Legacy database detected - recreating with goose migration system")
-		return gmr.RecreateDatabase()
+		return mr.RecreateDatabase()
 	}
 
 	// Normal migration flow
-	return gmr.MigrateUp()
+	return mr.MigrateUp()
 }
 
-// GooseMigrationStatus represents the current migration state using goose
-type GooseMigrationStatus struct {
+// MigrationStatus represents the current migration state using goose
+type MigrationStatus struct {
 	CurrentVersion int64 `json:"currentVersion"`
 }

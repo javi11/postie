@@ -37,6 +37,8 @@ export function GetLogs():Promise<string>;
 
 export function GetLogsPaginated(arg1:number,arg2:number):Promise<string>;
 
+export function GetMigrationStatus():Promise<Record<string, any>>;
+
 export function GetNZB(arg1:string):Promise<string>;
 
 export function GetNntpPoolMetrics():Promise<backend.NntpPoolMetrics>;
@@ -61,11 +63,15 @@ export function HandleDroppedFiles(arg1:Array<string>):Promise<void>;
 
 export function HasPendingConfigChanges():Promise<boolean>;
 
+export function IsLegacyDatabase():Promise<boolean>;
+
 export function IsProcessingAutoPaused():Promise<boolean>;
 
 export function IsProcessingPaused():Promise<boolean>;
 
 export function IsUploading():Promise<boolean>;
+
+export function MigrateTo(arg1:number):Promise<void>;
 
 export function NavigateToDashboard():Promise<void>;
 
@@ -73,11 +79,19 @@ export function NavigateToSettings():Promise<void>;
 
 export function PauseProcessing():Promise<void>;
 
+export function RecreateDatabase():Promise<void>;
+
 export function RemoveFromQueue(arg1:string):Promise<void>;
+
+export function ResetDatabase():Promise<void>;
 
 export function ResumeProcessing():Promise<void>;
 
 export function RetryJob(arg1:string):Promise<void>;
+
+export function RollbackMigration():Promise<void>;
+
+export function RunMigrations():Promise<void>;
 
 export function SaveConfig(arg1:config.ConfigData):Promise<void>;
 

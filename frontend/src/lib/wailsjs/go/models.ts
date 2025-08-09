@@ -356,8 +356,6 @@ export namespace config {
 	    }
 	}
 	export class QueueConfig {
-	    database_type: string;
-	    database_path: string;
 	    max_concurrent_uploads: number;
 	
 	    static createFrom(source: any = {}) {
@@ -366,9 +364,21 @@ export namespace config {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.max_concurrent_uploads = source["max_concurrent_uploads"];
+	    }
+	}
+	export class DatabaseConfig {
+	    database_type: string;
+	    database_path: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DatabaseConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.database_type = source["database_type"];
 	        this.database_path = source["database_path"];
-	        this.max_concurrent_uploads = source["max_concurrent_uploads"];
 	    }
 	}
 	export class NzbCompressionConfig {
@@ -636,6 +646,7 @@ export namespace config {
 	    par2: Par2Config;
 	    watcher: WatcherConfig;
 	    nzb_compression: NzbCompressionConfig;
+	    database: DatabaseConfig;
 	    queue: QueueConfig;
 	    output_dir: string;
 	    maintain_original_extension?: boolean;
@@ -655,6 +666,7 @@ export namespace config {
 	        this.par2 = this.convertValues(source["par2"], Par2Config);
 	        this.watcher = this.convertValues(source["watcher"], WatcherConfig);
 	        this.nzb_compression = this.convertValues(source["nzb_compression"], NzbCompressionConfig);
+	        this.database = this.convertValues(source["database"], DatabaseConfig);
 	        this.queue = this.convertValues(source["queue"], QueueConfig);
 	        this.output_dir = source["output_dir"];
 	        this.maintain_original_extension = source["maintain_original_extension"];
@@ -679,6 +691,7 @@ export namespace config {
 		    return a;
 		}
 	}
+	
 	
 	
 	

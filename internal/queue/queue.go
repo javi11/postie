@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/javi11/postie/internal/config"
+	"github.com/javi11/postie/internal/database"
 	_ "github.com/mattn/go-sqlite3"
 	"maragu.dev/goqite"
 )
@@ -24,21 +24,12 @@ type QueueInterface interface {
 	ClearQueue() error
 	GetQueueStats() (map[string]interface{}, error)
 	SetQueueItemPriorityWithReorder(ctx context.Context, id string, newPriority int) error
-	GetMigrationStatus() (*GooseMigrationStatus, error)
-	RunMigrations() error
-	RollbackMigration() error
-	MigrateTo(version int64) error
-	ResetDatabase() error
-	IsLegacyDatabase() (bool, error)
-	RecreateDatabase() error
-	EnsureMigrationCompatibility() error
 	IsPathInQueue(path string) (bool, error)
 }
 
 type Queue struct {
 	queue     *goqite.Queue
 	db        *sql.DB
-	dbPath    string
 	runCtx    context.Context
 	runCancel context.CancelFunc
 }
@@ -84,37 +75,14 @@ const (
 	StatusError    = "error"
 )
 
-func New(ctx context.Context, cfg config.QueueConfig) (*Queue, error) {
-	dbPath := cfg.DatabasePath
-	if dbPath == "" {
-		dbPath = "postie_queue.db"
-	}
-
-	slog.InfoContext(ctx, fmt.Sprintf("Using %s database at %s", cfg.DatabaseType, dbPath))
-
-	// For now, only SQLite is fully implemented
-	if cfg.DatabaseType != "sqlite" {
-		return nil, fmt.Errorf("database type %s is not yet implemented, please use 'sqlite'", cfg.DatabaseType)
-	}
-
-	db, err := sql.Open("sqlite3", dbPath+"?_journal=WAL&_timeout=5000&_fk=true")
-	if err != nil {
-		return nil, err
-	}
-
-	// Configure connection pool
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-
-	// Run database migrations using goose (handles legacy database recreation)
-	migrationRunner := NewGooseMigrationRunner(db)
-	if err := migrationRunner.EnsureMigrationCompatibility(); err != nil {
-		return nil, fmt.Errorf("failed to ensure database compatibility: %w", err)
+func New(ctx context.Context, database *database.Database) (*Queue, error) {
+	if database == nil {
+		return nil, fmt.Errorf("database instance is required")
 	}
 
 	// Create goqite queue
 	queue := goqite.New(goqite.NewOpts{
-		DB:   db,
+		DB:   database.DB,
 		Name: "file_jobs",
 	})
 
@@ -122,60 +90,12 @@ func New(ctx context.Context, cfg config.QueueConfig) (*Queue, error) {
 
 	return &Queue{
 		queue:     queue,
-		db:        db,
-		dbPath:    dbPath,
+		db:        database.DB,
 		runCtx:    runCtx,
 		runCancel: runCancel,
 	}, nil
 }
 
-// GetMigrationStatus returns the current migration status using goose
-func (q *Queue) GetMigrationStatus() (*GooseMigrationStatus, error) {
-	migrationRunner := NewGooseMigrationRunner(q.db)
-	return migrationRunner.GetStatus()
-}
-
-// RunMigrations runs all pending migrations using goose
-func (q *Queue) RunMigrations() error {
-	migrationRunner := NewGooseMigrationRunner(q.db)
-	return migrationRunner.MigrateUp()
-}
-
-// RollbackMigration rolls back the last applied migration using goose
-func (q *Queue) RollbackMigration() error {
-	migrationRunner := NewGooseMigrationRunner(q.db)
-	return migrationRunner.MigrateDown()
-}
-
-// MigrateTo migrates to a specific version using goose
-func (q *Queue) MigrateTo(version int64) error {
-	migrationRunner := NewGooseMigrationRunner(q.db)
-	return migrationRunner.MigrateTo(version)
-}
-
-// ResetDatabase drops all tables and re-runs all migrations using goose
-func (q *Queue) ResetDatabase() error {
-	migrationRunner := NewGooseMigrationRunner(q.db)
-	return migrationRunner.Reset()
-}
-
-// IsLegacyDatabase checks if the database is a legacy (non-goose) database
-func (q *Queue) IsLegacyDatabase() (bool, error) {
-	migrationRunner := NewGooseMigrationRunner(q.db)
-	return migrationRunner.IsLegacyDatabase()
-}
-
-// RecreateDatabase drops all tables and recreates them using goose migrations
-func (q *Queue) RecreateDatabase() error {
-	migrationRunner := NewGooseMigrationRunner(q.db)
-	return migrationRunner.RecreateDatabase()
-}
-
-// EnsureMigrationCompatibility ensures the database is compatible with goose migrations
-func (q *Queue) EnsureMigrationCompatibility() error {
-	migrationRunner := NewGooseMigrationRunner(q.db)
-	return migrationRunner.EnsureMigrationCompatibility()
-}
 
 // AddFile adds a file to the queue for processing
 func (q *Queue) AddFile(ctx context.Context, path string, size int64) error {
@@ -710,13 +630,10 @@ func (q *Queue) GetQueueStats() (map[string]interface{}, error) {
 	return stats, nil
 }
 
-// Close closes the database connection
+// Close closes the queue context (database is managed externally)
 func (q *Queue) Close() error {
 	if q.runCancel != nil {
 		q.runCancel()
-	}
-	if q.db != nil {
-		return q.db.Close()
 	}
 	return nil
 }

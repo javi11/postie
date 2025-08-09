@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/javi11/postie/internal/config"
+	"github.com/javi11/postie/internal/database"
 	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/processor"
 	"github.com/javi11/postie/internal/queue"
@@ -38,6 +39,7 @@ The watch command will monitor the configured directory and upload files accordi
 
 		// Get configurations
 		watcherCfg := cfg.GetWatcherConfig()
+		databaseCfg := cfg.GetDatabaseConfig()
 		queueCfg := cfg.GetQueueConfig()
 
 		// Set up directories
@@ -80,8 +82,26 @@ The watch command will monitor the configured directory and upload files accordi
 			}
 		}()
 
-		// Initialize queue
-		q, err := queue.New(ctx, queueCfg)
+		// Initialize database
+		db, err := database.New(ctx, databaseCfg)
+		if err != nil {
+			slog.ErrorContext(ctx, "Error creating database", "error", err)
+			return err
+		}
+		defer func() {
+			if err := db.Close(); err != nil {
+				slog.ErrorContext(ctx, "Error closing database", "error", err)
+			}
+		}()
+
+		// Run database migrations
+		if err := db.EnsureMigrationCompatibility(); err != nil {
+			slog.ErrorContext(ctx, "Error running database migrations", "error", err)
+			return err
+		}
+
+		// Initialize queue with database
+		q, err := queue.New(ctx, db)
 		if err != nil {
 			slog.ErrorContext(ctx, "Error creating queue", "error", err)
 			return err

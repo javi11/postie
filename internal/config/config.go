@@ -135,6 +135,7 @@ type Config interface {
 	GetPar2Config(ctx context.Context) (*Par2Config, error)
 	GetWatcherConfig() WatcherConfig
 	GetNzbCompressionConfig() NzbCompressionConfig
+	GetDatabaseConfig() DatabaseConfig
 	GetQueueConfig() QueueConfig
 	GetPostUploadScriptConfig() PostUploadScriptConfig
 	GetMaintainOriginalExtension() bool
@@ -156,6 +157,7 @@ type ConfigData struct {
 	Par2                      Par2Config             `yaml:"par2" json:"par2"`
 	Watcher                   WatcherConfig          `yaml:"watcher" json:"watcher"`
 	NzbCompression            NzbCompressionConfig   `yaml:"nzb_compression" json:"nzb_compression"`
+	Database                  DatabaseConfig         `yaml:"database" json:"database"`
 	Queue                     QueueConfig            `yaml:"queue" json:"queue"`
 	OutputDir                 string                 `yaml:"output_dir" json:"output_dir"`
 	MaintainOriginalExtension *bool                  `yaml:"maintain_original_extension" json:"maintain_original_extension"`
@@ -255,12 +257,16 @@ type NzbCompressionConfig struct {
 	Level int `yaml:"level" json:"level"`
 }
 
-// QueueConfig represents the upload queue configuration
-type QueueConfig struct {
-	// Database type to use for the queue. Supported: "sqlite", "postgres", "mysql"
+// DatabaseConfig represents the database configuration
+type DatabaseConfig struct {
+	// Database type to use. Supported: "sqlite", "postgres", "mysql"
 	DatabaseType string `yaml:"database_type" json:"database_type"`
 	// Database connection string or file path
 	DatabasePath string `yaml:"database_path" json:"database_path"`
+}
+
+// QueueConfig represents the upload queue configuration
+type QueueConfig struct {
 	// Maximum concurrent uploads from queue
 	MaxConcurrentUploads int `yaml:"max_concurrent_uploads" json:"max_concurrent_uploads"`
 }
@@ -426,15 +432,16 @@ func Load(path string) (*ConfigData, error) {
 		}
 	}
 
+	// Set default values for Database configuration
+	if cfg.Database.DatabaseType == "" {
+		cfg.Database.DatabaseType = "sqlite"
+	}
+
+	if cfg.Database.DatabasePath == "" {
+		cfg.Database.DatabasePath = "./postie_queue.db"
+	}
+
 	// Set default values for Queue configuration
-	if cfg.Queue.DatabaseType == "" {
-		cfg.Queue.DatabaseType = "sqlite"
-	}
-
-	if cfg.Queue.DatabasePath == "" {
-		cfg.Queue.DatabasePath = "./postie_queue.db"
-	}
-
 	if cfg.Queue.MaxConcurrentUploads <= 0 {
 		cfg.Queue.MaxConcurrentUploads = 1
 	}
@@ -504,14 +511,15 @@ func (c *ConfigData) validate() error {
 		}
 	}
 
-	// Validate queue configuration
-	switch c.Queue.DatabaseType {
+	// Validate database configuration
+	switch c.Database.DatabaseType {
 	case "sqlite", "postgres", "mysql":
 		// Valid database types
 	default:
-		return fmt.Errorf("invalid queue database type: %s (supported: sqlite, postgres, mysql)", c.Queue.DatabaseType)
+		return fmt.Errorf("invalid database type: %s (supported: sqlite, postgres, mysql)", c.Database.DatabaseType)
 	}
 
+	// Validate queue configuration
 	if c.Queue.MaxConcurrentUploads <= 0 {
 		return fmt.Errorf("queue max concurrent uploads must be positive")
 	}
@@ -652,6 +660,10 @@ func (c *ConfigData) GetNzbCompressionConfig() NzbCompressionConfig {
 	return c.NzbCompression
 }
 
+func (c *ConfigData) GetDatabaseConfig() DatabaseConfig {
+	return c.Database
+}
+
 func (c *ConfigData) GetQueueConfig() QueueConfig {
 	return c.Queue
 }
@@ -725,9 +737,11 @@ func GetDefaultConfig() ConfigData {
 			Type:    CompressionTypeNone,
 			Level:   0,
 		},
+		Database: DatabaseConfig{
+			DatabaseType: "sqlite",
+			DatabasePath: "./postie_queue.db",
+		},
 		Queue: QueueConfig{
-			DatabaseType:         "sqlite",
-			DatabasePath:         "./postie_queue.db",
 			MaxConcurrentUploads: 1,
 		},
 		OutputDir:                 "./output",
