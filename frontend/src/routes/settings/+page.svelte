@@ -149,14 +149,10 @@ async function handleSaveConfig() {
 			);
 		}
 
-		// Convert queue duration fields
+		// Convert queue fields
 		if (configToSave.queue) {
-			configToSave.queue.retry_delay = parseDuration(
-				configToSave.queue.retry_delay || "5m",
-			);
-			configToSave.queue.cleanup_after = parseDuration(
-				configToSave.queue.cleanup_after || "24h",
-			);
+			configToSave.queue.max_concurrent_uploads =
+				Number.parseInt(configToSave.queue.max_concurrent_uploads) || 1;
 		}
 
 		// Convert post_upload_script timeout

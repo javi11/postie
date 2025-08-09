@@ -353,20 +353,12 @@
 		},
 		"queue": {
 			"title": "Configuration de la File d'attente",
-			"database_type": "Type de Base de Données",
 			"save_button": "Sauvegarder les Paramètres de la File d'attente",
-			"database_type_description": "Système de base de données à utiliser pour la file d'attente de téléchargement",
-			"database_path": "Chemin/Connexion de Base de Données",
-			"database_path_description_sqlite": "Chemin du fichier pour la base de données SQLite",
-			"database_path_description_network": "Chaîne de connexion pour la base de données",
-			"database_path_placeholder_sqlite": "./postie_queue.db",
-			"database_path_placeholder_network": "host=localhost user=postie dbname=postie",
 			"max_concurrent_uploads": "Max. Téléchargements Concurrents",
 			"max_concurrent_uploads_description": "Nombre maximum de téléchargements simultanés depuis la file d'attente",
-			"database_types": {
-				"sqlite": "SQLite - Base de données basée sur fichier"
-			},
-			"info": "<strong>File d'attente de Téléchargement :</strong> Gère les téléchargements de fichiers avec persistance, logique de nouvelle tentative et traitement concurrent."
+			"info": "<strong>File d'attente de Téléchargement :</strong> Gère les téléchargements de fichiers avec traitement concurrent et logique de nouvelle tentative.",
+			"saved_success": "Paramètres de file d'attente sauvegardés",
+			"saved_success_description": "Votre configuration de file d'attente a été sauvegardée avec succès !"
 		},
 		"server": {
 			"title": "Serveurs NNTP",

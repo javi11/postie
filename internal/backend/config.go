@@ -190,6 +190,15 @@ func (a *App) applyConfigChanges(configData *config.ConfigData) error {
 		return err
 	}
 
+	if err := a.initializeProcessor(); err != nil {
+		slog.Error("Failed to re-initialize processor after config change", "error", err)
+	}
+
+	// Always check watcher configuration
+	if err := a.initializeWatcher(); err != nil {
+		slog.Error("Failed to re-initialize watcher after config change", "error", err)
+	}
+
 	// Update the connection pool manager only if pool-related configuration has changed
 	if a.poolManager != nil && poolCfgChanged {
 		if err := a.poolManager.UpdateConfig(a.config); err != nil {
@@ -310,15 +319,15 @@ func (a *App) loadConfig() error {
 
 	slog.Info("Successfully created postie instance")
 
-	// Re-initialize queue and watcher with new config
+	// Initialize queue and watcher with new config (used for initial load)
 	if err := a.initializeQueue(); err != nil {
-		slog.Error("Failed to re-initialize queue after config change", "error", err)
+		slog.Error("Failed to initialize queue", "error", err)
 	}
 	if err := a.initializeProcessor(); err != nil {
-		slog.Error("Failed to re-initialize processor after config change", "error", err)
+		slog.Error("Failed to initialize processor", "error", err)
 	}
 	if err := a.initializeWatcher(); err != nil {
-		slog.Error("Failed to re-initialize watcher after config change", "error", err)
+		slog.Error("Failed to initialize watcher", "error", err)
 	}
 
 	return nil
@@ -332,7 +341,7 @@ func (a *App) createDefaultConfig() error {
 	defaultConfig.Par2.Par2Path = a.appPaths.Par2
 
 	// Set the database path to the OS-specific location
-	defaultConfig.Queue.DatabasePath = a.appPaths.Database
+	defaultConfig.Database.DatabasePath = a.appPaths.Database
 
 	if err := config.SaveConfig(&defaultConfig, a.configPath); err != nil {
 		return fmt.Errorf("failed to save default config: %w", err)

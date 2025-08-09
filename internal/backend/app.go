@@ -15,6 +15,7 @@ import (
 
 	"github.com/javi11/nntppool"
 	"github.com/javi11/postie/internal/config"
+	"github.com/javi11/postie/internal/database"
 	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/processor"
 	"github.com/javi11/postie/internal/queue"
@@ -146,6 +147,7 @@ type App struct {
 	config               *config.ConfigData
 	configPath           string
 	appPaths             *AppPaths
+	database             *database.Database
 	poolManager          *pool.Manager
 	queue                *queue.Queue
 	processor            *processor.Processor
@@ -778,7 +780,7 @@ func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 	cfg.Par2.Par2Path = a.appPaths.Par2
 
 	// Set the database path to the OS-specific location
-	cfg.Queue.DatabasePath = a.appPaths.Database
+	cfg.Database.DatabasePath = a.appPaths.Database
 
 	// Save configuration
 	if err := a.SaveConfig(&cfg); err != nil {

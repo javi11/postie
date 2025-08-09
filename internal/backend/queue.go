@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/javi11/postie/internal/database"
 	"github.com/javi11/postie/internal/queue"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -48,6 +49,12 @@ func (a *App) initializeQueue() error {
 		a.queue = nil
 	}
 
+	// Close previous database if exists
+	if a.database != nil {
+		_ = a.database.Close()
+		a.database = nil
+	}
+
 	// Stop processor context to clean up any running operations
 	if a.procCancel != nil {
 		a.procCancel()
@@ -55,7 +62,7 @@ func (a *App) initializeQueue() error {
 		a.procCtx = nil
 	}
 
-	queueCfg := a.config.GetQueueConfig()
+	databaseCfg := a.config.GetDatabaseConfig()
 
 	// Get output directory from configuration
 	outputDir := a.config.GetOutputDir()
@@ -77,11 +84,24 @@ func (a *App) initializeQueue() error {
 	// Create context for queue and processor
 	a.procCtx, a.procCancel = context.WithCancel(context.Background())
 
-	// Initialize queue (always available for manual file additions)
-	var err2 error
-	a.queue, err2 = queue.New(a.procCtx, queueCfg)
-	if err2 != nil {
-		return fmt.Errorf("failed to create queue: %w", err2)
+	// Initialize database
+	db, err := database.New(a.procCtx, databaseCfg)
+	if err != nil {
+		return fmt.Errorf("failed to create database: %w", err)
+	}
+	
+	// Store database reference for cleanup
+	a.database = db
+
+	// Run database migrations
+	if err := db.EnsureMigrationCompatibility(); err != nil {
+		return fmt.Errorf("failed to run database migrations: %w", err)
+	}
+
+	// Initialize queue with database (always available for manual file additions)
+	a.queue, err = queue.New(a.procCtx, db)
+	if err != nil {
+		return fmt.Errorf("failed to create queue: %w", err)
 	}
 
 	slog.Info("Queue initialized successfully")
@@ -358,4 +378,83 @@ func (a *App) SetQueueItemPriority(id string, priority int) error {
 		a.webEventEmitter("queue-updated", nil)
 	}
 	return nil
+}
+
+// Database migration methods exposed through the App
+
+// GetMigrationStatus returns the current migration status
+func (a *App) GetMigrationStatus() (map[string]interface{}, error) {
+	if a.database == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	migrationRunner := a.database.GetMigrationRunner()
+	status, err := migrationRunner.GetStatus()
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"currentVersion": status.CurrentVersion,
+	}, nil
+}
+
+// RunMigrations runs all pending migrations
+func (a *App) RunMigrations() error {
+	if a.database == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	migrationRunner := a.database.GetMigrationRunner()
+	return migrationRunner.MigrateUp()
+}
+
+// RollbackMigration rolls back the last applied migration
+func (a *App) RollbackMigration() error {
+	if a.database == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	migrationRunner := a.database.GetMigrationRunner()
+	return migrationRunner.MigrateDown()
+}
+
+// MigrateTo migrates to a specific version
+func (a *App) MigrateTo(version int64) error {
+	if a.database == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	migrationRunner := a.database.GetMigrationRunner()
+	return migrationRunner.MigrateTo(version)
+}
+
+// ResetDatabase drops all tables and re-runs all migrations
+func (a *App) ResetDatabase() error {
+	if a.database == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	migrationRunner := a.database.GetMigrationRunner()
+	return migrationRunner.Reset()
+}
+
+// IsLegacyDatabase checks if the database is a legacy (non-goose) database
+func (a *App) IsLegacyDatabase() (bool, error) {
+	if a.database == nil {
+		return false, fmt.Errorf("database not initialized")
+	}
+
+	migrationRunner := a.database.GetMigrationRunner()
+	return migrationRunner.IsLegacyDatabase()
+}
+
+// RecreateDatabase drops all tables and recreates them using migrations
+func (a *App) RecreateDatabase() error {
+	if a.database == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	migrationRunner := a.database.GetMigrationRunner()
+	return migrationRunner.RecreateDatabase()
 }

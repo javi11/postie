@@ -315,19 +315,11 @@
 		"queue": {
 			"title": "Queue Configuration",
 			"save_button": "Save Queue Settings",
-			"database_type": "Database Type",
-			"database_type_description": "Database system to use for the upload queue",
-			"database_path": "Database Path/Connection",
-			"database_path_description_sqlite": "File path for SQLite database",
-			"database_path_description_network": "Connection string for database",
-			"database_path_placeholder_sqlite": "./postie_queue.db",
-			"database_path_placeholder_network": "host=localhost user=postie dbname=postie",
 			"max_concurrent_uploads": "Max Concurrent Uploads",
 			"max_concurrent_uploads_description": "Maximum number of simultaneous uploads from queue",
-			"database_types": {
-				"sqlite": "SQLite - File-based database"
-			},
-			"info": "<strong>Upload Queue:</strong> Manages file uploads with persistence, retry logic, and concurrent processing."
+			"info": "<strong>Upload Queue:</strong> Manages file uploads with concurrent processing and retry logic.",
+			"saved_success": "Queue settings saved",
+			"saved_success_description": "Your queue configuration has been saved successfully!"
 		},
 		"server": {
 			"validating": "Validating...",
