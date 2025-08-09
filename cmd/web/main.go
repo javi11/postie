@@ -619,7 +619,7 @@ func (ws *WebServer) handleDownloadNZB(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
-	nzbContent, err := ws.app.GetNZBContent(id)
+	nzbContent, fileName, err := ws.app.GetNZB(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -627,7 +627,7 @@ func (ws *WebServer) handleDownloadNZB(w http.ResponseWriter, r *http.Request) {
 
 	// Set headers for file download
 	w.Header().Set("Content-Type", "application/x-nzb")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.nzb\"", id))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fileName))
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(nzbContent)))
 
 	// Write the NZB content
