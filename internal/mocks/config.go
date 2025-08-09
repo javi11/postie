@@ -42,6 +42,20 @@ func (m *MockConfig) EXPECT() *MockConfigMockRecorder {
 	return m.recorder
 }
 
+// GetDatabaseConfig mocks base method.
+func (m *MockConfig) GetDatabaseConfig() config.DatabaseConfig {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDatabaseConfig")
+	ret0, _ := ret[0].(config.DatabaseConfig)
+	return ret0
+}
+
+// GetDatabaseConfig indicates an expected call of GetDatabaseConfig.
+func (mr *MockConfigMockRecorder) GetDatabaseConfig() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDatabaseConfig", reflect.TypeOf((*MockConfig)(nil).GetDatabaseConfig))
+}
+
 // GetMaintainOriginalExtension mocks base method.
 func (m *MockConfig) GetMaintainOriginalExtension() bool {
 	m.ctrl.T.Helper()

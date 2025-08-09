@@ -65,10 +65,6 @@ func (m *mockQueueWithDuplicateCheck) SetQueueItemPriorityWithReorder(ctx contex
 	return nil
 }
 
-func (m *mockQueueWithDuplicateCheck) GetMigrationStatus() (*queue.GooseMigrationStatus, error) {
-	return nil, nil
-}
-
 func (m *mockQueueWithDuplicateCheck) RunMigrations() error {
 	return nil
 }
