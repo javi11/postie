@@ -76,6 +76,7 @@ WORKDIR /app
 # Install necessary packages with cache mount for faster builds
 RUN --mount=type=cache,target=/var/cache/apt \
     --mount=type=cache,target=/var/lib/apt \
+    rm -f /var/lib/apt/lists/lock && \
     apt-get update -y && \
     apt-get install --reinstall mime-support -y && \
     apt-get install -y wget && \
