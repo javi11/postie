@@ -16,33 +16,19 @@ changelog:
       - '^test:'
       - '^Merge branch'
 
-# Docker
+# Docker - Multi-platform optimized build
 dockers:
   - image_templates:
       - '{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:v{{ .Version }}-amd64'
+      - '{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:v{{ .Version }}-arm64'
     use: buildx
     dockerfile: ./docker/Dockerfile
     build_flag_templates:
-      - --platform=linux/amd64
-      - --cache-from=type=gha
-      - --cache-to=type=gha,mode=max
-    extra_files:
-      - docker
-      - go.mod
-      - go.sum
-      - frontend
-      - cmd
-      - internal
-      - pkg
-  - image_templates:
-      - '{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:v{{ .Version }}-arm64'
-    use: buildx
-    goarch: arm64
-    dockerfile: ./docker/Dockerfile.aarch64
-    build_flag_templates:
-      - --platform=linux/arm64
-      - --cache-from=type=gha
-      - --cache-to=type=gha,mode=max
+      - --platform=linux/amd64,linux/arm64
+      - --cache-from=type=gha,scope=docker-multiarch
+      - --cache-to=type=gha,mode=max,scope=docker-multiarch
+      - --cache-from=type=registry,ref={{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:buildcache
+      - --cache-to=type=registry,ref={{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:buildcache,mode=max
     extra_files:
       - docker
       - go.mod

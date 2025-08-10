@@ -198,6 +198,8 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
 
       # docker login
       - name: Docker login
@@ -207,6 +209,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Enable buildx cache optimization
+      - name: Expose GitHub Runtime
+        uses: crazy-max/ghaction-github-runtime@v3
+
       # build server and docker
       - name: Build Image artifacts
         uses: goreleaser/goreleaser-action@v6
@@ -215,6 +221,7 @@ jobs:
           args: release --clean --config .goreleaser-docker.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILDX_NO_DEFAULT_ATTESTATIONS: 1
 
   release-gui:
     runs-on: ubuntu-latest
