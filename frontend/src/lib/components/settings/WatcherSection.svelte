@@ -5,7 +5,7 @@ import SizeInput from "$lib/components/inputs/SizeInput.svelte";
 import { t } from "$lib/i18n";
 import { advancedMode } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
-import type { config as configType } from "$lib/wailsjs/go/models";
+import { config as configType } from "$lib/wailsjs/go/models";
 import {
 	CirclePlus,
 	Eye,
@@ -30,6 +30,7 @@ let minFileSize = $state(config.watcher?.min_file_size || 1048576); // 1MB
 let deleteOriginalFile = $state(config.watcher?.delete_original_file ?? false);
 let startTime = $state(config.watcher?.schedule?.start_time || "00:00");
 let endTime = $state(config.watcher?.schedule?.end_time || "23:59");
+let ignorePatterns = $state<string[]>(config.watcher?.ignore_patterns || []);
 let saving = $state(false);
 let initialized = $state(false);
 
@@ -62,6 +63,11 @@ let canSave = $derived(watchDirectory.trim() && !saving);
 // Sync all local state back to config
 $effect(() => {
 	if (initialized) {
+		// Ensure watcher config exists
+		if (!config.watcher) {
+			config.watcher = new  configType.WatcherConfig();
+		}
+		
 		config.watcher.watch_directory = watchDirectory;
 		config.watcher.enabled = enabled;
 		config.watcher.check_interval = checkInterval;
@@ -73,6 +79,7 @@ $effect(() => {
 		}
 		config.watcher.schedule.start_time = startTime;
 		config.watcher.schedule.end_time = endTime;
+		config.watcher.ignore_patterns = ignorePatterns;
 	}
 });
 
@@ -106,6 +113,7 @@ $effect(() => {
 			deleteOriginalFile = config.watcher?.delete_original_file ?? false;
 			startTime = config.watcher?.schedule?.start_time || "00:00";
 			endTime = config.watcher?.schedule?.end_time || "23:59";
+			ignorePatterns = config.watcher?.ignore_patterns || [];
 			
 			initialized = true;
 		} catch (error) {
@@ -140,24 +148,17 @@ async function selectWatchDirectory() {
 }
 
 function addIgnorePattern() {
-	if (!config.watcher.ignore_patterns) {
-		config.watcher.ignore_patterns = [];
-	}
-	config.watcher.ignore_patterns = [...config.watcher.ignore_patterns, ""];
+	ignorePatterns = [...ignorePatterns, ""];
 }
 
 function removeIgnorePattern(index: number) {
-	if (!config.watcher.ignore_patterns) return;
-	
-	config.watcher.ignore_patterns = config.watcher.ignore_patterns.filter(
-		(_, i) => i !== index,
-	);
+	ignorePatterns = ignorePatterns.filter((_, i) => i !== index);
 }
 
 function handlePatternInput(index: number, value: string) {
-	if (!config.watcher.ignore_patterns) return;
-	
-	config.watcher.ignore_patterns[index] = value;
+	ignorePatterns = ignorePatterns.map((pattern, i) => 
+		i === index ? value : pattern
+	);
 }
 
 async function saveWatcherSettings() {
@@ -381,7 +382,6 @@ async function saveWatcherSettings() {
               </div>
             </div>
 
-          {#if isAdvanced}
             <div class="space-y-4">
               <div class="flex items-center justify-between">
                 <div>
@@ -403,7 +403,7 @@ async function saveWatcherSettings() {
               </div>
 
               <div class="space-y-3">
-                {#each config.watcher.ignore_patterns || [] as pattern, index (index)}
+                {#each ignorePatterns as pattern, index (index)}
                   <div class="flex items-center gap-3">
                     <div class="flex-1">
                       <input
@@ -431,7 +431,6 @@ async function saveWatcherSettings() {
                 </p>
               </div>
             </div>
-          {/if}
           </div>
         </div>
       {/if}

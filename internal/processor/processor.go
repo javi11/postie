@@ -182,6 +182,23 @@ func (p *Processor) processQueueItems(ctx context.Context) error {
 }
 
 func (p *Processor) processNextItem(ctx context.Context) error {
+	// Check if processor is shutting down
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	// Check if pool manager is still available before processing
+	p.runningMux.Lock()
+	poolManager := p.poolManager
+	p.runningMux.Unlock()
+	
+	if poolManager == nil {
+		slog.WarnContext(ctx, "Pool manager is not available, skipping item processing")
+		return nil
+	}
+
 	// Get next item from queue
 	msg, job, err := p.queue.ReceiveFile(ctx)
 	if err != nil {
@@ -271,8 +288,17 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 		Size: uint64(job.Size),
 	}
 
+	// Double-check that pool manager is still available before creating postie
+	p.runningMux.Lock()
+	poolManager := p.poolManager
+	p.runningMux.Unlock()
+	
+	if poolManager == nil {
+		return "", fmt.Errorf("pool manager is not available for job %s", jobID)
+	}
+
 	// Create a postie instance for this job with progress manager
-	jobPostie, err := postie.New(jobCtx, p.config, p.poolManager, progressJob)
+	jobPostie, err := postie.New(jobCtx, p.config, poolManager, progressJob)
 	if err != nil {
 		return "", fmt.Errorf("failed to create postie instance for job %s: %w", jobID, err)
 	}
@@ -474,6 +500,11 @@ func (p *Processor) IsPaused() bool {
 func (p *Processor) Close() error {
 	slog.Info("Processor shutdown initiated")
 
+	// Set pool manager to nil to prevent new jobs from using it
+	p.runningMux.Lock()
+	p.poolManager = nil
+	p.runningMux.Unlock()
+
 	// Stop provider monitoring
 	if p.providerCheckCancel != nil {
 		p.providerCheckCancel()
@@ -565,12 +596,17 @@ func (p *Processor) monitorProviderAvailability() {
 
 // checkAndHandleProviderAvailability checks provider availability and pauses/resumes as needed
 func (p *Processor) checkAndHandleProviderAvailability() {
-	if p.poolManager == nil {
+	// Get pool manager reference safely
+	p.runningMux.Lock()
+	poolManager := p.poolManager
+	p.runningMux.Unlock()
+	
+	if poolManager == nil {
 		return
 	}
 
 	// Get pool metrics to check provider status
-	metrics, err := p.poolManager.GetMetrics()
+	metrics, err := poolManager.GetMetrics()
 	if err != nil {
 		slog.Error("Failed to get pool metrics for provider check", "error", err)
 		return
