@@ -24,18 +24,19 @@ Makefile
 .goreleaser*
 wails.json
 
-# Frontend development files (keep what's needed)
+# Frontend development files (keep what's needed for build)
 frontend/node_modules/
 frontend/.svelte-kit/
-frontend/src/
 frontend/static/
 frontend/svelte.config.js
 frontend/vite.config.ts
 frontend/tsconfig.json
 frontend/README.md
 frontend/package.json.md5
+frontend/index.html
 
-# Only keep essential frontend files for GoReleaser
+# Keep essential frontend files for Docker build
+!frontend/src/
 !frontend/build/
 !frontend/embed.go
 !frontend/package.json
