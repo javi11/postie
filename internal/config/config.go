@@ -438,7 +438,7 @@ func Load(path string) (*ConfigData, error) {
 	}
 
 	if cfg.Database.DatabasePath == "" {
-		cfg.Database.DatabasePath = "./postie_queue.db"
+		cfg.Database.DatabasePath = "./postie.db"
 	}
 
 	// Set default values for Queue configuration
@@ -739,7 +739,7 @@ func GetDefaultConfig() ConfigData {
 		},
 		Database: DatabaseConfig{
 			DatabaseType: "sqlite",
-			DatabasePath: "./postie_queue.db",
+			DatabasePath: "./postie.db",
 		},
 		Queue: QueueConfig{
 			MaxConcurrentUploads: 1,

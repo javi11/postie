@@ -20,7 +20,7 @@ type Database struct {
 func New(ctx context.Context, cfg config.DatabaseConfig) (*Database, error) {
 	dbPath := cfg.DatabasePath
 	if dbPath == "" {
-		dbPath = "postie_queue.db"
+		dbPath = "postie.db"
 	}
 
 	slog.InfoContext(ctx, fmt.Sprintf("Using %s database at %s", cfg.DatabaseType, dbPath))

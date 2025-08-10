@@ -69,7 +69,7 @@ temp/
 .buildx-cache/
 
 # Databases and runtime
-postie_queue.db*
+postie.db*
 
 # Docker
 **/docker-compose*.yml

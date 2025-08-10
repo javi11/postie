@@ -21,14 +21,14 @@ func isRunningInDocker() bool {
 	if _, err := os.Stat("/.dockerenv"); err == nil {
 		return true
 	}
-	
+
 	// Check for docker in cgroup
 	if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
 		if len(data) > 0 && (filepath.Base(string(data)) == "docker" || filepath.Base(string(data)) == "containerd") {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -87,7 +87,7 @@ func GetAppPaths() (*AppPaths, error) {
 
 	return &AppPaths{
 		Config:   filepath.Join(configDir, "config.yaml"),
-		Database: filepath.Join(dataDir, "postie_queue.db"),
+		Database: filepath.Join(configDir, "postie.db"),
 		Par2:     filepath.Join(dataDir, par2Name),
 		Data:     dataDir,
 		Log:      logPath,

@@ -112,7 +112,7 @@ watcher:
 # Queue configuration for upload management
 queue:
   database_type: sqlite # Options: sqlite, postgres, mysql (only sqlite implemented currently)
-  database_path: ./postie_queue.db # Database file path or connection string
+  database_path: ./postie.db # Database file path or connection string
   max_concurrent_uploads: 1 # Maximum concurrent uploads from queue
 
 # Post upload script configuration
@@ -350,7 +350,7 @@ Configure the upload queue system:
 ```yaml
 queue:
   database_type: sqlite # Database type (sqlite, postgres, mysql - only sqlite implemented currently)
-  database_path: ./postie_queue.db # Database file path or connection string
+  database_path: ./postie.db # Database file path or connection string
   max_concurrent_uploads: 1 # Maximum concurrent uploads from queue
 ```
 

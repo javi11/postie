@@ -232,7 +232,7 @@ func NewApp() *App {
 		slog.Warn("Could not get OS-specific paths, using current directory", "error", err)
 		appPaths = &AppPaths{
 			Config:   "./config.yaml",
-			Database: "./postie_queue.db",
+			Database: "./postie.db",
 			Par2:     "./parpar",
 			Data:     ".",
 			Log:      "./postie.log",

@@ -70,7 +70,7 @@ queue:
   # Database type: sqlite, postgres, mysql (only sqlite implemented currently)
   database_type: 'sqlite'
   # Database file path (for SQLite) or connection string (for other DBs)
-  database_path: './postie_queue.db'
+  database_path: './postie.db'
   # Maximum number of items to process in each batch
   batch_size: 10
   # Maximum number of retry attempts for failed uploads

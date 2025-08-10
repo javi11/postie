@@ -2,7 +2,7 @@ par2cmd
 config.yaml
 test_files/
 parpar
-.postie_queue.db
+.postie.db
 dist/
 
 # Coverage files
