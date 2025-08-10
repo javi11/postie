@@ -55,7 +55,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
 
 # Final stage - use architecture-specific base image with conditional selection
 ARG TARGETARCH
-FROM ghcr.io/linuxserver/baseimage-ubuntu:${TARGETARCH:-amd64}-jammy
+FROM ghcr.io/linuxserver/baseimage-ubuntu:jammy
 
 ARG DEBIAN_FRONTEND="noninteractive"
 ARG BUILD_DATE
