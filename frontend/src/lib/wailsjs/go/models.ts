@@ -798,3 +798,66 @@ export namespace progress {
 
 }
 
+export namespace watcher {
+	
+	export class WatcherScheduleInfo {
+	    start_time: string;
+	    end_time: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WatcherScheduleInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.start_time = source["start_time"];
+	        this.end_time = source["end_time"];
+	    }
+	}
+	export class WatcherStatusInfo {
+	    enabled: boolean;
+	    initialized: boolean;
+	    watch_directory: string;
+	    check_interval: string;
+	    next_run?: string;
+	    is_within_schedule: boolean;
+	    schedule?: WatcherScheduleInfo;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WatcherStatusInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.initialized = source["initialized"];
+	        this.watch_directory = source["watch_directory"];
+	        this.check_interval = source["check_interval"];
+	        this.next_run = source["next_run"];
+	        this.is_within_schedule = source["is_within_schedule"];
+	        this.schedule = this.convertValues(source["schedule"], WatcherScheduleInfo);
+	        this.error = source["error"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+

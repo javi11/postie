@@ -6,6 +6,7 @@ import ProgressSection from "$lib/components/dashboard/ProgressSection.svelte";
 import ProviderStatus from "$lib/components/dashboard/ProviderStatus.svelte";
 import QueueSection from "$lib/components/dashboard/QueueSection.svelte";
 import QueueStats from "$lib/components/dashboard/QueueStats.svelte";
+import WatcherStatus from "$lib/components/dashboard/WatcherStatus.svelte";
 import { t } from "$lib/i18n";
 import { appStatus, runningJobs } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
@@ -262,9 +263,10 @@ async function handleUpload() {
 				<QueueSection />
 			</div>
 
-			<!-- Sidebar -->
+			<!-- Other -->
 			<div class="space-y-8">
 				<ProviderStatus />
+				<WatcherStatus />
 				<QueueStats />
 			</div>
 		</div>

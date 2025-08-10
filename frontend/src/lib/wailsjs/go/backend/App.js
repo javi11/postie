@@ -110,6 +110,10 @@ export function GetWatchDirectory() {
   return window['go']['backend']['App']['GetWatchDirectory']();
 }
 
+export function GetWatcherStatus() {
+  return window['go']['backend']['App']['GetWatcherStatus']();
+}
+
 export function HandleDroppedFiles(arg1) {
   return window['go']['backend']['App']['HandleDroppedFiles'](arg1);
 }

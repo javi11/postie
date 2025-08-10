@@ -15,6 +15,24 @@ import (
 	"github.com/opencontainers/selinux/pkg/pwalkdir"
 )
 
+// WatcherScheduleInfo represents the schedule configuration
+type WatcherScheduleInfo struct {
+	StartTime string `json:"start_time"`
+	EndTime   string `json:"end_time"`
+}
+
+// WatcherStatusInfo represents the watcher status information
+type WatcherStatusInfo struct {
+	Enabled          bool                 `json:"enabled"`
+	Initialized      bool                 `json:"initialized"`
+	WatchDirectory   string               `json:"watch_directory"`
+	CheckInterval    string               `json:"check_interval"`
+	NextRun          string               `json:"next_run,omitempty"`
+	IsWithinSchedule bool                 `json:"is_within_schedule"`
+	Schedule         *WatcherScheduleInfo `json:"schedule,omitempty"`
+	Error            string               `json:"error,omitempty"`
+}
+
 // ProcessorInterface defines the interface for checking running jobs
 type ProcessorInterface interface {
 	IsPathBeingProcessed(path string) bool
@@ -27,6 +45,8 @@ type Watcher struct {
 	watchFolder   string
 	fileSizeCache map[string]fileCacheEntry
 	cacheMutex    sync.RWMutex
+	nextRunTime   time.Time
+	nextRunMutex  sync.RWMutex
 }
 
 type fileCacheEntry struct {
@@ -59,12 +79,16 @@ func (w *Watcher) Start(ctx context.Context) error {
 	cacheCleanupTicker := time.NewTicker(1 * time.Hour)
 	defer cacheCleanupTicker.Stop()
 
+	// Initialize next run time
+	w.updateNextRunTime()
+
 	// Start continuous directory scanning
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-scanTicker.C:
+			w.updateNextRunTime() // Update next run time before checking schedule
 			if w.isWithinSchedule() {
 				if err := w.scanDirectory(ctx); err != nil {
 					slog.ErrorContext(ctx, "Error scanning directory", "error", err)
@@ -113,8 +137,12 @@ func (w *Watcher) scanDirectory(ctx context.Context) error {
 			return err
 		}
 
+		slog.DebugContext(ctx, "Processing file", "path", path, "size", info.Size(), "mod_time", info.ModTime())
+
 		// Skip files that don't meet criteria
 		if !w.shouldProcessFile(path, info) {
+			slog.DebugContext(ctx, "File does not meet criteria, skipping", "path", path)
+
 			return nil
 		}
 
@@ -258,6 +286,8 @@ func (w *Watcher) cleanupOldCacheEntries() {
 func (w *Watcher) TriggerScan(ctx context.Context) {
 	go func() {
 		if w.isWithinSchedule() {
+			slog.InfoContext(ctx, "Watch scanning started", "watch_directory", w.watchFolder)
+
 			if err := w.scanDirectory(ctx); err != nil {
 				slog.ErrorContext(ctx, "Error in triggered directory scan", "error", err)
 			}
@@ -283,6 +313,109 @@ func (w *Watcher) ClearQueue() error {
 // GetQueueStats returns statistics about the queue via queue
 func (w *Watcher) GetQueueStats() (map[string]interface{}, error) {
 	return w.queue.GetQueueStats()
+}
+
+// updateNextRunTime calculates and sets the next scheduled run time
+func (w *Watcher) updateNextRunTime() {
+	w.nextRunMutex.Lock()
+	defer w.nextRunMutex.Unlock()
+
+	now := time.Now()
+	interval := w.cfg.CheckInterval.ToDuration()
+
+	// Calculate next run based on current time plus interval
+	nextRun := now.Add(interval)
+
+	// If schedule is configured, check if the next run would be within schedule
+	if w.cfg.Schedule.StartTime != "" && w.cfg.Schedule.EndTime != "" {
+		// If the next run would be outside schedule, calculate when it would next be in schedule
+		if !w.wouldBeWithinSchedule(nextRun) {
+			nextRun = w.getNextScheduledRun(now)
+		}
+	}
+
+	w.nextRunTime = nextRun
+}
+
+// GetNextRunTime returns the next scheduled run time
+func (w *Watcher) GetNextRunTime() time.Time {
+	w.nextRunMutex.RLock()
+	defer w.nextRunMutex.RUnlock()
+	return w.nextRunTime
+}
+
+// wouldBeWithinSchedule checks if a given time would be within the configured schedule
+func (w *Watcher) wouldBeWithinSchedule(t time.Time) bool {
+	if w.cfg.Schedule.StartTime == "" || w.cfg.Schedule.EndTime == "" {
+		return true
+	}
+
+	timeStr := t.Format("15:04")
+	startTime := w.cfg.Schedule.StartTime
+	endTime := w.cfg.Schedule.EndTime
+
+	// Handle crossing midnight
+	if startTime <= endTime {
+		return timeStr >= startTime && timeStr <= endTime
+	} else {
+		return timeStr >= startTime || timeStr <= endTime
+	}
+}
+
+// getNextScheduledRun calculates when the next run should be within the schedule
+func (w *Watcher) getNextScheduledRun(now time.Time) time.Time {
+	startTime := w.cfg.Schedule.StartTime
+	endTime := w.cfg.Schedule.EndTime
+
+	// Parse start time for today
+	startHour := 0
+	startMin := 0
+	if len(startTime) >= 5 {
+		fmt.Sscanf(startTime, "%d:%d", &startHour, &startMin)
+	}
+
+	// Calculate start time for today
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), startHour, startMin, 0, 0, now.Location())
+
+	// If start time today has passed and we're crossing midnight, use tomorrow's start time
+	currentTime := now.Format("15:04")
+	if startTime <= endTime && currentTime > endTime {
+		// Schedule ends today, next run is tomorrow at start time
+		return todayStart.Add(24 * time.Hour)
+	} else if startTime > endTime && currentTime > endTime && currentTime < startTime {
+		// We're in the gap between end and start time (same day)
+		return todayStart
+	} else if todayStart.Before(now) && startTime <= endTime {
+		// Start time today has passed, next run is tomorrow
+		return todayStart.Add(24 * time.Hour)
+	} else {
+		// Next run is at today's start time
+		return todayStart
+	}
+}
+
+// GetWatcherStatus returns comprehensive watcher status information
+func (w *Watcher) GetWatcherStatus() WatcherStatusInfo {
+	status := WatcherStatusInfo{
+		Enabled:          w.cfg.Enabled,
+		Initialized:      true, // If this method is called, the watcher is initialized
+		WatchDirectory:   w.watchFolder,
+		CheckInterval:    string(w.cfg.CheckInterval),
+		IsWithinSchedule: w.isWithinSchedule(),
+	}
+
+	if w.cfg.Enabled {
+		status.NextRun = w.GetNextRunTime().Format(time.RFC3339)
+
+		if w.cfg.Schedule.StartTime != "" && w.cfg.Schedule.EndTime != "" {
+			status.Schedule = &WatcherScheduleInfo{
+				StartTime: w.cfg.Schedule.StartTime,
+				EndTime:   w.cfg.Schedule.EndTime,
+			}
+		}
+	}
+
+	return status
 }
 
 // Close does nothing for the simple watcher (queue is managed separately)
