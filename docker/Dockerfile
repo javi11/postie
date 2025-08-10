@@ -3,7 +3,7 @@
 # syntax=docker/dockerfile:1.7
 
 # Frontend build stage
-FROM --platform=$BUILDPLATFORM oven/bun:1 AS frontend-builder
+FROM oven/bun:1 AS frontend-builder
 
 # Set working directory for frontend
 WORKDIR /app/frontend
@@ -19,15 +19,11 @@ RUN --mount=type=cache,target=/root/.bun/install/cache,sharing=locked \
 COPY frontend/ ./
 RUN bun run build
 
-# Backend build stage with multi-arch support
-FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS backend-builder
+# Backend build stage with native arch support (no cross-compilation)
+FROM golang:1.24-alpine AS backend-builder
 
-# Build arguments for multi-platform support
-ARG TARGETOS
-ARG TARGETARCH
-
-# Install build dependencies
-RUN apk add --no-cache git gcc g++ musl-dev libstdc++ sqlite-dev
+# Install build dependencies including sqlite
+RUN apk add --no-cache git gcc g++ musl-dev sqlite-dev
 
 # Set working directory
 WORKDIR /app
@@ -48,9 +44,9 @@ COPY ./frontend/embed.go ./frontend/embed.go
 # Copy built frontend from previous stage
 COPY --from=frontend-builder /app/frontend/build ./frontend/build
 
-# Build web binary with cache mount and cross-compilation support
+# Build web binary with cache mount for native architecture
 RUN --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
-    CGO_ENABLED=1 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    CGO_ENABLED=1 GOOS=linux \
     go build -a -ldflags '-linkmode external -extldflags "-static"' -o postie-web cmd/web/main.go
 
 # Final stage - use architecture-specific base image with conditional selection
