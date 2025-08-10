@@ -75,10 +75,10 @@ func (a *App) initializeQueue() error {
 	// Ensure watch directory exists - only set permissions if creating new directory
 	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
 		if err := os.MkdirAll(outputDir, 0755); err != nil {
-			return fmt.Errorf("failed to create output directory: %w", err)
+			return fmt.Errorf("failed to create output directory: %w, %s", err, outputDir)
 		}
 	} else if err != nil {
-		return fmt.Errorf("failed to check output directory: %w", err)
+		return fmt.Errorf("failed to check output directory: %w, %s", err, outputDir)
 	}
 
 	// Create context for queue and processor
@@ -89,7 +89,7 @@ func (a *App) initializeQueue() error {
 	if err != nil {
 		return fmt.Errorf("failed to create database: %w", err)
 	}
-	
+
 	// Store database reference for cleanup
 	a.database = db
 

@@ -147,10 +147,10 @@ func (g *Generator) Generate(outputPath string) (string, error) {
 	// Create output directory if it doesn't exist
 	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
 		if err := os.MkdirAll(outputPath, 0755); err != nil {
-			return "", fmt.Errorf("failed to create output directory: %w", err)
+			return "", fmt.Errorf("failed to create output directory: %w, %s", err, outputPath)
 		}
 	} else if err != nil {
-		return "", fmt.Errorf("failed to check output directory: %w", err)
+		return "", fmt.Errorf("failed to check output directory: %w, %s", err, outputPath)
 	}
 
 	// Write NZB file

@@ -64,7 +64,7 @@ The watch command will monitor the configured directory and upload files accordi
 
 		if _, err := os.Stat(outputFolder); os.IsNotExist(err) {
 			if err := os.MkdirAll(outputFolder, 0755); err != nil {
-				return fmt.Errorf("failed to create output directory: %w", err)
+				return fmt.Errorf("failed to create output directory: %w, %s", err, outputFolder)
 			}
 		} else if err != nil {
 			return fmt.Errorf("failed to check output directory: %w", err)
