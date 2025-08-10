@@ -141,6 +141,22 @@
 				"disconnected": "Desconectado",
 				"unknown": "Desconocido"
 			}
+		},
+		"watcher": {
+			"title": "Monitor de Archivos",
+			"error_loading": "Error cargando el estado del monitor",
+			"no_directory": "No hay directorio de vigilancia configurado",
+			"next_scan": "Próximo escaneo",
+			"schedule": "Horario",
+			"outside_schedule": "fuera del horario",
+			"not_initialized": "Monitor no inicializado",
+			"waiting_for_schedule": "Esperando ventana de horario",
+			"status_active": "El monitor está vigilando activamente",
+			"status_inactive": "El monitor no está funcionando",
+			"next_run_soon": "Pronto",
+			"next_run_minutes": "en {count} {count, plural, =1 {minuto} other {minutos}}",
+			"next_run_hours": "en {count} {count, plural, =1 {hora} other {horas}}",
+			"next_run_days": "en {count} {count, plural, =1 {día} other {días}}"
 		}
 	}
 }

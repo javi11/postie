@@ -3,6 +3,7 @@
 import {backend} from '../models';
 import {config} from '../models';
 import {processor} from '../models';
+import {watcher} from '../models';
 import {context} from '../models';
 
 export function AddFilesToQueue():Promise<void>;
@@ -58,6 +59,8 @@ export function GetRunningJobs():Promise<Array<processor.RunningJobItem>>;
 export function GetRunningJobsDetails():Promise<Array<processor.RunningJobDetails>>;
 
 export function GetWatchDirectory():Promise<string>;
+
+export function GetWatcherStatus():Promise<watcher.WatcherStatusInfo>;
 
 export function HandleDroppedFiles(arg1:Array<string>):Promise<void>;
 

@@ -139,6 +139,22 @@
 				"disconnected": "Disconnected",
 				"unknown": "Unknown"
 			}
+		},
+		"watcher": {
+			"title": "File Watcher",
+			"error_loading": "Error loading watcher status",
+			"no_directory": "No watch directory configured",
+			"next_scan": "Next scan",
+			"schedule": "Schedule",
+			"outside_schedule": "outside schedule",
+			"not_initialized": "Watcher not initialized",
+			"waiting_for_schedule": "Waiting for schedule window",
+			"status_active": "Watcher is actively monitoring",
+			"status_inactive": "Watcher is not running",
+			"next_run_soon": "Soon",
+			"next_run_minutes": "in {count} {count, plural, =1 {minute} other {minutes}}",
+			"next_run_hours": "in {count} {count, plural, =1 {hour} other {hours}}",
+			"next_run_days": "in {count} {count, plural, =1 {day} other {days}}"
 		}
 	}
 }

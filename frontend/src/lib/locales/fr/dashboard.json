@@ -140,6 +140,22 @@
 				"disconnected": "Déconnecté",
 				"unknown": "Inconnu"
 			}
+		},
+		"watcher": {
+			"title": "Surveillant de Fichiers",
+			"error_loading": "Erreur lors du chargement de l'état du surveillant",
+			"no_directory": "Aucun répertoire de surveillance configuré",
+			"next_scan": "Prochaine analyse",
+			"schedule": "Horaire",
+			"outside_schedule": "hors horaire",
+			"not_initialized": "Surveillant non initialisé",
+			"waiting_for_schedule": "En attente de la fenêtre horaire",
+			"status_active": "Le surveillant surveille activement",
+			"status_inactive": "Le surveillant ne fonctionne pas",
+			"next_run_soon": "Bientôt",
+			"next_run_minutes": "dans {count} {count, plural, =1 {minute} other {minutes}}",
+			"next_run_hours": "dans {count} {count, plural, =1 {heure} other {heures}}",
+			"next_run_days": "dans {count} {count, plural, =1 {jour} other {jours}}"
 		}
 	}
 }

@@ -73,3 +73,61 @@ func (a *App) initializeWatcher() error {
 	slog.Info("Watcher initialized successfully", "watchDir", watchDir)
 	return nil
 }
+
+// GetWatcherStatus returns the current status of the watcher
+func (a *App) GetWatcherStatus() watcher.WatcherStatusInfo {
+	defer a.recoverPanic("GetWatcherStatus")
+
+	if a.config == nil {
+		// Return minimal status when config is not loaded
+		return watcher.WatcherStatusInfo{
+			Enabled:          false,
+			Initialized:      false,
+			WatchDirectory:   "",
+			CheckInterval:    "",
+			IsWithinSchedule: false,
+			Error:            "Configuration not loaded",
+		}
+	}
+
+	watcherCfg := a.config.GetWatcherConfig()
+	
+	if !watcherCfg.Enabled {
+		// Return basic status when watcher is disabled
+		return watcher.WatcherStatusInfo{
+			Enabled:          false,
+			Initialized:      false,
+			WatchDirectory:   "",
+			CheckInterval:    string(watcherCfg.CheckInterval),
+			IsWithinSchedule: false,
+		}
+	}
+
+	// If watcher is initialized, get detailed status
+	if a.watcher != nil {
+		return a.watcher.GetWatcherStatus()
+	}
+
+	// Provide basic config info when watcher is enabled but not running
+	watchDir := watcherCfg.WatchDirectory
+	if watchDir == "" {
+		watchDir = filepath.Join(a.appPaths.Data, "watch")
+	}
+	
+	status := watcher.WatcherStatusInfo{
+		Enabled:          true,
+		Initialized:      false, // Watcher is enabled but not initialized
+		WatchDirectory:   watchDir,
+		CheckInterval:    string(watcherCfg.CheckInterval),
+		IsWithinSchedule: true, // Default when not running
+	}
+	
+	if watcherCfg.Schedule.StartTime != "" && watcherCfg.Schedule.EndTime != "" {
+		status.Schedule = &watcher.WatcherScheduleInfo{
+			StartTime: watcherCfg.Schedule.StartTime,
+			EndTime:   watcherCfg.Schedule.EndTime,
+		}
+	}
+
+	return status
+}

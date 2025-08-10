@@ -254,6 +254,7 @@ func (ws *WebServer) setupRoutes() {
 	api.HandleFunc("/metrics/nntp-pool", ws.handleGetNntpPoolMetrics).Methods("GET")
 	api.HandleFunc("/filesystem/browse", ws.handleBrowseFilesystem).Methods("GET")
 	api.HandleFunc("/filesystem/import", ws.handleImportFiles).Methods("POST")
+	api.HandleFunc("/watcher/status", ws.handleGetWatcherStatus).Methods("GET")
 
 	// Serve static files (catch-all)
 	ws.router.PathPrefix("/").Handler(ws.getStaticFileHandler())
@@ -288,6 +289,12 @@ func (ws *WebServer) LiveHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+}
+
+func (ws *WebServer) handleGetWatcherStatus(w http.ResponseWriter, r *http.Request) {
+	status := ws.app.GetWatcherStatus()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(status)
 }
 
 func (ws *WebServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {

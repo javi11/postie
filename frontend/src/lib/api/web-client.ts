@@ -1,7 +1,6 @@
 // Web API client for browser environment (replaces Wails bindings)
 
-import type { backend, config, processor } from "$lib/wailsjs/go/models";
-import type { NntpPoolMetrics } from "$lib/types";
+import type { backend, config, processor, watcher } from "$lib/wailsjs/go/models";
 
 const API_BASE = "/api";
 
@@ -176,6 +175,10 @@ export class WebClient {
 	// Processor methods
 	async getProcessorStatus(): Promise<backend.ProcessorStatus> {
 		return this.get<backend.ProcessorStatus>("/processor/status");
+	}
+
+	async getWatcherStatus(): Promise<watcher.WatcherStatusInfo> {
+		return this.get<watcher.WatcherStatusInfo>("/watcher/status");
 	}
 
 	async pauseProcessing(): Promise<void> {
@@ -360,8 +363,8 @@ export class WebClient {
 	}
 
 	// NNTP Pool Metrics
-	async getNntpPoolMetrics(): Promise<NntpPoolMetrics> {
-		return this.get<NntpPoolMetrics>("/metrics/nntp-pool");
+	async getNntpPoolMetrics(): Promise<backend.NntpPoolMetrics> {
+		return this.get<backend.NntpPoolMetrics>("/metrics/nntp-pool");
 	}
 
 	// Filesystem operations
