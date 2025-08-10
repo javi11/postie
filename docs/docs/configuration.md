@@ -228,6 +228,70 @@ par2:
 
 **💡 Tip: The web UI automatically downloads and configures the PAR2 executable for you, and provides easy-to-use controls for redundancy settings.**
 
+#### PAR2 Troubleshooting
+
+**Architecture Detection Issues (Docker/ARM)**
+
+If you're running on ARM devices (Raspberry Pi, ARM servers) and getting errors about incorrect parpar executables:
+
+1. **Check logs for architecture detection**:
+   ```bash
+   docker logs postie 2>&1 | grep -i "arch"
+   ```
+
+2. **Common symptoms**:
+   - "exec format error" when running parpar
+   - "no such file or directory" errors
+   - Failed PAR2 generation
+
+3. **Solutions**:
+   
+   **Option 1: Explicit platform specification (Recommended)**
+   ```yaml
+   services:
+     postie:
+       platform: linux/arm64  # For ARM devices
+       # ... rest of config
+   ```
+
+   **Option 2: Manual parpar installation**
+   ```yaml
+   par2:
+     enabled: true
+     par2_path: /usr/local/bin/parpar  # Custom path
+     # ... rest of config
+   ```
+
+   **Option 3: Use Docker build arguments**
+   ```bash
+   docker run --platform linux/arm64 \
+     -e TARGETARCH=arm64 \
+     -e TARGETPLATFORM=linux/arm64 \
+     ghcr.io/javi11/postie:latest
+   ```
+
+4. **Verification**:
+   Check that the correct architecture is detected:
+   ```bash
+   # In container logs, you should see:
+   # "Selected parpar asset for Linux ARM64"
+   # instead of:
+   # "Selected parpar asset for Linux AMD64"
+   ```
+
+**Manual PAR2 Installation**
+
+If automatic download fails, you can manually install parpar:
+
+```dockerfile
+# In a custom Dockerfile extending the postie image:
+FROM ghcr.io/javi11/postie:latest
+RUN wget https://github.com/animetosho/ParPar/releases/latest/download/parpar-v0.4.1-linux-static-aarch64.xz \
+    && unxz parpar-v0.4.1-linux-static-aarch64.xz \
+    && chmod +x parpar-v0.4.1-linux-static-aarch64 \
+    && mv parpar-v0.4.1-linux-static-aarch64 /config/parpar
+```
+
 ### NZB Compression
 
 Configure NZB file compression:

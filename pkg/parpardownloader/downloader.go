@@ -50,6 +50,8 @@ func DownloadParParCmd(executablePath string) (string, error) {
 	goos := runtime.GOOS
 	goarch := runtime.GOARCH
 
+	slog.Info("Detected system information", "os", goos, "arch", goarch)
+
 	// Map system details to the appropriate asset
 	asset, err := findAssetForSystem(release, goos, goarch)
 	if err != nil {
@@ -108,6 +110,7 @@ func findAssetForSystem(release *Release, goos, goarch string) (*struct {
 	if goos == "linux" {
 		// Check if we're running in a Docker container and detect actual platform
 		if containerArch := detectContainerArch(); containerArch != "" {
+			slog.Info("Architecture detection override", "runtime_arch", goarch, "detected_arch", containerArch)
 			actualArch = containerArch
 		}
 	}
@@ -116,19 +119,23 @@ func findAssetForSystem(release *Release, goos, goarch string) (*struct {
 		switch actualArch {
 		case "amd64":
 			assetName = "linux-static-amd64.xz"
+			slog.Info("Selected parpar asset for Linux AMD64", "asset", assetName)
 		case "arm64":
 			assetName = "linux-static-aarch64.xz"
+			slog.Info("Selected parpar asset for Linux ARM64", "asset", assetName)
 		default:
-			return nil, fmt.Errorf("unsupported architecture: %s", actualArch)
+			return nil, fmt.Errorf("unsupported architecture: %s (supported: amd64, arm64)", actualArch)
 		}
 	case "darwin":
 		// macOS only has x64 builds available, but they work on both Intel and Apple Silicon via Rosetta
 		assetName = "macos-x64.xz"
+		slog.Info("Selected parpar asset for macOS", "asset", assetName)
 	case "windows":
 		// Windows only has x64 builds available, but they work on both amd64 and arm64
 		assetName = "win64.7z"
+		slog.Info("Selected parpar asset for Windows", "asset", assetName)
 	default:
-		return nil, fmt.Errorf("unsupported operating system: %s", goos)
+		return nil, fmt.Errorf("unsupported operating system: %s (supported: linux, darwin, windows)", goos)
 	}
 
 	for _, asset := range release.Assets {
@@ -252,44 +259,70 @@ func downloadFile(filename, url string) error {
 // detectContainerArch detects the actual container architecture at runtime
 // This helps with cross-platform Docker builds where compile-time arch differs from runtime arch
 func detectContainerArch() string {
-	// Method 1: Check /proc/cpuinfo for processor info (Linux-specific)
-	if cpuInfo, err := os.ReadFile("/proc/cpuinfo"); err == nil {
-		cpuInfoStr := string(cpuInfo)
-
-		// Look for x86_64/amd64 indicators
-		if strings.Contains(cpuInfoStr, "x86_64") ||
-			strings.Contains(cpuInfoStr, "Intel") ||
-			strings.Contains(cpuInfoStr, "AMD") {
-			return "amd64"
-		}
-
-		// Look for ARM64/aarch64 indicators
-		if strings.Contains(cpuInfoStr, "aarch64") ||
-			strings.Contains(cpuInfoStr, "ARM64") ||
-			strings.Contains(cpuInfoStr, "arm64") {
-			return "arm64"
-		}
-	}
-
-	// Method 2: Check platform-specific environment variables
+	// Method 1: Check platform-specific environment variables first (most reliable in Docker)
 	if arch := os.Getenv("TARGETARCH"); arch != "" {
+		slog.Info("Detected architecture from TARGETARCH", "arch", arch)
 		return arch
 	}
 	if platform := os.Getenv("TARGETPLATFORM"); platform != "" {
 		if strings.Contains(platform, "amd64") {
+			slog.Info("Detected architecture from TARGETPLATFORM", "arch", "amd64", "platform", platform)
 			return "amd64"
 		}
 		if strings.Contains(platform, "arm64") || strings.Contains(platform, "aarch64") {
+			slog.Info("Detected architecture from TARGETPLATFORM", "arch", "arm64", "platform", platform)
 			return "arm64"
 		}
 	}
-	// Method 3: For Docker environments, default to amd64 if detection fails
-	// This is safer as most container images run in amd64 mode even on ARM hosts
+
+	// Method 2: Check /proc/cpuinfo for processor info (Linux-specific)
+	if cpuInfo, err := os.ReadFile("/proc/cpuinfo"); err == nil {
+		cpuInfoStr := strings.ToLower(string(cpuInfo))
+
+		// Look for ARM64/aarch64 indicators first (more specific)
+		if strings.Contains(cpuInfoStr, "aarch64") ||
+			strings.Contains(cpuInfoStr, "arm64") ||
+			strings.Contains(cpuInfoStr, "cortex-a") {
+			slog.Info("Detected ARM64 architecture from /proc/cpuinfo")
+			return "arm64"
+		}
+
+		// Look for x86_64/amd64 indicators
+		if strings.Contains(cpuInfoStr, "x86_64") ||
+			strings.Contains(cpuInfoStr, "intel") ||
+			strings.Contains(cpuInfoStr, "amd") {
+			slog.Info("Detected AMD64 architecture from /proc/cpuinfo")
+			return "amd64"
+		}
+	}
+
+	// Method 3: Check /proc/version for additional architecture info
+	if version, err := os.ReadFile("/proc/version"); err == nil {
+		versionStr := strings.ToLower(string(version))
+		if strings.Contains(versionStr, "aarch64") || strings.Contains(versionStr, "arm64") {
+			slog.Info("Detected ARM64 architecture from /proc/version")
+			return "arm64"
+		}
+		if strings.Contains(versionStr, "x86_64") {
+			slog.Info("Detected AMD64 architecture from /proc/version")
+			return "amd64"
+		}
+	}
+
+	// Method 4: Check uname output via exec (if available)
+	// This is a fallback method for when /proc files aren't available or clear
+	
+	// Method 5: Use runtime.GOARCH as fallback (but log it as detected, not assumed)
 	if _, err := os.Stat("/.dockerenv"); err == nil {
-		slog.Warn("Running in Docker but couldn't detect arch, defaulting to amd64")
-		return "amd64"
+		// In Docker, if all detection methods failed, use runtime.GOARCH but warn
+		arch := runtime.GOARCH
+		slog.Warn("Failed to detect container architecture, using Go runtime architecture", 
+			"detected_arch", arch, 
+			"note", "If this is incorrect, please check Docker build arguments")
+		return arch
 	}
 
 	// If all methods fail, return empty to use runtime.GOARCH
+	slog.Debug("Architecture detection failed, falling back to runtime.GOARCH")
 	return ""
 }
