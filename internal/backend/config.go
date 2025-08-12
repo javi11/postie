@@ -319,17 +319,6 @@ func (a *App) loadConfig() error {
 
 	slog.Info("Successfully created postie instance")
 
-	// Initialize queue and watcher with new config (used for initial load)
-	if err := a.initializeQueue(); err != nil {
-		slog.Error("Failed to initialize queue", "error", err)
-	}
-	if err := a.initializeProcessor(); err != nil {
-		slog.Error("Failed to initialize processor", "error", err)
-	}
-	if err := a.initializeWatcher(); err != nil {
-		slog.Error("Failed to initialize watcher", "error", err)
-	}
-
 	return nil
 }
 

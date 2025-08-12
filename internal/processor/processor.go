@@ -148,9 +148,6 @@ func (p *Processor) processQueueItems(ctx context.Context) error {
 		return nil
 	}
 
-	p.runningMux.Lock()
-	defer p.runningMux.Unlock()
-
 	p.isRunning = true
 	defer func() {
 		p.isRunning = false
@@ -193,7 +190,7 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 	p.runningMux.Lock()
 	poolManager := p.poolManager
 	p.runningMux.Unlock()
-	
+
 	if poolManager == nil {
 		slog.WarnContext(ctx, "Pool manager is not available, skipping item processing")
 		return nil
@@ -292,7 +289,7 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 	p.runningMux.Lock()
 	poolManager := p.poolManager
 	p.runningMux.Unlock()
-	
+
 	if poolManager == nil {
 		return "", fmt.Errorf("pool manager is not available for job %s", jobID)
 	}
@@ -600,7 +597,7 @@ func (p *Processor) checkAndHandleProviderAvailability() {
 	p.runningMux.Lock()
 	poolManager := p.poolManager
 	p.runningMux.Unlock()
-	
+
 	if poolManager == nil {
 		return
 	}
