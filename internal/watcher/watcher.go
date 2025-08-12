@@ -122,6 +122,23 @@ func (w *Watcher) isWithinSchedule() bool {
 }
 
 func (w *Watcher) scanDirectory(ctx context.Context) error {
+	// First, calculate total directory size
+	totalSize, err := w.calculateDirectorySize(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to calculate directory size: %w", err)
+	}
+
+	slog.InfoContext(ctx, "Directory size check", "directory", w.watchFolder, "total_size", totalSize, "threshold", w.cfg.SizeThreshold)
+
+	// Check if directory size meets threshold
+	if totalSize < w.cfg.SizeThreshold {
+		slog.DebugContext(ctx, "Directory size below threshold, skipping import", "total_size", totalSize, "threshold", w.cfg.SizeThreshold)
+		return nil
+	}
+
+	slog.InfoContext(ctx, "Directory size exceeds threshold, starting import", "total_size", totalSize, "threshold", w.cfg.SizeThreshold)
+
+	// Process all files in directory
 	return pwalkdir.Walk(w.watchFolder, func(path string, dir fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -179,7 +196,7 @@ func (w *Watcher) scanDirectory(ctx context.Context) error {
 }
 
 func (w *Watcher) shouldProcessFile(path string, info os.FileInfo) bool {
-	// Check file size threshold
+	// Check minimum file size
 	if info.Size() < int64(w.cfg.MinFileSize) {
 		return false
 	}
@@ -196,14 +213,61 @@ func (w *Watcher) shouldProcessFile(path string, info os.FileInfo) bool {
 		}
 	}
 
-	// Check size threshold
-	if info.Size() < int64(w.cfg.SizeThreshold) {
-		return false
-	}
-
 	// Check if file is stable (not being written to)
 	if !w.isFileStable(path, info) {
 		return false
+	}
+
+	return true
+}
+
+// calculateDirectorySize calculates the total size of all files in the watch directory
+func (w *Watcher) calculateDirectorySize(ctx context.Context) (int64, error) {
+	var totalSize int64
+
+	err := pwalkdir.Walk(w.watchFolder, func(path string, dir fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip directories
+		if dir.IsDir() {
+			return nil
+		}
+
+		info, err := dir.Info()
+		if err != nil {
+			return err
+		}
+
+		// Only count files that meet basic criteria (not ignore patterns and min file size)
+		if w.shouldCountFile(path, info) {
+			totalSize += info.Size()
+		}
+
+		return nil
+	})
+
+	return totalSize, err
+}
+
+// shouldCountFile checks if a file should be counted towards directory size
+func (w *Watcher) shouldCountFile(path string, info os.FileInfo) bool {
+	// Check minimum file size
+	if info.Size() < int64(w.cfg.MinFileSize) {
+		return false
+	}
+
+	// Check ignore patterns
+	for _, pattern := range w.cfg.IgnorePatterns {
+		matched, err := filepath.Match(pattern, filepath.Base(path))
+		if err != nil {
+			slog.Warn("Invalid pattern", "pattern", pattern, "error", err)
+			continue
+		}
+		if matched {
+			return false
+		}
 	}
 
 	return true
