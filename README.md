@@ -2,7 +2,6 @@
 
 [![Build](https://github.com/javi11/postie/actions/workflows/pull-request.yml/badge.svg)](https://github.com/javi11/postie/actions/workflows/pull-request.yml)
 [![Coverage](https://github.com/javi11/postie/actions/workflows/coverage.yml/badge.svg)](https://github.com/javi11/postie/actions/workflows/coverage.yml)
-[![codecov](https://codecov.io/gh/javi11/postie/graph/badge.svg?token=YOUR_CODECOV_TOKEN)](https://codecov.io/gh/javi11/postie)
 [![Go Report Card](https://goreportcard.com/badge/github.com/javi11/postie)](https://goreportcard.com/report/github.com/javi11/postie)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
