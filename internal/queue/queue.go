@@ -26,13 +26,13 @@ type PaginationParams struct {
 
 // PaginatedResult contains paginated queue items and metadata
 type PaginatedResult struct {
-	Items      []QueueItem `json:"items"`
-	TotalItems int         `json:"totalItems"`
-	TotalPages int         `json:"totalPages"`
-	CurrentPage int        `json:"currentPage"`
-	ItemsPerPage int       `json:"itemsPerPage"`
-	HasNext    bool        `json:"hasNext"`
-	HasPrev    bool        `json:"hasPrev"`
+	Items        []QueueItem `json:"items"`
+	TotalItems   int         `json:"totalItems"`
+	TotalPages   int         `json:"totalPages"`
+	CurrentPage  int         `json:"currentPage"`
+	ItemsPerPage int         `json:"itemsPerPage"`
+	HasNext      bool        `json:"hasNext"`
+	HasPrev      bool        `json:"hasPrev"`
 }
 
 // QueueInterface defines the interface for queue operations
@@ -115,7 +115,6 @@ func New(ctx context.Context, database *database.Database) (*Queue, error) {
 		runCancel: runCancel,
 	}, nil
 }
-
 
 // AddFile adds a file to the queue for processing
 func (q *Queue) AddFile(ctx context.Context, path string, size int64) error {
@@ -486,7 +485,7 @@ func (q *Queue) GetQueueItemsPaginated(params PaginationParams) (*PaginatedResul
 
 	// Get total counts first
 	var activeCount, completedCount, erroredCount int
-	
+
 	err := q.db.QueryRow("SELECT COUNT(*) FROM goqite WHERE queue = 'file_jobs'").Scan(&activeCount)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active items count: %w", err)
@@ -533,7 +532,7 @@ func (q *Queue) GetQueueItemsPaginated(params PaginationParams) (*PaginatedResul
 
 	// Calculate pagination metadata
 	totalPages := (totalCount + params.Limit - 1) / params.Limit // Ceiling division
-	
+
 	result := &PaginatedResult{
 		Items:        allItems,
 		TotalItems:   totalCount,
@@ -620,7 +619,9 @@ func (q *Queue) getMergedItemsPaginated(orderBy string, offset, limit int) ([]Qu
 	if err != nil {
 		return nil, fmt.Errorf("failed to query paginated items: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var items []QueueItem
 	for rows.Next() {
@@ -730,7 +731,9 @@ func (q *Queue) getActiveItemsPaginated(offset, limit int) ([]QueueItem, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var items []QueueItem
 	for rows.Next() {
@@ -750,15 +753,15 @@ func (q *Queue) getActiveItemsPaginated(offset, limit int) ([]QueueItem, error) 
 		updatedTime, _ := time.Parse("2006-01-02T15:04:05.000Z", updated)
 
 		item := QueueItem{
-			ID:          id,
-			Path:        job.Path,
-			FileName:    getFileName(job.Path),
-			Size:        job.Size,
-			Status:      StatusPending,
-			RetryCount:  job.RetryCount,
-			Priority:    job.Priority,
-			CreatedAt:   createdTime,
-			UpdatedAt:   updatedTime,
+			ID:         id,
+			Path:       job.Path,
+			FileName:   getFileName(job.Path),
+			Size:       job.Size,
+			Status:     StatusPending,
+			RetryCount: job.RetryCount,
+			Priority:   job.Priority,
+			CreatedAt:  createdTime,
+			UpdatedAt:  updatedTime,
 		}
 
 		items = append(items, item)
@@ -776,7 +779,9 @@ func (q *Queue) getCompletedItemsPaginated(offset, limit int) ([]QueueItem, erro
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var items []QueueItem
 	for rows.Next() {
@@ -820,7 +825,9 @@ func (q *Queue) getErroredItemsPaginated(offset, limit int) ([]QueueItem, error)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var items []QueueItem
 	for rows.Next() {
