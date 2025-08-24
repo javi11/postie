@@ -747,7 +747,36 @@ func (a *App) isFirstStart() bool {
 func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 	defer a.recoverPanic("SetupWizardComplete")
 
-	slog.Info("Completing setup wizard", "data", wizardData)
+	slog.Info("Starting setup wizard completion", 
+		"serverCount", len(wizardData.Servers),
+		"hasOutputDir", wizardData.OutputDirectory != "")
+
+	// Validate input data
+	if len(wizardData.Servers) == 0 {
+		slog.Error("Setup wizard failed: no servers provided")
+		return fmt.Errorf("at least one server must be configured")
+	}
+
+	if wizardData.OutputDirectory == "" {
+		slog.Error("Setup wizard failed: no output directory provided")
+		return fmt.Errorf("output directory must be specified")
+	}
+
+	// Validate all servers have required fields
+	for i, serverData := range wizardData.Servers {
+		if serverData.Host == "" {
+			slog.Error("Setup wizard failed: server missing host", "serverIndex", i)
+			return fmt.Errorf("server %d: host is required", i+1)
+		}
+		if serverData.Port <= 0 || serverData.Port > 65535 {
+			slog.Error("Setup wizard failed: invalid server port", "serverIndex", i, "port", serverData.Port)
+			return fmt.Errorf("server %d: port must be between 1 and 65535", i+1)
+		}
+		if serverData.MaxConnections <= 0 {
+			slog.Warn("Server has invalid max connections, setting to default", "serverIndex", i, "maxConnections", serverData.MaxConnections)
+			serverData.MaxConnections = 5 // Set reasonable default
+		}
+	}
 
 	// Create new config based on wizard data
 	cfg := config.GetDefaultConfig()
@@ -769,12 +798,12 @@ func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 			Enabled:        &enabled,
 		}
 		cfg.Servers[i] = server
+		slog.Debug("Configured server", "index", i, "host", serverData.Host, "port", serverData.Port, "ssl", serverData.SSL)
 	}
 
 	// Set output directory
-	if wizardData.OutputDirectory != "" {
-		cfg.OutputDir = wizardData.OutputDirectory
-	}
+	cfg.OutputDir = wizardData.OutputDirectory
+	slog.Debug("Set output directory", "path", wizardData.OutputDirectory)
 
 	// Set the par2 path to the OS-specific location
 	cfg.Par2.Par2Path = a.appPaths.Par2
@@ -782,15 +811,17 @@ func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 	// Set the database path to the OS-specific location
 	cfg.Database.DatabasePath = a.appPaths.Database
 
-	// Save configuration
+	// Save configuration with enhanced error context
+	slog.Info("Saving setup wizard configuration", "configPath", a.configPath)
 	if err := a.SaveConfig(&cfg); err != nil {
-		return fmt.Errorf("failed to save wizard configuration: %w", err)
+		slog.Error("Failed to save setup wizard configuration", "error", err, "configPath", a.configPath)
+		return fmt.Errorf("failed to save configuration: %w", err)
 	}
 
 	// Mark as no longer first start since setup is complete
 	a.firstStart = false
 
-	slog.Info("Setup wizard completed successfully")
+	slog.Info("Setup wizard completed successfully", "configPath", a.configPath)
 	return nil
 }
 

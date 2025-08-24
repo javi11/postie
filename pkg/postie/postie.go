@@ -80,7 +80,7 @@ func (p *Postie) Close() {
 	}
 }
 
-// safeRemoveFile attempts to remove a file with retry logic for Windows compatibility
+// safeRemoveFile attempts to remove a file with retry logic
 func safeRemoveFile(ctx context.Context, filePath string) {
 	maxRetries := 3
 	baseDelay := 100 * time.Millisecond
@@ -103,13 +103,8 @@ func safeRemoveFile(ctx context.Context, filePath string) {
 		}
 	}
 
-	// Final attempt with detailed error logging
-	if err := os.Remove(filePath); err != nil {
-		slog.ErrorContext(ctx, "Failed to remove file after retries",
-			"file", filePath,
-			"error", err,
-			"os", runtime.GOOS)
-	}
+	// Final attempt if error just ignore it is a tmp file it will be deleted automatically
+	_ = os.Remove(filePath)
 }
 
 func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir string, outputDir string) (string, error) {

@@ -435,7 +435,7 @@ func (w *Watcher) getNextScheduledRun(now time.Time) time.Time {
 	startHour := 0
 	startMin := 0
 	if len(startTime) >= 5 {
-		fmt.Sscanf(startTime, "%d:%d", &startHour, &startMin)
+		_, _ = fmt.Sscanf(startTime, "%d:%d", &startHour, &startMin)
 	}
 
 	// Calculate start time for today

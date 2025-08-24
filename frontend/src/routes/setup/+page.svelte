@@ -33,6 +33,71 @@ $effect(() => {
 	checkAppStatus();
 });
 
+// Enhanced error handling for structured API responses
+function parseApiError(error: any): { title: string; message: string; details?: string } {
+	// Check if it's a structured error response from our API
+	if (error?.response?.data?.error) {
+		const apiError = error.response.data;
+		
+		// Map error codes to user-friendly messages
+		switch (apiError.code) {
+			case 'SERVER_VALIDATION_FAILED':
+				return {
+					title: $t("setup.errors.server_validation_title"),
+					message: $t("setup.errors.server_validation_message"),
+					details: apiError.details
+				};
+			case 'FILESYSTEM_ERROR':
+				return {
+					title: $t("setup.errors.filesystem_title"),
+					message: $t("setup.errors.filesystem_message"),
+					details: apiError.details
+				};
+			case 'CONFIG_SAVE_FAILED':
+				return {
+					title: $t("setup.errors.config_save_title"),
+					message: $t("setup.errors.config_save_message"),
+					details: apiError.details
+				};
+			case 'INVALID_INPUT':
+				return {
+					title: $t("setup.errors.invalid_input_title"),
+					message: $t("setup.errors.invalid_input_message"),
+					details: apiError.details
+				};
+			default:
+				return {
+					title: $t("setup.errors.generic_title"),
+					message: apiError.message || $t("setup.errors.generic_message"),
+					details: apiError.details
+				};
+		}
+	}
+	
+	// Handle network errors
+	if (error?.code === 'NETWORK_ERROR' || error?.message?.includes('Network Error')) {
+		return {
+			title: $t("setup.errors.network_title"),
+			message: $t("setup.errors.network_message")
+		};
+	}
+	
+	// Handle timeout errors
+	if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
+		return {
+			title: $t("setup.errors.timeout_title"),
+			message: $t("setup.errors.timeout_message")
+		};
+	}
+	
+	// Fallback for unknown errors
+	const errorMessage = error instanceof Error ? error.message : String(error);
+	return {
+		title: $t("common.common.error"),
+		message: errorMessage
+	};
+}
+
 async function handleWizardComplete(
 	data: backend.SetupWizardData,
 ): Promise<void> {
@@ -40,21 +105,26 @@ async function handleWizardComplete(
 		await apiClient.setupWizardComplete(data);
 
 		toastStore.success(
-			$t("common.common.success"),
-			$t("common.messages.configuration_saved_description"),
+			$t("setup.success_title"),
+			$t("setup.success_message"),
 		);
 
 		// Redirect to dashboard
 		goto("/");
 		return;
 	} catch (error) {
-		const errorMessage = error instanceof Error ? error.message : String(error);
 		console.error("Setup wizard failed:", error);
-
-		toastStore.error(
-			$t("common.common.error"),
-			errorMessage,
-		);
+		
+		// Parse the error and show user-friendly message
+		const { title, message, details } = parseApiError(error);
+		
+		// Show detailed error in toast
+		let fullMessage = message;
+		if (details) {
+			fullMessage += `\n\n${details}`;
+		}
+		
+		toastStore.error(title, fullMessage);
 	}
 }
 

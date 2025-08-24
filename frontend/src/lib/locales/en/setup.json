@@ -69,6 +69,24 @@
 		},
 		"messages": {
 			"setupRequired": "Setup is required to use Postie. Please complete the setup wizard."
+		},
+		"success_title": "Setup Complete!",
+		"success_message": "Your Postie configuration has been saved successfully. You can now start uploading files.",
+		"errors": {
+			"server_validation_title": "Server Connection Failed",
+			"server_validation_message": "Unable to connect to one or more NNTP servers. Please verify your credentials and network connection.",
+			"filesystem_title": "File Permission Error",
+			"filesystem_message": "Unable to save configuration due to file system permissions. Please check write access.",
+			"config_save_title": "Configuration Save Failed",
+			"config_save_message": "Failed to save your configuration. Please ensure sufficient disk space and try again.",
+			"invalid_input_title": "Invalid Configuration",
+			"invalid_input_message": "Some configuration values are invalid. Please review and correct your settings.",
+			"network_title": "Network Error",
+			"network_message": "Unable to connect to the server. Please check your internet connection and try again.",
+			"timeout_title": "Request Timeout",
+			"timeout_message": "The setup request took too long to complete. Please try again.",
+			"generic_title": "Setup Failed",
+			"generic_message": "An unexpected error occurred during setup. Please try again."
 		}
 	}
 }

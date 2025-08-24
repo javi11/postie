@@ -2,6 +2,7 @@
 
 import { browser } from "$app/environment";
 import type { backend, config, processor, watcher } from "$lib/wailsjs/go/models";
+// Using backend types for pagination - remove temporary types import
 import type { WebClient } from "./web-client";
 
 type WailsApp = typeof import("$lib/wailsjs/go/backend/App");
@@ -180,6 +181,22 @@ export class UnifiedClient {
 		if (this._environment === "web") {
 			const client = await getWebClient();
 			return client.getQueueItems();
+		}
+
+		throw new Error("No client available");
+	}
+
+	async getQueueItemsPaginated(params: backend.PaginationParams): Promise<backend.PaginatedQueueResult> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			return client.App.GetQueueItemsPaginated(params);
+		}
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.getQueueItemsPaginated(params);
 		}
 
 		throw new Error("No client available");
