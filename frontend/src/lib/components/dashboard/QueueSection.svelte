@@ -4,6 +4,7 @@ import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import { formatDate, formatFileSize, getStatusColor } from "$lib/utils";
 import type { backend } from "$lib/wailsjs/go/models";
+// Using backend types for pagination
 import {
 	AlertCircle,
 	CheckCircle,
@@ -18,26 +19,30 @@ import {
 } from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
 
-let queueItems: backend.QueueItem[] = [];
+let paginatedResult: backend.PaginatedQueueResult | null = null;
+let loading = false;
 
-// Pagination state
+// Pagination state - now controlled by server
 let currentPage = 1;
 let itemsPerPage = 10;
+let sortBy = "created";
+let sortOrder = "desc";
 
-// Computed properties for pagination
-$: totalPages = Math.ceil(queueItems.length / itemsPerPage);
-$: startIndex = (currentPage - 1) * itemsPerPage;
-$: endIndex = startIndex + itemsPerPage;
-$: currentPageItems = queueItems.slice(startIndex, endIndex);
-$: startItem = queueItems.length === 0 ? 0 : startIndex + 1;
-$: endItem = Math.min(endIndex, queueItems.length);
-
-// Reset to first page when queue items change significantly
-$: if (queueItems.length > 0 && currentPage > totalPages) {
-	currentPage = 1;
-}
+// Computed properties for pagination - now from server response
+$: queueItems = paginatedResult?.items || [];
+$: totalPages = paginatedResult?.totalPages || 0;
+$: totalItems = paginatedResult?.totalItems || 0;
+$: startItem = paginatedResult ? Math.max(1, (currentPage - 1) * itemsPerPage + 1) : 0;
+$: endItem = paginatedResult ? Math.min(currentPage * itemsPerPage, totalItems) : 0;
+$: hasNext = paginatedResult?.hasNext || false;
+$: hasPrev = paginatedResult?.hasPrev || false;
 
 let intervalId: ReturnType<typeof setInterval> | undefined;
+
+// Reactive statements to reload queue when pagination parameters change
+$: if (currentPage || itemsPerPage || sortBy || sortOrder) {
+	loadQueue();
+}
 
 onMount(() => {
 	// Listen for queue updates
@@ -64,11 +69,20 @@ onDestroy(() => {
 
 async function loadQueue() {
 	try {
-		const items = await apiClient.getQueueItems();
-		queueItems = items || [];
+		loading = true;
+		const result = await apiClient.getQueueItemsPaginated({
+			page: currentPage,
+			limit: itemsPerPage,
+			sortBy: sortBy,
+			order: sortOrder,
+		});
+		paginatedResult = result;
 	} catch (error) {
 		console.error("Failed to load queue:", error);
 		toastStore.error($t("common.messages.failed_to_load_queue"), String(error));
+		paginatedResult = null;
+	} finally {
+		loading = false;
 	}
 }
 
@@ -76,8 +90,7 @@ async function removeFromQueue(id: string) {
 	try {
 		await apiClient.removeFromQueue(id);
 
-		queueItems = queueItems.filter((item) => item.id !== id);
-		// Immediately refresh the queue to ensure UI updates
+		// Refresh the queue to get updated data
 		await loadQueue();
 		toastStore.success(
 			$t("common.messages.item_removed"),
@@ -167,10 +180,10 @@ function changeItemsPerPage(event: Event) {
       <div class="flex items-center gap-3 mt-1">
         <div class="badge badge-info">
           <span class="text-sm font-medium">
-            {queueItems.length} {$t("dashboard.queue.items")}
+            {totalItems} {$t("dashboard.queue.items")}
           </span>
         </div>
-        {#if queueItems.length > 0}
+        {#if totalItems > 0 && !loading}
           <div class="flex items-center gap-2">
             <label for="items-per-page" class="text-sm text-base-content/70">
               {$t("dashboard.queue.items_per_page")}:
@@ -192,7 +205,13 @@ function changeItemsPerPage(event: Event) {
     </div>
   </div>
 
-  {#if queueItems.length === 0}
+  {#if loading}
+    <!-- Loading State -->
+    <div class="text-center py-12">
+      <div class="loading loading-spinner loading-lg mb-4"></div>
+      <h3 class="text-lg font-medium mb-2">Loading queue...</h3>
+    </div>
+  {:else if totalItems === 0}
     <!-- Empty State -->
     <div class="text-center py-12">
       <div class="w-16 h-16 mx-auto mb-4 p-4 rounded-full bg-base-200">
@@ -220,7 +239,7 @@ function changeItemsPerPage(event: Event) {
               </tr>
             </thead>
             <tbody>
-              {#each currentPageItems as item (item.id)}
+              {#each queueItems as item (item.id)}
                 <tr>
                   <td>
                     <div class="max-w-xs">
@@ -331,13 +350,13 @@ function changeItemsPerPage(event: Event) {
         {#if totalPages > 1}
         <div class="card-actions justify-between p-4 bg-base-200 border-t border-base-300">
             <div class="text-sm text-base-content/70">
-              {$t("dashboard.queue.showing")} {startItem} {$t("dashboard.queue.to")} {endItem} {$t("dashboard.queue.of")} {queueItems.length} {$t("dashboard.queue.entries")}
+              {$t("dashboard.queue.showing")} {startItem} {$t("dashboard.queue.to")} {endItem} {$t("dashboard.queue.of")} {totalItems} {$t("dashboard.queue.entries")}
             </div>
             
             <div class="flex items-center space-x-2">
               <button
                 class="btn btn-sm"
-                disabled={currentPage === 1}
+                disabled={!hasPrev}
                 onclick={() => goToPage(currentPage - 1)}
               >
                 <ChevronLeft class="w-4 h-4" />
@@ -372,7 +391,7 @@ function changeItemsPerPage(event: Event) {
               
               <button
                 class="btn btn-sm"
-                disabled={currentPage === totalPages}
+                disabled={!hasNext}
                 onclick={() => goToPage(currentPage + 1)}
               >
                 {$t("dashboard.queue.next")}

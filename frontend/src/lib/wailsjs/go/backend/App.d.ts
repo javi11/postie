@@ -52,6 +52,8 @@ export function GetProcessorStatus():Promise<backend.ProcessorStatus>;
 
 export function GetQueueItems():Promise<Array<backend.QueueItem>>;
 
+export function GetQueueItemsPaginated(arg1:backend.PaginationParams):Promise<backend.PaginatedQueueResult>;
+
 export function GetQueueStats():Promise<backend.QueueStats>;
 
 export function GetRunningJobs():Promise<Array<processor.RunningJobItem>>;

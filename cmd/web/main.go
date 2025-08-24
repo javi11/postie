@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -32,6 +33,26 @@ var upgrader = websocket.Upgrader{
 		return true // Allow all origins for now, should be configured properly
 	},
 }
+
+// ErrorResponse represents a structured error response
+type ErrorResponse struct {
+	Error     string `json:"error"`
+	Message   string `json:"message"`
+	Code      string `json:"code,omitempty"`
+	Details   string `json:"details,omitempty"`
+	Timestamp string `json:"timestamp"`
+}
+
+// SetupErrorCode represents different types of setup errors
+type SetupErrorCode string
+
+const (
+	SetupErrorInvalidInput     SetupErrorCode = "INVALID_INPUT"
+	SetupErrorServerValidation SetupErrorCode = "SERVER_VALIDATION_FAILED"
+	SetupErrorFileSystem       SetupErrorCode = "FILESYSTEM_ERROR"
+	SetupErrorConfigSave       SetupErrorCode = "CONFIG_SAVE_FAILED"
+	SetupErrorInternal         SetupErrorCode = "INTERNAL_ERROR"
+)
 
 var (
 	port string
@@ -664,19 +685,105 @@ func (ws *WebServer) handleValidateServer(w http.ResponseWriter, r *http.Request
 	_ = json.NewEncoder(w).Encode(result)
 }
 
+// sendErrorResponse sends a structured error response
+func (ws *WebServer) sendErrorResponse(w http.ResponseWriter, statusCode int, errorCode SetupErrorCode, message string, details string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	
+	errorResp := ErrorResponse{
+		Error:     string(errorCode),
+		Message:   message,
+		Code:      string(errorCode),
+		Details:   details,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+	
+	json.NewEncoder(w).Encode(errorResp)
+}
+
+// categorizeSetupError determines the error category and user-friendly message
+func (ws *WebServer) categorizeSetupError(err error) (SetupErrorCode, string, string) {
+	errStr := err.Error()
+	
+	// Server validation errors
+	if strings.Contains(errStr, "failed to connect") || strings.Contains(errStr, "connection test failed") {
+		return SetupErrorServerValidation, 
+			"Server connection failed", 
+			"Please check your server credentials and network connectivity. Ensure the server is reachable and your credentials are correct."
+	}
+	
+	// File system errors
+	if strings.Contains(errStr, "permission denied") || strings.Contains(errStr, "read-only file system") {
+		return SetupErrorFileSystem, 
+			"File system permission error", 
+			"Unable to save configuration file. Please check file permissions and ensure the application has write access to the configuration directory."
+	}
+	
+	// Config save errors
+	if strings.Contains(errStr, "failed to save") || strings.Contains(errStr, "error writing config") {
+		return SetupErrorConfigSave, 
+			"Configuration save failed", 
+			"Failed to save configuration file. Please ensure sufficient disk space and write permissions."
+	}
+	
+	// Input validation errors
+	if strings.Contains(errStr, "server") && (strings.Contains(errStr, "host is required") || strings.Contains(errStr, "port must be")) {
+		return SetupErrorInvalidInput, 
+			"Invalid server configuration", 
+			"Please verify all server fields are properly filled out with valid values."
+	}
+	
+	if strings.Contains(errStr, "output directory") {
+		return SetupErrorInvalidInput, 
+			"Invalid output directory", 
+			"Please specify a valid output directory path."
+	}
+	
+	// Generic internal error
+	return SetupErrorInternal, 
+		"Setup failed", 
+		"An unexpected error occurred during setup. Please try again or contact support if the problem persists."
+}
+
 func (ws *WebServer) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Setup completion requested from %s", r.RemoteAddr)
+	
 	var wizardData backend.SetupWizardData
 	if err := json.NewDecoder(r.Body).Decode(&wizardData); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Printf("Setup completion failed - invalid JSON: %v", err)
+		ws.sendErrorResponse(w, http.StatusBadRequest, SetupErrorInvalidInput, 
+			"Invalid request data", 
+			"The request body contains invalid JSON. Please ensure all required fields are properly formatted.")
 		return
 	}
+	
+	log.Printf("Processing setup wizard data: %d servers, output dir: %s", 
+		len(wizardData.Servers), wizardData.OutputDirectory)
 
 	if err := ws.app.SetupWizardComplete(wizardData); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("Setup wizard completion failed: %v", err)
+		
+		// Categorize the error and provide appropriate response
+		errorCode, message, details := ws.categorizeSetupError(err)
+		
+		// Determine appropriate HTTP status code
+		statusCode := http.StatusInternalServerError
+		if errorCode == SetupErrorInvalidInput {
+			statusCode = http.StatusBadRequest
+		}
+		
+		ws.sendErrorResponse(w, statusCode, errorCode, message, details)
 		return
 	}
-
+	
+	log.Printf("Setup wizard completed successfully")
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Setup completed successfully",
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	})
 }
 
 func (ws *WebServer) handlePauseProcessing(w http.ResponseWriter, r *http.Request) {
