@@ -38,6 +38,25 @@ type QueueStats struct {
 	Error    int `json:"error"`
 }
 
+// PaginationParams defines parameters for paginated queries
+type PaginationParams struct {
+	Page   int    `json:"page"`   // 1-based page number
+	Limit  int    `json:"limit"`  // Items per page
+	SortBy string `json:"sortBy"` // Sort field: "created", "priority", "status", "filename"
+	Order  string `json:"order"`  // Sort order: "asc", "desc"
+}
+
+// PaginatedQueueResult contains paginated queue items and metadata
+type PaginatedQueueResult struct {
+	Items        []QueueItem `json:"items"`
+	TotalItems   int         `json:"totalItems"`
+	TotalPages   int         `json:"totalPages"`
+	CurrentPage  int         `json:"currentPage"`
+	ItemsPerPage int         `json:"itemsPerPage"`
+	HasNext      bool        `json:"hasNext"`
+	HasPrev      bool        `json:"hasPrev"`
+}
+
 func (a *App) initializeQueue() error {
 	if a.config == nil {
 		return fmt.Errorf("config not loaded")
@@ -195,6 +214,66 @@ func (a *App) GetQueueItems() ([]QueueItem, error) {
 	}
 
 	return items, nil
+}
+
+// GetQueueItemsPaginated returns paginated queue items with metadata
+func (a *App) GetQueueItemsPaginated(params PaginationParams) (*PaginatedQueueResult, error) {
+	defer a.recoverPanic("GetQueueItemsPaginated")
+
+	if a.queue == nil {
+		return &PaginatedQueueResult{
+			Items:        []QueueItem{},
+			TotalItems:   0,
+			TotalPages:   0,
+			CurrentPage:  params.Page,
+			ItemsPerPage: params.Limit,
+			HasNext:      false,
+			HasPrev:      false,
+		}, nil
+	}
+
+	// Convert backend params to queue params
+	queueParams := queue.PaginationParams{
+		Page:   params.Page,
+		Limit:  params.Limit,
+		SortBy: params.SortBy,
+		Order:  params.Order,
+	}
+
+	result, err := a.queue.GetQueueItemsPaginated(queueParams)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert queue items to backend items
+	var items []QueueItem
+	for _, queueItem := range result.Items {
+		item := QueueItem{
+			ID:           queueItem.ID,
+			Path:         queueItem.Path,
+			FileName:     queueItem.FileName,
+			Size:         queueItem.Size,
+			Status:       queueItem.Status,
+			RetryCount:   queueItem.RetryCount,
+			Priority:     queueItem.Priority,
+			ErrorMessage: queueItem.ErrorMessage,
+			CreatedAt:    queueItem.CreatedAt,
+			UpdatedAt:    queueItem.UpdatedAt,
+			CompletedAt:  queueItem.CompletedAt,
+			NzbPath:      queueItem.NzbPath,
+		}
+		items = append(items, item)
+	}
+
+	return &PaginatedQueueResult{
+		Items:        items,
+		TotalItems:   result.TotalItems,
+		TotalPages:   result.TotalPages,
+		CurrentPage:  result.CurrentPage,
+		ItemsPerPage: result.ItemsPerPage,
+		HasNext:      result.HasNext,
+		HasPrev:      result.HasPrev,
+	}, nil
 }
 
 // RemoveFromQueue removes an item from the queue via queue

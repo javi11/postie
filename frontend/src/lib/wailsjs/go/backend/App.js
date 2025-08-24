@@ -94,6 +94,10 @@ export function GetQueueItems() {
   return window['go']['backend']['App']['GetQueueItems']();
 }
 
+export function GetQueueItemsPaginated(arg1) {
+  return window['go']['backend']['App']['GetQueueItemsPaginated'](arg1);
+}
+
 export function GetQueueStats() {
   return window['go']['backend']['App']['GetQueueStats']();
 }

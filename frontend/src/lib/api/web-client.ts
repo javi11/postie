@@ -1,6 +1,7 @@
 // Web API client for browser environment (replaces Wails bindings)
 
 import type { backend, config, processor, watcher } from "$lib/wailsjs/go/models";
+// Using backend types for pagination
 
 const API_BASE = "/api";
 
@@ -158,6 +159,16 @@ export class WebClient {
 	// Queue methods
 	async getQueueItems(): Promise<backend.QueueItem[]> {
 		return this.get<backend.QueueItem[]>("/queue");
+	}
+
+	async getQueueItemsPaginated(params: backend.PaginationParams): Promise<backend.PaginatedQueueResult> {
+		const queryParams = new URLSearchParams({
+			page: params.page.toString(),
+			limit: params.limit.toString(),
+			sortBy: params.sortBy,
+			order: params.order,
+		});
+		return this.get<backend.PaginatedQueueResult>(`/queue/paginated?${queryParams}`);
 	}
 
 	async getQueueStats(): Promise<backend.QueueStats> {

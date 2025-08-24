@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/pkg/parpardownloader"
@@ -236,33 +238,123 @@ func (a *App) validateServerConnections(configData *config.ConfigData) error {
 
 	// Check if all servers have required fields
 	validServers := 0
-	for _, server := range configData.Servers {
+	var invalidServers []string
+	for i, server := range configData.Servers {
 		if server.Host != "" {
 			validServers++
+		} else {
+			invalidServers = append(invalidServers, fmt.Sprintf("Server %d: missing host", i+1))
 		}
 	}
 
 	// If no valid servers, skip connection test
 	if validServers == 0 {
+		if len(invalidServers) > 0 {
+			slog.Warn("No valid servers found for validation", "issues", invalidServers)
+		}
 		return nil
 	}
 
-	slog.Info("Validating server connections", "server_count", validServers)
+	slog.Info("Starting server connection validation", 
+		"validServers", validServers, 
+		"totalServers", len(configData.Servers))
 
-	// Try to create NNTP pool - this will test connections to all servers
-	pool, err := configData.GetNNTPPool()
-	if err != nil {
-		slog.Error("Server connection validation failed", "error", err)
-		return fmt.Errorf("failed to connect to one or more servers: %w", err)
+	// Create a context with timeout for validation
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Individual server validation for better error reporting
+	var failedServers []string
+	var lastError error
+
+	for i, server := range configData.Servers {
+		if server.Host == "" {
+			continue // Skip invalid servers
+		}
+
+		slog.Debug("Validating individual server", 
+			"index", i,
+			"host", server.Host,
+			"port", server.Port,
+			"ssl", server.SSL)
+
+		// Test individual server connection with timeout
+		if err := a.validateIndividualServer(ctx, &server, i+1); err != nil {
+			serverDesc := fmt.Sprintf("%s:%d", server.Host, server.Port)
+			failedServers = append(failedServers, serverDesc)
+			lastError = err
+			slog.Error("Server validation failed", 
+				"server", serverDesc,
+				"index", i+1,
+				"error", err)
+		} else {
+			slog.Info("Server validated successfully", 
+				"server", fmt.Sprintf("%s:%d", server.Host, server.Port),
+				"index", i+1)
+		}
 	}
 
-	// Close the pool immediately as we were just testing connections
-	if pool != nil {
-		pool.Quit()
+	// If any servers failed, return detailed error
+	if len(failedServers) > 0 {
+		errorMsg := fmt.Sprintf("Failed to connect to %d server(s): %s", 
+			len(failedServers), 
+			strings.Join(failedServers, ", "))
+		
+		if lastError != nil {
+			errorMsg = fmt.Sprintf("%s. Last error: %v", errorMsg, lastError)
+		}
+		
+		slog.Error("Server connection validation completed with failures", 
+			"failedCount", len(failedServers),
+			"successCount", validServers-len(failedServers))
+		
+		return fmt.Errorf("%s", errorMsg)
 	}
 
-	slog.Info("Server connections validated successfully")
+	slog.Info("All server connections validated successfully", "serverCount", validServers)
 	return nil
+}
+
+// validateIndividualServer tests a single server connection
+func (a *App) validateIndividualServer(ctx context.Context, server *config.ServerConfig, serverNum int) error {
+	// Convert to ServerData format for testing
+	serverData := ServerData{
+		Host:           server.Host,
+		Port:           server.Port,
+		Username:       server.Username,
+		Password:       server.Password,
+		SSL:            server.SSL,
+		MaxConnections: server.MaxConnections,
+	}
+
+	// Create a channel to handle the validation result
+	resultChan := make(chan ValidationResult, 1)
+	errorChan := make(chan error, 1)
+
+	// Run validation in a goroutine with timeout
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				errorChan <- fmt.Errorf("validation panic: %v", r)
+			}
+		}()
+		
+		result := a.TestProviderConnectivity(serverData)
+		resultChan <- result
+	}()
+
+	// Wait for result or timeout
+	select {
+	case result := <-resultChan:
+		if !result.Valid {
+			return fmt.Errorf("server %d (%s:%d): %s", serverNum, server.Host, server.Port, result.Error)
+		}
+		return nil
+	case err := <-errorChan:
+		return fmt.Errorf("server %d (%s:%d): %w", serverNum, server.Host, server.Port, err)
+	case <-ctx.Done():
+		return fmt.Errorf("server %d (%s:%d): connection timeout after 30 seconds", serverNum, server.Host, server.Port)
+	}
 }
 
 // SelectConfigFile allows user to select a config file
@@ -341,7 +433,7 @@ func (a *App) createDefaultConfig() error {
 }
 
 // ensurePar2Executable downloads par2 executable if it doesn't exist
-func (a *App) ensurePar2Executable(ctx context.Context) {
+func (a *App) ensurePar2Executable(_ context.Context) {
 	defer a.recoverPanic("ensurePar2Executable")
 
 	// Use the OS-specific par2 path
