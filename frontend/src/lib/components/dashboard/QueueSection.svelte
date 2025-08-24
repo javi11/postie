@@ -70,7 +70,7 @@ onDestroy(() => {
 async function loadQueue() {
 	try {
 		loading = true;
-		const result = await apiClient.getQueueItemsPaginated({
+		const result = await apiClient.getQueueItems({
 			page: currentPage,
 			limit: itemsPerPage,
 			sortBy: sortBy,

@@ -156,19 +156,14 @@ export class WebClient {
 		return this.post<void>("/config", config);
 	}
 
-	// Queue methods
-	async getQueueItems(): Promise<backend.QueueItem[]> {
-		return this.get<backend.QueueItem[]>("/queue");
-	}
-
-	async getQueueItemsPaginated(params: backend.PaginationParams): Promise<backend.PaginatedQueueResult> {
+	async getQueueItems(params: backend.PaginationParams): Promise<backend.PaginatedQueueResult> {
 		const queryParams = new URLSearchParams({
 			page: params.page.toString(),
 			limit: params.limit.toString(),
 			sortBy: params.sortBy,
 			order: params.order,
 		});
-		return this.get<backend.PaginatedQueueResult>(`/queue/paginated?${queryParams}`);
+		return this.get<backend.PaginatedQueueResult>(`/queue?${queryParams}`);
 	}
 
 	async getQueueStats(): Promise<backend.QueueStats> {

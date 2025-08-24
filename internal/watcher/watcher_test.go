@@ -45,8 +45,8 @@ func (m *mockQueueWithDuplicateCheck) AddFile(ctx context.Context, path string, 
 	return nil
 }
 
-func (m *mockQueueWithDuplicateCheck) GetQueueItems() ([]queue.QueueItem, error) {
-	return []queue.QueueItem{}, nil
+func (m *mockQueueWithDuplicateCheck) GetQueueItems(params queue.PaginationParams) (*queue.PaginatedResult, error) {
+	return &queue.PaginatedResult{}, nil
 }
 
 func (m *mockQueueWithDuplicateCheck) RemoveFromQueue(id string) error {
@@ -101,46 +101,6 @@ func (m *mockQueueWithDuplicateCheck) IsPathInQueue(path string) (bool, error) {
 		}
 	}
 	return false, nil
-}
-
-func (m *mockQueueWithDuplicateCheck) GetQueueItemsPaginated(params queue.PaginationParams) (*queue.PaginatedResult, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Simulate pagination by slicing the addFileCalls slice
-	page := params.Page
-	limit := params.Limit
-	if page < 0 || limit <= 0 || page*limit >= len(m.addFileCalls) {
-		return &queue.PaginatedResult{
-			Items:        []queue.QueueItem{},
-			TotalItems:   len(m.addFileCalls),
-			CurrentPage:  page,
-			ItemsPerPage: limit,
-			HasNext:      page*limit+limit < len(m.addFileCalls),
-			HasPrev:      page > 0,
-			TotalPages:   (len(m.addFileCalls) + limit - 1) / limit,
-		}, nil
-	}
-
-	end := page*limit + limit
-	if end > len(m.addFileCalls) {
-		end = len(m.addFileCalls)
-	}
-
-	var items []queue.QueueItem
-	for _, path := range m.addFileCalls[page*limit : end] {
-		items = append(items, queue.QueueItem{Path: path})
-	}
-
-	return &queue.PaginatedResult{
-		Items:        items,
-		TotalItems:   len(m.addFileCalls),
-		CurrentPage:  page,
-		ItemsPerPage: limit,
-		HasNext:      page*limit+limit < len(m.addFileCalls),
-		HasPrev:      page > 0,
-		TotalPages:   (len(m.addFileCalls) + limit - 1) / limit,
-	}, nil
 }
 
 // Helper function to create a test watcher

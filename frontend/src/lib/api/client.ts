@@ -170,33 +170,17 @@ export class UnifiedClient {
 	}
 
 	// Queue Management
-	async getQueueItems(): Promise<backend.QueueItem[]> {
+	async getQueueItems(params: backend.PaginationParams): Promise<backend.PaginatedQueueResult> {
 		await this.initialize();
 
 		if (this._environment === "wails") {
 			const client = await getWailsClient();
-			return client.App.GetQueueItems();
+			return client.App.GetQueueItems(params);
 		}
 
 		if (this._environment === "web") {
 			const client = await getWebClient();
-			return client.getQueueItems();
-		}
-
-		throw new Error("No client available");
-	}
-
-	async getQueueItemsPaginated(params: backend.PaginationParams): Promise<backend.PaginatedQueueResult> {
-		await this.initialize();
-
-		if (this._environment === "wails") {
-			const client = await getWailsClient();
-			return client.App.GetQueueItemsPaginated(params);
-		}
-
-		if (this._environment === "web") {
-			const client = await getWebClient();
-			return client.getQueueItemsPaginated(params);
+			return client.getQueueItems(params);
 		}
 
 		throw new Error("No client available");

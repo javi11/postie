@@ -360,8 +360,8 @@ func (w *Watcher) TriggerScan(ctx context.Context) {
 }
 
 // GetQueueItems returns queue items via the queue
-func (w *Watcher) GetQueueItems() ([]queue.QueueItem, error) {
-	return w.queue.GetQueueItems()
+func (w *Watcher) GetQueueItems(params queue.PaginationParams) (*queue.PaginatedResult, error) {
+	return w.queue.GetQueueItems(params)
 }
 
 // RemoveFromQueue removes an item from the queue via queue

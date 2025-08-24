@@ -181,44 +181,8 @@ func (a *App) AddFilesToQueue() error {
 }
 
 // GetQueueItems returns the current queue items from the queue
-func (a *App) GetQueueItems() ([]QueueItem, error) {
+func (a *App) GetQueueItems(params PaginationParams) (*PaginatedQueueResult, error) {
 	defer a.recoverPanic("GetQueueItems")
-
-	if a.queue == nil {
-		return []QueueItem{}, nil
-	}
-
-	queueItems, err := a.queue.GetQueueItems()
-	if err != nil {
-		return nil, err
-	}
-
-	// Convert queue.QueueItem to app.QueueItem (they should be compatible now)
-	var items []QueueItem
-	for _, queueItem := range queueItems {
-		item := QueueItem{
-			ID:           queueItem.ID,
-			Path:         queueItem.Path,
-			FileName:     queueItem.FileName,
-			Size:         queueItem.Size,
-			Status:       queueItem.Status,
-			RetryCount:   queueItem.RetryCount,
-			Priority:     queueItem.Priority,
-			ErrorMessage: queueItem.ErrorMessage,
-			CreatedAt:    queueItem.CreatedAt,
-			UpdatedAt:    queueItem.UpdatedAt,
-			CompletedAt:  queueItem.CompletedAt,
-			NzbPath:      queueItem.NzbPath,
-		}
-		items = append(items, item)
-	}
-
-	return items, nil
-}
-
-// GetQueueItemsPaginated returns paginated queue items with metadata
-func (a *App) GetQueueItemsPaginated(params PaginationParams) (*PaginatedQueueResult, error) {
-	defer a.recoverPanic("GetQueueItemsPaginated")
 
 	if a.queue == nil {
 		return &PaginatedQueueResult{
@@ -240,7 +204,7 @@ func (a *App) GetQueueItemsPaginated(params PaginationParams) (*PaginatedQueueRe
 		Order:  params.Order,
 	}
 
-	result, err := a.queue.GetQueueItemsPaginated(queueParams)
+	result, err := a.queue.GetQueueItems(queueParams)
 	if err != nil {
 		return nil, err
 	}

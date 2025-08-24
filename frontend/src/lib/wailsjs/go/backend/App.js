@@ -90,12 +90,8 @@ export function GetProcessorStatus() {
   return window['go']['backend']['App']['GetProcessorStatus']();
 }
 
-export function GetQueueItems() {
-  return window['go']['backend']['App']['GetQueueItems']();
-}
-
-export function GetQueueItemsPaginated(arg1) {
-  return window['go']['backend']['App']['GetQueueItemsPaginated'](arg1);
+export function GetQueueItems(arg1) {
+  return window['go']['backend']['App']['GetQueueItems'](arg1);
 }
 
 export function GetQueueStats() {

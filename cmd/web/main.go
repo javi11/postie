@@ -375,14 +375,47 @@ func (ws *WebServer) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ws *WebServer) handleGetQueueItems(w http.ResponseWriter, r *http.Request) {
-	queueItems, err := ws.app.GetQueueItems()
+	// Parse pagination parameters
+	query := r.URL.Query()
+
+	page, _ := strconv.Atoi(query.Get("page"))
+	if page < 1 {
+		page = 1
+	}
+
+	limit, _ := strconv.Atoi(query.Get("limit"))
+	if limit < 1 || limit > 100 {
+		limit = 25 // Default limit
+	}
+
+	sortBy := query.Get("sortBy")
+	if sortBy == "" {
+		sortBy = "created" // Default sort field
+	}
+
+	order := query.Get("order")
+	if order != "asc" && order != "desc" {
+		order = "desc" // Default sort order
+	}
+
+	// Create pagination parameters
+	params := backend.PaginationParams{
+		Page:   page,
+		Limit:  limit,
+		SortBy: sortBy,
+		Order:  order,
+	}
+
+	// Get paginated results
+	result, err := ws.app.GetQueueItems(params)
 	if err != nil {
+		log.Printf("Failed to get paginated queue items: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(queueItems)
+	_ = json.NewEncoder(w).Encode(result)
 }
 
 func (ws *WebServer) handleRetryJob(w http.ResponseWriter, r *http.Request) {
