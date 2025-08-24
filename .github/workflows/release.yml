@@ -249,6 +249,15 @@ jobs:
           name: postie-gui-macos-universal
           path: ./macos-gui
 
+      # Ensure macOS app binaries are executable before zipping
+      - name: Fix macOS app permissions
+        run: |
+          set -euo pipefail
+          # Make any binary inside *.app/Contents/MacOS executable
+          find macos-gui -path "*/Contents/MacOS/*" -type f -print0 | xargs -0 chmod +x || true
+          # Show resulting permissions for debugging
+          find macos-gui -path "*/Contents/MacOS/*" -type f -exec ls -l {} \; || true
+
       # Download Linux Web Interface artifact
       - name: Download Linux Web Interface artifact
         uses: actions/download-artifact@v4
