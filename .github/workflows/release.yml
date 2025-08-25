@@ -190,6 +190,16 @@ jobs:
         with:
           go-version: 1.24.0
 
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
       # checkout
       - name: Checkout
         uses: actions/checkout@v4
@@ -200,6 +210,14 @@ jobs:
         uses: docker/setup-buildx-action@v3
         with:
           platforms: linux/amd64,linux/arm64
+        
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-docker-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-docker-
 
       # docker login
       - name: Docker login
@@ -222,6 +240,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BUILDX_NO_DEFAULT_ATTESTATIONS: 1
+          DOCKER_BUILDKIT: 1
 
   release-gui:
     runs-on: ubuntu-latest
