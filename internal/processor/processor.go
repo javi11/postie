@@ -573,7 +573,7 @@ func (p *Processor) GetAutoPauseReason() string {
 
 // monitorProviderAvailability monitors provider status and pauses/resumes processing accordingly
 func (p *Processor) monitorProviderAvailability() {
-	ticker := time.NewTicker(10 * time.Second) // Check every 10 seconds
+	ticker := time.NewTicker(30 * time.Second) // Check every 30 seconds
 	defer ticker.Stop()
 
 	p.providerCheckTicker = ticker

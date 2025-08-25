@@ -324,18 +324,18 @@ func (a *App) Startup(ctx context.Context) {
 
 	// Initialize queue (always available)
 	if err := a.initializeQueue(); err != nil {
-		slog.Error("Failed to initialize queue", "error", err)
+		slog.Error(fmt.Sprintf("Failed to initialize queue: %v", err))
 	}
 
 	// Initialize processor if configuration is valid
 	if err := a.initializeProcessor(); err != nil {
 		a.criticalErrorMessage = err.Error()
-		slog.Error("Failed to initialize processor", "error", err)
+		slog.Error(fmt.Sprintf("Failed to initialize processor: %v", err))
 	}
 
 	// Initialize watcher if enabled and configuration is valid
 	if err := a.initializeWatcher(); err != nil {
-		slog.Error("Failed to initialize watcher", "error", err)
+		slog.Error(fmt.Sprintf("Failed to initialize watcher: %v", err))
 	}
 
 	// Ensure par2 executable is available
@@ -747,7 +747,7 @@ func (a *App) isFirstStart() bool {
 func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 	defer a.recoverPanic("SetupWizardComplete")
 
-	slog.Info("Starting setup wizard completion", 
+	slog.Info("Starting setup wizard completion",
 		"serverCount", len(wizardData.Servers),
 		"hasOutputDir", wizardData.OutputDirectory != "")
 

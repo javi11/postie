@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 
 	"github.com/javi11/postie/internal/processor"
@@ -49,6 +50,15 @@ func (a *App) initializeProcessor() error {
 	// If output directory is relative, make it relative to OS-specific data directory
 	if !filepath.IsAbs(outputDir) {
 		outputDir = filepath.Join(a.appPaths.Data, outputDir)
+	}
+
+	// Ensure output directory exists - only set permissions if creating new directory
+	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(outputDir, 0755); err != nil {
+			return fmt.Errorf("failed to create output directory: %w, %s", err, outputDir)
+		}
+	} else if err != nil {
+		return fmt.Errorf("failed to check output directory: %w, %s", err, outputDir)
 	}
 
 	// Get watcher config for delete original file setting

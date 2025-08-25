@@ -83,23 +83,6 @@ func (a *App) initializeQueue() error {
 
 	databaseCfg := a.config.GetDatabaseConfig()
 
-	// Get output directory from configuration
-	outputDir := a.config.GetOutputDir()
-
-	// If output directory is relative, make it relative to OS-specific data directory
-	if !filepath.IsAbs(outputDir) {
-		outputDir = filepath.Join(a.appPaths.Data, outputDir)
-	}
-
-	// Ensure watch directory exists - only set permissions if creating new directory
-	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
-		if err := os.MkdirAll(outputDir, 0755); err != nil {
-			return fmt.Errorf("failed to create output directory: %w, %s", err, outputDir)
-		}
-	} else if err != nil {
-		return fmt.Errorf("failed to check output directory: %w, %s", err, outputDir)
-	}
-
 	// Create context for queue and processor
 	a.procCtx, a.procCancel = context.WithCancel(context.Background())
 

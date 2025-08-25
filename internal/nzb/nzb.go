@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/andybalholm/brotli"
@@ -36,6 +37,7 @@ type Generator struct {
 	segmentSize               uint64                        // size of each segment in bytes
 	compressionConfig         config.NzbCompressionConfig   // compression configuration
 	maintainOriginalExtension bool                          // whether to maintain original file extension
+	mx                        sync.RWMutex                  // mutex for concurrent access
 }
 
 // NewGenerator creates a new NZB generator
@@ -51,6 +53,8 @@ func NewGenerator(segmentSize uint64, compressionConfig config.NzbCompressionCon
 
 // AddArticle adds an article to the generator
 func (g *Generator) AddArticle(art *article.Article) {
+	g.mx.Lock()
+	defer g.mx.Unlock()
 	filename := art.OriginalName
 
 	// Check if we already have this article (by message ID)
@@ -68,6 +72,9 @@ func (g *Generator) AddArticle(art *article.Article) {
 
 // Generate creates an NZB file for all files
 func (g *Generator) Generate(outputPath string) (string, error) {
+	g.mx.RLock()
+	defer g.mx.RUnlock()
+
 	if len(g.articles) == 0 {
 		return "", fmt.Errorf("no articles found")
 	}
@@ -309,6 +316,9 @@ func (g *Generator) compressWithZip(data []byte, outputPath string, originalNzbP
 
 // AddFileHash adds a hash for a file
 func (g *Generator) AddFileHash(filename string, hash string) {
+	g.mx.Lock()
+	defer g.mx.Unlock()
+
 	g.filesHash[filename] = hash
 }
 
