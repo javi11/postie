@@ -10,7 +10,7 @@ WORKDIR /app/frontend
 
 # Copy only dependency manifests first to leverage caching for bun install
 COPY frontend/bun.lock frontend/package.json ./
-
+COPY frontend/ ./
 # Install dependencies with cache mount
 RUN --mount=type=cache,target=/root/.bun/install/cache,sharing=locked \
     bun install --frozen-lockfile
