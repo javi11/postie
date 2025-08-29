@@ -22,3 +22,92 @@ jobs:
         with:
           fetch-depth: 0
       - uses: ./.github/actions/test
+  build-images:
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      # dependencies
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.0
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      # checkout
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+
+#      - name: Cache Docker layers
+#        uses: actions/cache@v4
+#        with:
+#          path: /tmp/.buildx-cache
+#          key: ${{ runner.os }}-docker-${{ github.ref }}-buildx
+#          restore-keys: |
+#            ${{ runner.os }}-docker-
+
+      # docker login
+      - name: Docker login
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Enable buildx cache optimization
+      - name: Expose GitHub Runtime
+        uses: crazy-max/ghaction-github-runtime@v3
+
+      - name: Build frontend-base image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          target: frontend-builder
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}_frontend_base:latest
+
+      - name: Build backend-base image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          target: backend-base
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}_backend_base:latest
+
+      - name: Build Docker image (snapshot mode)
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean --config .goreleaser-docker.yml --skip=publish --snapshot
+          debug: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILDX_NO_DEFAULT_ATTESTATIONS: 1
+          DOCKER_BUILDKIT: 1
+          CACHE_REGISTRY: ${{ github.ref == 'refs/heads/main' && 'true' || 'false' }}
+
