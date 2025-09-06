@@ -48,7 +48,7 @@ COPY ./cmd ./cmd
 COPY ./frontend/embed.go ./frontend/embed.go
 
 # Copy built frontend from previous stage
-COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
+COPY --from=frontend-builder /app/frontend/build ./frontend/build
 
 # Build web binary with enhanced cache mount for native architecture
 RUN --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
@@ -75,7 +75,7 @@ WORKDIR /app
 
 # Copy web binary from builder
 COPY --from=backend-builder /app/postie-web /app/postie-web
-COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
+COPY --from=frontend-builder /app/frontend/build ./frontend/build
 
 # Install required packages for runtime
 RUN apt-get update && \

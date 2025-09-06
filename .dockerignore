@@ -4,8 +4,6 @@
 .github
 
 # Build artifacts
-build/
-dist/
 **/*.exe
 **/*.app
 **/*.zip
