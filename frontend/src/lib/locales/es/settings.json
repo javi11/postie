@@ -370,6 +370,9 @@
 			"server_number": "Servidor {number}",
 			"test_connection": "Probar Conexión",
 			"enabled": "Habilitado",
+			"disabled": "Deshabilitado",
+			"enabled_description": "Este proveedor será utilizado para cargas",
+			"disabled_description": "Este proveedor no será utilizado para cargas",
 			"remove": "Eliminar",
 			"host": "Host",
 			"host_required": "Host *",
@@ -394,6 +397,17 @@
 			"saved_success_description": "¡Su configuración del servidor se ha guardado exitosamente!",
 			"incomplete": "Configuración Incompleta",
 			"invalid": "Inválido",
+			"status": {
+				"providers_active": "proveedores activos"
+			},
+			"bulk_operations": {
+				"enable_all": "Habilitar Todos",
+				"disable_all": "Deshabilitar Todos",
+				"cannot_disable_all": "No se pueden deshabilitar todos los proveedores. Al menos uno debe permanecer activo."
+			},
+			"validation": {
+				"cannot_disable_last": "No se puede deshabilitar el último proveedor activo. Al menos un proveedor debe permanecer habilitado."
+			},
 			"validation_errors": {
 				"host_required": "Servidor {number}: Se requiere host",
 				"port_invalid": "Servidor {number}: Se requiere un número de puerto válido (1-65535)"

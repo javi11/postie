@@ -371,6 +371,9 @@
 			"server_number": "Serveur {number}",
 			"test_connection": "Tester la Connexion",
 			"enabled": "Activé",
+			"disabled": "Désactivé",
+			"enabled_description": "Ce fournisseur sera utilisé pour les téléchargements",
+			"disabled_description": "Ce fournisseur ne sera pas utilisé pour les téléchargements",
 			"remove": "Supprimer",
 			"host": "Hôte",
 			"host_required": "Hôte *",
@@ -394,6 +397,17 @@
 			"saving": "Sauvegarde...",
 			"saved_success": "Paramètres du serveur sauvegardés",
 			"saved_success_description": "Votre configuration de serveur a été sauvegardée avec succès !",
+			"status": {
+				"providers_active": "fournisseurs actifs"
+			},
+			"bulk_operations": {
+				"enable_all": "Activer Tout",
+				"disable_all": "Désactiver Tout",
+				"cannot_disable_all": "Impossible de désactiver tous les fournisseurs. Au moins un doit rester actif."
+			},
+			"validation": {
+				"cannot_disable_last": "Impossible de désactiver le dernier fournisseur actif. Au moins un fournisseur doit rester activé."
+			},
 			"validation_errors": {
 				"host_required": "Serveur {number} : L'hôte est requis",
 				"port_invalid": "Serveur {number} : Un numéro de port valide est requis (1-65535)"
