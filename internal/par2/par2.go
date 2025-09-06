@@ -8,7 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -29,8 +28,8 @@ const (
 )
 
 var (
-	execCommand = exec.CommandContext
-	parregexp   = regexp.MustCompile(`(?i)(\.vol\d+\+(\d+))?\.par2$`)
+	parregexp    = regexp.MustCompile(`(?i)(\.vol\d+\+(\d+))?\.par2$`)
+	commandFunc  = createCommand  // Function variable for testing
 )
 
 // Par2Executor defines the interface for executing par2 commands.
@@ -120,7 +119,7 @@ func (p *Par2CmdExecutor) Create(ctx context.Context, files []fileinfo.FileInfo)
 
 		slog.DebugContext(ctx, fmt.Sprintf("Par command: %s in dir %s with parameters %v", p.cfg.Par2Path, dir, parameters))
 
-		cmd := execCommand(ctx, p.cfg.Par2Path, parameters...)
+		cmd := commandFunc(ctx, p.cfg.Par2Path, parameters...)
 		cmd.Dir = dir
 		slog.DebugContext(ctx, fmt.Sprintf("Par command: %s in dir %s", cmd.String(), cmd.Dir))
 

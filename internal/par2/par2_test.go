@@ -346,9 +346,9 @@ func TestScanLines(t *testing.T) {
 // Using the actual exec.Command pattern in Go for testing
 
 func TestCreatePar2WithPar2Command(t *testing.T) {
-	// Save and restore the original execCommand
-	originalExecCommand := execCommand
-	defer func() { execCommand = originalExecCommand }()
+	// Save and restore the original commandFunc
+	originalCommandFunc := commandFunc
+	defer func() { commandFunc = originalCommandFunc }()
 
 	ctx := context.Background()
 	tempDir := t.TempDir()
@@ -360,8 +360,8 @@ func TestCreatePar2WithPar2Command(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	// Mock the exec.CommandContext to create a script that creates the expected par2 file
-	execCommand = func(ctx context.Context, command string, args ...string) *exec.Cmd {
+	// Mock the commandFunc to create a script that creates the expected par2 file
+	commandFunc = func(ctx context.Context, command string, args ...string) *exec.Cmd {
 		// Find the output file from the args (the par2 file path for par2 command)
 		var outputFile string
 		if len(args) >= 4 {
@@ -437,9 +437,9 @@ echo "Processing: 100%%"
 }
 
 func TestCreatePar2WithParparCommand(t *testing.T) {
-	// Save and restore the original execCommand
-	originalExecCommand := execCommand
-	defer func() { execCommand = originalExecCommand }()
+	// Save and restore the original commandFunc
+	originalCommandFunc := commandFunc
+	defer func() { commandFunc = originalCommandFunc }()
 
 	ctx := context.Background()
 	tempDir := t.TempDir()
@@ -451,8 +451,8 @@ func TestCreatePar2WithParparCommand(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	// Mock the exec.CommandContext to create a script that creates the expected par2 file
-	execCommand = func(ctx context.Context, command string, args ...string) *exec.Cmd {
+	// Mock the commandFunc to create a script that creates the expected par2 file
+	commandFunc = func(ctx context.Context, command string, args ...string) *exec.Cmd {
 		// Find the output file from the args (after -o flag for parpar)
 		var outputFile string
 		for _, arg := range args {
@@ -525,9 +525,9 @@ echo "Processing: 100%%"
 }
 
 func TestCreatePar2CommandFailed(t *testing.T) {
-	// Save and restore the original execCommand
-	originalExecCommand := execCommand
-	defer func() { execCommand = originalExecCommand }()
+	// Save and restore the original commandFunc
+	originalCommandFunc := commandFunc
+	defer func() { commandFunc = originalCommandFunc }()
 
 	ctx := context.Background()
 	tempDir := t.TempDir()
@@ -539,8 +539,8 @@ func TestCreatePar2CommandFailed(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	// Mock the exec.CommandContext to return an error by using a non-existent command
-	execCommand = func(ctx context.Context, command string, args ...string) *exec.Cmd {
+	// Mock the commandFunc to return an error by using a non-existent command
+	commandFunc = func(ctx context.Context, command string, args ...string) *exec.Cmd {
 		// Command will fail because it doesn't exist
 		return exec.CommandContext(ctx, "nonexistentcommand")
 	}
@@ -573,9 +573,9 @@ func TestCreatePar2CommandFailed(t *testing.T) {
 }
 
 func TestCreatePar2WithPausableContext(t *testing.T) {
-	// Save and restore the original execCommand
-	originalExecCommand := execCommand
-	defer func() { execCommand = originalExecCommand }()
+	// Save and restore the original commandFunc
+	originalCommandFunc := commandFunc
+	defer func() { commandFunc = originalCommandFunc }()
 
 	pausableCtx := pausable.NewContext(context.Background())
 	tempDir := t.TempDir()
@@ -587,8 +587,8 @@ func TestCreatePar2WithPausableContext(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	// Mock the exec.CommandContext to create a script that creates the expected par2 file
-	execCommand = func(ctx context.Context, command string, args ...string) *exec.Cmd {
+	// Mock the commandFunc to create a script that creates the expected par2 file
+	commandFunc = func(ctx context.Context, command string, args ...string) *exec.Cmd {
 		// Find the output file from the args (the par2 file path for par2 command)
 		var outputFile string
 		if len(args) >= 4 {
