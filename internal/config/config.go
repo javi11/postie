@@ -214,16 +214,22 @@ type PostCheck struct {
 	MaxRePost uint `yaml:"max_reposts" json:"max_reposts"`
 }
 
+// NewsgroupConfig represents a single newsgroup configuration
+type NewsgroupConfig struct {
+	Name    string `yaml:"name" json:"name"`
+	Enabled *bool  `yaml:"enabled" json:"enabled"`
+}
+
 // PostingConfig represents posting configuration
 type PostingConfig struct {
-	WaitForPar2        *bool           `yaml:"wait_for_par2" json:"wait_for_par2"`
-	MaxRetries         int             `yaml:"max_retries" json:"max_retries"`
-	RetryDelay         Duration        `yaml:"retry_delay" json:"retry_delay"`
-	ArticleSizeInBytes uint64          `yaml:"article_size_in_bytes" json:"article_size_in_bytes"`
-	Groups             []string        `yaml:"groups" json:"groups"`
-	ThrottleRate       int64           `yaml:"throttle_rate" json:"throttle_rate"` // bytes per second
-	MessageIDFormat    MessageIDFormat `yaml:"message_id_format" json:"message_id_format"`
-	PostHeaders        PostHeaders     `yaml:"post_headers" json:"post_headers"`
+	WaitForPar2        *bool               `yaml:"wait_for_par2" json:"wait_for_par2"`
+	MaxRetries         int                 `yaml:"max_retries" json:"max_retries"`
+	RetryDelay         Duration            `yaml:"retry_delay" json:"retry_delay"`
+	ArticleSizeInBytes uint64              `yaml:"article_size_in_bytes" json:"article_size_in_bytes"`
+	Groups             []NewsgroupConfig   `yaml:"groups" json:"groups"`
+	ThrottleRate       int64               `yaml:"throttle_rate" json:"throttle_rate"` // bytes per second
+	MessageIDFormat    MessageIDFormat     `yaml:"message_id_format" json:"message_id_format"`
+	PostHeaders        PostHeaders         `yaml:"post_headers" json:"post_headers"`
 	// If true the uploaded subject and filename will be obfuscated. Default value is `true`.
 	ObfuscationPolicy     ObfuscationPolicy `yaml:"obfuscation_policy" json:"obfuscation_policy"`
 	Par2ObfuscationPolicy ObfuscationPolicy `yaml:"par2_obfuscation_policy" json:"par2_obfuscation_policy"`
@@ -693,7 +699,9 @@ func GetDefaultConfig() ConfigData {
 			MaxRetries:         3,
 			RetryDelay:         Duration("5s"),
 			ArticleSizeInBytes: 768000, // 768KB
-			Groups:             []string{"alt.binaries.test"},
+			Groups: []NewsgroupConfig{
+				{Name: "alt.binaries.test", Enabled: &enabled},
+			},
 			ThrottleRate:       0, // 0 means no throttling
 			MessageIDFormat:    MessageIDFormatRandom,
 			PostHeaders: PostHeaders{

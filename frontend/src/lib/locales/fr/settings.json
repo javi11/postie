@@ -271,11 +271,11 @@
 			},
 			"newsgroups": {
 				"title": "Groupes de Nouvelles",
-				"description": "Groupes où les fichiers seront publiés",
+				"description": "Configurez les groupes de nouvelles où les fichiers seront publiés. Utilisez les commutateurs pour activer/désactiver des groupes individuels.",
 				"add_group": "Ajouter un Groupe",
 				"remove": "Supprimer",
 				"placeholder": "alt.binaries.exemple",
-				"info": "<strong>Groupes de nouvelles communs :</strong> alt.binaries.test (pour les tests), alt.binaries.misc, alt.binaries.multimedia. Choisissez des groupes appropriés pour votre type de contenu."
+				"info": "<strong>Groupes de nouvelles communs :</strong> alt.binaries.test (pour les tests), alt.binaries.misc, alt.binaries.multimedia. Choisissez des groupes appropriés pour votre type de contenu. <strong>Commutateur :</strong> Utilisez les interrupteurs pour activer/désactiver des groupes de nouvelles individuels sans les supprimer."
 			},
 			"save_button": "Sauvegarder les Paramètres de Publication",
 			"saving": "Sauvegarde...",

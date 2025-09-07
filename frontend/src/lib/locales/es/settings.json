@@ -271,11 +271,11 @@
 			},
 			"newsgroups": {
 				"title": "Grupos de Noticias",
-				"description": "Grupos donde se publicarán los archivos",
+				"description": "Configure los grupos de noticias donde se publicarán los archivos. Use los interruptores para habilitar/deshabilitar grupos individuales.",
 				"add_group": "Agregar Grupo",
 				"remove": "Eliminar",
 				"placeholder": "alt.binaries.ejemplo",
-				"info": "<strong>Grupos de noticias comunes:</strong> alt.binaries.test (para pruebas), alt.binaries.misc, alt.binaries.multimedia. Elija grupos apropiados para su tipo de contenido."
+				"info": "<strong>Grupos de noticias comunes:</strong> alt.binaries.test (para pruebas), alt.binaries.misc, alt.binaries.multimedia. Elija grupos apropiados para su tipo de contenido. <strong>Interruptor:</strong> Use los switches para habilitar/deshabilitar grupos de noticias individuales sin eliminarlos."
 			},
 			"save_button": "Guardar Configuración de Publicación",
 			"saving": "Guardando...",

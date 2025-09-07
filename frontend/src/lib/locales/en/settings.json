@@ -276,11 +276,11 @@
 			},
 			"newsgroups": {
 				"title": "Newsgroups",
-				"description": "Groups where files will be posted",
+				"description": "Configure newsgroups where files will be posted. Use toggles to enable/disable individual groups.",
 				"add_group": "Add Group",
 				"remove": "Remove",
 				"placeholder": "alt.binaries.example",
-				"info": "<strong>Common newsgroups:</strong> alt.binaries.test (for testing), alt.binaries.misc, alt.binaries.multimedia. Choose groups appropriate for your content type."
+				"info": "<strong>Common newsgroups:</strong> alt.binaries.test (for testing), alt.binaries.misc, alt.binaries.multimedia. Choose groups appropriate for your content type. <strong>Toggle:</strong> Use the switches to enable/disable individual newsgroups without removing them."
 			},
 			"save_button": "Save Posting Settings",
 			"saving": "Saving...",

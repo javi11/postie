@@ -26,7 +26,9 @@ let retryDelay = $state(config.posting.retry_delay || "5s");
 let articleSizeInBytes = $state(config.posting.article_size_in_bytes || 750000);
 let waitForPar2 = $state(config.posting.wait_for_par2 ?? true);
 let groups = $state(
-	config.posting.groups ? [...config.posting.groups] : ["alt.binaries.test"],
+	config.posting.groups?.length > 0 
+		? [...config.posting.groups] 
+		: [{ name: "alt.binaries.test", enabled: true }],
 );
 let customHeaders = $state(
 	config.posting.post_headers?.custom_headers
@@ -91,7 +93,7 @@ $effect(() => {
 // Ensure at least one group exists
 $effect(() => {
 	if (groups.length === 0) {
-		groups = ["alt.binaries.test"];
+		groups = [{ name: "alt.binaries.test", enabled: true }];
 	}
 });
 
@@ -139,7 +141,7 @@ const throttleRatePresets = [
 
 // Functions
 function addGroup() {
-	groups = [...groups, ""];
+	groups = [...groups, { name: "", enabled: true }];
 }
 
 function removeGroup(index: number) {
@@ -489,14 +491,30 @@ async function savePostingSettings() {
       <div class="space-y-3">
         {#each groups as group, index (index)}
           <div class="flex items-center gap-3">
+            <!-- Enable/Disable Toggle for Individual Newsgroup -->
+            <div class="form-control">
+              <label class="label cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  class="toggle toggle-sm toggle-primary" 
+                  bind:checked={groups[index].enabled}
+                />
+              </label>
+            </div>
+            
+            <!-- Newsgroup Name Input -->
             <div class="flex-1">
               <input
                 class="input input-bordered w-full"
-                bind:value={groups[index]}
+                class:opacity-50={!groups[index].enabled}
+                bind:value={groups[index].name}
                 placeholder={$t('settings.posting.newsgroups.placeholder')}
+                disabled={!groups[index].enabled}
                 required
               />
             </div>
+            
+            <!-- Remove Button -->
             {#if groups.length > 1}
               <button
                 type="button"

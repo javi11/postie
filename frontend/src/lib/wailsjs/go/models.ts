@@ -604,12 +604,26 @@ export namespace config {
 		    return a;
 		}
 	}
+	export class NewsgroupConfig {
+	    name: string;
+	    enabled?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new NewsgroupConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.enabled = source["enabled"];
+	    }
+	}
 	export class PostingConfig {
 	    wait_for_par2?: boolean;
 	    max_retries: number;
 	    retry_delay: string;
 	    article_size_in_bytes: number;
-	    groups: string[];
+	    groups: NewsgroupConfig[];
 	    throttle_rate: number;
 	    message_id_format: string;
 	    post_headers: PostHeaders;
@@ -627,7 +641,7 @@ export namespace config {
 	        this.max_retries = source["max_retries"];
 	        this.retry_delay = source["retry_delay"];
 	        this.article_size_in_bytes = source["article_size_in_bytes"];
-	        this.groups = source["groups"];
+	        this.groups = this.convertValues(source["groups"], NewsgroupConfig);
 	        this.throttle_rate = source["throttle_rate"];
 	        this.message_id_format = source["message_id_format"];
 	        this.post_headers = this.convertValues(source["post_headers"], PostHeaders);
@@ -752,6 +766,7 @@ export namespace config {
 		    return a;
 		}
 	}
+	
 	
 	
 	
