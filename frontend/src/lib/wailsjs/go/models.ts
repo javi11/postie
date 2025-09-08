@@ -524,6 +524,7 @@ export namespace config {
 	    max_input_slices: number;
 	    extra_par2_options: string[];
 	    temp_dir: string;
+	    maintain_par2_files?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Par2Config(source);
@@ -538,6 +539,7 @@ export namespace config {
 	        this.max_input_slices = source["max_input_slices"];
 	        this.extra_par2_options = source["extra_par2_options"];
 	        this.temp_dir = source["temp_dir"];
+	        this.maintain_par2_files = source["maintain_par2_files"];
 	    }
 	}
 	export class PostCheck {

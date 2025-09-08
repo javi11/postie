@@ -171,6 +171,8 @@
 			"temp_dir": "Temporary Directory",
 			"temp_dir_description": "Directory where PAR2 files are temporarily created during processing (uses system temp by default)",
 			"temp_dir_placeholder": "Leave empty for system temp directory",
+			"maintain_par2_files": "Maintain PAR2 Files",
+			"maintain_par2_files_description": "Keep PAR2 files permanently after successful upload (useful for archive integrity and future repairs)",
 			"redundancy": "Redundancy",
 			"redundancy_description": "Recovery data percentage",
 			"volume_size": "Volume Size",

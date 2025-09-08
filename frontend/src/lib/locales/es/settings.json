@@ -166,6 +166,8 @@
 			"temp_dir": "Directorio Temporal",
 			"temp_dir_description": "Directorio donde se crean temporalmente los archivos PAR2 durante el procesamiento (usa el temp del sistema por defecto)",
 			"temp_dir_placeholder": "Dejar vacío para usar el directorio temporal del sistema",
+			"maintain_par2_files": "Mantener Archivos PAR2",
+			"maintain_par2_files_description": "Conservar los archivos PAR2 permanentemente después de una subida exitosa (útil para la integridad del archivo y futuras reparaciones)",
 			"redundancy": "Redundancia",
 			"redundancy_description": "Porcentaje de datos de recuperación",
 			"volume_size": "Tamaño de Volumen",

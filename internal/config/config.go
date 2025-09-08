@@ -172,6 +172,7 @@ type Par2Config struct {
 	MaxInputSlices   int       `yaml:"max_input_slices" json:"max_input_slices"`
 	ExtraPar2Options []string  `yaml:"extra_par2_options" json:"extra_par2_options"`
 	TempDir          string    `yaml:"temp_dir" json:"temp_dir"`
+	MaintainPar2Files *bool    `yaml:"maintain_par2_files" json:"maintain_par2_files"`
 	once             sync.Once `json:"-"`
 }
 
@@ -414,6 +415,12 @@ func Load(path string) (*ConfigData, error) {
 
 	if cfg.Par2.MaxInputSlices <= 0 {
 		cfg.Par2.MaxInputSlices = defaultMaxInputSlices
+	}
+
+	// Set default for maintain par2 files (default to false to preserve current behavior)
+	if cfg.Par2.MaintainPar2Files == nil {
+		maintainPar2Files := false
+		cfg.Par2.MaintainPar2Files = &maintainPar2Files
 	}
 
 	// Set version if not present
@@ -719,13 +726,14 @@ func GetDefaultConfig() ConfigData {
 			MaxRePost:  1,
 		},
 		Par2: Par2Config{
-			Enabled:          &enabled,
-			Par2Path:         defaultPar2Path,
-			Redundancy:       defaultRedundancy,
-			VolumeSize:       defaultVolumeSize,
-			MaxInputSlices:   defaultMaxInputSlices,
-			ExtraPar2Options: []string{},
-			TempDir:          os.TempDir(),
+			Enabled:           &enabled,
+			Par2Path:          defaultPar2Path,
+			Redundancy:        defaultRedundancy,
+			VolumeSize:        defaultVolumeSize,
+			MaxInputSlices:    defaultMaxInputSlices,
+			ExtraPar2Options:  []string{},
+			TempDir:           os.TempDir(),
+			MaintainPar2Files: &disabled, // Default to false to preserve current behavior
 		},
 		Watcher: WatcherConfig{
 			Enabled:        false,

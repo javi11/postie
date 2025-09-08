@@ -213,12 +213,16 @@ func (p *Postie) postInParallel(
 		postingSucceeded bool
 	)
 	defer func() {
-		// Only clean up PAR2 files if posting was successful
-		// This preserves them for retry attempts on failure
-		if postingSucceeded {
-			for _, p := range createdPar2Paths {
-				safeRemoveFile(ctx, p)
+		// Only clean up PAR2 files if posting was successful AND maintain_par2_files is false
+		// This preserves them for retry attempts on failure, and permanently if maintain_par2_files is true
+		shouldCleanup := postingSucceeded && (p.par2Cfg.MaintainPar2Files == nil || !*p.par2Cfg.MaintainPar2Files)
+		if shouldCleanup {
+			for _, path := range createdPar2Paths {
+				safeRemoveFile(ctx, path)
 			}
+		} else if postingSucceeded && p.par2Cfg.MaintainPar2Files != nil && *p.par2Cfg.MaintainPar2Files {
+			slog.InfoContext(ctx, "PAR2 files preserved due to maintain_par2_files setting", 
+				"sourceFile", f.Path, "par2Files", len(createdPar2Paths))
 		}
 	}()
 
@@ -298,12 +302,16 @@ func (p *Postie) post(
 	)
 
 	defer func() {
-		// Only clean up PAR2 files if posting was successful
-		// This preserves them for retry attempts on failure
-		if postingSucceeded {
-			for _, p := range createdPar2Paths {
-				safeRemoveFile(ctx, p)
+		// Only clean up PAR2 files if posting was successful AND maintain_par2_files is false
+		// This preserves them for retry attempts on failure, and permanently if maintain_par2_files is true
+		shouldCleanup := postingSucceeded && (p.par2Cfg.MaintainPar2Files == nil || !*p.par2Cfg.MaintainPar2Files)
+		if shouldCleanup {
+			for _, path := range createdPar2Paths {
+				safeRemoveFile(ctx, path)
 			}
+		} else if postingSucceeded && p.par2Cfg.MaintainPar2Files != nil && *p.par2Cfg.MaintainPar2Files {
+			slog.InfoContext(ctx, "PAR2 files preserved due to maintain_par2_files setting", 
+				"sourceFile", f.Path, "par2Files", len(createdPar2Paths))
 		}
 	}()
 

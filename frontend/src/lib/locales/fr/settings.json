@@ -166,6 +166,8 @@
 			"temp_dir": "Répertoire Temporaire",
 			"temp_dir_description": "Répertoire où les fichiers PAR2 sont créés temporairement pendant le traitement (utilise le temp système par défaut)",
 			"temp_dir_placeholder": "Laisser vide pour le répertoire temporaire du système",
+			"maintain_par2_files": "Maintenir les Fichiers PAR2",
+			"maintain_par2_files_description": "Conserver les fichiers PAR2 de façon permanente après un téléchargement réussi (utile pour l'intégrité des archives et les réparations futures)",
 			"redundancy": "Redondance",
 			"redundancy_description": "Pourcentage de données de récupération",
 			"volume_size": "Taille de Volume",

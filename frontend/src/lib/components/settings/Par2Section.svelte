@@ -73,6 +73,7 @@ let redundancy = $state(config.par2?.redundancy || "10%");
 let volumeSize = $state(config.par2?.volume_size || 209715200);
 let maxInputSlices = $state(config.par2?.max_input_slices || 4000);
 let extraPar2Options = $state<string[]>(config.par2?.extra_par2_options || []);
+let maintainPar2Files = $state(config.par2?.maintain_par2_files ?? false);
 let volumeSizeValue = $state<number>(0);
 let volumeSizeUnit = $state("MB");
 let redundancyValue = $state<number>(10);
@@ -111,6 +112,10 @@ $effect(() => {
 
 $effect(() => {
 	config.par2.extra_par2_options = extraPar2Options;
+});
+
+$effect(() => {
+	config.par2.maintain_par2_files = maintainPar2Files;
 });
 
 // Parse existing values and update local state
@@ -192,6 +197,7 @@ async function savePar2Settings() {
 			volume_size: volumeSize || 153600000,
 			max_input_slices: maxInputSlices || 4000,
 			extra_par2_options: extraPar2Options,
+			maintain_par2_files: maintainPar2Files,
 		};
 
 		await apiClient.saveConfig(currentConfig);
@@ -274,6 +280,22 @@ let volumeSizeDisplay = $derived(volumeSize
               </div>
               <p class="text-sm text-base-content/70 mt-1">
                 {$t('settings.par2.temp_dir_description')}
+              </p>
+            </div>
+
+            <!-- Maintain PAR2 Files -->
+            <div class="form-control">
+              <label for="maintain-par2-files" class="cursor-pointer label">
+                <span class="label-text">{$t('settings.par2.maintain_par2_files')}</span>
+                <input
+                  id="maintain-par2-files"
+                  type="checkbox"
+                  class="checkbox"
+                  bind:checked={maintainPar2Files}
+                />
+              </label>
+              <p class="text-sm text-base-content/70 mt-1">
+                {$t('settings.par2.maintain_par2_files_description')}
               </p>
             </div>
 
