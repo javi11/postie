@@ -236,6 +236,9 @@
 			"group_policy_description": "Cómo distribuir archivos entre grupos de noticias",
 			"wait_for_par2": "Esperar PAR2",
 			"wait_for_par2_description": "Esperar a que se creen los archivos PAR2 antes de comenzar la carga",
+			"single_nzb_per_folder": "Un Solo NZB Por Carpeta",
+			"single_nzb_per_folder_description": "Crear un NZB por carpeta en lugar de un NZB por archivo. Especialmente útil para sets de archivos organizados en carpetas.",
+			"single_nzb_per_folder_info": "<strong>Modo Observación:</strong> Crea un NZB con el nombre de la carpeta conteniendo todos los archivos con rutas relativas preservadas.<br><strong>Carga Directa:</strong> Al cargar una carpeta, crea un solo NZB para todo el contenido de la carpeta.",
 			"obfuscation": {
 				"none": "Ninguno",
 				"partial": "Parcial",

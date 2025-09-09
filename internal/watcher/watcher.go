@@ -39,14 +39,15 @@ type ProcessorInterface interface {
 }
 
 type Watcher struct {
-	cfg           config.WatcherConfig
-	queue         queue.QueueInterface
-	processor     ProcessorInterface
-	watchFolder   string
-	fileSizeCache map[string]fileCacheEntry
-	cacheMutex    sync.RWMutex
-	nextRunTime   time.Time
-	nextRunMutex  sync.RWMutex
+	cfg                config.WatcherConfig
+	queue              queue.QueueInterface
+	processor          ProcessorInterface
+	watchFolder        string
+	fileSizeCache      map[string]fileCacheEntry
+	cacheMutex         sync.RWMutex
+	nextRunTime        time.Time
+	nextRunMutex       sync.RWMutex
+	singleNzbPerFolder bool
 }
 
 type fileCacheEntry struct {
@@ -59,13 +60,15 @@ func New(
 	q queue.QueueInterface,
 	processor ProcessorInterface,
 	watchFolder string,
+	singleNzbPerFolder bool,
 ) *Watcher {
 	return &Watcher{
-		cfg:           cfg,
-		queue:         q,
-		processor:     processor,
-		watchFolder:   watchFolder,
-		fileSizeCache: make(map[string]fileCacheEntry),
+		cfg:                cfg,
+		queue:              q,
+		processor:          processor,
+		watchFolder:        watchFolder,
+		fileSizeCache:      make(map[string]fileCacheEntry),
+		singleNzbPerFolder: singleNzbPerFolder,
 	}
 }
 
@@ -138,7 +141,12 @@ func (w *Watcher) scanDirectory(ctx context.Context) error {
 
 	slog.InfoContext(ctx, "Directory size exceeds threshold, starting import", "total_size", totalSize, "threshold", w.cfg.SizeThreshold)
 
-	// Process all files in directory
+	// If single NZB per folder mode is enabled, collect files by folder
+	if w.singleNzbPerFolder {
+		return w.scanDirectoryGroupByFolder(ctx)
+	}
+
+	// Process all files in directory (traditional mode - one NZB per file)
 	return pwalkdir.Walk(w.watchFolder, func(path string, dir fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -193,6 +201,108 @@ func (w *Watcher) scanDirectory(ctx context.Context) error {
 
 		return nil
 	})
+}
+
+// scanDirectoryGroupByFolder scans the directory and groups files by folder for single NZB per folder mode
+func (w *Watcher) scanDirectoryGroupByFolder(ctx context.Context) error {
+	// Map to collect files by their parent directory
+	filesByFolder := make(map[string][]string)
+	sizeByFolder := make(map[string]int64)
+
+	// Walk the directory tree and collect files by folder
+	err := pwalkdir.Walk(w.watchFolder, func(path string, dir fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip directories
+		if dir.IsDir() {
+			return nil
+		}
+
+		info, err := dir.Info()
+		if err != nil {
+			return err
+		}
+
+		// Skip files that don't meet criteria
+		if !w.shouldProcessFile(path, info) {
+			return nil
+		}
+
+		// Get the parent directory
+		folderPath := filepath.Dir(path)
+		
+		// Add file to the folder's file list
+		filesByFolder[folderPath] = append(filesByFolder[folderPath], path)
+		sizeByFolder[folderPath] += info.Size()
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// Process each folder as a unit
+	for folderPath, files := range filesByFolder {
+		if len(files) == 0 {
+			continue
+		}
+
+		// Check if any file in the folder is being processed or in queue
+		skipFolder := false
+		for _, filePath := range files {
+			// Check if file is currently being processed
+			if w.processor != nil && w.processor.IsPathBeingProcessed(filePath) {
+				slog.InfoContext(ctx, "File in folder is currently being processed, skipping folder", "file", filePath, "folder", folderPath)
+				skipFolder = true
+				break
+			}
+
+			// Check if file is already in queue
+			inQueue, err := w.queue.IsPathInQueue(filePath)
+			if err != nil {
+				slog.ErrorContext(ctx, "Error checking if path is in queue", "path", filePath, "error", err)
+				continue
+			}
+
+			if inQueue {
+				slog.DebugContext(ctx, "File in folder already exists in queue, skipping folder", "file", filePath, "folder", folderPath)
+				skipFolder = true
+				break
+			}
+		}
+
+		if skipFolder {
+			continue
+		}
+
+		// Use the folder path as the queue identifier
+		// This allows the processor to know which files belong to this folder job
+		folderSize := sizeByFolder[folderPath]
+		folderName := filepath.Base(folderPath)
+		
+		slog.InfoContext(ctx, "Adding folder to queue", "folder", folderName, "files", len(files), "size", folderSize)
+
+		// Add the folder to the queue with a special marker to indicate it's a folder
+		// We'll use the folder path with a special prefix to distinguish from individual files
+		folderQueuePath := "FOLDER:" + folderPath
+		err = w.queue.AddFile(ctx, folderQueuePath, folderSize)
+		if err != nil {
+			slog.ErrorContext(ctx, "Error adding folder to queue", "folder", folderPath, "error", err)
+			continue
+		}
+
+		// Store the file list for this folder so the processor can retrieve them
+		// This would typically be stored in the queue metadata or a separate storage
+		// For now, we'll log them
+		for _, filePath := range files {
+			slog.DebugContext(ctx, "File in folder", "folder", folderName, "file", filepath.Base(filePath))
+		}
+	}
+
+	return nil
 }
 
 func (w *Watcher) shouldProcessFile(path string, info os.FileInfo) bool {

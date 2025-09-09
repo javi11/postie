@@ -632,6 +632,7 @@ export namespace config {
 	    obfuscation_policy: string;
 	    par2_obfuscation_policy: string;
 	    group_policy: string;
+	    single_nzb_per_folder: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new PostingConfig(source);
@@ -650,6 +651,7 @@ export namespace config {
 	        this.obfuscation_policy = source["obfuscation_policy"];
 	        this.par2_obfuscation_policy = source["par2_obfuscation_policy"];
 	        this.group_policy = source["group_policy"];
+	        this.single_nzb_per_folder = source["single_nzb_per_folder"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

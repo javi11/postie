@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -232,7 +233,39 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 }
 
 func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *queue.FileJob) (string, error) {
-	fileName := getFileName(job.Path)
+	// Check if this is a folder job
+	isFolder := strings.HasPrefix(job.Path, "FOLDER:")
+	var fileName string
+	var filesToProcess []fileinfo.FileInfo
+	var folderPath string
+	
+	if isFolder {
+		// Extract the actual folder path
+		folderPath = strings.TrimPrefix(job.Path, "FOLDER:")
+		fileName = filepath.Base(folderPath)
+		
+		// Collect all files in the folder
+		files, err := p.collectFilesInFolder(folderPath)
+		if err != nil {
+			return "", fmt.Errorf("failed to collect files in folder %s: %w", folderPath, err)
+		}
+		if len(files) == 0 {
+			return "", fmt.Errorf("no files found in folder %s", folderPath)
+		}
+		filesToProcess = files
+		
+		slog.InfoContext(ctx, "Processing folder as single NZB", "folder", fileName, "files", len(files))
+	} else {
+		// Single file processing
+		fileName = getFileName(job.Path)
+		filesToProcess = []fileinfo.FileInfo{
+			{
+				Path: job.Path,
+				Size: uint64(job.Size),
+			},
+		}
+	}
+
 	jobID := string(msg.ID)
 
 	// Create a context for this specific job that can be cancelled independently
@@ -279,12 +312,6 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 		p.jobsWg.Done() // Signal job completion to WaitGroup
 	}()
 
-	// Create file info
-	fileInfo := fileinfo.FileInfo{
-		Path: job.Path,
-		Size: uint64(job.Size),
-	}
-
 	// Double-check that pool manager is still available before creating postie
 	p.runningMux.Lock()
 	poolManager := p.poolManager
@@ -303,7 +330,10 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 
 	// Determine the input folder for maintaining folder structure
 	var inputFolder string
-	if p.watchFolder != "" && isWithinPath(job.Path, p.watchFolder) {
+	if isFolder {
+		// For folder processing, use the parent directory of the folder
+		inputFolder = filepath.Dir(folderPath)
+	} else if p.watchFolder != "" && isWithinPath(job.Path, p.watchFolder) {
 		// For files from the watcher, use the watch folder as root to maintain structure
 		inputFolder = p.watchFolder
 		slog.DebugContext(jobCtx, "Using watch folder as root for folder structure",
@@ -315,16 +345,18 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 			"inputFolder", inputFolder, "filePath", job.Path)
 	}
 
-	// Post the file using the job-specific postie instance with pausable context
-	actualNzbPath, err := jobPostie.Post(pausableCtx, []fileinfo.FileInfo{fileInfo}, inputFolder, p.outputFolder)
+	// Post the files using the job-specific postie instance with pausable context
+	actualNzbPath, err := jobPostie.Post(pausableCtx, filesToProcess, inputFolder, p.outputFolder)
 	if err != nil {
 		return "", err
 	}
 
-	// Delete the original file
+	// Delete the original files if configured
 	if p.deleteOriginalFile {
-		if err := os.Remove(job.Path); err != nil {
-			slog.WarnContext(ctx, "Could not delete original file", "path", job.Path, "error", err)
+		for _, fileInfo := range filesToProcess {
+			if err := os.Remove(fileInfo.Path); err != nil {
+				slog.WarnContext(ctx, "Could not delete original file", "path", fileInfo.Path, "error", err)
+			}
 		}
 	}
 
@@ -655,6 +687,36 @@ func (p *Processor) checkAndHandleProviderAvailability() {
 		p.autoPauseReason = ""
 		p.autoPausedMux.Unlock()
 	}
+}
+
+// collectFilesInFolder collects all files in the specified folder recursively
+func (p *Processor) collectFilesInFolder(folderPath string) ([]fileinfo.FileInfo, error) {
+	var files []fileinfo.FileInfo
+	
+	err := filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		
+		// Skip directories
+		if info.IsDir() {
+			return nil
+		}
+		
+		// Add file to the list
+		files = append(files, fileinfo.FileInfo{
+			Path: path,
+			Size: uint64(info.Size()),
+		})
+		
+		return nil
+	})
+	
+	if err != nil {
+		return nil, err
+	}
+	
+	return files, nil
 }
 
 func getFileName(path string) string {

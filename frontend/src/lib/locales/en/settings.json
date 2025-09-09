@@ -241,6 +241,9 @@
 			"group_policy_description": "How to distribute files across newsgroups",
 			"wait_for_par2": "Wait for PAR2",
 			"wait_for_par2_description": "Wait for PAR2 files to be created before starting upload",
+			"single_nzb_per_folder": "Single NZB Per Folder",
+			"single_nzb_per_folder_description": "Create one NZB per folder instead of one NZB per file. When enabled, all files in a folder will be combined into a single NZB file.",
+			"single_nzb_per_folder_info": "<strong>Watch Mode:</strong> Creates one NZB named after the folder containing all files (e.g., 'folder.nzb' with 'subfolder/file1.mkv' and 'file2.mkv'). <strong>Direct Upload:</strong> When uploading a folder, creates one NZB for the entire folder contents.",
 			"obfuscation": {
 				"none": "None",
 				"partial": "Partial",

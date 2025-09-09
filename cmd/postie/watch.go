@@ -132,8 +132,11 @@ The watch command will monitor the configured directory and upload files accordi
 			}
 		}()
 
+		// Get posting config to check singleNzbPerFolder setting
+		postingCfg := cfg.GetPostingConfig()
+		
 		// Create watcher
-		w := watcher.New(watcherCfg, q, proc, watchDir)
+		w := watcher.New(watcherCfg, q, proc, watchDir, postingCfg.SingleNzbPerFolder)
 
 		// Handle shutdown signals
 		sigChan := make(chan os.Signal, 1)
