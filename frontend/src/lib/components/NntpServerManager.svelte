@@ -93,6 +93,22 @@
     updateServers();
   }
 
+  function onServerEnabledChange(index: number, enabled: boolean): void {
+    // If trying to disable, check if it's the last enabled server
+    if (!enabled) {
+      const enabledCount = localServers.filter(s => s.enabled !== false).length;
+      if (enabledCount <= 1) {
+        toastStore.error($t("settings.server.validation.cannot_disable_last"));
+        // Revert the change
+        localServers[index].enabled = true;
+        return;
+      }
+    }
+    
+    localServers[index].enabled = enabled;
+    onServerFieldChange(index);
+  }
+
   function getServerValidationState(index: number): ValidationState {
     const state = validationStates[index];
     if (!state) {
@@ -118,6 +134,38 @@
     // This will run whenever validationStates changes
     checkValidationState();
   });
+
+  // Bulk operations
+  function enableAllServers(): void {
+    localServers.forEach((server, index) => {
+      if (!server.enabled) {
+        localServers[index].enabled = true;
+        onServerFieldChange(index);
+      }
+    });
+  }
+
+  function disableAllServers(): void {
+    // Ensure at least one server remains enabled
+    const enabledCount = localServers.filter(s => s.enabled !== false).length;
+    if (enabledCount <= 1) {
+      toastStore.error($t("settings.server.bulk_operations.cannot_disable_all"));
+      return;
+    }
+    
+    localServers.forEach((server, index) => {
+      if (server.enabled !== false) {
+        localServers[index].enabled = false;
+        onServerFieldChange(index);
+      }
+    });
+  }
+
+  // Computed values for bulk operations
+  let enabledServersCount = $derived(localServers.filter(s => s.enabled !== false).length);
+  let totalServersCount = $derived(localServers.length);
+  let hasDisabledServers = $derived(localServers.some(s => s.enabled === false));
+  let allServersDisabled = $derived(enabledServersCount === 0);
 
   async function validateServer(index: number): Promise<void> {
     const server = localServers[index];
@@ -207,6 +255,42 @@
     </div>
   {/if}
 
+  <!-- Status and Bulk Operations -->
+  {#if localServers.length > 0 && variant === "settings"}
+    <div class="flex items-center justify-between p-4 bg-base-200 rounded-lg mb-4">
+      <div class="flex items-center gap-4">
+        <div class="stat">
+          <div class="stat-title text-sm">Providers Status</div>
+          <div class="stat-value text-lg">
+            {enabledServersCount} / {totalServersCount}
+          </div>
+          <div class="stat-desc text-xs">
+            {$t("settings.server.status.providers_active")}
+          </div>
+        </div>
+      </div>
+      
+      <div class="flex gap-2">
+        {#if hasDisabledServers}
+          <button 
+            class="btn btn-sm btn-success"
+            onclick={enableAllServers}
+          >
+            {$t("settings.server.bulk_operations.enable_all")}
+          </button>
+        {/if}
+        {#if enabledServersCount > 1}
+          <button 
+            class="btn btn-sm btn-warning"
+            onclick={disableAllServers}
+          >
+            {$t("settings.server.bulk_operations.disable_all")}
+          </button>
+        {/if}
+      </div>
+    </div>
+  {/if}
+
   {#if localServers.length === 0}
     <div
       class="text-center py-8 border-2 border-dashed border-base-300 rounded-lg"
@@ -224,7 +308,8 @@
     <div class="space-y-4">
       {#each localServers as server, index}
         {@const validationState = getServerValidationState(index)}
-        <div class="card bg-base-100 shadow-lg">
+        {@const isEnabled = server.enabled !== false}
+        <div class="card bg-base-100 shadow-lg {!isEnabled ? 'opacity-60' : ''}">
           <div class="card-body p-4">
             <div class="flex justify-between items-start mb-4">
               <div class="flex items-center gap-2">
@@ -233,6 +318,11 @@
                     values: { number: index + 1 },
                   })}
                 </h4>
+                {#if !isEnabled}
+                  <div class="badge badge-warning">
+                    {$t("settings.server.disabled")}
+                  </div>
+                {/if}
                 {#if validationState.status === "validating"}
                   <div class="badge badge-primary gap-1">
                     <Loader2 class="w-3 h-3 animate-spin" />
@@ -284,19 +374,25 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               {#if variant === "settings" && server.enabled !== undefined}
                 <div class="md:col-span-2">
-                  <div class="flex items-center gap-3">
+                  <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg">
                     <input
                       id="server-enabled-{index}"
                       type="checkbox"
-                      class="checkbox"
-                      bind:checked={localServers[index].enabled}
-                      onchange={() => onServerFieldChange(index)}
+                      class="checkbox checkbox-primary"
+                      checked={localServers[index].enabled !== false}
+                      onchange={(e) => onServerEnabledChange(index, e.target.checked)}
                     />
                     <label
                       for="server-enabled-{index}"
-                      class="label-text cursor-pointer"
+                      class="label-text cursor-pointer flex-1"
                     >
-                      {$t("settings.server.enabled")}
+                      <span class="font-medium">{$t("settings.server.enabled")}</span>
+                      <p class="text-sm opacity-70">
+                        {isEnabled 
+                          ? $t("settings.server.enabled_description")
+                          : $t("settings.server.disabled_description")
+                        }
+                      </p>
                     </label>
                   </div>
                 </div>

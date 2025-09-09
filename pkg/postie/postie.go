@@ -80,6 +80,49 @@ func (p *Postie) Close() {
 	}
 }
 
+// CleanupPar2Files removes PAR2 files for the given source file
+// This method can be called when a job fails permanently to clean up orphaned PAR2 files
+func (p *Postie) CleanupPar2Files(ctx context.Context, sourceFile fileinfo.FileInfo) {
+	var dirPath string
+	if p.par2Cfg != nil && p.par2Cfg.TempDir != "" {
+		dirPath = p.par2Cfg.TempDir
+	} else {
+		dirPath = filepath.Dir(sourceFile.Path)
+	}
+
+	baseName := filepath.Base(sourceFile.Path)
+	par2FileName := baseName + ".par2"
+	mainPar2Path := filepath.Join(dirPath, par2FileName)
+
+	// Remove main PAR2 file
+	if _, err := os.Stat(mainPar2Path); err == nil {
+		safeRemoveFile(ctx, mainPar2Path)
+		slog.DebugContext(ctx, "Cleaned up main PAR2 file", "file", mainPar2Path)
+	}
+
+	// Find and remove all volume files
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to read directory for PAR2 cleanup", "error", err)
+		return
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		// Match patterns like .vol0+1.par2, .vol1+1.par2, etc.
+		if strings.HasPrefix(name, baseName) && strings.Contains(name, ".vol") && strings.HasSuffix(name, ".par2") {
+			volumePath := filepath.Join(dirPath, name)
+			safeRemoveFile(ctx, volumePath)
+			slog.DebugContext(ctx, "Cleaned up PAR2 volume file", "file", volumePath)
+		}
+	}
+
+	slog.InfoContext(ctx, "PAR2 cleanup completed", "sourceFile", sourceFile.Path)
+}
+
 // safeRemoveFile attempts to remove a file with retry logic
 func safeRemoveFile(ctx context.Context, filePath string) {
 	maxRetries := 3
@@ -167,10 +210,19 @@ func (p *Postie) postInParallel(
 	var (
 		createdPar2Paths []string
 		err              error
+		postingSucceeded bool
 	)
 	defer func() {
-		for _, p := range createdPar2Paths {
-			safeRemoveFile(ctx, p)
+		// Only clean up PAR2 files if posting was successful AND maintain_par2_files is false
+		// This preserves them for retry attempts on failure, and permanently if maintain_par2_files is true
+		shouldCleanup := postingSucceeded && (p.par2Cfg.MaintainPar2Files == nil || !*p.par2Cfg.MaintainPar2Files)
+		if shouldCleanup {
+			for _, path := range createdPar2Paths {
+				safeRemoveFile(ctx, path)
+			}
+		} else if postingSucceeded && p.par2Cfg.MaintainPar2Files != nil && *p.par2Cfg.MaintainPar2Files {
+			slog.InfoContext(ctx, "PAR2 files preserved due to maintain_par2_files setting",
+				"sourceFile", f.Path, "par2Files", len(createdPar2Paths))
 		}
 	}()
 
@@ -232,6 +284,8 @@ func (p *Postie) postInParallel(
 		// Note: We don't return the error here to avoid failing the upload if the script fails
 	}
 
+	// Mark posting as successful so PAR2 files get cleaned up
+	postingSucceeded = true
 	return finalPath, nil
 }
 
@@ -244,11 +298,20 @@ func (p *Postie) post(
 	var (
 		createdPar2Paths []string
 		err              error
+		postingSucceeded bool
 	)
 
 	defer func() {
-		for _, p := range createdPar2Paths {
-			safeRemoveFile(ctx, p)
+		// Only clean up PAR2 files if posting was successful AND maintain_par2_files is false
+		// This preserves them for retry attempts on failure, and permanently if maintain_par2_files is true
+		shouldCleanup := postingSucceeded && (p.par2Cfg.MaintainPar2Files == nil || !*p.par2Cfg.MaintainPar2Files)
+		if shouldCleanup {
+			for _, path := range createdPar2Paths {
+				safeRemoveFile(ctx, path)
+			}
+		} else if postingSucceeded && p.par2Cfg.MaintainPar2Files != nil && *p.par2Cfg.MaintainPar2Files {
+			slog.InfoContext(ctx, "PAR2 files preserved due to maintain_par2_files setting",
+				"sourceFile", f.Path, "par2Files", len(createdPar2Paths))
 		}
 	}()
 
@@ -276,10 +339,6 @@ func (p *Postie) post(
 		return "", err
 	}
 
-	for _, p := range createdPar2Paths {
-		safeRemoveFile(ctx, p)
-	}
-
 	// Generate single NZB file for all files
 	dirPath := filepath.Dir(f.Path)
 	dirPath = strings.TrimPrefix(dirPath, rootDir)
@@ -297,6 +356,8 @@ func (p *Postie) post(
 		// Note: We don't return the error here to avoid failing the upload if the script fails
 	}
 
+	// Mark posting as successful so PAR2 files get cleaned up
+	postingSucceeded = true
 	return finalPath, nil
 }
 
@@ -305,7 +366,7 @@ func (p *Postie) executePostUploadScript(ctx context.Context, nzbPath string) er
 		return nil
 	}
 
-	slog.InfoContext(ctx, "Executing post upload script", "command", p.postUploadScriptCfg.Command, "nzbPath", nzbPath)
+	slog.InfoContext(ctx, "Executing post upload script", "command", p.postUploadScriptCfg.Command, "nzb_path", nzbPath)
 
 	// Create timeout context
 	timeoutCtx, cancel := context.WithTimeout(ctx, p.postUploadScriptCfg.Timeout.ToDuration())

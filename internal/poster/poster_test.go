@@ -1262,7 +1262,7 @@ func createTestConfig() config.PostingConfig {
 		MaxRetries:         3,
 		RetryDelay:         config.Duration("1s"),
 		ArticleSizeInBytes: 1000,
-		Groups:             []string{"alt.test"},
+		Groups:             []config.NewsgroupConfig{{Name: "alt.test", Enabled: &enabled}},
 		ThrottleRate:       1024 * 1024,
 		MessageIDFormat:    config.MessageIDFormatRandom,
 		PostHeaders: config.PostHeaders{

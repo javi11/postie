@@ -166,6 +166,8 @@
 			"temp_dir": "Répertoire Temporaire",
 			"temp_dir_description": "Répertoire où les fichiers PAR2 sont créés temporairement pendant le traitement (utilise le temp système par défaut)",
 			"temp_dir_placeholder": "Laisser vide pour le répertoire temporaire du système",
+			"maintain_par2_files": "Maintenir les Fichiers PAR2",
+			"maintain_par2_files_description": "Conserver les fichiers PAR2 de façon permanente après un téléchargement réussi (utile pour l'intégrité des archives et les réparations futures)",
 			"redundancy": "Redondance",
 			"redundancy_description": "Pourcentage de données de récupération",
 			"volume_size": "Taille de Volume",
@@ -271,11 +273,11 @@
 			},
 			"newsgroups": {
 				"title": "Groupes de Nouvelles",
-				"description": "Groupes où les fichiers seront publiés",
+				"description": "Configurez les groupes de nouvelles où les fichiers seront publiés. Utilisez les commutateurs pour activer/désactiver des groupes individuels.",
 				"add_group": "Ajouter un Groupe",
 				"remove": "Supprimer",
 				"placeholder": "alt.binaries.exemple",
-				"info": "<strong>Groupes de nouvelles communs :</strong> alt.binaries.test (pour les tests), alt.binaries.misc, alt.binaries.multimedia. Choisissez des groupes appropriés pour votre type de contenu."
+				"info": "<strong>Groupes de nouvelles communs :</strong> alt.binaries.test (pour les tests), alt.binaries.misc, alt.binaries.multimedia. Choisissez des groupes appropriés pour votre type de contenu. <strong>Commutateur :</strong> Utilisez les interrupteurs pour activer/désactiver des groupes de nouvelles individuels sans les supprimer."
 			},
 			"save_button": "Sauvegarder les Paramètres de Publication",
 			"saving": "Sauvegarde...",
@@ -371,6 +373,9 @@
 			"server_number": "Serveur {number}",
 			"test_connection": "Tester la Connexion",
 			"enabled": "Activé",
+			"disabled": "Désactivé",
+			"enabled_description": "Ce fournisseur sera utilisé pour les téléchargements",
+			"disabled_description": "Ce fournisseur ne sera pas utilisé pour les téléchargements",
 			"remove": "Supprimer",
 			"host": "Hôte",
 			"host_required": "Hôte *",
@@ -394,6 +399,17 @@
 			"saving": "Sauvegarde...",
 			"saved_success": "Paramètres du serveur sauvegardés",
 			"saved_success_description": "Votre configuration de serveur a été sauvegardée avec succès !",
+			"status": {
+				"providers_active": "fournisseurs actifs"
+			},
+			"bulk_operations": {
+				"enable_all": "Activer Tout",
+				"disable_all": "Désactiver Tout",
+				"cannot_disable_all": "Impossible de désactiver tous les fournisseurs. Au moins un doit rester actif."
+			},
+			"validation": {
+				"cannot_disable_last": "Impossible de désactiver le dernier fournisseur actif. Au moins un fournisseur doit rester activé."
+			},
 			"validation_errors": {
 				"host_required": "Serveur {number} : L'hôte est requis",
 				"port_invalid": "Serveur {number} : Un numéro de port valide est requis (1-65535)"

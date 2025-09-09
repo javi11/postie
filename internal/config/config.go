@@ -172,6 +172,7 @@ type Par2Config struct {
 	MaxInputSlices   int       `yaml:"max_input_slices" json:"max_input_slices"`
 	ExtraPar2Options []string  `yaml:"extra_par2_options" json:"extra_par2_options"`
 	TempDir          string    `yaml:"temp_dir" json:"temp_dir"`
+	MaintainPar2Files *bool    `yaml:"maintain_par2_files" json:"maintain_par2_files"`
 	once             sync.Once `json:"-"`
 }
 
@@ -214,16 +215,22 @@ type PostCheck struct {
 	MaxRePost uint `yaml:"max_reposts" json:"max_reposts"`
 }
 
+// NewsgroupConfig represents a single newsgroup configuration
+type NewsgroupConfig struct {
+	Name    string `yaml:"name" json:"name"`
+	Enabled *bool  `yaml:"enabled" json:"enabled"`
+}
+
 // PostingConfig represents posting configuration
 type PostingConfig struct {
-	WaitForPar2        *bool           `yaml:"wait_for_par2" json:"wait_for_par2"`
-	MaxRetries         int             `yaml:"max_retries" json:"max_retries"`
-	RetryDelay         Duration        `yaml:"retry_delay" json:"retry_delay"`
-	ArticleSizeInBytes uint64          `yaml:"article_size_in_bytes" json:"article_size_in_bytes"`
-	Groups             []string        `yaml:"groups" json:"groups"`
-	ThrottleRate       int64           `yaml:"throttle_rate" json:"throttle_rate"` // bytes per second
-	MessageIDFormat    MessageIDFormat `yaml:"message_id_format" json:"message_id_format"`
-	PostHeaders        PostHeaders     `yaml:"post_headers" json:"post_headers"`
+	WaitForPar2        *bool               `yaml:"wait_for_par2" json:"wait_for_par2"`
+	MaxRetries         int                 `yaml:"max_retries" json:"max_retries"`
+	RetryDelay         Duration            `yaml:"retry_delay" json:"retry_delay"`
+	ArticleSizeInBytes uint64              `yaml:"article_size_in_bytes" json:"article_size_in_bytes"`
+	Groups             []NewsgroupConfig   `yaml:"groups" json:"groups"`
+	ThrottleRate       int64               `yaml:"throttle_rate" json:"throttle_rate"` // bytes per second
+	MessageIDFormat    MessageIDFormat     `yaml:"message_id_format" json:"message_id_format"`
+	PostHeaders        PostHeaders         `yaml:"post_headers" json:"post_headers"`
 	// If true the uploaded subject and filename will be obfuscated. Default value is `true`.
 	ObfuscationPolicy     ObfuscationPolicy `yaml:"obfuscation_policy" json:"obfuscation_policy"`
 	Par2ObfuscationPolicy ObfuscationPolicy `yaml:"par2_obfuscation_policy" json:"par2_obfuscation_policy"`
@@ -408,6 +415,12 @@ func Load(path string) (*ConfigData, error) {
 
 	if cfg.Par2.MaxInputSlices <= 0 {
 		cfg.Par2.MaxInputSlices = defaultMaxInputSlices
+	}
+
+	// Set default for maintain par2 files (default to false to preserve current behavior)
+	if cfg.Par2.MaintainPar2Files == nil {
+		maintainPar2Files := false
+		cfg.Par2.MaintainPar2Files = &maintainPar2Files
 	}
 
 	// Set version if not present
@@ -693,7 +706,9 @@ func GetDefaultConfig() ConfigData {
 			MaxRetries:         3,
 			RetryDelay:         Duration("5s"),
 			ArticleSizeInBytes: 768000, // 768KB
-			Groups:             []string{"alt.binaries.test"},
+			Groups: []NewsgroupConfig{
+				{Name: "alt.binaries.test", Enabled: &enabled},
+			},
 			ThrottleRate:       0, // 0 means no throttling
 			MessageIDFormat:    MessageIDFormatRandom,
 			PostHeaders: PostHeaders{
@@ -711,13 +726,14 @@ func GetDefaultConfig() ConfigData {
 			MaxRePost:  1,
 		},
 		Par2: Par2Config{
-			Enabled:          &enabled,
-			Par2Path:         defaultPar2Path,
-			Redundancy:       defaultRedundancy,
-			VolumeSize:       defaultVolumeSize,
-			MaxInputSlices:   defaultMaxInputSlices,
-			ExtraPar2Options: []string{},
-			TempDir:          os.TempDir(),
+			Enabled:           &enabled,
+			Par2Path:          defaultPar2Path,
+			Redundancy:        defaultRedundancy,
+			VolumeSize:        defaultVolumeSize,
+			MaxInputSlices:    defaultMaxInputSlices,
+			ExtraPar2Options:  []string{},
+			TempDir:           os.TempDir(),
+			MaintainPar2Files: &disabled, // Default to false to preserve current behavior
 		},
 		Watcher: WatcherConfig{
 			Enabled:        false,

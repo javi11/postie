@@ -470,9 +470,12 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int, wg *sy
 	switch p.cfg.GroupPolicy {
 	case config.GroupPolicyEachFile:
 		randomGroup := p.cfg.Groups[rand.Intn(len(p.cfg.Groups))]
-		groups = append(groups, randomGroup)
+		groups = append(groups, randomGroup.Name)
 	case config.GroupPolicyAll:
-		groups = p.cfg.Groups
+		groups = make([]string, 0)
+		for _, group := range p.cfg.Groups {
+			groups = append(groups, group.Name)
+		}
 	}
 
 	from, err := article.GenerateFrom()

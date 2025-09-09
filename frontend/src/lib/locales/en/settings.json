@@ -171,6 +171,8 @@
 			"temp_dir": "Temporary Directory",
 			"temp_dir_description": "Directory where PAR2 files are temporarily created during processing (uses system temp by default)",
 			"temp_dir_placeholder": "Leave empty for system temp directory",
+			"maintain_par2_files": "Maintain PAR2 Files",
+			"maintain_par2_files_description": "Keep PAR2 files permanently after successful upload (useful for archive integrity and future repairs)",
 			"redundancy": "Redundancy",
 			"redundancy_description": "Recovery data percentage",
 			"volume_size": "Volume Size",
@@ -276,11 +278,11 @@
 			},
 			"newsgroups": {
 				"title": "Newsgroups",
-				"description": "Groups where files will be posted",
+				"description": "Configure newsgroups where files will be posted. Use toggles to enable/disable individual groups.",
 				"add_group": "Add Group",
 				"remove": "Remove",
 				"placeholder": "alt.binaries.example",
-				"info": "<strong>Common newsgroups:</strong> alt.binaries.test (for testing), alt.binaries.misc, alt.binaries.multimedia. Choose groups appropriate for your content type."
+				"info": "<strong>Common newsgroups:</strong> alt.binaries.test (for testing), alt.binaries.misc, alt.binaries.multimedia. Choose groups appropriate for your content type. <strong>Toggle:</strong> Use the switches to enable/disable individual newsgroups without removing them."
 			},
 			"save_button": "Save Posting Settings",
 			"saving": "Saving...",
@@ -332,6 +334,9 @@
 			"server_number": "Server {number}",
 			"test_connection": "Test Connection",
 			"enabled": "Enabled",
+			"disabled": "Disabled",
+			"enabled_description": "This provider will be used for uploading",
+			"disabled_description": "This provider will not be used for uploading",
 			"valid": "Valid",
 			"remove": "Remove",
 			"host": "Host",
@@ -355,6 +360,17 @@
 			"saving": "Saving...",
 			"saved_success": "Server settings saved",
 			"saved_success_description": "Your server configuration has been saved successfully!",
+			"status": {
+				"providers_active": "providers active"
+			},
+			"bulk_operations": {
+				"enable_all": "Enable All",
+				"disable_all": "Disable All",
+				"cannot_disable_all": "Cannot disable all providers. At least one must remain active."
+			},
+			"validation": {
+				"cannot_disable_last": "Cannot disable the last active provider. At least one provider must remain enabled."
+			},
 			"validation_errors": {
 				"host_required": "Server {number}: Host is required",
 				"port_invalid": "Server {number}: Valid port number is required (1-65535)"

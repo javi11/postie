@@ -166,6 +166,8 @@
 			"temp_dir": "Directorio Temporal",
 			"temp_dir_description": "Directorio donde se crean temporalmente los archivos PAR2 durante el procesamiento (usa el temp del sistema por defecto)",
 			"temp_dir_placeholder": "Dejar vacío para usar el directorio temporal del sistema",
+			"maintain_par2_files": "Mantener Archivos PAR2",
+			"maintain_par2_files_description": "Conservar los archivos PAR2 permanentemente después de una subida exitosa (útil para la integridad del archivo y futuras reparaciones)",
 			"redundancy": "Redundancia",
 			"redundancy_description": "Porcentaje de datos de recuperación",
 			"volume_size": "Tamaño de Volumen",
@@ -271,11 +273,11 @@
 			},
 			"newsgroups": {
 				"title": "Grupos de Noticias",
-				"description": "Grupos donde se publicarán los archivos",
+				"description": "Configure los grupos de noticias donde se publicarán los archivos. Use los interruptores para habilitar/deshabilitar grupos individuales.",
 				"add_group": "Agregar Grupo",
 				"remove": "Eliminar",
 				"placeholder": "alt.binaries.ejemplo",
-				"info": "<strong>Grupos de noticias comunes:</strong> alt.binaries.test (para pruebas), alt.binaries.misc, alt.binaries.multimedia. Elija grupos apropiados para su tipo de contenido."
+				"info": "<strong>Grupos de noticias comunes:</strong> alt.binaries.test (para pruebas), alt.binaries.misc, alt.binaries.multimedia. Elija grupos apropiados para su tipo de contenido. <strong>Interruptor:</strong> Use los switches para habilitar/deshabilitar grupos de noticias individuales sin eliminarlos."
 			},
 			"save_button": "Guardar Configuración de Publicación",
 			"saving": "Guardando...",
@@ -370,6 +372,9 @@
 			"server_number": "Servidor {number}",
 			"test_connection": "Probar Conexión",
 			"enabled": "Habilitado",
+			"disabled": "Deshabilitado",
+			"enabled_description": "Este proveedor será utilizado para cargas",
+			"disabled_description": "Este proveedor no será utilizado para cargas",
 			"remove": "Eliminar",
 			"host": "Host",
 			"host_required": "Host *",
@@ -394,6 +399,17 @@
 			"saved_success_description": "¡Su configuración del servidor se ha guardado exitosamente!",
 			"incomplete": "Configuración Incompleta",
 			"invalid": "Inválido",
+			"status": {
+				"providers_active": "proveedores activos"
+			},
+			"bulk_operations": {
+				"enable_all": "Habilitar Todos",
+				"disable_all": "Deshabilitar Todos",
+				"cannot_disable_all": "No se pueden deshabilitar todos los proveedores. Al menos uno debe permanecer activo."
+			},
+			"validation": {
+				"cannot_disable_last": "No se puede deshabilitar el último proveedor activo. Al menos un proveedor debe permanecer habilitado."
+			},
 			"validation_errors": {
 				"host_required": "Servidor {number}: Se requiere host",
 				"port_invalid": "Servidor {number}: Se requiere un número de puerto válido (1-65535)"

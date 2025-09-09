@@ -58,6 +58,52 @@ func New(ctx context.Context, articleSize uint64, cfg *config.Par2Config, jobPro
 	}
 }
 
+// checkExistingPar2Files checks if PAR2 files already exist for the given source file
+func (p *Par2CmdExecutor) checkExistingPar2Files(ctx context.Context, sourceFile fileinfo.FileInfo) ([]string, bool) {
+	var dirPath string
+	if p.cfg.TempDir != "" {
+		dirPath = p.cfg.TempDir
+	} else {
+		dirPath = filepath.Dir(sourceFile.Path)
+	}
+
+	baseName := filepath.Base(sourceFile.Path)
+	par2FileName := baseName + ".par2"
+	mainPar2Path := filepath.Join(dirPath, par2FileName)
+
+	// Check if main PAR2 file exists
+	if _, err := os.Stat(mainPar2Path); os.IsNotExist(err) {
+		return nil, false
+	}
+
+	// Collect all existing PAR2 files (main + volume files)
+	var existingPaths []string
+	existingPaths = append(existingPaths, mainPar2Path)
+
+	// Find all volume files
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to read directory for existing par2 volumes", "error", err)
+		return nil, false
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		// Match patterns like .vol0+1.par2, .vol1+1.par2, etc.
+		if strings.HasPrefix(name, baseName) && strings.Contains(name, ".vol") && strings.HasSuffix(name, ".par2") {
+			existingPaths = append(existingPaths, filepath.Join(dirPath, name))
+		}
+	}
+
+	slog.InfoContext(ctx, "Found existing PAR2 files, skipping generation", 
+		"sourceFile", sourceFile.Path, "par2Files", len(existingPaths))
+
+	return existingPaths, true
+}
+
 // Repair executes the par2 command to repair files in the target folder.
 func (p *Par2CmdExecutor) Create(ctx context.Context, files []fileinfo.FileInfo) ([]string, error) {
 	slog.InfoContext(ctx, "Starting par2 creation process", "executor", "Par2CmdExecutor")
@@ -68,6 +114,12 @@ func (p *Par2CmdExecutor) Create(ctx context.Context, files []fileinfo.FileInfo)
 	)
 	for _, file := range files {
 		if filepath.Ext(file.Path) == ".par2" {
+			continue
+		}
+
+		// Check if PAR2 files already exist for this file
+		if existingPaths, exists := p.checkExistingPar2Files(ctx, file); exists {
+			createdPar2Paths = append(createdPar2Paths, existingPaths...)
 			continue
 		}
 
