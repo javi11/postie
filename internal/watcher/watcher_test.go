@@ -124,7 +124,7 @@ func createTestWatcher(t *testing.T) (*Watcher, string) {
 		processingPaths: make(map[string]bool),
 	}
 
-	watcher := New(cfg, mockQueue, mockProc, tempDir)
+	watcher := New(cfg, mockQueue, mockProc, tempDir, false)
 	return watcher, tempDir
 }
 

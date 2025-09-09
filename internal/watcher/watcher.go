@@ -232,7 +232,7 @@ func (w *Watcher) scanDirectoryGroupByFolder(ctx context.Context) error {
 
 		// Get the parent directory
 		folderPath := filepath.Dir(path)
-		
+
 		// Add file to the folder's file list
 		filesByFolder[folderPath] = append(filesByFolder[folderPath], path)
 		sizeByFolder[folderPath] += info.Size()
@@ -282,7 +282,7 @@ func (w *Watcher) scanDirectoryGroupByFolder(ctx context.Context) error {
 		// This allows the processor to know which files belong to this folder job
 		folderSize := sizeByFolder[folderPath]
 		folderName := filepath.Base(folderPath)
-		
+
 		slog.InfoContext(ctx, "Adding folder to queue", "folder", folderName, "files", len(files), "size", folderSize)
 
 		// Add the folder to the queue with a special marker to indicate it's a folder
