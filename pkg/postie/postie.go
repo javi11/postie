@@ -221,7 +221,7 @@ func (p *Postie) postInParallel(
 				safeRemoveFile(ctx, path)
 			}
 		} else if postingSucceeded && p.par2Cfg.MaintainPar2Files != nil && *p.par2Cfg.MaintainPar2Files {
-			slog.InfoContext(ctx, "PAR2 files preserved due to maintain_par2_files setting", 
+			slog.InfoContext(ctx, "PAR2 files preserved due to maintain_par2_files setting",
 				"sourceFile", f.Path, "par2Files", len(createdPar2Paths))
 		}
 	}()
@@ -310,7 +310,7 @@ func (p *Postie) post(
 				safeRemoveFile(ctx, path)
 			}
 		} else if postingSucceeded && p.par2Cfg.MaintainPar2Files != nil && *p.par2Cfg.MaintainPar2Files {
-			slog.InfoContext(ctx, "PAR2 files preserved due to maintain_par2_files setting", 
+			slog.InfoContext(ctx, "PAR2 files preserved due to maintain_par2_files setting",
 				"sourceFile", f.Path, "par2Files", len(createdPar2Paths))
 		}
 	}()
@@ -366,7 +366,7 @@ func (p *Postie) executePostUploadScript(ctx context.Context, nzbPath string) er
 		return nil
 	}
 
-	slog.InfoContext(ctx, "Executing post upload script", "command", p.postUploadScriptCfg.Command, "nzbPath", nzbPath)
+	slog.InfoContext(ctx, "Executing post upload script", "command", p.postUploadScriptCfg.Command, "nzb_path", nzbPath)
 
 	// Create timeout context
 	timeoutCtx, cancel := context.WithTimeout(ctx, p.postUploadScriptCfg.Timeout.ToDuration())
