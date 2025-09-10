@@ -236,6 +236,8 @@ type PostingConfig struct {
 	Par2ObfuscationPolicy ObfuscationPolicy `yaml:"par2_obfuscation_policy" json:"par2_obfuscation_policy"`
 	//  If you give several Groups you've 3 policy when posting
 	GroupPolicy GroupPolicy `yaml:"group_policy" json:"group_policy"`
+	// If true, creates one NZB per folder instead of one NZB per file. Default value is `false`.
+	SingleNzbPerFolder bool `yaml:"single_nzb_per_folder" json:"single_nzb_per_folder"`
 }
 
 type WatcherConfig struct {
@@ -719,6 +721,7 @@ func GetDefaultConfig() ConfigData {
 			ObfuscationPolicy:     ObfuscationPolicyFull,
 			Par2ObfuscationPolicy: ObfuscationPolicyFull,
 			GroupPolicy:           GroupPolicyEachFile,
+			SingleNzbPerFolder:    false, // Default to false for backward compatibility
 		},
 		PostCheck: PostCheck{
 			Enabled:    &enabled,

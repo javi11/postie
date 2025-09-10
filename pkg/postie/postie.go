@@ -166,7 +166,13 @@ func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir st
 		return "", fmt.Errorf("no files to post")
 	}
 
-	// Start posting
+	// Check if we should create one NZB per folder
+	if p.postingCfg.SingleNzbPerFolder && len(files) > 1 {
+		// Post all files as a single unit (folder mode)
+		return p.postFolder(ctx, files, rootDir, outputDir)
+	}
+
+	// Start posting (one NZB per file - traditional mode)
 	startTime := time.Now()
 	var lastNzbPath string
 
@@ -358,6 +364,147 @@ func (p *Postie) post(
 
 	// Mark posting as successful so PAR2 files get cleaned up
 	postingSucceeded = true
+	return finalPath, nil
+}
+
+// postFolder posts all files from a folder as a single NZB
+func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, rootDir string, outputDir string) (string, error) {
+	if len(files) == 0 {
+		return "", fmt.Errorf("no files to post in folder")
+	}
+
+	startTime := time.Now()
+	
+	// Determine the folder name from the first file's path
+	// This will be used as the NZB filename
+	firstFilePath := files[0].Path
+	folderPath := filepath.Dir(firstFilePath)
+	folderName := filepath.Base(folderPath)
+	if folderName == "." || folderName == "/" {
+		// If files are in root, use a default name
+		folderName = "upload"
+	}
+	
+	slog.InfoContext(ctx, "Posting folder as single NZB", "folder", folderName, "files", len(files))
+	
+	var (
+		createdPar2Paths []string
+		err              error
+		postingSucceeded bool
+	)
+	
+	defer func() {
+		// Only clean up PAR2 files if posting was successful AND maintain_par2_files is false
+		shouldCleanup := postingSucceeded && (p.par2Cfg.MaintainPar2Files == nil || !*p.par2Cfg.MaintainPar2Files)
+		if shouldCleanup {
+			for _, path := range createdPar2Paths {
+				safeRemoveFile(ctx, path)
+			}
+		} else if postingSucceeded && p.par2Cfg.MaintainPar2Files != nil && *p.par2Cfg.MaintainPar2Files {
+			slog.InfoContext(ctx, "PAR2 files preserved due to maintain_par2_files setting",
+				"folder", folderName, "par2Files", len(createdPar2Paths))
+		}
+	}()
+
+	// Create a single NZB generator for all files
+	nzbGen := nzb.NewGenerator(p.postingCfg.ArticleSizeInBytes, p.compressionCfg, p.maintainOriginalExtension)
+
+	// Collect all file paths for posting
+	var allFilePaths []string
+	for _, f := range files {
+		allFilePaths = append(allFilePaths, f.Path)
+	}
+
+	if *p.postingCfg.WaitForPar2 {
+		// Create PAR2 files for all files in the folder
+		if *p.par2Cfg.Enabled {
+			createdPar2Paths, err = p.par2runner.Create(ctx, files)
+			if err != nil {
+				if !errors.Is(err, context.Canceled) {
+					slog.ErrorContext(ctx, "Error during par2 creation. Upload will continue without par2.", "error", err)
+				}
+				// Continue without PAR2 files
+			} else {
+				allFilePaths = append(allFilePaths, createdPar2Paths...)
+			}
+		}
+
+		// Post all files (including PAR2) together
+		if err := p.poster.Post(ctx, allFilePaths, rootDir, nzbGen); err != nil {
+			if !errors.Is(err, context.Canceled) {
+				slog.ErrorContext(ctx, "Error during folder upload", "folder", folderName, "error", err)
+			}
+			return "", err
+		}
+	} else {
+		// Post files and PAR2 in parallel
+		errg := errgroup.Group{}
+
+		// Create PAR2 files in parallel
+		errg.Go(func() error {
+			if !*p.par2Cfg.Enabled {
+				return nil
+			}
+			createdPar2Paths, err = p.par2runner.Create(ctx, files)
+			if err != nil {
+				if !errors.Is(err, context.Canceled) {
+					slog.ErrorContext(ctx, "Error during par2 creation. Upload will continue without par2.", "error", err)
+				}
+				return nil
+			}
+
+			if err := p.poster.Post(ctx, createdPar2Paths, rootDir, nzbGen); err != nil {
+				if !errors.Is(err, context.Canceled) {
+					slog.ErrorContext(ctx, "Error during upload of par2 files. Upload will continue without par2.", "error", err)
+				}
+				return nil
+			}
+			return nil
+		})
+
+		// Post main files
+		errg.Go(func() error {
+			if err := p.poster.Post(ctx, allFilePaths, rootDir, nzbGen); err != nil {
+				if !errors.Is(err, context.Canceled) {
+					slog.ErrorContext(ctx, "Error during folder upload", "folder", folderName, "error", err)
+				}
+				return err
+			}
+			return nil
+		})
+
+		if err := errg.Wait(); err != nil {
+			return "", err
+		}
+	}
+
+	// Generate single NZB file for the entire folder
+	// Use folder name as the base for NZB filename
+	nzbPath := filepath.Join(outputDir, folderName)
+	finalPath, err := nzbGen.Generate(nzbPath)
+	if err != nil {
+		return "", fmt.Errorf("error generating NZB file for folder: %w", err)
+	}
+
+	// Execute post upload script if configured
+	if err := p.executePostUploadScript(ctx, finalPath); err != nil {
+		slog.ErrorContext(ctx, "Post upload script execution failed", "error", err, "nzbPath", finalPath)
+		// Note: We don't return the error here to avoid failing the upload if the script fails
+	}
+
+	// Mark posting as successful so PAR2 files get cleaned up
+	postingSucceeded = true
+
+	// Print final statistics
+	stats := p.poster.Stats()
+	elapsed := time.Since(startTime)
+
+	slog.InfoContext(ctx, "Folder upload completed", "folder", folderName, "elapsed", elapsed.Round(time.Second))
+	slog.InfoContext(ctx, "Articles posted", "count", stats.ArticlesPosted)
+	slog.InfoContext(ctx, "Articles checked", "count", stats.ArticlesChecked)
+	slog.InfoContext(ctx, "Total bytes", "count", stats.BytesPosted)
+	slog.InfoContext(ctx, "Errors", "count", stats.ArticleErrors)
+
 	return finalPath, nil
 }
 

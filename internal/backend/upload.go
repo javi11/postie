@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -13,9 +14,9 @@ import (
 func (a *App) UploadFiles() error {
 	defer a.recoverPanic("UploadFiles")
 
-	// Open file dialog
+	// Open file dialog - allow both files and directories
 	files, err := runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Select files to upload",
+		Title: "Select files or folders to upload",
 	})
 	if err != nil {
 		return fmt.Errorf("error opening file dialog: %w", err)
@@ -45,13 +46,48 @@ func (a *App) UploadFiles() error {
 			continue
 		}
 
-		// Skip directories
+		// Handle directories by processing them as single NZB units
 		if info.IsDir() {
-			slog.Info("Skipping directory", "path", filePath)
+			slog.Info("Processing selected directory", "path", filePath)
+			
+			// Process directory recursively to collect files
+			filesByFolder, sizeByFolder, err := a.processDirectoryRecursively(filePath)
+			if err != nil {
+				slog.Error("Error processing directory", "path", filePath, "error", err)
+				continue
+			}
+
+			// Add each folder as a single queue entry (following watcher pattern)
+			for folderPath, files := range filesByFolder {
+				if len(files) == 0 {
+					continue
+				}
+
+				folderSize := sizeByFolder[folderPath]
+				folderName := filepath.Base(folderPath)
+
+				slog.Info("Adding folder to queue", "folder", folderName, "files", len(files), "size", folderSize)
+
+				// Add the folder to the queue with FOLDER: prefix to indicate it's a folder
+				folderQueuePath := "FOLDER:" + folderPath
+				if err := a.queue.AddFile(context.Background(), folderQueuePath, folderSize); err != nil {
+					slog.Warn("Could not add folder to queue, skipping", "folder", folderPath, "error", err)
+					continue
+				}
+
+				addedCount++
+				slog.Info("Selected folder added to queue", "folder", folderName, "files", len(files), "size", folderSize)
+
+				// Log the files in the folder for debugging
+				for _, file := range files {
+					slog.Debug("File in selected folder", "folder", folderName, "file", filepath.Base(file))
+				}
+			}
+
 			continue
 		}
 
-		// Add file to queue
+		// Handle individual files (existing logic)
 		if err := a.queue.AddFile(context.Background(), filePath, info.Size()); err != nil {
 			slog.Warn("Could not add selected file to queue, skipping", "file", filePath, "error", err)
 			continue
@@ -62,7 +98,7 @@ func (a *App) UploadFiles() error {
 	}
 
 	if addedCount > 0 {
-		slog.Info("Added selected files to queue", "added", addedCount, "total", len(files))
+		slog.Info("Added selected items to queue", "added", addedCount, "total", len(files))
 		
 		// Emit event to refresh queue in frontend
 		if !a.isWebMode {
@@ -73,7 +109,7 @@ func (a *App) UploadFiles() error {
 	}
 
 	if addedCount == 0 {
-		return fmt.Errorf("no valid files could be added to queue")
+		return fmt.Errorf("no valid files or folders could be added to queue")
 	}
 
 	return nil

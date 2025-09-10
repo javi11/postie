@@ -60,8 +60,11 @@ func (a *App) initializeWatcher() error {
 	// Create separate context for watcher
 	a.watchCtx, a.watchCancel = context.WithCancel(context.Background())
 
+	// Get posting config to check singleNzbPerFolder setting
+	postingCfg := a.config.GetPostingConfig()
+	
 	// Initialize watcher
-	a.watcher = watcher.New(watcherCfg, a.queue, a.processor, watchDir)
+	a.watcher = watcher.New(watcherCfg, a.queue, a.processor, watchDir, postingCfg.SingleNzbPerFolder)
 
 	// Start watcher
 	go func() {

@@ -236,6 +236,9 @@
 			"group_policy_description": "Comment distribuer les fichiers entre les groupes de nouvelles",
 			"wait_for_par2": "Attendre PAR2",
 			"wait_for_par2_description": "Attendre que les fichiers PAR2 soient créés avant de commencer le téléchargement",
+			"single_nzb_per_folder": "Un Seul NZB Par Dossier",
+			"single_nzb_per_folder_description": "Créer un NZB par dossier au lieu d'un NZB par fichier. Particulièrement utile pour les ensembles de fichiers organisés en dossiers.",
+			"single_nzb_per_folder_info": "<strong>Mode Surveillance :</strong> Crée un NZB nommé d'après le dossier contenant tous les fichiers avec les chemins relatifs préservés.<br><strong>Téléchargement Direct :</strong> Lors du téléchargement d'un dossier, crée un seul NZB pour tout le contenu du dossier.",
 			"obfuscation": {
 				"none": "Aucune",
 				"partial": "Partielle",
