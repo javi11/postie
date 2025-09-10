@@ -641,6 +641,37 @@ func (a *App) NavigateToDashboard() {
 	}
 }
 
+// processDirectoryRecursively processes a directory and returns collected files grouped by folder
+func (a *App) processDirectoryRecursively(dirPath string) (map[string][]string, map[string]int64, error) {
+	filesByFolder := make(map[string][]string)
+	sizeByFolder := make(map[string]int64)
+
+	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			slog.Warn("Error walking directory", "path", path, "error", err)
+			return nil // Continue processing other files
+		}
+
+		// Skip directories
+		if info.IsDir() {
+			return nil
+		}
+
+		// Get the parent directory
+		folderPath := filepath.Dir(path)
+
+		// Add file to the folder's file list
+		filesByFolder[folderPath] = append(filesByFolder[folderPath], path)
+		sizeByFolder[folderPath] += info.Size()
+
+		slog.Debug("Found file in directory", "file", path, "folder", folderPath, "size", info.Size())
+
+		return nil
+	})
+
+	return filesByFolder, sizeByFolder, err
+}
+
 // HandleDroppedFiles processes files that are dropped onto the application window
 func (a *App) HandleDroppedFiles(filePaths []string) error {
 	defer a.recoverPanic("HandleDroppedFiles")
@@ -668,13 +699,48 @@ func (a *App) HandleDroppedFiles(filePaths []string) error {
 				continue
 			}
 
-			// Skip directories for now
+			// Handle directories by processing them as single NZB units
 			if info.IsDir() {
-				slog.Info("Skipping directory", "path", filePath)
+				slog.Info("Processing dropped directory", "path", filePath)
+				
+				// Process directory recursively to collect files
+				filesByFolder, sizeByFolder, err := a.processDirectoryRecursively(filePath)
+				if err != nil {
+					slog.Error("Error processing directory", "path", filePath, "error", err)
+					continue
+				}
+
+				// Add each folder as a single queue entry (following watcher pattern)
+				for folderPath, files := range filesByFolder {
+					if len(files) == 0 {
+						continue
+					}
+
+					folderSize := sizeByFolder[folderPath]
+					folderName := filepath.Base(folderPath)
+
+					slog.Info("Adding folder to queue", "folder", folderName, "files", len(files), "size", folderSize)
+
+					// Add the folder to the queue with FOLDER: prefix to indicate it's a folder
+					folderQueuePath := "FOLDER:" + folderPath
+					if err := a.queue.AddFile(context.Background(), folderQueuePath, folderSize); err != nil {
+						slog.Warn("Could not add folder to queue, skipping", "folder", folderPath, "error", err)
+						continue
+					}
+
+					addedCount++
+					slog.Info("Dropped folder added to queue", "folder", folderName, "files", len(files), "size", folderSize)
+
+					// Log the files in the folder for debugging
+					for _, file := range files {
+						slog.Debug("File in dropped folder", "folder", folderName, "file", filepath.Base(file))
+					}
+				}
+
 				continue
 			}
 
-			// Add file to queue
+			// Handle individual files (existing logic)
 			if err := a.queue.AddFile(context.Background(), filePath, info.Size()); err != nil {
 				slog.Warn("Could not add dropped file to queue, skipping", "file", filePath, "error", err)
 				continue
@@ -685,7 +751,7 @@ func (a *App) HandleDroppedFiles(filePaths []string) error {
 		}
 
 		if addedCount > 0 {
-			slog.Info("Added dropped files to queue", "added", addedCount, "total", len(filePaths))
+			slog.Info("Added dropped items to queue", "added", addedCount, "total", len(filePaths))
 			// Emit event to refresh queue in frontend for both desktop and web modes
 			if !a.isWebMode {
 				wailsruntime.EventsEmit(a.ctx, "queue-updated")
@@ -695,7 +761,7 @@ func (a *App) HandleDroppedFiles(filePaths []string) error {
 		}
 
 		if addedCount == 0 {
-			return fmt.Errorf("no valid files could be added to queue")
+			return fmt.Errorf("no valid files or folders could be added to queue")
 		}
 
 		return nil
