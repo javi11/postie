@@ -288,6 +288,10 @@ type PostUploadScriptConfig struct {
 	Command string `yaml:"command" json:"command"`
 	// Timeout for script execution. Default value is `30s`.
 	Timeout Duration `yaml:"timeout" json:"timeout"`
+	// Maximum number of retry attempts for failed script executions. Default value is `3`.
+	MaxRetries int `yaml:"max_retries" json:"max_retries"`
+	// Base delay for retry attempts with exponential backoff. Default value is `30s`.
+	RetryDelay Duration `yaml:"retry_delay" json:"retry_delay"`
 }
 
 // Par2DownloadStatus represents the status of par2 executable download
@@ -766,9 +770,11 @@ func GetDefaultConfig() ConfigData {
 		OutputDir:                 "./output",
 		MaintainOriginalExtension: &enabled,
 		PostUploadScript: PostUploadScriptConfig{
-			Enabled: false,
-			Command: "",
-			Timeout: Duration("30s"),
+			Enabled:    false,
+			Command:    "",
+			Timeout:    Duration("30s"),
+			MaxRetries: 3,
+			RetryDelay: Duration("30s"),
 		},
 	}
 }

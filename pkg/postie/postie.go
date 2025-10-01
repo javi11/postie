@@ -31,6 +31,13 @@ type Postie struct {
 	postUploadScriptCfg       config.PostUploadScriptConfig
 	maintainOriginalExtension bool
 	jobProgress               progress.JobProgress
+	queue                     QueueInterface
+}
+
+// QueueInterface defines the queue methods needed by Postie
+type QueueInterface interface {
+	UpdateScriptStatus(ctx context.Context, itemID string, status string, retryCount int, lastError string, nextRetryAt *time.Time) error
+	MarkScriptCompleted(ctx context.Context, itemID string) error
 }
 
 func New(
@@ -38,6 +45,7 @@ func New(
 	cfg config.Config,
 	poolManager *pool.Manager,
 	jobProgress progress.JobProgress,
+	queue QueueInterface,
 ) (*Postie, error) {
 	// Ensure par2 executable exists and get its path
 	par2Cfg, err := cfg.GetPar2Config(ctx)
@@ -70,6 +78,7 @@ func New(
 		postUploadScriptCfg:       postUploadScriptConfig,
 		maintainOriginalExtension: maintainOriginalExtension,
 		jobProgress:               jobProgress,
+		queue:                     queue,
 	}, nil
 }
 
@@ -284,12 +293,6 @@ func (p *Postie) postInParallel(
 		return "", fmt.Errorf("error generating NZB file: %w", err)
 	}
 
-	// Execute post upload script if configured
-	if err := p.executePostUploadScript(ctx, finalPath); err != nil {
-		slog.ErrorContext(ctx, "Post upload script execution failed", "error", err, "nzbPath", finalPath)
-		// Note: We don't return the error here to avoid failing the upload if the script fails
-	}
-
 	// Mark posting as successful so PAR2 files get cleaned up
 	postingSucceeded = true
 	return finalPath, nil
@@ -354,12 +357,6 @@ func (p *Postie) post(
 	finalPath, err := nzbGen.Generate(nzbPath)
 	if err != nil {
 		return "", fmt.Errorf("error generating NZB file: %w", err)
-	}
-
-	// Execute post upload script if configured
-	if err := p.executePostUploadScript(ctx, finalPath); err != nil {
-		slog.ErrorContext(ctx, "Post upload script execution failed", "error", err, "nzbPath", finalPath)
-		// Note: We don't return the error here to avoid failing the upload if the script fails
 	}
 
 	// Mark posting as successful so PAR2 files get cleaned up
@@ -486,12 +483,6 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 		return "", fmt.Errorf("error generating NZB file for folder: %w", err)
 	}
 
-	// Execute post upload script if configured
-	if err := p.executePostUploadScript(ctx, finalPath); err != nil {
-		slog.ErrorContext(ctx, "Post upload script execution failed", "error", err, "nzbPath", finalPath)
-		// Note: We don't return the error here to avoid failing the upload if the script fails
-	}
-
 	// Mark posting as successful so PAR2 files get cleaned up
 	postingSucceeded = true
 
@@ -508,12 +499,14 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 	return finalPath, nil
 }
 
-func (p *Postie) executePostUploadScript(ctx context.Context, nzbPath string) error {
+// ExecutePostUploadScript executes the post-upload script for a completed item
+// This should be called after the file has been marked as completed in the database
+func (p *Postie) ExecutePostUploadScript(ctx context.Context, nzbPath string, itemID string) error {
 	if !p.postUploadScriptCfg.Enabled || p.postUploadScriptCfg.Command == "" {
 		return nil
 	}
 
-	slog.InfoContext(ctx, "Executing post upload script", "command", p.postUploadScriptCfg.Command, "nzb_path", nzbPath)
+	slog.InfoContext(ctx, "Executing post upload script", "command", p.postUploadScriptCfg.Command, "nzb_path", nzbPath, "item_id", itemID)
 
 	// Create timeout context
 	timeoutCtx, cancel := context.WithTimeout(ctx, p.postUploadScriptCfg.Timeout.ToDuration())
@@ -533,8 +526,28 @@ func (p *Postie) executePostUploadScript(ctx context.Context, nzbPath string) er
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		errorMsg := fmt.Sprintf("script failed: %v, output: %s", err, string(output))
 		slog.ErrorContext(ctx, "Error executing post upload script", "error", err, "output", string(output), "command", command)
+
+		// Track failure in database for retry if queue is available
+		if p.queue != nil {
+			// Calculate next retry time with exponential backoff
+			baseDelay := p.postUploadScriptCfg.RetryDelay.ToDuration()
+			nextRetry := time.Now().Add(baseDelay)
+
+			if updateErr := p.queue.UpdateScriptStatus(ctx, itemID, "pending_retry", 0, errorMsg, &nextRetry); updateErr != nil {
+				slog.ErrorContext(ctx, "Failed to track script failure", "error", updateErr)
+			}
+		}
+
 		return fmt.Errorf("post upload script failed: %w", err)
+	}
+
+	// Mark script as completed in database if queue is available
+	if p.queue != nil {
+		if updateErr := p.queue.MarkScriptCompleted(ctx, itemID); updateErr != nil {
+			slog.ErrorContext(ctx, "Failed to mark script as completed", "error", updateErr)
+		}
 	}
 
 	slog.InfoContext(ctx, "Post upload script executed successfully", "command", command, "output", string(output))

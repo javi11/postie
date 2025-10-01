@@ -504,6 +504,30 @@ func (a *App) RetryJob(id string) error {
 	return nil
 }
 
+// RetryScript manually retries a failed post-upload script execution
+func (a *App) RetryScript(id string) error {
+	defer a.recoverPanic("RetryScript")
+
+	if a.queue == nil {
+		return fmt.Errorf("queue is not available")
+	}
+
+	// Reset the script status to pending_retry with immediate retry
+	nextRetry := time.Now()
+	if err := a.queue.UpdateScriptStatus(a.ctx, id, "pending_retry", 0, "", &nextRetry); err != nil {
+		return fmt.Errorf("failed to reset script status: %w", err)
+	}
+
+	// Emit events for both desktop and web modes
+	if !a.isWebMode {
+		wailsruntime.EventsEmit(a.ctx, "queue:updated")
+	} else if a.webEventEmitter != nil {
+		a.webEventEmitter("queue:updated", nil)
+	}
+
+	return nil
+}
+
 // Helper function to get keys from map
 func getKeys(m map[string]bool) []string {
 	keys := make([]string, 0, len(m))

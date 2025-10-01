@@ -210,8 +210,8 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 
 	slog.Info("Processing file", "msg", msg.ID, "path", job.Path, "priority", job.Priority)
 
-	// Process the file
-	actualNzbPath, err := p.processFile(ctx, msg, job)
+	// Process the file and get both NZB path and postie instance
+	actualNzbPath, jobPostie, err := p.processFile(ctx, msg, job)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			slog.Info("Job cancelled", "msg", msg.ID, "path", job.Path)
@@ -229,10 +229,17 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 		return err
 	}
 
+	// Execute post upload script if configured
+	// Note: We don't return the error here to avoid failing the completion if the script fails
+	// The script failure will be tracked in the database for retry
+	if scriptErr := jobPostie.ExecutePostUploadScript(ctx, actualNzbPath, string(msg.ID)); scriptErr != nil {
+		slog.ErrorContext(ctx, "Post upload script execution failed", "error", scriptErr, "nzbPath", actualNzbPath)
+	}
+
 	return nil
 }
 
-func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *queue.FileJob) (string, error) {
+func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *queue.FileJob) (string, *postie.Postie, error) {
 	// Check if this is a folder job
 	isFolder := strings.HasPrefix(job.Path, "FOLDER:")
 	var fileName string
@@ -247,10 +254,10 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 		// Collect all files in the folder
 		files, err := p.collectFilesInFolder(folderPath)
 		if err != nil {
-			return "", fmt.Errorf("failed to collect files in folder %s: %w", folderPath, err)
+			return "", nil, fmt.Errorf("failed to collect files in folder %s: %w", folderPath, err)
 		}
 		if len(files) == 0 {
-			return "", fmt.Errorf("no files found in folder %s", folderPath)
+			return "", nil, fmt.Errorf("no files found in folder %s", folderPath)
 		}
 		filesToProcess = files
 		
@@ -318,13 +325,13 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 	p.runningMux.Unlock()
 
 	if poolManager == nil {
-		return "", fmt.Errorf("pool manager is not available for job %s", jobID)
+		return "", nil, fmt.Errorf("pool manager is not available for job %s", jobID)
 	}
 
 	// Create a postie instance for this job with progress manager
-	jobPostie, err := postie.New(jobCtx, p.config, poolManager, progressJob)
+	jobPostie, err := postie.New(jobCtx, p.config, poolManager, progressJob, p.queue)
 	if err != nil {
-		return "", fmt.Errorf("failed to create postie instance for job %s: %w", jobID, err)
+		return "", nil, fmt.Errorf("failed to create postie instance for job %s: %w", jobID, err)
 	}
 	defer jobPostie.Close()
 
@@ -348,7 +355,7 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 	// Post the files using the job-specific postie instance with pausable context
 	actualNzbPath, err := jobPostie.Post(pausableCtx, filesToProcess, inputFolder, p.outputFolder)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	// Delete the original files if configured
@@ -360,7 +367,7 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 		}
 	}
 
-	return actualNzbPath, nil
+	return actualNzbPath, jobPostie, nil
 }
 
 func (p *Processor) handleProcessingError(ctx context.Context, msg *goqite.Message, job *queue.FileJob, jobID string, err error) error {
