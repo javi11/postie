@@ -105,12 +105,23 @@ func New(ctx context.Context, cfg config.Config, poolManager PoolManager, jobPro
 		StartTime: time.Now(),
 	}
 
+	postCheckCfg := cfg.GetPostCheckConfig()
 	p := &poster{
 		cfg:         cfg.GetPostingConfig(),
-		checkCfg:    cfg.GetPostCheckConfig(),
+		checkCfg:    postCheckCfg,
 		pool:        nntpPool,
 		stats:       stats,
 		jobProgress: jobProgress,
+	}
+
+	// Log post check configuration for debugging
+	if postCheckCfg.Enabled != nil {
+		slog.DebugContext(ctx, "Poster initialized",
+			"post_check_enabled", *postCheckCfg.Enabled,
+			"max_repost", postCheckCfg.MaxRePost,
+			"retry_delay", postCheckCfg.RetryDelay)
+	} else {
+		slog.WarnContext(ctx, "PostCheck.Enabled is nil, will default to true")
 	}
 
 	throttleRate := p.cfg.ThrottleRate
@@ -159,8 +170,13 @@ func (p *poster) Post(
 	// Start a goroutine to process posts
 	go p.postLoop(ctx, postQueue, checkQueue, errChan, nzbGen)
 
-	// Start a goroutine to process checks
-	go p.checkLoop(ctx, checkQueue, postQueue, errChan, nzbGen)
+	// Start a goroutine to process checks only if post check is enabled
+	if p.checkCfg.Enabled != nil && *p.checkCfg.Enabled {
+		go p.checkLoop(ctx, checkQueue, postQueue, errChan, nzbGen)
+		slog.DebugContext(ctx, "Post check enabled - started checkLoop goroutine")
+	} else {
+		slog.InfoContext(ctx, "Post check disabled - skipping article verification")
+	}
 
 	wg.Add(len(files))
 	for i, file := range files {
@@ -288,7 +304,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			fileHash := CalculateHash([]byte(combinedHash))
 			nzbGen.AddFileHash(post.Articles[0].OriginalName, fileHash)
 
-			if *p.checkCfg.Enabled {
+			if p.checkCfg.Enabled != nil && *p.checkCfg.Enabled {
 				checkQueue <- post
 
 				continue
