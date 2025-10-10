@@ -92,6 +92,8 @@ export function ResumeProcessing():Promise<void>;
 
 export function RetryJob(arg1:string):Promise<void>;
 
+export function RetryScript(arg1:string):Promise<void>;
+
 export function RollbackMigration():Promise<void>;
 
 export function RunMigrations():Promise<void>;

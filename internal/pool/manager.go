@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/javi11/nntppool"
+	"github.com/javi11/nntppool/v2"
 	"github.com/javi11/postie/internal/config"
 )
 
@@ -136,4 +136,3 @@ func (m *Manager) IsClosed() bool {
 	defer m.mu.RUnlock()
 	return m.closed
 }
-

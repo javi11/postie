@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	nntppool "github.com/javi11/nntppool"
+	nntppool "github.com/javi11/nntppool/v2"
 	config "github.com/javi11/postie/internal/config"
 	gomock "go.uber.org/mock/gomock"
 )

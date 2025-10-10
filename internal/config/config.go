@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/javi11/nntppool"
+	"github.com/javi11/nntppool/v2"
 	"github.com/javi11/postie/pkg/parpardownloader"
 	"gopkg.in/yaml.v3"
 )
@@ -165,15 +165,15 @@ type ConfigData struct {
 }
 
 type Par2Config struct {
-	Enabled          *bool     `yaml:"enabled" json:"enabled"`
-	Par2Path         string    `yaml:"par2_path" json:"par2_path"`
-	Redundancy       string    `yaml:"redundancy" json:"redundancy"`
-	VolumeSize       int       `yaml:"volume_size" json:"volume_size"`
-	MaxInputSlices   int       `yaml:"max_input_slices" json:"max_input_slices"`
-	ExtraPar2Options []string  `yaml:"extra_par2_options" json:"extra_par2_options"`
-	TempDir          string    `yaml:"temp_dir" json:"temp_dir"`
-	MaintainPar2Files *bool    `yaml:"maintain_par2_files" json:"maintain_par2_files"`
-	once             sync.Once `json:"-"`
+	Enabled           *bool     `yaml:"enabled" json:"enabled"`
+	Par2Path          string    `yaml:"par2_path" json:"par2_path"`
+	Redundancy        string    `yaml:"redundancy" json:"redundancy"`
+	VolumeSize        int       `yaml:"volume_size" json:"volume_size"`
+	MaxInputSlices    int       `yaml:"max_input_slices" json:"max_input_slices"`
+	ExtraPar2Options  []string  `yaml:"extra_par2_options" json:"extra_par2_options"`
+	TempDir           string    `yaml:"temp_dir" json:"temp_dir"`
+	MaintainPar2Files *bool     `yaml:"maintain_par2_files" json:"maintain_par2_files"`
+	once              sync.Once `json:"-"`
 }
 
 // ServerConfig represents a Usenet server configuration
@@ -223,14 +223,14 @@ type NewsgroupConfig struct {
 
 // PostingConfig represents posting configuration
 type PostingConfig struct {
-	WaitForPar2        *bool               `yaml:"wait_for_par2" json:"wait_for_par2"`
-	MaxRetries         int                 `yaml:"max_retries" json:"max_retries"`
-	RetryDelay         Duration            `yaml:"retry_delay" json:"retry_delay"`
-	ArticleSizeInBytes uint64              `yaml:"article_size_in_bytes" json:"article_size_in_bytes"`
-	Groups             []NewsgroupConfig   `yaml:"groups" json:"groups"`
-	ThrottleRate       int64               `yaml:"throttle_rate" json:"throttle_rate"` // bytes per second
-	MessageIDFormat    MessageIDFormat     `yaml:"message_id_format" json:"message_id_format"`
-	PostHeaders        PostHeaders         `yaml:"post_headers" json:"post_headers"`
+	WaitForPar2        *bool             `yaml:"wait_for_par2" json:"wait_for_par2"`
+	MaxRetries         int               `yaml:"max_retries" json:"max_retries"`
+	RetryDelay         Duration          `yaml:"retry_delay" json:"retry_delay"`
+	ArticleSizeInBytes uint64            `yaml:"article_size_in_bytes" json:"article_size_in_bytes"`
+	Groups             []NewsgroupConfig `yaml:"groups" json:"groups"`
+	ThrottleRate       int64             `yaml:"throttle_rate" json:"throttle_rate"` // bytes per second
+	MessageIDFormat    MessageIDFormat   `yaml:"message_id_format" json:"message_id_format"`
+	PostHeaders        PostHeaders       `yaml:"post_headers" json:"post_headers"`
 	// If true the uploaded subject and filename will be obfuscated. Default value is `true`.
 	ObfuscationPolicy     ObfuscationPolicy `yaml:"obfuscation_policy" json:"obfuscation_policy"`
 	Par2ObfuscationPolicy ObfuscationPolicy `yaml:"par2_obfuscation_policy" json:"par2_obfuscation_policy"`
@@ -589,7 +589,7 @@ func (c *ConfigData) GetNNTPPoolConfig() (nntppool.Config, error) {
 	}
 
 	if c.ConnectionPool.MinConnections <= 0 {
-		c.ConnectionPool.MinConnections = 5
+		c.ConnectionPool.MinConnections = 0
 	}
 
 	config := nntppool.Config{
@@ -715,8 +715,8 @@ func GetDefaultConfig() ConfigData {
 			Groups: []NewsgroupConfig{
 				{Name: "alt.binaries.test", Enabled: &enabled},
 			},
-			ThrottleRate:       0, // 0 means no throttling
-			MessageIDFormat:    MessageIDFormatRandom,
+			ThrottleRate:    0, // 0 means no throttling
+			MessageIDFormat: MessageIDFormatRandom,
 			PostHeaders: PostHeaders{
 				AddNXGHeader:  false,
 				DefaultFrom:   "",

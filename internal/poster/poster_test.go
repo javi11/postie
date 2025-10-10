@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/javi11/nntppool"
+	"github.com/javi11/nntppool/v2"
 	"github.com/javi11/postie/internal/article"
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/mocks"
@@ -856,7 +856,8 @@ func TestAddPost(t *testing.T) {
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 
 		wg.Add(1)
-		err := p.addPost(testFile, 1, 1, &wg, &failedPosts, postQueue, nzbGen)
+		ctx := context.Background()
+		err := p.addPost(ctx, testFile, 1, 1, &wg, &failedPosts, postQueue, nzbGen)
 
 		assert.NoError(t, err)
 
@@ -891,7 +892,8 @@ func TestAddPost(t *testing.T) {
 		postQueue := make(chan *Post, 10)
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 
-		err := p.addPost("nonexistent.txt", 1, 1, &wg, &failedPosts, postQueue, nzbGen)
+		ctx := context.Background()
+		err := p.addPost(ctx, "nonexistent.txt", 1, 1, &wg, &failedPosts, postQueue, nzbGen)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "error opening file")

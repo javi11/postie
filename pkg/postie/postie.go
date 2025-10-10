@@ -160,17 +160,6 @@ func safeRemoveFile(ctx context.Context, filePath string) {
 }
 
 func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir string, outputDir string) (string, error) {
-	defer func() {
-		if r := recover(); r != nil {
-			slog.ErrorContext(ctx, "Panic in Postie.Post",
-				"panic", r,
-				"files", len(files),
-				"rootDir", rootDir,
-				"outputDir", outputDir,
-				"os", runtime.GOOS)
-		}
-	}()
-
 	if len(files) == 0 {
 		return "", fmt.Errorf("no files to post")
 	}
@@ -371,7 +360,7 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 	}
 
 	startTime := time.Now()
-	
+
 	// Determine the folder name from the first file's path
 	// This will be used as the NZB filename
 	firstFilePath := files[0].Path
@@ -381,15 +370,15 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 		// If files are in root, use a default name
 		folderName = "upload"
 	}
-	
+
 	slog.InfoContext(ctx, "Posting folder as single NZB", "folder", folderName, "files", len(files))
-	
+
 	var (
 		createdPar2Paths []string
 		err              error
 		postingSucceeded bool
 	)
-	
+
 	defer func() {
 		// Only clean up PAR2 files if posting was successful AND maintain_par2_files is false
 		shouldCleanup := postingSucceeded && (p.par2Cfg.MaintainPar2Files == nil || !*p.par2Cfg.MaintainPar2Files)

@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/javi11/nntppool"
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/pausable"
 	"github.com/javi11/postie/internal/pool"
@@ -245,12 +244,12 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 	var fileName string
 	var filesToProcess []fileinfo.FileInfo
 	var folderPath string
-	
+
 	if isFolder {
 		// Extract the actual folder path
 		folderPath = strings.TrimPrefix(job.Path, "FOLDER:")
 		fileName = filepath.Base(folderPath)
-		
+
 		// Collect all files in the folder
 		files, err := p.collectFilesInFolder(folderPath)
 		if err != nil {
@@ -260,7 +259,7 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 			return "", nil, fmt.Errorf("no files found in folder %s", folderPath)
 		}
 		filesToProcess = files
-		
+
 		slog.InfoContext(ctx, "Processing folder as single NZB", "folder", fileName, "files", len(files))
 	} else {
 		// Single file processing
@@ -648,13 +647,13 @@ func (p *Processor) checkAndHandleProviderAvailability() {
 		return
 	}
 
-	// Count connected/active providers
+	// Count connected/active providers from map
 	activeProviders := 0
 	totalProviders := len(metrics.ProviderMetrics)
 
 	for _, provider := range metrics.ProviderMetrics {
-		// Consider a provider active if it's connected or has a good state
-		if provider.State == nntppool.ProviderStateActive {
+		// Consider a provider active if it's in "active" state (string comparison for v2)
+		if provider.State == "active" {
 			activeProviders++
 		}
 	}
@@ -699,30 +698,30 @@ func (p *Processor) checkAndHandleProviderAvailability() {
 // collectFilesInFolder collects all files in the specified folder recursively
 func (p *Processor) collectFilesInFolder(folderPath string) ([]fileinfo.FileInfo, error) {
 	var files []fileinfo.FileInfo
-	
+
 	err := filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		
+
 		// Skip directories
 		if info.IsDir() {
 			return nil
 		}
-		
+
 		// Add file to the list
 		files = append(files, fileinfo.FileInfo{
 			Path: path,
 			Size: uint64(info.Size()),
 		})
-		
+
 		return nil
 	})
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return files, nil
 }
 

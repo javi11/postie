@@ -32,68 +32,14 @@ export namespace backend {
 	        this.needsConfiguration = source["needsConfiguration"];
 	    }
 	}
-	export class MetricSummary {
-	    startTime: string;
-	    endTime: string;
-	    totalConnectionsCreated: number;
-	    totalConnectionsDestroyed: number;
-	    totalAcquires: number;
-	    totalReleases: number;
-	    totalErrors: number;
-	    totalRetries: number;
-	    totalAcquireWaitTime: number;
-	    totalBytesDownloaded: number;
-	    totalBytesUploaded: number;
-	    totalArticlesRetrieved: number;
-	    totalArticlesPosted: number;
-	    totalCommandCount: number;
-	    totalCommandErrors: number;
-	    averageConnectionsPerHour: number;
-	    averageErrorRate: number;
-	    averageSuccessRate: number;
-	    averageAcquireWaitTime: number;
-	    windowCount: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new MetricSummary(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.startTime = source["startTime"];
-	        this.endTime = source["endTime"];
-	        this.totalConnectionsCreated = source["totalConnectionsCreated"];
-	        this.totalConnectionsDestroyed = source["totalConnectionsDestroyed"];
-	        this.totalAcquires = source["totalAcquires"];
-	        this.totalReleases = source["totalReleases"];
-	        this.totalErrors = source["totalErrors"];
-	        this.totalRetries = source["totalRetries"];
-	        this.totalAcquireWaitTime = source["totalAcquireWaitTime"];
-	        this.totalBytesDownloaded = source["totalBytesDownloaded"];
-	        this.totalBytesUploaded = source["totalBytesUploaded"];
-	        this.totalArticlesRetrieved = source["totalArticlesRetrieved"];
-	        this.totalArticlesPosted = source["totalArticlesPosted"];
-	        this.totalCommandCount = source["totalCommandCount"];
-	        this.totalCommandErrors = source["totalCommandErrors"];
-	        this.averageConnectionsPerHour = source["averageConnectionsPerHour"];
-	        this.averageErrorRate = source["averageErrorRate"];
-	        this.averageSuccessRate = source["averageSuccessRate"];
-	        this.averageAcquireWaitTime = source["averageAcquireWaitTime"];
-	        this.windowCount = source["windowCount"];
-	    }
-	}
 	export class NntpProviderMetrics {
 	    host: string;
-	    username: string;
 	    state: string;
-	    totalConnections: number;
+	    activeConnections: number;
 	    maxConnections: number;
-	    acquiredConnections: number;
-	    idleConnections: number;
 	    totalBytesUploaded: number;
 	    totalArticlesPosted: number;
-	    successRate: number;
-	    averageConnectionAge: number;
+	    totalErrors: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new NntpProviderMetrics(source);
@@ -102,34 +48,20 @@ export namespace backend {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.host = source["host"];
-	        this.username = source["username"];
 	        this.state = source["state"];
-	        this.totalConnections = source["totalConnections"];
+	        this.activeConnections = source["activeConnections"];
 	        this.maxConnections = source["maxConnections"];
-	        this.acquiredConnections = source["acquiredConnections"];
-	        this.idleConnections = source["idleConnections"];
 	        this.totalBytesUploaded = source["totalBytesUploaded"];
 	        this.totalArticlesPosted = source["totalArticlesPosted"];
-	        this.successRate = source["successRate"];
-	        this.averageConnectionAge = source["averageConnectionAge"];
+	        this.totalErrors = source["totalErrors"];
 	    }
 	}
 	export class NntpPoolMetrics {
 	    timestamp: string;
-	    uptime: number;
-	    activeConnections: number;
-	    uploadSpeed: number;
-	    commandSuccessRate: number;
-	    errorRate: number;
-	    totalAcquires: number;
 	    totalBytesUploaded: number;
-	    totalArticlesRetrieved: number;
 	    totalArticlesPosted: number;
-	    averageAcquireWaitTime: number;
 	    totalErrors: number;
 	    providers: NntpProviderMetrics[];
-	    dailyMetrics?: MetricSummary;
-	    weeklyMetrics?: MetricSummary;
 	
 	    static createFrom(source: any = {}) {
 	        return new NntpPoolMetrics(source);
@@ -138,20 +70,10 @@ export namespace backend {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.timestamp = source["timestamp"];
-	        this.uptime = source["uptime"];
-	        this.activeConnections = source["activeConnections"];
-	        this.uploadSpeed = source["uploadSpeed"];
-	        this.commandSuccessRate = source["commandSuccessRate"];
-	        this.errorRate = source["errorRate"];
-	        this.totalAcquires = source["totalAcquires"];
 	        this.totalBytesUploaded = source["totalBytesUploaded"];
-	        this.totalArticlesRetrieved = source["totalArticlesRetrieved"];
 	        this.totalArticlesPosted = source["totalArticlesPosted"];
-	        this.averageAcquireWaitTime = source["averageAcquireWaitTime"];
 	        this.totalErrors = source["totalErrors"];
 	        this.providers = this.convertValues(source["providers"], NntpProviderMetrics);
-	        this.dailyMetrics = this.convertValues(source["dailyMetrics"], MetricSummary);
-	        this.weeklyMetrics = this.convertValues(source["weeklyMetrics"], MetricSummary);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -404,6 +326,8 @@ export namespace config {
 	    enabled: boolean;
 	    command: string;
 	    timeout: string;
+	    max_retries: number;
+	    retry_delay: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new PostUploadScriptConfig(source);
@@ -414,6 +338,8 @@ export namespace config {
 	        this.enabled = source["enabled"];
 	        this.command = source["command"];
 	        this.timeout = source["timeout"];
+	        this.max_retries = source["max_retries"];
+	        this.retry_delay = source["retry_delay"];
 	    }
 	}
 	export class QueueConfig {

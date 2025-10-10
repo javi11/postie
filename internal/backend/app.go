@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/javi11/nntppool"
+	"github.com/javi11/nntppool/v2"
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/database"
 	"github.com/javi11/postie/internal/pool"
@@ -72,73 +72,22 @@ type ProcessorStatus struct {
 
 // NntpPoolMetrics represents NNTP connection pool metrics
 type NntpPoolMetrics struct {
-	Timestamp              string                `json:"timestamp"`
-	Uptime                 float64               `json:"uptime"`
-	ActiveConnections      int                   `json:"activeConnections"`
-	UploadSpeed            float64               `json:"uploadSpeed"`
-	CommandSuccessRate     float64               `json:"commandSuccessRate"`
-	ErrorRate              float64               `json:"errorRate"`
-	TotalAcquires          int64                 `json:"totalAcquires"`
-	TotalBytesUploaded     int64                 `json:"totalBytesUploaded"`
-	TotalArticlesRetrieved int64                 `json:"totalArticlesRetrieved"`
-	TotalArticlesPosted    int64                 `json:"totalArticlesPosted"`
-	AverageAcquireWaitTime float64               `json:"averageAcquireWaitTime"`
-	TotalErrors            int64                 `json:"totalErrors"`
-	Providers              []NntpProviderMetrics `json:"providers"`
-	// Daily and Weekly compressed metrics from nntppool v1.3.1+
-	DailyMetrics  *MetricSummary `json:"dailyMetrics,omitempty"`
-	WeeklyMetrics *MetricSummary `json:"weeklyMetrics,omitempty"`
-}
-
-// MetricSummary represents aggregated metrics for a time period
-type MetricSummary struct {
-	StartTime                 string  `json:"startTime"`
-	EndTime                   string  `json:"endTime"`
-	TotalConnectionsCreated   int64   `json:"totalConnectionsCreated"`
-	TotalConnectionsDestroyed int64   `json:"totalConnectionsDestroyed"`
-	TotalAcquires             int64   `json:"totalAcquires"`
-	TotalReleases             int64   `json:"totalReleases"`
-	TotalErrors               int64   `json:"totalErrors"`
-	TotalRetries              int64   `json:"totalRetries"`
-	TotalAcquireWaitTime      int64   `json:"totalAcquireWaitTime"`
-	TotalBytesDownloaded      int64   `json:"totalBytesDownloaded"`
-	TotalBytesUploaded        int64   `json:"totalBytesUploaded"`
-	TotalArticlesRetrieved    int64   `json:"totalArticlesRetrieved"`
-	TotalArticlesPosted       int64   `json:"totalArticlesPosted"`
-	TotalCommandCount         int64   `json:"totalCommandCount"`
-	TotalCommandErrors        int64   `json:"totalCommandErrors"`
-	AverageConnectionsPerHour float64 `json:"averageConnectionsPerHour"`
-	AverageErrorRate          float64 `json:"averageErrorRate"`
-	AverageSuccessRate        float64 `json:"averageSuccessRate"`
-	AverageAcquireWaitTime    int64   `json:"averageAcquireWaitTime"`
-	WindowCount               int     `json:"windowCount"`
-}
-
-// CompressedMetrics represents compressed historical metrics for daily/weekly periods (legacy)
-type CompressedMetrics struct {
-	Timestamp           string  `json:"timestamp"`
-	Period              string  `json:"period"` // "daily" or "weekly"
-	TotalBytesUploaded  int64   `json:"totalBytesUploaded"`
-	TotalArticlesPosted int64   `json:"totalArticlesPosted"`
-	AverageUploadSpeed  float64 `json:"averageUploadSpeed"`
-	AverageSuccessRate  float64 `json:"averageSuccessRate"`
-	TotalErrors         int64   `json:"totalErrors"`
-	AverageConnections  float64 `json:"averageConnections"`
+	Timestamp           string                `json:"timestamp"`
+	TotalBytesUploaded  int64                 `json:"totalBytesUploaded"`
+	TotalArticlesPosted int64                 `json:"totalArticlesPosted"`
+	TotalErrors         int64                 `json:"totalErrors"`
+	Providers           []NntpProviderMetrics `json:"providers"`
 }
 
 // NntpProviderMetrics represents metrics for individual NNTP providers
 type NntpProviderMetrics struct {
-	Host                 string  `json:"host"`
-	Username             string  `json:"username"`
-	State                string  `json:"state"`
-	TotalConnections     int     `json:"totalConnections"`
-	MaxConnections       int     `json:"maxConnections"`
-	AcquiredConnections  int     `json:"acquiredConnections"`
-	IdleConnections      int     `json:"idleConnections"`
-	TotalBytesUploaded   int64   `json:"totalBytesUploaded"`
-	TotalArticlesPosted  int64   `json:"totalArticlesPosted"`
-	SuccessRate          float64 `json:"successRate"`
-	AverageConnectionAge float64 `json:"averageConnectionAge"`
+	Host                string `json:"host"`
+	State               string `json:"state"`
+	ActiveConnections   int    `json:"activeConnections"`
+	MaxConnections      int    `json:"maxConnections"`
+	TotalBytesUploaded  int64  `json:"totalBytesUploaded"`
+	TotalArticlesPosted int64  `json:"totalArticlesPosted"`
+	TotalErrors         int64  `json:"totalErrors"`
 }
 
 // App struct for the Wails application
@@ -726,7 +675,7 @@ func (a *App) HandleDroppedFiles(filePaths []string) error {
 			// Handle directories by processing them as single NZB units
 			if info.IsDir() {
 				slog.Info("Processing dropped directory", "path", filePath)
-				
+
 				// Process directory recursively to collect files
 				filesByFolder, sizeByFolder, err := a.processDirectoryRecursively(filePath)
 				if err != nil {
@@ -1054,18 +1003,11 @@ func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 
 	// Default empty metrics if no pool available
 	emptyMetrics := NntpPoolMetrics{
-		Timestamp:              time.Now().Format(time.RFC3339),
-		Uptime:                 0,
-		ActiveConnections:      0,
-		UploadSpeed:            0,
-		CommandSuccessRate:     0,
-		ErrorRate:              0,
-		TotalAcquires:          0,
-		TotalBytesUploaded:     0,
-		TotalArticlesRetrieved: 0,
-		AverageAcquireWaitTime: 0,
-		TotalErrors:            0,
-		Providers:              []NntpProviderMetrics{},
+		Timestamp:           time.Now().Format(time.RFC3339),
+		TotalBytesUploaded:  0,
+		TotalArticlesPosted: 0,
+		TotalErrors:         0,
+		Providers:           []NntpProviderMetrics{},
 	}
 
 	// Get metrics from the connection pool manager
@@ -1083,94 +1025,30 @@ func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 
 	// Convert pool metrics to our metrics structure
 	metrics := NntpPoolMetrics{
-		Timestamp:              snapshot.Timestamp.Format(time.RFC3339),
-		Uptime:                 snapshot.Uptime.Seconds(),
-		ActiveConnections:      int(snapshot.ActiveConnections),
-		UploadSpeed:            snapshot.UploadSpeed,
-		CommandSuccessRate:     snapshot.CommandSuccessRate,
-		ErrorRate:              snapshot.ErrorRate,
-		TotalAcquires:          snapshot.TotalAcquires,
-		TotalBytesUploaded:     snapshot.TotalBytesUploaded,
-		TotalArticlesRetrieved: snapshot.TotalArticlesRetrieved,
-		AverageAcquireWaitTime: float64(snapshot.AverageAcquireWaitTime.Milliseconds()), // Convert to milliseconds
-		TotalErrors:            snapshot.TotalErrors,
-		TotalArticlesPosted:    snapshot.TotalArticlesPosted,
+		Timestamp:           snapshot.Timestamp.Format(time.RFC3339),
+		TotalBytesUploaded:  snapshot.BytesUploaded,
+		TotalArticlesPosted: snapshot.ArticlesPosted,
+		TotalErrors:         snapshot.TotalErrors,
 	}
 
-	// Convert daily summary directly from snapshot.DailySummary
-	if snapshot.DailySummary != nil {
-		metrics.DailyMetrics = &MetricSummary{
-			StartTime:                 snapshot.DailySummary.StartTime.Format(time.RFC3339),
-			EndTime:                   snapshot.DailySummary.EndTime.Format(time.RFC3339),
-			TotalConnectionsCreated:   snapshot.DailySummary.TotalConnectionsCreated,
-			TotalConnectionsDestroyed: snapshot.DailySummary.TotalConnectionsDestroyed,
-			TotalAcquires:             snapshot.DailySummary.TotalAcquires,
-			TotalReleases:             snapshot.DailySummary.TotalReleases,
-			TotalErrors:               snapshot.DailySummary.TotalErrors,
-			TotalRetries:              snapshot.DailySummary.TotalRetries,
-			TotalAcquireWaitTime:      snapshot.DailySummary.TotalAcquireWaitTime,
-			TotalBytesDownloaded:      snapshot.DailySummary.TotalBytesDownloaded,
-			TotalBytesUploaded:        snapshot.DailySummary.TotalBytesUploaded,
-			TotalArticlesRetrieved:    snapshot.DailySummary.TotalArticlesRetrieved,
-			TotalArticlesPosted:       snapshot.DailySummary.TotalArticlesPosted,
-			TotalCommandCount:         snapshot.DailySummary.TotalCommandCount,
-			TotalCommandErrors:        snapshot.DailySummary.TotalCommandErrors,
-			AverageConnectionsPerHour: snapshot.DailySummary.AverageConnectionsPerHour,
-			AverageErrorRate:          snapshot.DailySummary.AverageErrorRate,
-			AverageSuccessRate:        snapshot.DailySummary.AverageSuccessRate,
-			AverageAcquireWaitTime:    snapshot.DailySummary.AverageAcquireWaitTime,
-			WindowCount:               snapshot.DailySummary.WindowCount,
-		}
-	}
-
-	// Convert weekly summary directly from snapshot.WeeklySummary
-	if snapshot.WeeklySummary != nil {
-		metrics.WeeklyMetrics = &MetricSummary{
-			StartTime:                 snapshot.WeeklySummary.StartTime.Format(time.RFC3339),
-			EndTime:                   snapshot.WeeklySummary.EndTime.Format(time.RFC3339),
-			TotalConnectionsCreated:   snapshot.WeeklySummary.TotalConnectionsCreated,
-			TotalConnectionsDestroyed: snapshot.WeeklySummary.TotalConnectionsDestroyed,
-			TotalAcquires:             snapshot.WeeklySummary.TotalAcquires,
-			TotalReleases:             snapshot.WeeklySummary.TotalReleases,
-			TotalErrors:               snapshot.WeeklySummary.TotalErrors,
-			TotalRetries:              snapshot.WeeklySummary.TotalRetries,
-			TotalAcquireWaitTime:      snapshot.WeeklySummary.TotalAcquireWaitTime,
-			TotalBytesDownloaded:      snapshot.WeeklySummary.TotalBytesDownloaded,
-			TotalBytesUploaded:        snapshot.WeeklySummary.TotalBytesUploaded,
-			TotalArticlesRetrieved:    snapshot.WeeklySummary.TotalArticlesRetrieved,
-			TotalArticlesPosted:       snapshot.WeeklySummary.TotalArticlesPosted,
-			TotalCommandCount:         snapshot.WeeklySummary.TotalCommandCount,
-			TotalCommandErrors:        snapshot.WeeklySummary.TotalCommandErrors,
-			AverageConnectionsPerHour: snapshot.WeeklySummary.AverageConnectionsPerHour,
-			AverageErrorRate:          snapshot.WeeklySummary.AverageErrorRate,
-			AverageSuccessRate:        snapshot.WeeklySummary.AverageSuccessRate,
-			AverageAcquireWaitTime:    snapshot.WeeklySummary.AverageAcquireWaitTime,
-			WindowCount:               snapshot.WeeklySummary.WindowCount,
-		}
-	}
-
-	// Convert provider metrics
-	providers := make([]NntpProviderMetrics, len(snapshot.ProviderMetrics))
-	for i, provider := range snapshot.ProviderMetrics {
-		providers[i] = NntpProviderMetrics{
-			Host:                 provider.Host,
-			Username:             provider.Username,
-			State:                provider.State.String(),
-			TotalConnections:     int(provider.TotalConnections),    // Convert int32 to int
-			MaxConnections:       int(provider.MaxConnections),      // Convert int32 to int
-			AcquiredConnections:  int(provider.AcquiredConnections), // Convert int32 to int
-			IdleConnections:      int(provider.IdleConnections),     // Convert int32 to int
-			TotalBytesUploaded:   provider.TotalBytesUploaded,
-			SuccessRate:          provider.SuccessRate,
-			AverageConnectionAge: provider.AverageConnectionAge.Seconds(),
-			TotalArticlesPosted:  provider.TotalArticlesPosted,
-		}
+	// Convert provider metrics from map to array
+	providers := make([]NntpProviderMetrics, 0, len(snapshot.ProviderMetrics))
+	for _, provider := range snapshot.ProviderMetrics {
+		providers = append(providers, NntpProviderMetrics{
+			Host:                provider.Host,
+			State:               provider.State,
+			ActiveConnections:   provider.ActiveConnections,
+			MaxConnections:      provider.MaxConnections,
+			TotalBytesUploaded:  provider.BytesUploaded,
+			TotalArticlesPosted: provider.ArticlesPosted,
+			TotalErrors:         provider.TotalErrors,
+		})
 	}
 	metrics.Providers = providers
 
 	slog.Debug("Retrieved NNTP pool metrics successfully",
-		"activeConnections", metrics.ActiveConnections,
-		"providerCount", len(metrics.Providers))
+		"providerCount", len(metrics.Providers),
+		"totalBytesUploaded", metrics.TotalBytesUploaded)
 
 	return metrics, nil
 }

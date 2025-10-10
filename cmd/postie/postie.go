@@ -53,7 +53,7 @@ It supports configuration via a YAML file and can process multiple files in a di
 		jobProgress := progress.NewProgressJob("postie-job")
 		defer jobProgress.Close()
 
-		poster, err := postie.New(ctx, cfg, poolManager, jobProgress)
+		poster, err := postie.New(ctx, cfg, poolManager, jobProgress, nil)
 		if err != nil {
 			slog.ErrorContext(ctx, "Error creating postie", "error", err)
 			return err

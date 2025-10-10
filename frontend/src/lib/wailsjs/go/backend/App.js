@@ -174,6 +174,10 @@ export function RetryJob(arg1) {
   return window['go']['backend']['App']['RetryJob'](arg1);
 }
 
+export function RetryScript(arg1) {
+  return window['go']['backend']['App']['RetryScript'](arg1);
+}
+
 export function RollbackMigration() {
   return window['go']['backend']['App']['RollbackMigration']();
 }

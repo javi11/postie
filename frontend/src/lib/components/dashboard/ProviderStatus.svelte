@@ -92,10 +92,6 @@ function formatBytes(bytes: number): string {
 	return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
-function formatSuccessRate(rate: number): string {
-	return (rate * 100).toFixed(1) + "%";
-}
-
 onMount(() => {
 	fetchProviderStatus();
 	
@@ -138,9 +134,6 @@ onDestroy(() => {
 									<h3 class="font-semibold text-base-content">
 										{provider.host}
 									</h3>
-									<p class="text-sm text-base-content/70">
-										{provider.username || $t("dashboard.provider.anonymous")}
-									</p>
 								</div>
 							</div>
 							<div class="text-right">
@@ -148,17 +141,13 @@ onDestroy(() => {
 									{getProviderStatusText(provider)}
 								</div>
 								<div class="text-xs text-base-content/60">
-									{$t("dashboard.provider.connections")}: {provider.acquiredConnections}/{provider.maxConnections}
+									{$t("dashboard.provider.connections")}: {provider.activeConnections}/{provider.maxConnections}
 								</div>
 							</div>
 						</div>
 
 						{#if provider.state?.toLowerCase() === "connected" || provider.state?.toLowerCase() === "active"}
 							<div class="grid grid-cols-2 gap-4 text-sm">
-								<div>
-									<span class="text-base-content/70">{$t("dashboard.provider.success_rate")}:</span>
-									<span class="font-medium ml-1">{formatSuccessRate(provider.successRate)}</span>
-								</div>
 								<div>
 									<span class="text-base-content/70">{$t("dashboard.provider.uploaded")}:</span>
 									<span class="font-medium ml-1">{formatBytes(provider.totalBytesUploaded)}</span>
@@ -168,8 +157,8 @@ onDestroy(() => {
 									<span class="font-medium ml-1">{provider.totalArticlesPosted.toLocaleString()}</span>
 								</div>
 								<div>
-									<span class="text-base-content/70">{$t("dashboard.provider.idle_connections")}:</span>
-									<span class="font-medium ml-1">{provider.idleConnections}</span>
+									<span class="text-base-content/70">{$t("dashboard.provider.errors")}:</span>
+									<span class="font-medium ml-1">{provider.totalErrors.toLocaleString()}</span>
 								</div>
 							</div>
 						{/if}
@@ -180,14 +169,16 @@ onDestroy(() => {
 			<!-- Pool Summary -->
 			<div class="mt-4 p-3 bg-base-200 rounded-lg">
 				<div class="flex justify-between items-center text-sm">
-					<span class="text-base-content/70">{$t("dashboard.provider.pool_summary")}:</span>
-					<span class="font-medium">
-						{poolMetrics.activeConnections} {$t("dashboard.provider.active_connections")}
-					</span>
-				</div>
-				<div class="flex justify-between items-center text-sm mt-1">
 					<span class="text-base-content/70">{$t("dashboard.provider.total_uploaded")}:</span>
 					<span class="font-medium">{formatBytes(poolMetrics.totalBytesUploaded)}</span>
+				</div>
+				<div class="flex justify-between items-center text-sm mt-1">
+					<span class="text-base-content/70">{$t("dashboard.provider.total_articles")}:</span>
+					<span class="font-medium">{poolMetrics.totalArticlesPosted.toLocaleString()}</span>
+				</div>
+				<div class="flex justify-between items-center text-sm mt-1">
+					<span class="text-base-content/70">{$t("dashboard.provider.total_errors")}:</span>
+					<span class="font-medium">{poolMetrics.totalErrors.toLocaleString()}</span>
 				</div>
 			</div>
 		{:else}

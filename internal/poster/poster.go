@@ -11,12 +11,11 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/javi11/nntppool"
+	"github.com/javi11/nntppool/v2"
 	"github.com/javi11/nxg"
 	"github.com/javi11/postie/internal/article"
 	"github.com/javi11/postie/internal/config"
@@ -143,16 +142,6 @@ func (p *poster) Post(
 	rootDir string,
 	nzbGen nzb.NZBGenerator,
 ) error {
-	defer func() {
-		if r := recover(); r != nil {
-			slog.ErrorContext(ctx, "Panic in poster.Post",
-				"panic", r,
-				"files", len(files),
-				"rootDir", rootDir,
-				"os", runtime.GOOS)
-		}
-	}()
-
 	wg := sync.WaitGroup{}
 	var failedPosts int
 
@@ -180,10 +169,24 @@ func (p *poster) Post(
 
 	wg.Add(len(files))
 	for i, file := range files {
-		if err := p.addPost(file, i+1, len(files), &wg, &failedPosts, postQueue, nzbGen); err != nil {
+		// Check if context is canceled before adding more posts
+		select {
+		case <-ctx.Done():
+			close(postQueue) // Close before returning
+			return ctx.Err()
+		default:
+		}
+
+		if err := p.addPost(ctx, file, i+1, len(files), &wg, &failedPosts, postQueue, nzbGen); err != nil {
+			close(postQueue) // Close before returning error
 			return fmt.Errorf("error adding file %s to posting queue: %w", file, err)
 		}
 	}
+
+	// Close postQueue after all initial files have been added
+	// This signals to postLoop that no more initial posts are coming
+	// Note: checkLoop may still send retries, which will be handled gracefully
+	close(postQueue)
 
 	// Wait for all posts to complete or an error to occur
 	done := make(chan struct{})
@@ -210,7 +213,7 @@ func (p *poster) Post(
 
 // postLoop processes posts from the queue
 func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue chan *Post, errChan chan<- error, nzbGen nzb.NZBGenerator) {
-	defer close(postQueue)
+	// Only close channels that this goroutine writes to
 	defer close(checkQueue)
 
 	numOfConnections := 0
@@ -413,8 +416,32 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 						"max_retries", p.checkCfg.MaxRePost,
 					)
 
-					postQueue <- failedPost
-					continue
+					// Try to send retry to postQueue
+					// Use select to handle closed channel gracefully
+					select {
+					case postQueue <- failedPost:
+						// Retry sent successfully, continue to next post
+						continue
+					case <-ctx.Done():
+						// Context canceled, stop processing
+						slog.WarnContext(ctx, "Context canceled while trying to send retry", "file", post.FilePath)
+						return
+					default:
+						// Channel is closed or full, cannot retry
+						// Treat this as a failure
+						slog.WarnContext(ctx, "Cannot send retry - postQueue unavailable", "file", post.FilePath)
+						post.mu.Lock()
+						post.Status = PostStatusFailed
+						post.Error = fmt.Errorf("failed to queue retry - postQueue closed")
+						post.mu.Unlock()
+
+						if post.failed != nil {
+							*post.failed++
+						}
+
+						errChan <- fmt.Errorf("failed to queue retry for file %s", post.FilePath)
+						return
+					}
 				}
 
 				// Increment failed posts counter if we've exceeded max retries
@@ -464,7 +491,7 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 }
 
 // addPost adds a file to the posting queue
-func (p *poster) addPost(filePath string, fileNumber int, totalFiles int, wg *sync.WaitGroup, failedPosts *int, postQueue chan<- *Post, nzbGen nzb.NZBGenerator) error {
+func (p *poster) addPost(ctx context.Context, filePath string, fileNumber int, totalFiles int, wg *sync.WaitGroup, failedPosts *int, postQueue chan<- *Post, nzbGen nzb.NZBGenerator) error {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("error opening file: %w", err)
@@ -645,8 +672,17 @@ func (p *poster) addPost(filePath string, fileNumber int, totalFiles int, wg *sy
 		progress: p.jobProgress.AddProgress(uuid.New(), filepath.Base(filePath), progress.ProgressTypeUploading, fileInfo.Size()),
 	}
 
-	postQueue <- post
-	return nil
+	// Use select to safely send to channel and handle context cancellation
+	select {
+	case postQueue <- post:
+		return nil
+	case <-ctx.Done():
+		// Context canceled, close the file and return error
+		if err := file.Close(); err != nil {
+			slog.WarnContext(ctx, "Error closing file after context cancellation", "error", err, "file", filePath)
+		}
+		return ctx.Err()
+	}
 }
 
 // postArticle posts an article to Usenet
