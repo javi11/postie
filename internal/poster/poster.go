@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,6 +25,11 @@ import (
 	"github.com/javi11/postie/internal/pausable"
 	"github.com/javi11/postie/internal/progress"
 	concpool "github.com/sourcegraph/conc/pool"
+)
+
+var (
+	// ErrPosterClosed is returned when attempting to post after the poster has been closed
+	ErrPosterClosed = errors.New("poster is closed")
 )
 
 // PoolManager defines the interface for connection pool management
@@ -86,6 +92,8 @@ type poster struct {
 	stats       *Stats
 	throttle    *Throttle
 	jobProgress progress.JobProgress
+	closed      atomic.Bool
+	closeOnce   sync.Once
 }
 
 // New creates a new poster using dependency injection for the connection pool manager
@@ -132,7 +140,10 @@ func New(ctx context.Context, cfg config.Config, poolManager PoolManager, jobPro
 }
 
 func (p *poster) Close() {
-	slog.Info("Closing poster")
+	p.closeOnce.Do(func() {
+		p.closed.Store(true)
+		slog.Info("Poster closed - no new Post() calls will be accepted")
+	})
 }
 
 // Post posts files from a directory to Usenet
@@ -142,6 +153,11 @@ func (p *poster) Post(
 	rootDir string,
 	nzbGen nzb.NZBGenerator,
 ) error {
+	// Check if poster has been closed
+	if p.closed.Load() {
+		return ErrPosterClosed
+	}
+
 	wg := sync.WaitGroup{}
 	var failedPosts int
 
@@ -156,12 +172,21 @@ func (p *poster) Post(
 	postQueue := make(chan *Post, 100)
 	checkQueue := make(chan *Post, 100)
 
+	// Track posts in flight (initial + retries) to know when to close postQueue
+	var postsInFlight sync.WaitGroup
+
+	// Start goroutine to close postQueue when all posts are done
+	go func() {
+		postsInFlight.Wait()
+		close(postQueue)
+	}()
+
 	// Start a goroutine to process posts
-	go p.postLoop(ctx, postQueue, checkQueue, errChan, nzbGen)
+	go p.postLoop(ctx, postQueue, checkQueue, errChan, nzbGen, &postsInFlight)
 
 	// Start a goroutine to process checks only if post check is enabled
 	if p.checkCfg.Enabled != nil && *p.checkCfg.Enabled {
-		go p.checkLoop(ctx, checkQueue, postQueue, errChan, nzbGen)
+		go p.checkLoop(ctx, checkQueue, postQueue, errChan, nzbGen, &postsInFlight)
 		slog.DebugContext(ctx, "Post check enabled - started checkLoop goroutine")
 	} else {
 		slog.InfoContext(ctx, "Post check disabled - skipping article verification")
@@ -172,21 +197,17 @@ func (p *poster) Post(
 		// Check if context is canceled before adding more posts
 		select {
 		case <-ctx.Done():
-			close(postQueue) // Close before returning
 			return ctx.Err()
 		default:
 		}
 
+		// Track this post in the queue
+		postsInFlight.Add(1)
 		if err := p.addPost(ctx, file, i+1, len(files), &wg, &failedPosts, postQueue, nzbGen); err != nil {
-			close(postQueue) // Close before returning error
+			postsInFlight.Done() // Remove from tracking since it failed to add
 			return fmt.Errorf("error adding file %s to posting queue: %w", file, err)
 		}
 	}
-
-	// Close postQueue after all initial files have been added
-	// This signals to postLoop that no more initial posts are coming
-	// Note: checkLoop may still send retries, which will be handled gracefully
-	close(postQueue)
 
 	// Wait for all posts to complete or an error to occur
 	done := make(chan struct{})
@@ -212,7 +233,7 @@ func (p *poster) Post(
 }
 
 // postLoop processes posts from the queue
-func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue chan *Post, errChan chan<- error, nzbGen nzb.NZBGenerator) {
+func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue chan *Post, errChan chan<- error, nzbGen nzb.NZBGenerator, postsInFlight *sync.WaitGroup) {
 	// Only close channels that this goroutine writes to
 	defer close(checkQueue)
 
@@ -290,6 +311,9 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 				}
 				post.mu.Unlock()
 
+				// Mark this post as done in the queue tracking
+				postsInFlight.Done()
+
 				if !errors.Is(errs, context.Canceled) {
 					errChan <- fmt.Errorf("failed to post file %s after %d retries: %v", post.FilePath, p.cfg.MaxRetries, errs)
 				}
@@ -313,6 +337,9 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 				continue
 			}
 
+			// Post complete without check - mark as done in queue tracking
+			postsInFlight.Done()
+
 			// Close file
 			if post.file != nil {
 				if err := post.file.Close(); err != nil {
@@ -326,7 +353,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 }
 
 // checkLoop processes posts from the check queue
-func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue chan *Post, errChan chan<- error, nzbGen nzb.NZBGenerator) {
+func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue chan *Post, errChan chan<- error, nzbGen nzb.NZBGenerator, postsInFlight *sync.WaitGroup) {
 	numOfConnections := 0
 
 	for _, pr := range p.pool.GetProvidersInfo() {
@@ -416,6 +443,9 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 						"max_retries", p.checkCfg.MaxRePost,
 					)
 
+					// Track this retry in the queue before sending
+					postsInFlight.Add(1)
+
 					// Try to send retry to postQueue
 					// Use select to handle closed channel gracefully
 					select {
@@ -424,10 +454,14 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 						continue
 					case <-ctx.Done():
 						// Context canceled, stop processing
+						// Decrement since we added above but didn't actually send
+						postsInFlight.Done()
 						slog.WarnContext(ctx, "Context canceled while trying to send retry", "file", post.FilePath)
 						return
 					default:
 						// Channel is closed or full, cannot retry
+						// Decrement since we added above but didn't actually send
+						postsInFlight.Done()
 						// Treat this as a failure
 						slog.WarnContext(ctx, "Cannot send retry - postQueue unavailable", "file", post.FilePath)
 						post.mu.Lock()
@@ -450,6 +484,9 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 				post.Error = fmt.Errorf("failed to verify articles after %d retries", p.checkCfg.MaxRePost)
 				post.mu.Unlock()
 
+				// Mark this post as done in queue tracking - it failed permanently
+				postsInFlight.Done()
+
 				if post.failed != nil {
 					*post.failed++
 				}
@@ -463,6 +500,9 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 				post.Error = fmt.Errorf("verification failed but no articles were marked as failed: %v", errors)
 				post.mu.Unlock()
 
+				// Mark this post as done in queue tracking - it failed with unexpected error
+				postsInFlight.Done()
+
 				if post.failed != nil {
 					*post.failed++
 				}
@@ -475,6 +515,9 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 			post.mu.Lock()
 			post.Status = PostStatusVerified
 			post.mu.Unlock()
+
+			// Mark this post as done in queue tracking - verification successful
+			postsInFlight.Done()
 
 			p.jobProgress.FinishProgress(post.progress.GetID())
 
