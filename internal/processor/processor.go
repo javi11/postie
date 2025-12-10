@@ -11,10 +11,6 @@ import (
 	"sync"
 	"time"
 
-<<<<<<< Updated upstream
-=======
-	"github.com/javi11/nntppool/v2"
->>>>>>> Stashed changes
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/pausable"
 	"github.com/javi11/postie/internal/pool"
