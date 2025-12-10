@@ -1,7 +1,7 @@
 <script lang="ts">
 import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
-  import { backend } from "$lib/wailsjs/go/models";
+import { backend } from "$lib/wailsjs/go/models";
 import { CheckCircle, Clock, AlertCircle, Server, WifiOff } from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
 
@@ -94,7 +94,7 @@ function formatBytes(bytes: number): string {
 
 onMount(() => {
 	fetchProviderStatus();
-	
+
 	// Set up auto-refresh
 	refreshInterval = setInterval(fetchProviderStatus, REFRESH_INTERVAL);
 });
@@ -147,18 +147,18 @@ onDestroy(() => {
 						</div>
 
 						{#if provider.state?.toLowerCase() === "connected" || provider.state?.toLowerCase() === "active"}
-							<div class="grid grid-cols-2 gap-4 text-sm">
+							<div class="grid grid-cols-3 gap-4 text-sm">
 								<div>
 									<span class="text-base-content/70">{$t("dashboard.provider.uploaded")}:</span>
 									<span class="font-medium ml-1">{formatBytes(provider.totalBytesUploaded)}</span>
 								</div>
 								<div>
-									<span class="text-base-content/70">{$t("dashboard.provider.articles")}:</span>
+									<span class="text-base-content/70">{$t("dashboard.provider.articles_posted")}:</span>
 									<span class="font-medium ml-1">{provider.totalArticlesPosted.toLocaleString()}</span>
 								</div>
 								<div>
 									<span class="text-base-content/70">{$t("dashboard.provider.errors")}:</span>
-									<span class="font-medium ml-1">{provider.totalErrors.toLocaleString()}</span>
+									<span class="font-medium ml-1 {provider.totalErrors > 0 ? 'text-error' : ''}">{provider.totalErrors.toLocaleString()}</span>
 								</div>
 							</div>
 						{/if}

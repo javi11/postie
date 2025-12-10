@@ -72,22 +72,28 @@ type ProcessorStatus struct {
 
 // NntpPoolMetrics represents NNTP connection pool metrics
 type NntpPoolMetrics struct {
-	Timestamp           string                `json:"timestamp"`
-	TotalBytesUploaded  int64                 `json:"totalBytesUploaded"`
-	TotalArticlesPosted int64                 `json:"totalArticlesPosted"`
-	TotalErrors         int64                 `json:"totalErrors"`
-	Providers           []NntpProviderMetrics `json:"providers"`
+	Timestamp               string                `json:"timestamp"`
+	ActiveConnections       int                   `json:"activeConnections"`
+	TotalBytesUploaded      int64                 `json:"totalBytesUploaded"`
+	TotalBytesDownloaded    int64                 `json:"totalBytesDownloaded"`
+	TotalArticlesPosted     int64                 `json:"totalArticlesPosted"`
+	TotalArticlesDownloaded int64                 `json:"totalArticlesDownloaded"`
+	TotalErrors             int64                 `json:"totalErrors"`
+	ProviderErrors          map[string]int64      `json:"providerErrors"`
+	Providers               []NntpProviderMetrics `json:"providers"`
 }
 
 // NntpProviderMetrics represents metrics for individual NNTP providers
 type NntpProviderMetrics struct {
-	Host                string `json:"host"`
-	State               string `json:"state"`
-	ActiveConnections   int    `json:"activeConnections"`
-	MaxConnections      int    `json:"maxConnections"`
-	TotalBytesUploaded  int64  `json:"totalBytesUploaded"`
-	TotalArticlesPosted int64  `json:"totalArticlesPosted"`
-	TotalErrors         int64  `json:"totalErrors"`
+	Host                    string `json:"host"`
+	State                   string `json:"state"`
+	ActiveConnections       int    `json:"activeConnections"`
+	MaxConnections          int    `json:"maxConnections"`
+	TotalBytesUploaded      int64  `json:"totalBytesUploaded"`
+	TotalBytesDownloaded    int64  `json:"totalBytesDownloaded"`
+	TotalArticlesPosted     int64  `json:"totalArticlesPosted"`
+	TotalArticlesDownloaded int64  `json:"totalArticlesDownloaded"`
+	TotalErrors             int64  `json:"totalErrors"`
 }
 
 // App struct for the Wails application
@@ -1003,11 +1009,15 @@ func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 
 	// Default empty metrics if no pool available
 	emptyMetrics := NntpPoolMetrics{
-		Timestamp:           time.Now().Format(time.RFC3339),
-		TotalBytesUploaded:  0,
-		TotalArticlesPosted: 0,
-		TotalErrors:         0,
-		Providers:           []NntpProviderMetrics{},
+		Timestamp:               time.Now().Format(time.RFC3339),
+		ActiveConnections:       0,
+		TotalBytesUploaded:      0,
+		TotalBytesDownloaded:    0,
+		TotalArticlesPosted:     0,
+		TotalArticlesDownloaded: 0,
+		TotalErrors:             0,
+		ProviderErrors:          make(map[string]int64),
+		Providers:               []NntpProviderMetrics{},
 	}
 
 	// Get metrics from the connection pool manager
@@ -1023,25 +1033,37 @@ func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 		return emptyMetrics, fmt.Errorf("failed to get pool metrics: %w", err)
 	}
 
+	// Sum active connections from all providers
+	activeConnections := 0
+	for _, provider := range snapshot.ProviderMetrics {
+		activeConnections += provider.ActiveConnections
+	}
+
 	// Convert pool metrics to our metrics structure
 	metrics := NntpPoolMetrics{
-		Timestamp:           snapshot.Timestamp.Format(time.RFC3339),
-		TotalBytesUploaded:  snapshot.BytesUploaded,
-		TotalArticlesPosted: snapshot.ArticlesPosted,
-		TotalErrors:         snapshot.TotalErrors,
+		Timestamp:               snapshot.Timestamp.Format(time.RFC3339),
+		ActiveConnections:       activeConnections,
+		TotalBytesUploaded:      snapshot.BytesUploaded,
+		TotalBytesDownloaded:    snapshot.BytesDownloaded,
+		TotalArticlesPosted:     snapshot.ArticlesPosted,
+		TotalArticlesDownloaded: snapshot.ArticlesDownloaded,
+		TotalErrors:             snapshot.TotalErrors,
+		ProviderErrors:          snapshot.ProviderErrors,
 	}
 
 	// Convert provider metrics from map to array
 	providers := make([]NntpProviderMetrics, 0, len(snapshot.ProviderMetrics))
 	for _, provider := range snapshot.ProviderMetrics {
 		providers = append(providers, NntpProviderMetrics{
-			Host:                provider.Host,
-			State:               provider.State,
-			ActiveConnections:   provider.ActiveConnections,
-			MaxConnections:      provider.MaxConnections,
-			TotalBytesUploaded:  provider.BytesUploaded,
-			TotalArticlesPosted: provider.ArticlesPosted,
-			TotalErrors:         provider.TotalErrors,
+			Host:                    provider.Host,
+			State:                   provider.State,
+			ActiveConnections:       provider.ActiveConnections,
+			MaxConnections:          provider.MaxConnections,
+			TotalBytesUploaded:      provider.BytesUploaded,
+			TotalBytesDownloaded:    provider.BytesDownloaded,
+			TotalArticlesPosted:     provider.ArticlesPosted,
+			TotalArticlesDownloaded: provider.ArticlesDownloaded,
+			TotalErrors:             provider.TotalErrors,
 		})
 	}
 	metrics.Providers = providers

@@ -8,10 +8,19 @@ import (
 	"math/big"
 	mrand "math/rand"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mnightingale/rapidyenc"
 )
+
+// encoderBufferPool provides reusable buffers for article encoding to reduce GC pressure
+var encoderBufferPool = sync.Pool{
+	New: func() interface{} {
+		// Pre-allocate 900KB (slightly larger than typical article size)
+		return bytes.NewBuffer(make([]byte, 0, 900*1024))
+	},
+}
 
 type Encoder interface {
 	Encode(p []byte) []byte
@@ -70,8 +79,10 @@ func New(
 	}
 }
 
-// EncodeBytes encodes the article body using the provided encoder
-func (a *Article) Encode(body []byte) (io.Reader, error) {
+// Encode encodes the article body using yEnc encoding.
+// Returns the encoded reader, a cleanup function to return the buffer to the pool, and any error.
+// The caller MUST call the cleanup function when done with the reader.
+func (a *Article) Encode(body []byte) (io.Reader, func(), error) {
 	headers := make(map[string]string)
 
 	if a.CustomHeaders != nil {
@@ -95,7 +106,15 @@ func (a *Article) Encode(body []byte) (io.Reader, error) {
 		header += fmt.Sprintf("%s: %s\r\n", k, v)
 	}
 
-	buff := bytes.NewBuffer(nil)
+	// Get buffer from pool and reset it
+	buff := encoderBufferPool.Get().(*bytes.Buffer)
+	buff.Reset()
+
+	// Cleanup function to return buffer to pool
+	cleanup := func() {
+		encoderBufferPool.Put(buff)
+	}
+
 	buff.WriteString(header + "\r\n")
 
 	encoder, err := rapidyenc.NewEncoder(buff, rapidyenc.Meta{
@@ -107,20 +126,23 @@ func (a *Article) Encode(body []byte) (io.Reader, error) {
 		PartSize:   int64(a.Size),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("error creating encoder: %w", err)
+		cleanup() // Return buffer to pool on error
+		return nil, nil, fmt.Errorf("error creating encoder: %w", err)
 	}
 
 	_, errWrite := encoder.Write(body)
 
 	if err := encoder.Close(); err != nil {
-		return nil, fmt.Errorf("error closing encoder: %w", err)
+		cleanup() // Return buffer to pool on error
+		return nil, nil, fmt.Errorf("error closing encoder: %w", err)
 	}
 
 	if errWrite != nil {
-		return nil, fmt.Errorf("error writing article body: %w", errWrite)
+		cleanup() // Return buffer to pool on error
+		return nil, nil, fmt.Errorf("error writing article body: %w", errWrite)
 	}
 
-	return buff, nil
+	return buff, cleanup, nil
 }
 
 // generateRandomString generates a random string of specified length

@@ -38,7 +38,9 @@ export namespace backend {
 	    activeConnections: number;
 	    maxConnections: number;
 	    totalBytesUploaded: number;
+	    totalBytesDownloaded: number;
 	    totalArticlesPosted: number;
+	    totalArticlesDownloaded: number;
 	    totalErrors: number;
 	
 	    static createFrom(source: any = {}) {
@@ -52,15 +54,21 @@ export namespace backend {
 	        this.activeConnections = source["activeConnections"];
 	        this.maxConnections = source["maxConnections"];
 	        this.totalBytesUploaded = source["totalBytesUploaded"];
+	        this.totalBytesDownloaded = source["totalBytesDownloaded"];
 	        this.totalArticlesPosted = source["totalArticlesPosted"];
+	        this.totalArticlesDownloaded = source["totalArticlesDownloaded"];
 	        this.totalErrors = source["totalErrors"];
 	    }
 	}
 	export class NntpPoolMetrics {
 	    timestamp: string;
+	    activeConnections: number;
 	    totalBytesUploaded: number;
+	    totalBytesDownloaded: number;
 	    totalArticlesPosted: number;
+	    totalArticlesDownloaded: number;
 	    totalErrors: number;
+	    providerErrors: Record<string, number>;
 	    providers: NntpProviderMetrics[];
 	
 	    static createFrom(source: any = {}) {
@@ -70,9 +78,13 @@ export namespace backend {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.timestamp = source["timestamp"];
+	        this.activeConnections = source["activeConnections"];
 	        this.totalBytesUploaded = source["totalBytesUploaded"];
+	        this.totalBytesDownloaded = source["totalBytesDownloaded"];
 	        this.totalArticlesPosted = source["totalArticlesPosted"];
+	        this.totalArticlesDownloaded = source["totalArticlesDownloaded"];
 	        this.totalErrors = source["totalErrors"];
+	        this.providerErrors = source["providerErrors"];
 	        this.providers = this.convertValues(source["providers"], NntpProviderMetrics);
 	    }
 	

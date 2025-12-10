@@ -3,8 +3,8 @@ import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import { onMount, onDestroy } from "svelte";
-import { Activity, Upload, Server, AlertCircle, FileText } from "lucide-svelte";
-  import type { backend } from "$lib/wailsjs/go/models";
+import { Activity, Upload, Server, AlertCircle, AlertTriangle } from "lucide-svelte";
+import type { backend } from "$lib/wailsjs/go/models";
 
 let metrics = $state<backend.NntpPoolMetrics | null>(null);
 let loading = $state(true);
@@ -63,6 +63,10 @@ function formatBytes(bytes: number): string {
 	return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
+function formatNumber(num: number): string {
+	return num.toLocaleString();
+}
+
 function getProviderStatusColor(state: string): string {
 	switch (state.toLowerCase()) {
 		case "healthy":
@@ -80,7 +84,6 @@ function getProviderStatusColor(state: string): string {
 			return "badge-neutral";
 	}
 }
-
 </script>
 
 <div class="space-y-6">
@@ -121,67 +124,42 @@ function getProviderStatusColor(state: string): string {
 			</div>
 		</div>
 	{:else if metrics}
-		<!-- Posting Overview Stats -->
-		<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-			<!-- Total Data Posted -->
+		<!-- Overview Stats -->
+		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+			<!-- Active Connections -->
 			<div class="stat bg-base-100 rounded-lg shadow-sm">
-				<div class="stat-figure text-success">
-					<Upload class="w-8 h-8" />
+				<div class="stat-figure text-primary">
+					<Server class="w-8 h-8" />
 				</div>
-				<div class="stat-title">{$t('metrics.total_data_posted')}</div>
-				<div class="stat-value text-success">{formatBytes(metrics.totalBytesUploaded)}</div>
+				<div class="stat-title">{$t('metrics.active_connections')}</div>
+				<div class="stat-value text-primary">{metrics.activeConnections}</div>
 			</div>
 
 			<!-- Articles Posted -->
 			<div class="stat bg-base-100 rounded-lg shadow-sm">
-				<div class="stat-figure text-info">
-					<FileText class="w-8 h-8" />
+				<div class="stat-figure text-success">
+					<Upload class="w-8 h-8" />
 				</div>
 				<div class="stat-title">{$t('metrics.articles_posted')}</div>
-				<div class="stat-value text-info">{metrics.totalArticlesPosted.toLocaleString()}</div>
+				<div class="stat-value text-success">{formatNumber(metrics.totalArticlesPosted)}</div>
+			</div>
+
+			<!-- Total Data Uploaded -->
+			<div class="stat bg-base-100 rounded-lg shadow-sm">
+				<div class="stat-figure text-info">
+					<Upload class="w-8 h-8" />
+				</div>
+				<div class="stat-title">{$t('metrics.total_data_posted')}</div>
+				<div class="stat-value text-info">{formatBytes(metrics.totalBytesUploaded)}</div>
 			</div>
 
 			<!-- Total Errors -->
 			<div class="stat bg-base-100 rounded-lg shadow-sm">
 				<div class="stat-figure text-error">
-					<AlertCircle class="w-8 h-8" />
+					<AlertTriangle class="w-8 h-8" />
 				</div>
 				<div class="stat-title">{$t('metrics.total_errors')}</div>
-				<div class="stat-value text-error">{metrics.totalErrors.toLocaleString()}</div>
-			</div>
-		</div>
-
-		<!-- Upload Statistics Summary -->
-		<div class="card bg-base-100 shadow-sm">
-			<div class="card-body">
-				<h2 class="card-title flex items-center gap-2">
-					<Upload class="w-5 h-5" />
-					{$t('metrics.upload_statistics')}
-				</h2>
-
-				<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-					<div class="stat">
-						<div class="stat-title">{$t('metrics.total_data_posted')}</div>
-						<div class="stat-value text-success text-2xl">{formatBytes(metrics.totalBytesUploaded)}</div>
-					</div>
-					<div class="stat">
-						<div class="stat-title">{$t('metrics.articles_posted')}</div>
-						<div class="stat-value text-info text-2xl">{metrics.totalArticlesPosted.toLocaleString()}</div>
-					</div>
-					<div class="stat">
-						<div class="stat-title">{$t('metrics.total_errors')}</div>
-						<div class="stat-value text-error text-2xl">{metrics.totalErrors.toLocaleString()}</div>
-					</div>
-					<div class="stat">
-						<div class="stat-title">{$t('metrics.average_article_size')}</div>
-						<div class="stat-value text-base-content text-2xl">
-							{metrics.totalArticlesPosted > 0
-								? formatBytes(Math.round(metrics.totalBytesUploaded / metrics.totalArticlesPosted))
-								: "0 B"
-							}
-						</div>
-					</div>
-				</div>
+				<div class="stat-value text-error">{formatNumber(metrics.totalErrors)}</div>
 			</div>
 		</div>
 
@@ -192,7 +170,7 @@ function getProviderStatusColor(state: string): string {
 					<Server class="w-5 h-5" />
 					{$t('metrics.nntp_servers')} ({metrics.providers.length})
 				</h2>
-				
+
 				<div class="overflow-x-auto">
 					<table class="table table-zebra w-full">
 						<thead>
@@ -200,9 +178,9 @@ function getProviderStatusColor(state: string): string {
 								<th>{$t('metrics.server_host')}</th>
 								<th>{$t('metrics.status')}</th>
 								<th>{$t('metrics.connections')}</th>
-								<th>{$t('metrics.data_posted')}</th>
+								<th>{$t('metrics.data_uploaded')}</th>
 								<th>{$t('metrics.articles_posted')}</th>
-								<th>{$t('metrics.total_errors')}</th>
+								<th>{$t('metrics.errors')}</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -227,13 +205,13 @@ function getProviderStatusColor(state: string): string {
 										</div>
 									</td>
 									<td>
-										<div class="text-sm text-info">
-											{provider.totalArticlesPosted.toLocaleString()}
+										<div class="text-sm">
+											{formatNumber(provider.totalArticlesPosted)}
 										</div>
 									</td>
 									<td>
-										<div class="text-sm text-error">
-											{provider.totalErrors.toLocaleString()}
+										<div class="text-sm font-mono {provider.totalErrors > 0 ? 'text-error' : 'text-success'}">
+											{formatNumber(provider.totalErrors)}
 										</div>
 									</td>
 								</tr>

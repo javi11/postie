@@ -1,7 +1,7 @@
 {
 	"metrics": {
-		"title": "Métriques du Pool NNTP",
-		"description": "Métriques de performance et de connexion en temps réel pour vos serveurs NNTP",
+		"title": "Métriques du Pool de Connexions",
+		"description": "Métriques de performance et de connexion en temps réel pour votre pool de connexions",
 		"auto_refresh": "Actualisation automatique",
 		"refresh": "Actualiser",
 		"error_loading": "Échec du chargement des métriques",

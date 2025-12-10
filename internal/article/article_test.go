@@ -99,10 +99,11 @@ func TestEncode(t *testing.T) {
 	article.Size = uint64(len(testData))
 
 	// Test Encode method
-	reader, err := article.Encode(testData)
+	reader, cleanup, err := article.Encode(testData)
 	if err != nil {
 		t.Fatalf("Encode failed: %v", err)
 	}
+	defer cleanup()
 
 	// Read the encoded result
 	encoded, err := io.ReadAll(reader)
@@ -177,10 +178,11 @@ func TestEncodeWithXNxgHeader(t *testing.T) {
 	// Update the Size field to match the actual test data length
 	article.Size = uint64(len(testData))
 
-	reader, err := article.Encode(testData)
+	reader, cleanup, err := article.Encode(testData)
 	if err != nil {
 		t.Fatalf("Encode failed: %v", err)
 	}
+	defer cleanup()
 
 	encoded, err := io.ReadAll(reader)
 	if err != nil {
@@ -214,10 +216,11 @@ func TestEncodeSmallData(t *testing.T) {
 	// Test with minimal data (1 byte)
 	testData := []byte("x")
 
-	reader, err := article.Encode(testData)
+	reader, cleanup, err := article.Encode(testData)
 	if err != nil {
 		t.Fatalf("Encode with small data failed: %v", err)
 	}
+	defer cleanup()
 
 	encoded, err := io.ReadAll(reader)
 	if err != nil {

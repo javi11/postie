@@ -74,6 +74,12 @@ type Post struct {
 	progress progress.Progress
 }
 
+// articleWithBody holds an article with its pre-read body data for read-ahead buffering
+type articleWithBody struct {
+	article *article.Article
+	body    []byte
+}
+
 // Stats tracks posting statistics
 type Stats struct {
 	ArticlesPosted  int64
@@ -260,14 +266,42 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			post.Status = PostStatusPosting
 			post.mu.Unlock()
 
-			// Create a pool with error handling - use all available CPU cores
+			// Create read-ahead channel (buffer 10 articles ahead to overlap I/O with network)
+			readAheadChan := make(chan articleWithBody, 10)
+
+			// Start read-ahead goroutine to pre-read article bodies
+			go func() {
+				defer close(readAheadChan)
+				for _, art := range post.Articles {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+						body := make([]byte, art.Size)
+						if _, err := post.file.ReadAt(body, art.Offset); err != nil {
+							slog.ErrorContext(ctx, "Error pre-reading article", "error", err, "offset", art.Offset)
+							return
+						}
+
+						select {
+						case readAheadChan <- articleWithBody{article: art, body: body}:
+						case <-ctx.Done():
+							return
+						}
+					}
+				}
+			}()
+
+			// Create a pool with error handling - use all available connections
 			pool := concpool.New().WithContext(ctx).WithMaxGoroutines(numOfConnections).WithCancelOnError().WithFirstError()
 
 			var combinedHash string
+			var hashMu sync.Mutex
 
-			// Submit all articles to the pool
-			for _, art := range post.Articles {
-				combinedHash += art.Hash
+			// Consume from read-ahead channel and submit to posting pool
+			for artWithBody := range readAheadChan {
+				art := artWithBody.article
+				body := artWithBody.body
 
 				pool.Go(func(ctx context.Context) error {
 					if ctx.Err() != nil {
@@ -279,9 +313,14 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 						return err
 					}
 
-					if err := p.postArticle(ctx, art, post.file); err != nil {
+					if err := p.postArticleWithBody(ctx, art, body); err != nil {
 						return err
 					}
+
+					// Update combined hash (thread-safe)
+					hashMu.Lock()
+					combinedHash += art.Hash
+					hashMu.Unlock()
 
 					// Update progress if manager is available
 					post.progress.UpdateProgress(int64(art.Size))
@@ -728,7 +767,7 @@ func (p *poster) addPost(ctx context.Context, filePath string, fileNumber int, t
 	}
 }
 
-// postArticle posts an article to Usenet
+// postArticle posts an article to Usenet (reads body from file)
 func (p *poster) postArticle(ctx context.Context, article *article.Article, file *os.File) error {
 	// Check if we should pause before posting
 	if err := pausable.CheckPause(ctx); err != nil {
@@ -741,15 +780,26 @@ func (p *poster) postArticle(ctx context.Context, article *article.Article, file
 		return fmt.Errorf("error reading article body: %w", err)
 	}
 
+	return p.postArticleWithBody(ctx, article, body)
+}
+
+// postArticleWithBody posts an article with pre-read body data
+func (p *poster) postArticleWithBody(ctx context.Context, article *article.Article, body []byte) error {
+	// Check if we should pause before posting
+	if err := pausable.CheckPause(ctx); err != nil {
+		return err
+	}
+
 	// Calculate and set hash for the article
 	articleHash := CalculateHash(body)
 	article.Hash = articleHash
 
-	// Create article
-	buff, err := article.Encode(body)
+	// Create article (with buffer pooling)
+	buff, cleanup, err := article.Encode(body)
 	if err != nil {
 		return fmt.Errorf("error encoding article: %w", err)
 	}
+	defer cleanup() // Return buffer to pool when done
 
 	// Post article
 	if err := p.pool.Post(ctx, buff); err != nil {
