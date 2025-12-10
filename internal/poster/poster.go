@@ -178,14 +178,8 @@ func (p *poster) Post(
 	postQueue := make(chan *Post, 100)
 	checkQueue := make(chan *Post, 100)
 
-	// Track posts in flight (initial + retries) to know when to close postQueue
+	// Track posts in flight (initial + retries) to know when all processing is complete
 	var postsInFlight sync.WaitGroup
-
-	// Start goroutine to close postQueue when all posts are done
-	go func() {
-		postsInFlight.Wait()
-		close(postQueue)
-	}()
 
 	// Start a goroutine to process posts
 	go p.postLoop(ctx, postQueue, checkQueue, errChan, nzbGen, &postsInFlight)
@@ -207,13 +201,14 @@ func (p *poster) Post(
 		default:
 		}
 
-		// Track this post in the queue
-		postsInFlight.Add(1)
-		if err := p.addPost(ctx, file, i+1, len(files), &wg, &failedPosts, postQueue, nzbGen); err != nil {
-			postsInFlight.Done() // Remove from tracking since it failed to add
+		if err := p.addPost(ctx, file, i+1, len(files), &wg, &failedPosts, postQueue, nzbGen, &postsInFlight); err != nil {
 			return fmt.Errorf("error adding file %s to posting queue: %w", file, err)
 		}
 	}
+
+	// Close postQueue after all initial posts have been added
+	// The checkLoop can still add retries back to the queue if needed
+	close(postQueue)
 
 	// Wait for all posts to complete or an error to occur
 	done := make(chan struct{})
@@ -573,7 +568,7 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 }
 
 // addPost adds a file to the posting queue
-func (p *poster) addPost(ctx context.Context, filePath string, fileNumber int, totalFiles int, wg *sync.WaitGroup, failedPosts *int, postQueue chan<- *Post, nzbGen nzb.NZBGenerator) error {
+func (p *poster) addPost(ctx context.Context, filePath string, fileNumber int, totalFiles int, wg *sync.WaitGroup, failedPosts *int, postQueue chan<- *Post, nzbGen nzb.NZBGenerator, postsInFlight *sync.WaitGroup) error {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("error opening file: %w", err)
@@ -754,12 +749,18 @@ func (p *poster) addPost(ctx context.Context, filePath string, fileNumber int, t
 		progress: p.jobProgress.AddProgress(uuid.New(), filepath.Base(filePath), progress.ProgressTypeUploading, fileInfo.Size()),
 	}
 
+	// Track this post as in-flight until it's sent to the queue
+	postsInFlight.Add(1)
+
 	// Use select to safely send to channel and handle context cancellation
 	select {
 	case postQueue <- post:
+		// Successfully sent to queue
 		return nil
 	case <-ctx.Done():
-		// Context canceled, close the file and return error
+		// Context canceled, decrement counter since we didn't send
+		postsInFlight.Done()
+		// Close the file and return error
 		if err := file.Close(); err != nil {
 			slog.WarnContext(ctx, "Error closing file after context cancellation", "error", err, "file", filePath)
 		}
