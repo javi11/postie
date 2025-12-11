@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
-	"strings"
 	"sync"
 	"time"
 
@@ -483,15 +482,6 @@ func (a *App) RetryScript(id string) error {
 	return nil
 }
 
-// Helper function to get keys from map
-func getKeys(m map[string]bool) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
 // GetLogs returns the content of the log file.
 func (a *App) GetLogs() (string, error) {
 	defer a.recoverPanic("GetLogs")
@@ -538,68 +528,7 @@ func (a *App) GetLogsPaginated(limit, offset int) (string, error) {
 	}
 
 	// New paginated behavior
-	return a.readLogLines(file, limit, offset)
-}
-
-// readLogLines reads lines from the log file with pagination
-func (a *App) readLogLines(file *os.File, limit, offset int) (string, error) {
-	// For very large files (>10MB), we should optimize this
-	// For now, we'll read the entire file for simplicity
-	content, err := io.ReadAll(file)
-	if err != nil {
-		return "", fmt.Errorf("failed to read log file: %w", err)
-	}
-
-	if len(content) == 0 {
-		return "", nil
-	}
-
-	// Split into lines
-	lines := strings.Split(string(content), "\n")
-
-	// Remove empty last line if it exists (common with newline-terminated files)
-	if len(lines) > 0 && lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
-
-	totalLines := len(lines)
-	if totalLines == 0 {
-		return "", nil
-	}
-
-	// Validate parameters
-	if offset < 0 {
-		offset = 0
-	}
-	if limit <= 0 {
-		return "", fmt.Errorf("limit must be positive")
-	}
-
-	// Calculate start and end indices
-	// We want the most recent lines, so we work backwards from the end
-	endIndex := totalLines - offset
-	if endIndex <= 0 {
-		return "", nil // No lines to return
-	}
-
-	startIndex := endIndex - limit
-	if startIndex < 0 {
-		startIndex = 0
-	}
-
-	// Ensure we don't go out of bounds
-	if startIndex >= totalLines {
-		return "", nil
-	}
-	if endIndex > totalLines {
-		endIndex = totalLines
-	}
-
-	// Get the requested lines
-	requestedLines := lines[startIndex:endIndex]
-
-	// Join with newlines and return
-	return strings.Join(requestedLines, "\n"), nil
+	return readLogLines(file, limit, offset)
 }
 
 // NavigateToSettings emits an event to navigate to the settings page
@@ -618,37 +547,6 @@ func (a *App) NavigateToDashboard() {
 	} else if a.webEventEmitter != nil {
 		a.webEventEmitter("navigate-to-dashboard", nil)
 	}
-}
-
-// processDirectoryRecursively processes a directory and returns collected files grouped by folder
-func (a *App) processDirectoryRecursively(dirPath string) (map[string][]string, map[string]int64, error) {
-	filesByFolder := make(map[string][]string)
-	sizeByFolder := make(map[string]int64)
-
-	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			slog.Warn("Error walking directory", "path", path, "error", err)
-			return nil // Continue processing other files
-		}
-
-		// Skip directories
-		if info.IsDir() {
-			return nil
-		}
-
-		// Get the parent directory
-		folderPath := filepath.Dir(path)
-
-		// Add file to the folder's file list
-		filesByFolder[folderPath] = append(filesByFolder[folderPath], path)
-		sizeByFolder[folderPath] += info.Size()
-
-		slog.Debug("Found file in directory", "file", path, "folder", folderPath, "size", info.Size())
-
-		return nil
-	})
-
-	return filesByFolder, sizeByFolder, err
 }
 
 // HandleDroppedFiles processes files that are dropped onto the application window
@@ -683,7 +581,7 @@ func (a *App) HandleDroppedFiles(filePaths []string) error {
 				slog.Info("Processing dropped directory", "path", filePath)
 
 				// Process directory recursively to collect files
-				filesByFolder, sizeByFolder, err := a.processDirectoryRecursively(filePath)
+				filesByFolder, sizeByFolder, err := processDirectoryRecursively(filePath)
 				if err != nil {
 					slog.Error("Error processing directory", "path", filePath, "error", err)
 					continue
@@ -747,45 +645,6 @@ func (a *App) HandleDroppedFiles(filePaths []string) error {
 	}
 
 	return fmt.Errorf("queue not initialized")
-}
-
-// determineFirstStart checks if this is the first time the application is being run
-// This must be called BEFORE any config creation
-func (a *App) determineFirstStart() bool {
-	// Check if config file exists
-	if _, err := os.Stat(a.configPath); os.IsNotExist(err) {
-		slog.Info("Config file does not exist, treating as first start", "configPath", a.configPath)
-		return true
-	}
-
-	// If config file exists, try to load it to check if it has meaningful content
-	cfg, err := config.Load(a.configPath)
-	if err != nil {
-		slog.Info("Config file exists but cannot be loaded, treating as first start", "error", err)
-		return true
-	}
-
-	// Check if config has any configured servers with actual host values
-	hasValidServers := false
-	for _, server := range cfg.Servers {
-		if server.Host != "" {
-			hasValidServers = true
-			break
-		}
-	}
-
-	if !hasValidServers {
-		slog.Info("Config file exists but has no valid servers, treating as first start")
-		return true
-	}
-
-	slog.Info("Config file exists with valid servers, not first start")
-	return false
-}
-
-// isFirstStart returns whether this is the first time the application is being run
-func (a *App) isFirstStart() bool {
-	return a.firstStart
 }
 
 // SetupWizardComplete saves the configuration from the setup wizard
@@ -860,7 +719,7 @@ func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 	slog.Info("Saving setup wizard configuration", "configPath", a.configPath)
 	if err := a.SaveConfig(&cfg); err != nil {
 		slog.Error("Failed to save setup wizard configuration", "error", err, "configPath", a.configPath)
-		return fmt.Errorf("failed to save configuration: %w", err)
+		return a.wrapSaveConfigError(err)
 	}
 
 	// Mark as no longer first start since setup is complete
@@ -1073,4 +932,43 @@ func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 		"totalBytesUploaded", metrics.TotalBytesUploaded)
 
 	return metrics, nil
+}
+
+// determineFirstStart checks if this is the first time the application is being run
+// This must be called BEFORE any config creation
+func (a *App) determineFirstStart() bool {
+	// Check if config file exists
+	if _, err := os.Stat(a.configPath); os.IsNotExist(err) {
+		slog.Info("Config file does not exist, treating as first start", "configPath", a.configPath)
+		return true
+	}
+
+	// If config file exists, try to load it to check if it has meaningful content
+	cfg, err := config.Load(a.configPath)
+	if err != nil {
+		slog.Info("Config file exists but cannot be loaded, treating as first start", "error", err)
+		return true
+	}
+
+	// Check if config has any configured servers with actual host values
+	hasValidServers := false
+	for _, server := range cfg.Servers {
+		if server.Host != "" {
+			hasValidServers = true
+			break
+		}
+	}
+
+	if !hasValidServers {
+		slog.Info("Config file exists but has no valid servers, treating as first start")
+		return true
+	}
+
+	slog.Info("Config file exists with valid servers, not first start")
+	return false
+}
+
+// isFirstStart returns whether this is the first time the application is being run
+func (a *App) isFirstStart() bool {
+	return a.firstStart
 }

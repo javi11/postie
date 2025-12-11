@@ -783,11 +783,11 @@ func GetDefaultConfig() ConfigData {
 func SaveConfig(configData *ConfigData, path string) error {
 	data, err := yaml.Marshal(configData)
 	if err != nil {
-		return fmt.Errorf("error marshaling YAML: %w", err)
+		return fmt.Errorf("Invalid configuration format: %v", err)
 	}
 
 	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("error writing config file: %w", err)
+		return err // Let caller wrap with path context and user-friendly message
 	}
 
 	return nil

@@ -49,9 +49,9 @@ func (a *App) UploadFiles() error {
 		// Handle directories by processing them as single NZB units
 		if info.IsDir() {
 			slog.Info("Processing selected directory", "path", filePath)
-			
+
 			// Process directory recursively to collect files
-			filesByFolder, sizeByFolder, err := a.processDirectoryRecursively(filePath)
+			filesByFolder, sizeByFolder, err := processDirectoryRecursively(filePath)
 			if err != nil {
 				slog.Error("Error processing directory", "path", filePath, "error", err)
 				continue
@@ -99,7 +99,7 @@ func (a *App) UploadFiles() error {
 
 	if addedCount > 0 {
 		slog.Info("Added selected items to queue", "added", addedCount, "total", len(files))
-		
+
 		// Emit event to refresh queue in frontend
 		if !a.isWebMode {
 			runtime.EventsEmit(a.ctx, "queue-updated")
@@ -120,7 +120,7 @@ func (a *App) IsUploading() bool {
 	if a.processor == nil {
 		return false
 	}
-	
+
 	runningJobs := a.processor.GetRunningJobs()
 	return len(runningJobs) > 0
 }
