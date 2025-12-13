@@ -927,10 +927,6 @@ func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 	}
 	metrics.Providers = providers
 
-	slog.Debug("Retrieved NNTP pool metrics successfully",
-		"providerCount", len(metrics.Providers),
-		"totalBytesUploaded", metrics.TotalBytesUploaded)
-
 	return metrics, nil
 }
 
