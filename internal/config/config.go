@@ -24,6 +24,29 @@ const (
 	CurrentConfigVersion = 1
 )
 
+// #region agent log
+const agentDebugLogPath = "/Users/javi/mio/postie/.cursor/debug.log"
+
+func agentDebugLog(payload map[string]any) {
+	// Best-effort, never fail config parsing because of debug logging.
+	payload["timestamp"] = time.Now().UnixMilli()
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	// Ensure parent directory exists (manual cleanup may remove it).
+	if err := os.MkdirAll(filepath.Dir(agentDebugLogPath), 0755); err != nil {
+		return
+	}
+	f, err := os.OpenFile(agentDebugLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	_, _ = f.Write(append(b, '\n'))
+	_ = f.Close()
+}
+// #endregion agent log
+
 // Duration wraps time.Duration to provide custom JSON and YAML marshalling
 type Duration string
 
@@ -36,11 +59,56 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 func (d *Duration) UnmarshalJSON(data []byte) error {
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
+		// #region agent log
+		agentDebugLog(map[string]any{
+			"sessionId":    "debug-session",
+			"runId":        "pre-fix",
+			"hypothesisId": "D",
+			"location":     "internal/config/config.go:Duration.UnmarshalJSON",
+			"message":      "json.Unmarshal into string failed for Duration",
+			"data": map[string]any{
+				"raw_json_len": len(data),
+			},
+		})
+		// #endregion agent log
 		return err
+	}
+
+	// Allow empty duration strings (treat as zero) so partial configs or missing fields don't hard-fail.
+	// Defaults (where applicable) are applied at higher levels (e.g. config load / validation).
+	if s == "" {
+		// #region agent log
+		agentDebugLog(map[string]any{
+			"sessionId":    "debug-session",
+			"runId":        "pre-fix",
+			"hypothesisId": "E",
+			"location":     "internal/config/config.go:Duration.UnmarshalJSON",
+			"message":      "Empty duration string accepted (treated as zero)",
+			"data": map[string]any{
+				"raw_json": string(data),
+			},
+		})
+		// #endregion agent log
+		*d = Duration("")
+		return nil
 	}
 
 	duration, err := time.ParseDuration(s)
 	if err != nil {
+		// #region agent log
+		agentDebugLog(map[string]any{
+			"sessionId":    "debug-session",
+			"runId":        "pre-fix",
+			"hypothesisId": "C",
+			"location":     "internal/config/config.go:Duration.UnmarshalJSON",
+			"message":      "time.ParseDuration failed for Duration",
+			"data": map[string]any{
+				"duration_str": s, // safe: duration strings only
+				"raw_json":     string(data),
+				"error":        err.Error(),
+			},
+		})
+		// #endregion agent log
 		return err
 	}
 
@@ -57,11 +125,55 @@ func (d Duration) MarshalYAML() (interface{}, error) {
 func (d *Duration) UnmarshalYAML(value *yaml.Node) error {
 	var s string
 	if err := value.Decode(&s); err != nil {
+		// #region agent log
+		agentDebugLog(map[string]any{
+			"sessionId":    "debug-session",
+			"runId":        "pre-fix",
+			"hypothesisId": "Y1",
+			"location":     "internal/config/config.go:Duration.UnmarshalYAML",
+			"message":      "yaml.Node.Decode into string failed for Duration",
+			"data": map[string]any{
+				"line":   value.Line,
+				"column": value.Column,
+			},
+		})
+		// #endregion agent log
 		return err
 	}
 
+	// #region agent log
+	if s == "" {
+		agentDebugLog(map[string]any{
+			"sessionId":    "debug-session",
+			"runId":        "pre-fix",
+			"hypothesisId": "Y2",
+			"location":     "internal/config/config.go:Duration.UnmarshalYAML",
+			"message":      "Duration string is empty before ParseDuration (YAML)",
+			"data": map[string]any{
+				"line":   value.Line,
+				"column": value.Column,
+			},
+		})
+	}
+	// #endregion agent log
+
 	duration, err := time.ParseDuration(s)
 	if err != nil {
+		// #region agent log
+		agentDebugLog(map[string]any{
+			"sessionId":    "debug-session",
+			"runId":        "pre-fix",
+			"hypothesisId": "Y3",
+			"location":     "internal/config/config.go:Duration.UnmarshalYAML",
+			"message":      "time.ParseDuration failed for Duration (YAML)",
+			"data": map[string]any{
+				"duration_str": s, // safe
+				"line":         value.Line,
+				"column":       value.Column,
+				"error":        err.Error(),
+			},
+		})
+		// #endregion agent log
 		return err
 	}
 
@@ -188,6 +300,9 @@ type ServerConfig struct {
 	MaxConnectionTTLInSeconds      int    `yaml:"max_connection_ttl_in_seconds" json:"max_connection_ttl_in_seconds"`
 	InsecureSSL                    bool   `yaml:"insecure_ssl" json:"insecure_ssl"`
 	Enabled                        *bool  `yaml:"enabled" json:"enabled"`
+	// CheckOnly when true, this server will only be used for article verification (STAT command)
+	// and not for posting articles. Useful for cheap/slow providers that have good retention.
+	CheckOnly *bool `yaml:"check_only" json:"check_only"`
 }
 
 type PostHeaders struct {
@@ -368,6 +483,17 @@ func Load(path string) (*ConfigData, error) {
 		cfg.Posting.RetryDelay = Duration("5s")
 	}
 
+	// Post-upload script defaults (YAML may omit these fields)
+	if cfg.PostUploadScript.Timeout == "" {
+		cfg.PostUploadScript.Timeout = Duration("30s")
+	}
+	if cfg.PostUploadScript.MaxRetries <= 0 {
+		cfg.PostUploadScript.MaxRetries = 3
+	}
+	if cfg.PostUploadScript.RetryDelay == "" {
+		cfg.PostUploadScript.RetryDelay = Duration("30s")
+	}
+
 	if cfg.Posting.ArticleSizeInBytes <= 0 {
 		cfg.Posting.ArticleSizeInBytes = 750000 // Default to 750KB
 	}
@@ -546,9 +672,66 @@ func (c *ConfigData) validate() error {
 	return nil
 }
 
+// GetPostingServers returns enabled servers that are NOT check-only (used for posting)
+func (c *ConfigData) GetPostingServers() []ServerConfig {
+	var servers []ServerConfig
+	for _, s := range c.Servers {
+		isEnabled := s.Enabled == nil || *s.Enabled
+		isCheckOnly := s.CheckOnly != nil && *s.CheckOnly
+		if isEnabled && !isCheckOnly {
+			servers = append(servers, s)
+		}
+	}
+	return servers
+}
+
+// GetCheckOnlyServers returns enabled servers that are check-only (used only for article verification)
+func (c *ConfigData) GetCheckOnlyServers() []ServerConfig {
+	var servers []ServerConfig
+	for _, s := range c.Servers {
+		isEnabled := s.Enabled == nil || *s.Enabled
+		isCheckOnly := s.CheckOnly != nil && *s.CheckOnly
+		if isEnabled && isCheckOnly {
+			servers = append(servers, s)
+		}
+	}
+	return servers
+}
+
+// serverConfigToProviderConfig converts a ServerConfig to nntppool.UsenetProviderConfig
+func serverConfigToProviderConfig(s ServerConfig) nntppool.UsenetProviderConfig {
+	maxConnections := s.MaxConnections
+	if maxConnections <= 0 {
+		maxConnections = 10 // default value if not specified
+	}
+
+	maxIdleTime := s.MaxConnectionIdleTimeInSeconds
+	if maxIdleTime <= 0 {
+		maxIdleTime = 300
+	}
+
+	maxTTL := s.MaxConnectionTTLInSeconds
+	if maxTTL <= 0 {
+		maxTTL = 3600
+	}
+
+	return nntppool.UsenetProviderConfig{
+		Host:                           s.Host,
+		Port:                           s.Port,
+		Username:                       s.Username,
+		Password:                       s.Password,
+		TLS:                            s.SSL,
+		MaxConnections:                 maxConnections,
+		MaxConnectionIdleTimeInSeconds: maxIdleTime,
+		MaxConnectionTTLInSeconds:      maxTTL,
+		InsecureSSL:                    s.InsecureSSL,
+	}
+}
+
 // GetNNTPPoolConfig returns the nntppool configuration without creating the actual pool
+// This returns ALL enabled servers (for backwards compatibility)
 func (c *ConfigData) GetNNTPPoolConfig() (nntppool.Config, error) {
-	// Filter enabled servers
+	// Filter enabled servers (all enabled, regardless of check_only)
 	var enabledServers []ServerConfig
 	for _, s := range c.Servers {
 		if s.Enabled == nil || *s.Enabled {
@@ -558,32 +741,47 @@ func (c *ConfigData) GetNNTPPoolConfig() (nntppool.Config, error) {
 
 	providers := make([]nntppool.UsenetProviderConfig, len(enabledServers))
 	for i, s := range enabledServers {
-		maxConnections := s.MaxConnections
-		if maxConnections <= 0 {
-			maxConnections = 10 // default value if not specified
-		}
-
-		if s.MaxConnectionIdleTimeInSeconds <= 0 {
-			s.MaxConnectionIdleTimeInSeconds = 300
-		}
-
-		if s.MaxConnectionTTLInSeconds <= 0 {
-			s.MaxConnectionTTLInSeconds = 3600
-		}
-
-		providers[i] = nntppool.UsenetProviderConfig{
-			Host:                           s.Host,
-			Port:                           s.Port,
-			Username:                       s.Username,
-			Password:                       s.Password,
-			TLS:                            s.SSL,
-			MaxConnections:                 maxConnections,
-			MaxConnectionIdleTimeInSeconds: s.MaxConnectionIdleTimeInSeconds,
-			MaxConnectionTTLInSeconds:      s.MaxConnectionTTLInSeconds,
-			InsecureSSL:                    s.InsecureSSL,
-		}
+		providers[i] = serverConfigToProviderConfig(s)
 	}
 
+	return c.buildPoolConfig(providers), nil
+}
+
+// GetPostingPoolConfig returns pool configuration for posting servers only (excluding check-only)
+func (c *ConfigData) GetPostingPoolConfig() (nntppool.Config, error) {
+	postingServers := c.GetPostingServers()
+	if len(postingServers) == 0 {
+		return nntppool.Config{}, fmt.Errorf("no posting servers configured (all servers are check-only)")
+	}
+
+	providers := make([]nntppool.UsenetProviderConfig, len(postingServers))
+	for i, s := range postingServers {
+		providers[i] = serverConfigToProviderConfig(s)
+	}
+
+	return c.buildPoolConfig(providers), nil
+}
+
+// GetCheckPoolConfig returns pool configuration for article verification
+// If there are check-only servers, use those; otherwise fall back to posting servers
+func (c *ConfigData) GetCheckPoolConfig() (nntppool.Config, error) {
+	checkOnlyServers := c.GetCheckOnlyServers()
+
+	// If we have dedicated check-only servers, use them
+	if len(checkOnlyServers) > 0 {
+		providers := make([]nntppool.UsenetProviderConfig, len(checkOnlyServers))
+		for i, s := range checkOnlyServers {
+			providers[i] = serverConfigToProviderConfig(s)
+		}
+		return c.buildPoolConfig(providers), nil
+	}
+
+	// Fall back to posting servers for checking
+	return c.GetPostingPoolConfig()
+}
+
+// buildPoolConfig creates a pool config with common settings
+func (c *ConfigData) buildPoolConfig(providers []nntppool.UsenetProviderConfig) nntppool.Config {
 	if c.ConnectionPool.HealthCheckInterval == "" {
 		c.ConnectionPool.HealthCheckInterval = Duration("1m")
 	}
@@ -592,7 +790,7 @@ func (c *ConfigData) GetNNTPPoolConfig() (nntppool.Config, error) {
 		c.ConnectionPool.MinConnections = 0
 	}
 
-	config := nntppool.Config{
+	return nntppool.Config{
 		Providers:           providers,
 		HealthCheckInterval: c.ConnectionPool.HealthCheckInterval.ToDuration(),
 		MinConnections:      c.ConnectionPool.MinConnections,
@@ -600,11 +798,9 @@ func (c *ConfigData) GetNNTPPoolConfig() (nntppool.Config, error) {
 		DelayType:           nntppool.DelayTypeExponential,
 		RetryDelay:          c.Posting.RetryDelay.ToDuration(),
 	}
-
-	return config, nil
 }
 
-// GetNNTPPool returns the NNTP connection pool
+// GetNNTPPool returns the NNTP connection pool (all enabled servers)
 func (c *ConfigData) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
 	config, err := c.GetNNTPPoolConfig()
 	if err != nil {
@@ -614,6 +810,37 @@ func (c *ConfigData) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
 	pool, err := nntppool.NewConnectionPool(config)
 	if err != nil {
 		return nil, fmt.Errorf("error creating connection pool: %w", err)
+	}
+
+	return pool, nil
+}
+
+// GetPostingPool returns the NNTP connection pool for posting (excludes check-only servers)
+func (c *ConfigData) GetPostingPool() (nntppool.UsenetConnectionPool, error) {
+	config, err := c.GetPostingPoolConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	pool, err := nntppool.NewConnectionPool(config)
+	if err != nil {
+		return nil, fmt.Errorf("error creating posting pool: %w", err)
+	}
+
+	return pool, nil
+}
+
+// GetCheckPool returns the NNTP connection pool for article verification
+// Uses check-only servers if available, otherwise falls back to posting servers
+func (c *ConfigData) GetCheckPool() (nntppool.UsenetConnectionPool, error) {
+	config, err := c.GetCheckPoolConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	pool, err := nntppool.NewConnectionPool(config)
+	if err != nil {
+		return nil, fmt.Errorf("error creating check pool: %w", err)
 	}
 
 	return pool, nil

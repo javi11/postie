@@ -19,8 +19,12 @@ func (a *App) initializeProcessor() error {
 		return fmt.Errorf("config not loaded")
 	}
 
-	// Stop previous processor if running
+	// Stop previous processor if running - properly close it first
 	if a.processor != nil {
+		slog.Info("Closing existing processor before reinitialization")
+		if err := a.processor.Close(); err != nil {
+			slog.Error("Error closing existing processor", "error", err)
+		}
 		a.processor = nil
 	}
 

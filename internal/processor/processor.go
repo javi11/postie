@@ -50,6 +50,8 @@ type Processor struct {
 	providerCheckCancel context.CancelFunc
 	// Callback to check if processor can start new items
 	canProcessNextItem func() bool
+	// Shutdown flag to prevent new operations during close
+	isShuttingDown bool
 }
 
 type ProcessorOptions struct {
@@ -186,10 +188,15 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 	default:
 	}
 
-	// Check if pool manager is still available before processing
+	// Check if processor is shutting down or pool manager is unavailable
 	p.runningMux.Lock()
+	shuttingDown := p.isShuttingDown
 	poolManager := p.poolManager
 	p.runningMux.Unlock()
+
+	if shuttingDown {
+		return nil
+	}
 
 	if poolManager == nil {
 		slog.WarnContext(ctx, "Pool manager is not available, skipping item processing")
@@ -535,9 +542,11 @@ func (p *Processor) IsPaused() bool {
 func (p *Processor) Close() error {
 	slog.Info("Processor shutdown initiated")
 
-	// Set pool manager to nil to prevent new jobs from using it
+	// Set shutdown flag to prevent new operations
+	// Note: Don't set poolManager to nil - it's a shared reference
+	// and setting it to nil can affect other processors
 	p.runningMux.Lock()
-	p.poolManager = nil
+	p.isShuttingDown = true
 	p.runningMux.Unlock()
 
 	// Stop provider monitoring

@@ -944,27 +944,12 @@ func (a *App) determineFirstStart() bool {
 	}
 
 	// If config file exists, try to load it to check if it has meaningful content
-	cfg, err := config.Load(a.configPath)
+	_, err := config.Load(a.configPath)
 	if err != nil {
 		slog.Info("Config file exists but cannot be loaded, treating as first start", "error", err)
 		return true
 	}
 
-	// Check if config has any configured servers with actual host values
-	hasValidServers := false
-	for _, server := range cfg.Servers {
-		if server.Host != "" {
-			hasValidServers = true
-			break
-		}
-	}
-
-	if !hasValidServers {
-		slog.Info("Config file exists but has no valid servers, treating as first start")
-		return true
-	}
-
-	slog.Info("Config file exists with valid servers, not first start")
 	return false
 }
 

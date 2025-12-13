@@ -158,6 +158,10 @@ export class UnifiedClient {
 
 		if (this._environment === "wails") {
 			const client = await getWailsClient();
+			// #region agent log
+			// Debug instrumentation (no secrets): capture duration-like fields before calling backend.SaveConfig
+			fetch('http://127.0.0.1:7242/ingest/179798b3-2a7a-4cca-82ff-855a1b657b1f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A',location:'frontend/src/lib/api/client.ts:saveConfig',message:'About to call backend.App.SaveConfig (wails)',data:{posting_retry_delay:(config as any)?.posting?.retry_delay,posting_retry_delay_type:typeof (config as any)?.posting?.retry_delay,post_check_delay:(config as any)?.post_check?.delay,post_check_delay_type:typeof (config as any)?.post_check?.delay,connection_pool_hc:(config as any)?.connection_pool?.health_check_interval,connection_pool_hc_type:typeof (config as any)?.connection_pool?.health_check_interval,watcher_check_interval:(config as any)?.watcher?.check_interval,watcher_check_interval_type:typeof (config as any)?.watcher?.check_interval,post_upload_script_timeout:(config as any)?.post_upload_script?.timeout,post_upload_script_timeout_type:typeof (config as any)?.post_upload_script?.timeout,post_upload_script_retry_delay:(config as any)?.post_upload_script?.retry_delay,post_upload_script_retry_delay_type:typeof (config as any)?.post_upload_script?.retry_delay,post_upload_script_max_retries:(config as any)?.post_upload_script?.max_retries,servers_count:Array.isArray((config as any)?.servers)?(config as any).servers.length:0},timestamp:Date.now()})}).catch(()=>{});
+			// #endregion agent log
 			return client.App.SaveConfig(
 				config as unknown as import("$lib/wailsjs/go/models").config.ConfigData,
 			);

@@ -23,6 +23,7 @@ import (
 	"github.com/javi11/postie/internal/nzb"
 	"github.com/javi11/postie/internal/par2"
 	"github.com/javi11/postie/internal/pausable"
+	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/progress"
 	concpool "github.com/sourcegraph/conc/pool"
 )
@@ -31,11 +32,6 @@ var (
 	// ErrPosterClosed is returned when attempting to post after the poster has been closed
 	ErrPosterClosed = errors.New("poster is closed")
 )
-
-// PoolManager defines the interface for connection pool management
-type PoolManager interface {
-	GetPool() nntppool.UsenetConnectionPool
-}
 
 // Poster defines the interface for posting articles to Usenet
 type Poster interface {
@@ -94,7 +90,8 @@ type Stats struct {
 type poster struct {
 	cfg         config.PostingConfig
 	checkCfg    config.PostCheck
-	pool        nntppool.UsenetConnectionPool
+	pool        nntppool.UsenetConnectionPool // Pool for posting articles
+	checkPool   nntppool.UsenetConnectionPool // Pool for article verification (may be same as pool)
 	stats       *Stats
 	throttle    *Throttle
 	jobProgress progress.JobProgress
@@ -103,15 +100,22 @@ type poster struct {
 }
 
 // New creates a new poster using dependency injection for the connection pool manager
-func New(ctx context.Context, cfg config.Config, poolManager PoolManager, jobProgress progress.JobProgress) (Poster, error) {
+func New(ctx context.Context, cfg config.Config, poolManager pool.PoolManager, jobProgress progress.JobProgress) (Poster, error) {
 	if poolManager == nil {
 		return nil, fmt.Errorf("pool manager cannot be nil")
 	}
 
-	// Get the pool from the manager
+	// Get the posting pool from the manager
 	nntpPool := poolManager.GetPool()
 	if nntpPool == nil {
 		return nil, fmt.Errorf("connection pool is not available")
+	}
+
+	// Get the check pool (may be same as posting pool if no check-only servers configured)
+	checkPool := poolManager.GetCheckPool()
+	if checkPool == nil {
+		// Fall back to posting pool if check pool is not available
+		checkPool = nntpPool
 	}
 
 	stats := &Stats{
@@ -123,6 +127,7 @@ func New(ctx context.Context, cfg config.Config, poolManager PoolManager, jobPro
 		cfg:         cfg.GetPostingConfig(),
 		checkCfg:    postCheckCfg,
 		pool:        nntpPool,
+		checkPool:   checkPool,
 		stats:       stats,
 		jobProgress: jobProgress,
 	}
@@ -361,9 +366,11 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 
 			post.mu.Unlock()
 
-			// Add file hash to NZB generator
-			fileHash := CalculateHash([]byte(combinedHash))
-			nzbGen.AddFileHash(post.Articles[0].OriginalName, fileHash)
+			// Add file hash to NZB generator (defensive check for empty posts)
+			if len(post.Articles) > 0 {
+				fileHash := CalculateHash([]byte(combinedHash))
+				nzbGen.AddFileHash(post.Articles[0].OriginalName, fileHash)
+			}
 
 			if p.checkCfg.Enabled != nil && *p.checkCfg.Enabled {
 				checkQueue <- post
@@ -390,7 +397,8 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue chan *Post, errChan chan<- error, nzbGen nzb.NZBGenerator, postsInFlight *sync.WaitGroup) {
 	numOfConnections := 0
 
-	for _, pr := range p.pool.GetProvidersInfo() {
+	// Use check pool's providers for connection count
+	for _, pr := range p.checkPool.GetProvidersInfo() {
 		numOfConnections += pr.MaxConnections
 	}
 
@@ -578,6 +586,13 @@ func (p *poster) addPost(ctx context.Context, filePath string, fileNumber int, t
 	if err != nil {
 		_ = file.Close()
 		return fmt.Errorf("error getting file info: %w", err)
+	}
+
+	// Skip empty files - they have no segments to post
+	if fileInfo.Size() == 0 {
+		_ = file.Close()
+		slog.WarnContext(ctx, "Skipping empty file", "path", filePath)
+		return nil
 	}
 
 	// Calculate number of segments
@@ -825,14 +840,15 @@ func (p *poster) postArticleWithBody(ctx context.Context, article *article.Artic
 	return nil
 }
 
-// checkArticle checks if an article exists
+// checkArticle checks if an article exists using the check pool
 func (p *poster) checkArticle(ctx context.Context, art *article.Article) error {
 	// Check if we should pause before checking
 	if err := pausable.CheckPause(ctx); err != nil {
 		return err
 	}
 
-	_, err := p.pool.Stat(ctx, art.MessageID, art.Groups)
+	// Use the dedicated check pool for article verification
+	_, err := p.checkPool.Stat(ctx, art.MessageID, art.Groups)
 	if err != nil {
 		return fmt.Errorf("article not found: %w", err)
 	}

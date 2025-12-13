@@ -8,3 +8,62 @@
 
 // Package mocks is a generated GoMock package.
 package mocks
+
+import (
+	reflect "reflect"
+
+	nntppool "github.com/javi11/nntppool/v2"
+	gomock "go.uber.org/mock/gomock"
+)
+
+// MockPoolManager is a mock of PoolManager interface.
+type MockPoolManager struct {
+	ctrl     *gomock.Controller
+	recorder *MockPoolManagerMockRecorder
+	isgomock struct{}
+}
+
+// MockPoolManagerMockRecorder is the mock recorder for MockPoolManager.
+type MockPoolManagerMockRecorder struct {
+	mock *MockPoolManager
+}
+
+// NewMockPoolManager creates a new mock instance.
+func NewMockPoolManager(ctrl *gomock.Controller) *MockPoolManager {
+	mock := &MockPoolManager{ctrl: ctrl}
+	mock.recorder = &MockPoolManagerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockPoolManager) EXPECT() *MockPoolManagerMockRecorder {
+	return m.recorder
+}
+
+// GetCheckPool mocks base method.
+func (m *MockPoolManager) GetCheckPool() nntppool.UsenetConnectionPool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCheckPool")
+	ret0, _ := ret[0].(nntppool.UsenetConnectionPool)
+	return ret0
+}
+
+// GetCheckPool indicates an expected call of GetCheckPool.
+func (mr *MockPoolManagerMockRecorder) GetCheckPool() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCheckPool", reflect.TypeOf((*MockPoolManager)(nil).GetCheckPool))
+}
+
+// GetPool mocks base method.
+func (m *MockPoolManager) GetPool() nntppool.UsenetConnectionPool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPool")
+	ret0, _ := ret[0].(nntppool.UsenetConnectionPool)
+	return ret0
+}
+
+// GetPool indicates an expected call of GetPool.
+func (mr *MockPoolManagerMockRecorder) GetPool() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPool", reflect.TypeOf((*MockPoolManager)(nil).GetPool))
+}

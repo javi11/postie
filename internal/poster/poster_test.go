@@ -315,6 +315,7 @@ func TestPost(t *testing.T) {
 			cfg:         createTestConfig(),
 			checkCfg:    checkCfg,
 			pool:        mockPool,
+			checkPool:   mockPool, // Use same pool for checking
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mockJobProgress,
@@ -370,6 +371,7 @@ func TestPost(t *testing.T) {
 			cfg:         createTestConfig(),
 			checkCfg:    checkCfg,
 			pool:        mockPool,
+			checkPool:   mockPool, // Use same pool for checking
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mockJobProgress,
@@ -402,8 +404,9 @@ func TestPost(t *testing.T) {
 
 		// Test checkArticle method directly
 		p := &poster{
-			pool:  mockPool,
-			stats: &Stats{StartTime: time.Now()},
+			pool:      mockPool,
+			checkPool: mockPool, // Use same pool for checking
+			stats:     &Stats{StartTime: time.Now()},
 		}
 		defer p.Close()
 
@@ -441,8 +444,9 @@ func TestPost(t *testing.T) {
 		}).AnyTimes()
 
 		p := &poster{
-			pool:  mockPool,
-			stats: &Stats{StartTime: time.Now()},
+			pool:      mockPool,
+			checkPool: mockPool, // Use same pool for checking
+			stats:     &Stats{StartTime: time.Now()},
 		}
 		defer p.Close()
 
@@ -499,6 +503,7 @@ func TestPost(t *testing.T) {
 
 		p := &poster{
 			pool:        mockPool,
+			checkPool:   mockPool, // Use same pool for checking
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mocks.NewMockJobProgress(ctrl),
@@ -552,6 +557,7 @@ func TestPost(t *testing.T) {
 			cfg:         createTestConfig(),
 			checkCfg:    createTestPostCheckConfig(),
 			pool:        mockPool,
+			checkPool:   mockPool, // Use same pool for checking
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mocks.NewMockJobProgress(ctrl),
@@ -782,8 +788,9 @@ func TestCheckArticle(t *testing.T) {
 		mockPool.EXPECT().Stat(ctx, "test@example.com", []string{"alt.test"}).Return(200, nil)
 
 		p := &poster{
-			pool:  mockPool,
-			stats: &Stats{StartTime: time.Now()},
+			pool:      mockPool,
+			checkPool: mockPool, // Use same pool for checking
+			stats:     &Stats{StartTime: time.Now()},
 		}
 
 		art := &article.Article{
@@ -810,8 +817,9 @@ func TestCheckArticle(t *testing.T) {
 		mockPool.EXPECT().Stat(ctx, "test@example.com", []string{"alt.test"}).Return(0, errors.New("not found"))
 
 		p := &poster{
-			pool:  mockPool,
-			stats: &Stats{StartTime: time.Now()},
+			pool:      mockPool,
+			checkPool: mockPool, // Use same pool for checking
+			stats:     &Stats{StartTime: time.Now()},
 		}
 
 		art := &article.Article{
@@ -1055,6 +1063,7 @@ func TestPostIntegration(t *testing.T) {
 			cfg:         cfg,
 			checkCfg:    checkCfg,
 			pool:        mockPool,
+			checkPool:   mockPool, // Use same pool for checking
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mockJobProgress,
@@ -1220,8 +1229,9 @@ func TestCheckLoop_Basic(t *testing.T) {
 		mockPool.EXPECT().Stat(ctx, "test@example.com", []string{"alt.test"}).Return(200, nil)
 
 		p := &poster{
-			pool:  mockPool,
-			stats: &Stats{StartTime: time.Now()},
+			pool:      mockPool,
+			checkPool: mockPool, // Use same pool for checking
+			stats:     &Stats{StartTime: time.Now()},
 		}
 
 		art := &article.Article{
@@ -1247,8 +1257,9 @@ func TestCheckLoop_Basic(t *testing.T) {
 		mockPool.EXPECT().Stat(ctx, "test@example.com", []string{"alt.test"}).Return(0, errors.New("article not found"))
 
 		p := &poster{
-			pool:  mockPool,
-			stats: &Stats{StartTime: time.Now()},
+			pool:      mockPool,
+			checkPool: mockPool, // Use same pool for checking
+			stats:     &Stats{StartTime: time.Now()},
 		}
 
 		art := &article.Article{
@@ -1307,32 +1318,10 @@ func createTestFile(t *testing.T, content string) string {
 	return tmpFile.Name()
 }
 
-// MockPoolManager is a simple mock for the pool manager used in tests
-type MockPoolManager struct {
-	pool nntppool.UsenetConnectionPool
-}
-
-func (m *MockPoolManager) GetPool() nntppool.UsenetConnectionPool {
-	return m.pool
-}
-
-func (m *MockPoolManager) Close() error {
-	return nil
-}
-
-func (m *MockPoolManager) GetMetrics() (nntppool.PoolMetricsSnapshot, error) {
-	return nntppool.PoolMetricsSnapshot{}, nil
-}
-
-func (m *MockPoolManager) UpdateConfig(*config.ConfigData) error {
-	return nil
-}
-
-func (m *MockPoolManager) IsClosed() bool {
-	return false
-}
-
-// createMockPoolManager creates a mock pool manager for testing
-func createMockPoolManager(ctrl *gomock.Controller, pool nntppool.UsenetConnectionPool) *MockPoolManager {
-	return &MockPoolManager{pool: pool}
+// createMockPoolManager creates a mock pool manager for testing using the generated mock
+func createMockPoolManager(ctrl *gomock.Controller, pool nntppool.UsenetConnectionPool) *mocks.MockPoolManager {
+	mockPoolManager := mocks.NewMockPoolManager(ctrl)
+	mockPoolManager.EXPECT().GetPool().Return(pool).AnyTimes()
+	mockPoolManager.EXPECT().GetCheckPool().Return(pool).AnyTimes()
+	return mockPoolManager
 }

@@ -411,8 +411,13 @@
 				"cannot_disable_all": "No se pueden deshabilitar todos los proveedores. Al menos uno debe permanecer activo."
 			},
 			"validation": {
-				"cannot_disable_last": "No se puede deshabilitar el último proveedor activo. Al menos un proveedor debe permanecer habilitado."
+				"cannot_disable_last": "No se puede deshabilitar el último proveedor activo. Al menos un proveedor debe permanecer habilitado.",
+				"cannot_set_all_check_only": "No se pueden configurar todos los proveedores como solo verificación. Al menos un proveedor debe estar disponible para publicar."
 			},
+			"check_only": "Solo Verificación",
+			"check_only_description": "Usar este proveedor solo para verificar artículos cargados, no para publicar",
+			"check_only_enabled_description": "Este proveedor solo verificará artículos, no los publicará",
+			"check_only_badge": "Solo Verificar",
 			"validation_errors": {
 				"host_required": "Servidor {number}: Se requiere host",
 				"port_invalid": "Servidor {number}: Se requiere un número de puerto válido (1-65535)"

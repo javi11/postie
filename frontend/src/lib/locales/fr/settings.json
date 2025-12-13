@@ -411,8 +411,13 @@
 				"cannot_disable_all": "Impossible de désactiver tous les fournisseurs. Au moins un doit rester actif."
 			},
 			"validation": {
-				"cannot_disable_last": "Impossible de désactiver le dernier fournisseur actif. Au moins un fournisseur doit rester activé."
+				"cannot_disable_last": "Impossible de désactiver le dernier fournisseur actif. Au moins un fournisseur doit rester activé.",
+				"cannot_set_all_check_only": "Impossible de configurer tous les fournisseurs en vérification uniquement. Au moins un fournisseur doit être disponible pour la publication."
 			},
+			"check_only": "Vérification Uniquement",
+			"check_only_description": "Utiliser ce fournisseur uniquement pour vérifier les articles téléchargés, pas pour publier",
+			"check_only_enabled_description": "Ce fournisseur vérifiera uniquement les articles, il ne les publiera pas",
+			"check_only_badge": "Vérif. Seule",
 			"validation_errors": {
 				"host_required": "Serveur {number} : L'hôte est requis",
 				"port_invalid": "Serveur {number} : Un numéro de port valide est requis (1-65535)"

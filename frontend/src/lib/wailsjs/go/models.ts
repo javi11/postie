@@ -635,6 +635,7 @@ export namespace config {
 	    max_connection_ttl_in_seconds: number;
 	    insecure_ssl: boolean;
 	    enabled?: boolean;
+	    check_only?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ServerConfig(source);
@@ -652,6 +653,7 @@ export namespace config {
 	        this.max_connection_ttl_in_seconds = source["max_connection_ttl_in_seconds"];
 	        this.insecure_ssl = source["insecure_ssl"];
 	        this.enabled = source["enabled"];
+	        this.check_only = source["check_only"];
 	    }
 	}
 	export class ConfigData {
