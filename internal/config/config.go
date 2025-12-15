@@ -351,8 +351,6 @@ type PostingConfig struct {
 	Par2ObfuscationPolicy ObfuscationPolicy `yaml:"par2_obfuscation_policy" json:"par2_obfuscation_policy"`
 	//  If you give several Groups you've 3 policy when posting
 	GroupPolicy GroupPolicy `yaml:"group_policy" json:"group_policy"`
-	// If true, creates one NZB per folder instead of one NZB per file. Default value is `false`.
-	SingleNzbPerFolder bool `yaml:"single_nzb_per_folder" json:"single_nzb_per_folder"`
 }
 
 type WatcherConfig struct {
@@ -364,6 +362,8 @@ type WatcherConfig struct {
 	MinFileSize        int64          `yaml:"min_file_size" json:"min_file_size"`
 	CheckInterval      Duration       `yaml:"check_interval" json:"check_interval"`
 	DeleteOriginalFile bool           `yaml:"delete_original_file" json:"delete_original_file"`
+	// If true, creates one NZB per folder instead of one NZB per file in watch mode. Default value is `false`.
+	SingleNzbPerFolder bool `yaml:"single_nzb_per_folder" json:"single_nzb_per_folder"`
 }
 
 type ScheduleConfig struct {
@@ -952,7 +952,6 @@ func GetDefaultConfig() ConfigData {
 			ObfuscationPolicy:     ObfuscationPolicyFull,
 			Par2ObfuscationPolicy: ObfuscationPolicyFull,
 			GroupPolicy:           GroupPolicyEachFile,
-			SingleNzbPerFolder:    false, // Default to false for backward compatibility
 		},
 		PostCheck: PostCheck{
 			Enabled:    &enabled,
@@ -970,9 +969,9 @@ func GetDefaultConfig() ConfigData {
 			MaintainPar2Files: &disabled, // Default to false to preserve current behavior
 		},
 		Watcher: WatcherConfig{
-			Enabled:        false,
-			WatchDirectory: "",        // Will be set to default in backend if empty
-			SizeThreshold:  104857600, // 100MB
+			Enabled:            false,
+			WatchDirectory:     "",        // Will be set to default in backend if empty
+			SizeThreshold:      104857600, // 100MB
 			Schedule: ScheduleConfig{
 				StartTime: "00:00",
 				EndTime:   "23:59",
@@ -981,6 +980,7 @@ func GetDefaultConfig() ConfigData {
 			MinFileSize:        1048576, // 1MB
 			CheckInterval:      Duration("5m"),
 			DeleteOriginalFile: false, // Default to keeping original files for safety
+			SingleNzbPerFolder: false, // Default to false for backward compatibility
 		},
 		NzbCompression: NzbCompressionConfig{
 			Enabled: disabled,

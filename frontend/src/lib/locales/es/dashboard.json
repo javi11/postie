@@ -5,6 +5,10 @@
 			"title": "Panel de Subidas",
 			"description": "Gestiona tus cargas de archivos y monitorea el progreso",
 			"add_files": "Agregar Archivos",
+			"add_folder": "Agregar Carpeta",
+			"add_folder_tooltip": "Subir una carpeta entera como un solo NZB",
+			"folder_added": "Carpeta Agregada",
+			"folder_added_description": "La carpeta ha sido agregada a la cola de carga",
 			"import_files": "Importar Archivos",
 			"import_files_tooltip": "Explorar e importar archivos desde el servidor remoto",
 			"clear_completed": "Limpiar Completados"

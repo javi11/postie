@@ -39,15 +39,14 @@ type ProcessorInterface interface {
 }
 
 type Watcher struct {
-	cfg                config.WatcherConfig
-	queue              queue.QueueInterface
-	processor          ProcessorInterface
-	watchFolder        string
-	fileSizeCache      map[string]fileCacheEntry
-	cacheMutex         sync.RWMutex
-	nextRunTime        time.Time
-	nextRunMutex       sync.RWMutex
-	singleNzbPerFolder bool
+	cfg           config.WatcherConfig
+	queue         queue.QueueInterface
+	processor     ProcessorInterface
+	watchFolder   string
+	fileSizeCache map[string]fileCacheEntry
+	cacheMutex    sync.RWMutex
+	nextRunTime   time.Time
+	nextRunMutex  sync.RWMutex
 }
 
 type fileCacheEntry struct {
@@ -60,15 +59,13 @@ func New(
 	q queue.QueueInterface,
 	processor ProcessorInterface,
 	watchFolder string,
-	singleNzbPerFolder bool,
 ) *Watcher {
 	return &Watcher{
-		cfg:                cfg,
-		queue:              q,
-		processor:          processor,
-		watchFolder:        watchFolder,
-		fileSizeCache:      make(map[string]fileCacheEntry),
-		singleNzbPerFolder: singleNzbPerFolder,
+		cfg:           cfg,
+		queue:         q,
+		processor:     processor,
+		watchFolder:   watchFolder,
+		fileSizeCache: make(map[string]fileCacheEntry),
 	}
 }
 
@@ -142,7 +139,7 @@ func (w *Watcher) scanDirectory(ctx context.Context) error {
 	slog.InfoContext(ctx, "Directory size exceeds threshold, starting import", "total_size", totalSize, "threshold", w.cfg.SizeThreshold)
 
 	// If single NZB per folder mode is enabled, collect files by folder
-	if w.singleNzbPerFolder {
+	if w.cfg.SingleNzbPerFolder {
 		return w.scanDirectoryGroupByFolder(ctx)
 	}
 

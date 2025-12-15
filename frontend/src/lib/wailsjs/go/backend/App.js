@@ -194,6 +194,10 @@ export function SelectConfigFile() {
   return window['go']['backend']['App']['SelectConfigFile']();
 }
 
+export function SelectFolder() {
+  return window['go']['backend']['App']['SelectFolder']();
+}
+
 export function SelectOutputDirectory() {
   return window['go']['backend']['App']['SelectOutputDirectory']();
 }
@@ -236,6 +240,10 @@ export function TestProviderConnectivity(arg1) {
 
 export function UploadFiles() {
   return window['go']['backend']['App']['UploadFiles']();
+}
+
+export function UploadFolder(arg1) {
+  return window['go']['backend']['App']['UploadFolder'](arg1);
 }
 
 export function ValidateNNTPServer(arg1) {

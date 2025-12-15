@@ -4,7 +4,7 @@ import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import { uploadActions, uploadStore } from "$lib/stores/upload";
 import { isUploading } from "$lib/stores/app";
-import { AlertTriangle, Plus, X, Pause, Play, FolderOpen } from "lucide-svelte";
+import { AlertTriangle, Plus, X, Pause, Play, FolderOpen, FolderPlus } from "lucide-svelte";
 import { onMount, onDestroy } from "svelte";
 import FileExplorerModal from "./FileExplorerModal.svelte";
 
@@ -116,6 +116,69 @@ function closeFileExplorer() {
   showFileExplorer = false;
 }
 
+// Handle folder upload - works in both desktop (Wails) and web modes
+async function handleFolderUpload() {
+  try {
+    if (apiClient.environment === "wails") {
+      // Desktop mode: use native folder picker
+      const folderPath = await apiClient.selectFolder();
+      if (folderPath) {
+        await apiClient.uploadFolder(folderPath);
+        toastStore.success(
+          $t("dashboard.header.folder_added"),
+          $t("dashboard.header.folder_added_description")
+        );
+      }
+    } else {
+      // Web mode: use hidden input with webkitdirectory attribute
+      const input = document.createElement("input");
+      input.type = "file";
+      // @ts-ignore - webkitdirectory is not in the type definitions
+      input.webkitdirectory = true;
+      // @ts-ignore
+      input.directory = true;
+      input.multiple = true;
+
+      input.onchange = async () => {
+        if (input.files && input.files.length > 0) {
+          // In web mode, we need to send the files to the server
+          const fileList = input.files;
+
+          // Use the existing file upload mechanism
+          uploadActions.startUpload(fileList);
+
+          try {
+            await apiClient.uploadFileList(
+              input.files,
+              (progress: number) => {
+                uploadActions.updateTotalProgress(progress);
+              },
+              (xhr: XMLHttpRequest) => {
+                uploadActions.setCurrentRequest(xhr);
+              }
+            );
+
+            uploadActions.completeUpload();
+            toastStore.success(
+              $t("dashboard.header.folder_added"),
+              $t("dashboard.header.folder_added_description")
+            );
+          } catch (error) {
+            console.error("Folder upload failed:", error);
+            toastStore.error($t("common.common.error"), String(error));
+            uploadActions.cancelUpload();
+          }
+        }
+      };
+
+      input.click();
+    }
+  } catch (error) {
+    console.error("Failed to upload folder:", error);
+    toastStore.error($t("common.common.error"), String(error));
+  }
+}
+
 </script>
 
 <div class="card bg-base-100/60 backdrop-blur-sm border border-base-300/60 shadow-xl animate-fade-in max-w-full">
@@ -176,6 +239,17 @@ function closeFileExplorer() {
           >
             <Plus class="w-4 h-4" />
             {$t("dashboard.header.add_files")}
+          </button>
+
+          <!-- Add Folder Button -->
+          <button
+            class="btn btn-secondary"
+            onclick={handleFolderUpload}
+            disabled={needsConfiguration}
+            title={$t("dashboard.header.add_folder_tooltip")}
+          >
+            <FolderPlus class="w-4 h-4" />
+            {$t("dashboard.header.add_folder")}
           </button>
 
           <!-- Import Files Button (Web mode only) -->

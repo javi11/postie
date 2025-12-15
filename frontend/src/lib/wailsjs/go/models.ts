@@ -419,6 +419,7 @@ export namespace config {
 	    min_file_size: number;
 	    check_interval: string;
 	    delete_original_file: boolean;
+	    single_nzb_per_folder: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new WatcherConfig(source);
@@ -434,6 +435,7 @@ export namespace config {
 	        this.min_file_size = source["min_file_size"];
 	        this.check_interval = source["check_interval"];
 	        this.delete_original_file = source["delete_original_file"];
+	        this.single_nzb_per_folder = source["single_nzb_per_folder"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -570,7 +572,6 @@ export namespace config {
 	    obfuscation_policy: string;
 	    par2_obfuscation_policy: string;
 	    group_policy: string;
-	    single_nzb_per_folder: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new PostingConfig(source);
@@ -589,7 +590,6 @@ export namespace config {
 	        this.obfuscation_policy = source["obfuscation_policy"];
 	        this.par2_obfuscation_policy = source["par2_obfuscation_policy"];
 	        this.group_policy = source["group_policy"];
-	        this.single_nzb_per_folder = source["single_nzb_per_folder"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

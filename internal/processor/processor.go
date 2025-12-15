@@ -359,7 +359,8 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 	}
 
 	// Post the files using the job-specific postie instance with pausable context
-	actualNzbPath, err := jobPostie.Post(pausableCtx, filesToProcess, inputFolder, p.outputFolder)
+	// Pass isFolder flag to force folder mode (single NZB) for explicit folder uploads
+	actualNzbPath, err := jobPostie.Post(pausableCtx, filesToProcess, inputFolder, p.outputFolder, isFolder)
 	if err != nil {
 		return "", nil, err
 	}
@@ -705,8 +706,14 @@ func (p *Processor) checkAndHandleProviderAvailability() {
 }
 
 // collectFilesInFolder collects all files in the specified folder recursively
+// It also calculates the relative path for each file, including the folder name
+// e.g., if folderPath is "/home/user/MyFolder" and file is at "/home/user/MyFolder/sub/video.mp4"
+// the RelativePath will be "MyFolder/sub/video.mp4"
 func (p *Processor) collectFilesInFolder(folderPath string) ([]fileinfo.FileInfo, error) {
 	var files []fileinfo.FileInfo
+
+	// Get the parent directory to calculate relative paths that include the folder name
+	parentDir := filepath.Dir(folderPath)
 
 	err := filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -718,10 +725,21 @@ func (p *Processor) collectFilesInFolder(folderPath string) ([]fileinfo.FileInfo
 			return nil
 		}
 
+		// Calculate relative path from parent directory (includes folder name)
+		relativePath, relErr := filepath.Rel(parentDir, path)
+		if relErr != nil {
+			// Fallback to just the filename if relative path calculation fails
+			relativePath = filepath.Base(path)
+		}
+
+		// Normalize path separators to forward slashes for cross-platform NZB compatibility
+		relativePath = filepath.ToSlash(relativePath)
+
 		// Add file to the list
 		files = append(files, fileinfo.FileInfo{
-			Path: path,
-			Size: uint64(info.Size()),
+			Path:         path,
+			Size:         uint64(info.Size()),
+			RelativePath: relativePath,
 		})
 
 		return nil

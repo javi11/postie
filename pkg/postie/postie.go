@@ -159,13 +159,16 @@ func safeRemoveFile(ctx context.Context, filePath string) {
 	_ = os.Remove(filePath)
 }
 
-func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir string, outputDir string) (string, error) {
+func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir string, outputDir string, forceFolderMode bool) (string, error) {
 	if len(files) == 0 {
 		return "", fmt.Errorf("no files to post")
 	}
 
-	// Check if we should create one NZB per folder
-	if p.postingCfg.SingleNzbPerFolder && len(files) > 1 {
+	// Use folder mode (single NZB) if explicitly requested via forceFolderMode
+	// This is set to true for:
+	// - Add Folder button (explicit folder upload)
+	// - Watch mode with SingleNzbPerFolder enabled (FOLDER: prefix in queue)
+	if forceFolderMode {
 		// Post all files as a single unit (folder mode)
 		return p.postFolder(ctx, files, rootDir, outputDir)
 	}
@@ -395,10 +398,15 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 	// Create a single NZB generator for all files
 	nzbGen := nzb.NewGenerator(p.postingCfg.ArticleSizeInBytes, p.compressionCfg, p.maintainOriginalExtension)
 
-	// Collect all file paths for posting
+	// Collect all file paths and build relative paths map for subject generation
 	var allFilePaths []string
+	relativePaths := make(map[string]string)
 	for _, f := range files {
 		allFilePaths = append(allFilePaths, f.Path)
+		// Use RelativePath for subject if available, otherwise use filename
+		if f.RelativePath != "" {
+			relativePaths[f.Path] = f.RelativePath
+		}
 	}
 
 	if *p.postingCfg.WaitForPar2 {
@@ -415,8 +423,8 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 			}
 		}
 
-		// Post all files (including PAR2) together
-		if err := p.poster.Post(ctx, allFilePaths, rootDir, nzbGen); err != nil {
+		// Post all files (including PAR2) together with relative paths for subjects
+		if err := p.poster.PostWithRelativePaths(ctx, allFilePaths, rootDir, nzbGen, relativePaths); err != nil {
 			if !errors.Is(err, context.Canceled) {
 				slog.ErrorContext(ctx, "Error during folder upload", "folder", folderName, "error", err)
 			}
@@ -439,6 +447,7 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 				return nil
 			}
 
+			// PAR2 files don't need relative paths - use standard Post
 			if err := p.poster.Post(ctx, createdPar2Paths, rootDir, nzbGen); err != nil {
 				if !errors.Is(err, context.Canceled) {
 					slog.ErrorContext(ctx, "Error during upload of par2 files. Upload will continue without par2.", "error", err)
@@ -448,9 +457,9 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 			return nil
 		})
 
-		// Post main files
+		// Post main files with relative paths for subjects
 		errg.Go(func() error {
-			if err := p.poster.Post(ctx, allFilePaths, rootDir, nzbGen); err != nil {
+			if err := p.poster.PostWithRelativePaths(ctx, allFilePaths, rootDir, nzbGen, relativePaths); err != nil {
 				if !errors.Is(err, context.Canceled) {
 					slog.ErrorContext(ctx, "Error during folder upload", "folder", folderName, "error", err)
 				}

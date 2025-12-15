@@ -5,6 +5,10 @@
 			"title": "Tableau de Téléchargement",
 			"description": "Gérez vos téléchargements de fichiers et surveillez le progrès",
 			"add_files": "Ajouter des Fichiers",
+			"add_folder": "Ajouter un Dossier",
+			"add_folder_tooltip": "Télécharger un dossier entier comme un seul NZB",
+			"folder_added": "Dossier Ajouté",
+			"folder_added_description": "Le dossier a été ajouté à la file d'attente de téléchargement",
 			"import_files": "Importer des Fichiers",
 			"import_files_tooltip": "Explorer et importer des fichiers depuis le serveur distant",
 			"clear_completed": "Vider les Terminés"

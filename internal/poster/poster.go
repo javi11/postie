@@ -37,6 +37,9 @@ var (
 type Poster interface {
 	// Post posts files from a directory to Usenet
 	Post(ctx context.Context, files []string, rootDir string, nzbGen nzb.NZBGenerator) error
+	// PostWithRelativePaths posts files with custom display names (relative paths) for subjects
+	// relativePaths maps absolute file path to the display name to use in the subject
+	PostWithRelativePaths(ctx context.Context, files []string, rootDir string, nzbGen nzb.NZBGenerator, relativePaths map[string]string) error
 	// Stats returns posting statistics
 	Stats() Stats
 	// Close closes the poster
@@ -164,6 +167,19 @@ func (p *poster) Post(
 	rootDir string,
 	nzbGen nzb.NZBGenerator,
 ) error {
+	return p.PostWithRelativePaths(ctx, files, rootDir, nzbGen, nil)
+}
+
+// PostWithRelativePaths posts files with custom display names (relative paths) for subjects
+// relativePaths maps absolute file path to the display name to use in the subject
+// If relativePaths is nil or a file is not found in the map, the filename is used
+func (p *poster) PostWithRelativePaths(
+	ctx context.Context,
+	files []string,
+	rootDir string,
+	nzbGen nzb.NZBGenerator,
+	relativePaths map[string]string,
+) error {
 	// Check if poster has been closed
 	if p.closed.Load() {
 		return ErrPosterClosed
@@ -206,7 +222,13 @@ func (p *poster) Post(
 		default:
 		}
 
-		if err := p.addPost(ctx, file, i+1, len(files), &wg, &failedPosts, postQueue, nzbGen, &postsInFlight); err != nil {
+		// Get the display name (relative path) for this file, or empty string to use filename
+		displayName := ""
+		if relativePaths != nil {
+			displayName = relativePaths[file]
+		}
+
+		if err := p.addPost(ctx, file, displayName, i+1, len(files), &wg, &failedPosts, postQueue, nzbGen, &postsInFlight); err != nil {
 			return fmt.Errorf("error adding file %s to posting queue: %w", file, err)
 		}
 	}
@@ -576,7 +598,9 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 }
 
 // addPost adds a file to the posting queue
-func (p *poster) addPost(ctx context.Context, filePath string, fileNumber int, totalFiles int, wg *sync.WaitGroup, failedPosts *int, postQueue chan<- *Post, nzbGen nzb.NZBGenerator, postsInFlight *sync.WaitGroup) error {
+// displayName is the name to use in the subject (e.g., "Folder/subfolder/file.mp4")
+// If displayName is empty, the filename is used
+func (p *poster) addPost(ctx context.Context, filePath string, displayName string, fileNumber int, totalFiles int, wg *sync.WaitGroup, failedPosts *int, postQueue chan<- *Post, nzbGen nzb.NZBGenerator, postsInFlight *sync.WaitGroup) error {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("error opening file: %w", err)
@@ -658,8 +682,13 @@ func (p *poster) addPost(ctx context.Context, filePath string, fileNumber int, t
 			messageID = msgID
 		}
 
+		// Use displayName if provided, otherwise fall back to filename
 		fileName := filepath.Base(filePath)
-		subject := article.GenerateSubject(fileNumber, totalFiles, fileName, partNumber, numSegments)
+		subjectName := fileName
+		if displayName != "" {
+			subjectName = displayName
+		}
+		subject := article.GenerateSubject(fileNumber, totalFiles, subjectName, partNumber, numSegments)
 		originalSubject := subject
 
 		var fName string

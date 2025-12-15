@@ -94,7 +94,8 @@ It supports configuration via a YAML file and can process multiple files in a di
 			}
 		}
 
-		_, err = poster.Post(ctx, files, dirPath, outputDir)
+		// CLI mode: use config-based folder mode decision (not forced)
+		_, err = poster.Post(ctx, files, dirPath, outputDir, false)
 		return err
 	},
 }

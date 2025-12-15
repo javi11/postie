@@ -102,6 +102,8 @@ export function SaveConfig(arg1:config.ConfigData):Promise<void>;
 
 export function SelectConfigFile():Promise<string>;
 
+export function SelectFolder():Promise<string>;
+
 export function SelectOutputDirectory():Promise<string>;
 
 export function SelectTempDirectory():Promise<string>;
@@ -123,5 +125,7 @@ export function Startup(arg1:context.Context):Promise<void>;
 export function TestProviderConnectivity(arg1:backend.ServerData):Promise<backend.ValidationResult>;
 
 export function UploadFiles():Promise<void>;
+
+export function UploadFolder(arg1:string):Promise<void>;
 
 export function ValidateNNTPServer(arg1:backend.ServerData):Promise<backend.ValidationResult>;

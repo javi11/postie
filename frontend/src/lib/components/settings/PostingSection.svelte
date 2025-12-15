@@ -46,7 +46,6 @@ let addNgxHeader = $state(config.posting.post_headers?.add_nxg_header ?? false);
 let throttleRateMB = $state(
 	Math.round((config.posting.throttle_rate || 0) / 1048576),
 );
-let singleNzbPerFolder = $state(config.posting.single_nzb_per_folder ?? false);
 
 // Initialize defaults (following initialization pattern)
 function initializeDefaults() {
@@ -79,7 +78,6 @@ $effect(() => {
 	config.posting.message_id_format = messageIdFormat;
 	config.posting.group_policy = groupPolicy;
 	config.posting.throttle_rate = throttleRateMB * 1048576;
-	config.posting.single_nzb_per_folder = singleNzbPerFolder;
 });
 
 $effect(() => {
@@ -240,30 +238,6 @@ async function savePostingSettings() {
         maxValue={10000000}
         id="article-size"
       />
-
-      <!-- Single NZB Per Folder -->
-      <div class="flex flex-col justify-center">
-        <div class="form-control">
-          <label class="label cursor-pointer justify-start gap-3">
-            <input
-              type="checkbox"
-              class="checkbox checkbox-primary"
-              bind:checked={singleNzbPerFolder}
-            />
-            <span class="label-text font-medium">
-              {$t('settings.posting.single_nzb_per_folder')}
-            </span>
-          </label>
-          <p class="text-sm text-base-content/70 mt-1">
-            {$t('settings.posting.single_nzb_per_folder_description')}
-          </p>
-          <div class="mt-2 p-3 bg-base-200 rounded text-xs">
-            <p class="text-base-content/70">
-              {@html $t('settings.posting.single_nzb_per_folder_info')}
-            </p>
-          </div>
-        </div>
-      </div>
 
       <!-- Advanced Settings (conditionally shown) -->
       {#if $advancedMode}

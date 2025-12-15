@@ -428,6 +428,32 @@ export class UnifiedClient {
 		throw new Error("No client available");
 	}
 
+	// Folder upload
+	async selectFolder(): Promise<string | null> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			const path = await client.App.SelectFolder();
+			return path || null;
+		}
+
+		// In web mode, folder selection is handled via HTML input with webkitdirectory
+		return null;
+	}
+
+	async uploadFolder(folderPath: string): Promise<void> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			return client.App.UploadFolder(folderPath);
+		}
+
+		// In web mode, folder upload is handled via uploadFileList with webkitdirectory files
+		throw new Error("Use uploadFileList for web folder uploads");
+	}
+
 	// Logs
 	async getLogs(): Promise<string> {
 		await this.initialize();
