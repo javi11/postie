@@ -871,7 +871,7 @@ func TestAddPost(t *testing.T) {
 
 		wg.Add(1)
 		ctx := context.Background()
-		err := p.addPost(ctx, testFile, 1, 1, &wg, &failedPosts, postQueue, nzbGen, &postsInFlight)
+		err := p.addPost(ctx, testFile, "", 1, 1, &wg, &failedPosts, postQueue, nzbGen, &postsInFlight)
 
 		assert.NoError(t, err)
 
@@ -908,7 +908,7 @@ func TestAddPost(t *testing.T) {
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 
 		ctx := context.Background()
-		err := p.addPost(ctx, "nonexistent.txt", 1, 1, &wg, &failedPosts, postQueue, nzbGen, &postsInFlight)
+		err := p.addPost(ctx, "nonexistent.txt", "", 1, 1, &wg, &failedPosts, postQueue, nzbGen, &postsInFlight)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "error opening file")

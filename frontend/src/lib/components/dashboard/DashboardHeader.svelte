@@ -21,12 +21,16 @@ let pauseCheckInterval: NodeJS.Timeout | null = null;
 let showFileExplorer = $state(false);
 let isWebMode = $state(false);
 
-// Check pause status and auto-pause status
+// Check pause status and auto-pause status (only update if changed to prevent unnecessary re-renders)
 async function checkPauseStatus() {
   try {
-    isPaused = await apiClient.isProcessingPaused();
-    isAutoPaused = await apiClient.isProcessingAutoPaused();
-    autoPauseReason = await apiClient.getAutoPauseReason();
+    const newPaused = await apiClient.isProcessingPaused();
+    const newAutoPaused = await apiClient.isProcessingAutoPaused();
+    const newReason = await apiClient.getAutoPauseReason();
+
+    if (isPaused !== newPaused) isPaused = newPaused;
+    if (isAutoPaused !== newAutoPaused) isAutoPaused = newAutoPaused;
+    if (autoPauseReason !== newReason) autoPauseReason = newReason;
   } catch (error) {
     console.error("Failed to check pause status:", error);
   }

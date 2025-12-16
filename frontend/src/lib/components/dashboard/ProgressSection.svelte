@@ -150,7 +150,7 @@ function cancelUpload(jobID: string) {
 
   {#if $isUploading}
     <!-- Running Jobs with Progress -->
-    {#each $runningJobs as job}
+    {#each $runningJobs as job (job.id)}
       <div class="card bg-base-100 shadow-xl p-6 hover:shadow-2xl transition-all duration-200">
         <div class="space-y-6">
           <div class="flex items-center justify-between">

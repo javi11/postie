@@ -6,7 +6,7 @@ import { CheckCircle, Clock, AlertCircle, Server, WifiOff } from "lucide-svelte"
 import { onDestroy, onMount } from "svelte";
 
 let poolMetrics = $state<backend.NntpPoolMetrics | null>(null);
-let loading = $state(true);
+let initialLoad = $state(true);
 let error = $state("");
 let refreshInterval: NodeJS.Timeout | null = null;
 
@@ -15,7 +15,6 @@ const REFRESH_INTERVAL = 5000;
 
 async function fetchProviderStatus() {
 	try {
-		loading = true;
 		error = "";
 		poolMetrics = await apiClient.getNntpPoolMetrics();
 	} catch (err) {
@@ -23,7 +22,7 @@ async function fetchProviderStatus() {
 		error = String(err);
 		poolMetrics = null;
 	} finally {
-		loading = false;
+		initialLoad = false;
 	}
 }
 
@@ -113,7 +112,7 @@ onDestroy(() => {
 			{$t("dashboard.provider.title")}
 		</h2>
 
-		{#if loading && !poolMetrics}
+		{#if initialLoad && !poolMetrics}
 			<div class="flex justify-center py-4">
 				<span class="loading loading-spinner loading-md"></span>
 			</div>
@@ -124,7 +123,7 @@ onDestroy(() => {
 			</div>
 		{:else if poolMetrics?.providers && poolMetrics.providers.length > 0}
 			<div class="space-y-3">
-				{#each poolMetrics.providers as provider}
+				{#each poolMetrics.providers as provider (provider.host)}
 					{@const StatusIcon = getProviderStatusIcon(provider)}
 					<div class="border border-base-300 rounded-lg p-4">
 						<div class="flex items-center justify-between mb-3">

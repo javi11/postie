@@ -20,7 +20,8 @@ import {
 import { onDestroy, onMount } from "svelte";
 
 let paginatedResult: backend.PaginatedQueueResult | null = null;
-let loading = false;
+let initialLoad = true;
+let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
 // Pagination state - now controlled by server
 let currentPage = 1;
@@ -45,9 +46,10 @@ $: if (currentPage || itemsPerPage || sortBy || sortOrder) {
 }
 
 onMount(() => {
-	// Listen for queue updates
+	// Listen for queue updates with debouncing to prevent double-fetches
 	apiClient.on("queue-updated", () => {
-		loadQueue();
+		clearTimeout(debounceTimer);
+		debounceTimer = setTimeout(loadQueue, 100);
 	});
 
   // Set up periodic refresh for queue
@@ -60,16 +62,16 @@ onMount(() => {
 });
 
 onDestroy(() => {
-	// Clean up event listener
+	// Clean up event listener and timers
 	apiClient.off("queue-updated");
-  if (intervalId) {
-    clearInterval(intervalId);
-  }
+	clearTimeout(debounceTimer);
+	if (intervalId) {
+		clearInterval(intervalId);
+	}
 });
 
 async function loadQueue() {
 	try {
-		loading = true;
 		const result = await apiClient.getQueueItems({
 			page: currentPage,
 			limit: itemsPerPage,
@@ -82,7 +84,7 @@ async function loadQueue() {
 		toastStore.error($t("common.messages.failed_to_load_queue"), String(error));
 		paginatedResult = null;
 	} finally {
-		loading = false;
+		initialLoad = false;
 	}
 }
 
@@ -183,7 +185,7 @@ function changeItemsPerPage(event: Event) {
             {totalItems} {$t("dashboard.queue.items")}
           </span>
         </div>
-        {#if totalItems > 0 && !loading}
+        {#if totalItems > 0 && !initialLoad}
           <div class="flex items-center gap-2">
             <label for="items-per-page" class="text-sm text-base-content/70">
               {$t("dashboard.queue.items_per_page")}:
@@ -205,7 +207,7 @@ function changeItemsPerPage(event: Event) {
     </div>
   </div>
 
-  {#if loading}
+  {#if initialLoad}
     <!-- Loading State -->
     <div class="text-center py-12">
       <div class="loading loading-spinner loading-lg mb-4"></div>
