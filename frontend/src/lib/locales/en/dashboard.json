@@ -118,6 +118,7 @@
 			"auto_paused": "Processing Auto-Paused",
 			"settings_link": "Settings"
 		},
+		"job_failed": "Upload failed: {fileName}",
 		"file_explorer": {
 			"title": "Add Files from Server to Queue",
 			"import_success": "Files added to queue successfully"

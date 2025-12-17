@@ -120,6 +120,7 @@
 			"auto_paused": "Procesamiento Pausado Automáticamente",
 			"settings_link": "Configuración"
 		},
+		"job_failed": "Subida fallida: {fileName}",
 		"file_explorer": {
 			"title": "Agregar Archivos del Servidor a la Cola",
 			"import_success": "Archivos agregados a la cola exitosamente"

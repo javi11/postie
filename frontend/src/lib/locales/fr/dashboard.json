@@ -119,6 +119,7 @@
 			"auto_paused": "Traitement Automatiquement Mis en Pause",
 			"settings_link": "Paramètres"
 		},
+		"job_failed": "Échec du téléchargement: {fileName}",
 		"file_explorer": {
 			"title": "Ajouter des Fichiers du Serveur à la File",
 			"import_success": "Fichiers ajoutés à la file avec succès"

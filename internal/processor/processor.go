@@ -50,6 +50,8 @@ type Processor struct {
 	providerCheckCancel context.CancelFunc
 	// Callback to check if processor can start new items
 	canProcessNextItem func() bool
+	// Callback when job fails permanently
+	onJobError func(fileName, errorMessage string)
 	// Shutdown flag to prevent new operations during close
 	isShuttingDown bool
 }
@@ -63,7 +65,8 @@ type ProcessorOptions struct {
 	DeleteOriginalFile        bool
 	MaintainOriginalExtension bool
 	WatchFolder               string
-	CanProcessNextItem        func() bool // Callback to check if processor can start new items
+	CanProcessNextItem        func() bool                     // Callback to check if processor can start new items
+	OnJobError                func(fileName, errorMessage string) // Callback when job fails permanently
 }
 type RunningJobDetails struct {
 	ID       string                   `json:"id"`
@@ -102,6 +105,7 @@ func New(opts ProcessorOptions) *Processor {
 		providerCheckCtx:          providerCtx,
 		providerCheckCancel:       providerCancel,
 		canProcessNextItem:        opts.CanProcessNextItem,
+		onJobError:                opts.OnJobError,
 	}
 
 	// Start provider availability monitoring if we have a pool manager
@@ -378,14 +382,32 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 }
 
 func (p *Processor) handleProcessingError(ctx context.Context, msg *goqite.Message, job *queue.FileJob, jobID string, err error) error {
-	slog.ErrorContext(ctx, "Error processing file", "error", err, "path", job.Path, "retryCount", job.RetryCount)
+	slog.ErrorContext(ctx, "Error processing file",
+		"error", err,
+		"path", job.Path,
+		"retryCount", job.RetryCount,
+		"maxRetries", maxRetries,
+		"jobID", jobID,
+	)
 
 	job.RetryCount++
 
 	if job.RetryCount >= maxRetries {
-		slog.ErrorContext(ctx, "Job failed permanently after reaching max retries", "path", job.Path)
-		if err := p.queue.MarkAsError(ctx, msg.ID, job, err.Error()); err != nil {
-			slog.ErrorContext(ctx, "Failed to mark job as error", "error", err, "path", job.Path)
+		fileName := getFileName(job.Path)
+		slog.ErrorContext(ctx, "Job failed permanently after reaching max retries",
+			"path", job.Path,
+			"fileName", fileName,
+			"retryCount", job.RetryCount,
+			"error", err.Error(),
+		)
+
+		// Notify UI about the permanent failure
+		if p.onJobError != nil {
+			p.onJobError(fileName, err.Error())
+		}
+
+		if markErr := p.queue.MarkAsError(ctx, msg.ID, job, err.Error()); markErr != nil {
+			slog.ErrorContext(ctx, "Failed to mark job as error", "error", markErr, "path", job.Path)
 			// Re-add to queue as a fallback
 			if readdErr := p.queue.ReaddJob(ctx, job); readdErr != nil {
 				slog.ErrorContext(ctx, "Failed to re-add job to queue", "error", readdErr, "path", job.Path)

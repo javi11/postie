@@ -79,6 +79,18 @@ func (a *App) initializeProcessor() error {
 		MaintainOriginalExtension: a.config.GetMaintainOriginalExtension(),
 		WatchFolder:               watcherCfg.WatchDirectory,
 		CanProcessNextItem:        a.canProcessNextItem,
+		OnJobError: func(fileName, errorMessage string) {
+			// Emit job-error event to notify UI about permanent failure
+			eventData := map[string]string{
+				"fileName": fileName,
+				"error":    errorMessage,
+			}
+			if !a.isWebMode {
+				runtime.EventsEmit(a.ctx, "job-error", eventData)
+			} else if a.webEventEmitter != nil {
+				a.webEventEmitter("job-error", eventData)
+			}
+		},
 	})
 
 	// Start processor
