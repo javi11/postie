@@ -152,12 +152,14 @@ func (g *Generator) Generate(outputPath string) (string, error) {
 	})
 
 	// Create output directory if it doesn't exist
-	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
-		if err := os.MkdirAll(outputPath, 0755); err != nil {
-			return "", fmt.Errorf("failed to create output directory: %w, %s", err, outputPath)
+	// Use filepath.Dir to get the parent directory, not the full path which includes the filename
+	outputDir := filepath.Dir(outputPath)
+	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(outputDir, 0755); err != nil {
+			return "", fmt.Errorf("failed to create output directory: %w, %s", err, outputDir)
 		}
 	} else if err != nil {
-		return "", fmt.Errorf("failed to check output directory: %w, %s", err, outputPath)
+		return "", fmt.Errorf("failed to check output directory: %w, %s", err, outputDir)
 	}
 
 	// Write NZB file
