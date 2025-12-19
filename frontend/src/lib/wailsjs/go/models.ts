@@ -340,6 +340,9 @@ export namespace config {
 	    timeout: string;
 	    max_retries: number;
 	    retry_delay: string;
+	    max_backoff: string;
+	    max_retry_duration: string;
+	    retry_check_interval: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new PostUploadScriptConfig(source);
@@ -352,6 +355,9 @@ export namespace config {
 	        this.timeout = source["timeout"];
 	        this.max_retries = source["max_retries"];
 	        this.retry_delay = source["retry_delay"];
+	        this.max_backoff = source["max_backoff"];
+	        this.max_retry_duration = source["max_retry_duration"];
+	        this.retry_check_interval = source["retry_check_interval"];
 	    }
 	}
 	export class QueueConfig {

@@ -27,12 +27,18 @@ type ScriptRetryWorker struct {
 func NewScriptRetryWorker(ctx context.Context, queue *queue.Queue, scriptConfig config.PostUploadScriptConfig) *ScriptRetryWorker {
 	workerCtx, cancel := context.WithCancel(ctx)
 
+	// Use configured retry check interval, default to 1 minute
+	checkInterval := scriptConfig.RetryCheckInterval.ToDuration()
+	if checkInterval <= 0 {
+		checkInterval = 1 * time.Minute
+	}
+
 	return &ScriptRetryWorker{
 		queue:              queue,
 		scriptConfig:       scriptConfig,
 		ctx:                workerCtx,
 		cancel:             cancel,
-		retryCheckInterval: 1 * time.Minute, // Check for retries every minute
+		retryCheckInterval: checkInterval,
 	}
 }
 
@@ -124,27 +130,36 @@ func (w *ScriptRetryWorker) executeScript(ctx context.Context, item queue.Comple
 		currentRetryCount := item.ScriptRetryCount
 		newRetryCount := currentRetryCount + 1
 
-		// Check if we've exceeded max retries
-		if newRetryCount >= w.scriptConfig.MaxRetries {
+		// Determine first failure time (use existing or set to now)
+		now := time.Now()
+		var firstFailureAt time.Time
+		if item.ScriptFirstFailureAt != nil {
+			firstFailureAt = *item.ScriptFirstFailureAt
+		} else {
+			firstFailureAt = now
+		}
+
+		// Check if we should continue retrying
+		if !w.shouldRetry(firstFailureAt, newRetryCount) {
 			// Mark as permanently failed
+			reason := w.getFailureReason(firstFailureAt, newRetryCount)
 			if updateErr := w.queue.MarkScriptFailed(ctx, item.ID, errorMsg); updateErr != nil {
 				slog.ErrorContext(ctx, "Failed to mark script as permanently failed", "itemID", item.ID, "error", updateErr)
 			}
-			slog.WarnContext(ctx, "Script permanently failed after max retries", "itemID", item.ID, "retries", newRetryCount)
-			return fmt.Errorf("script failed permanently after %d retries: %w", newRetryCount, err)
+			slog.WarnContext(ctx, "Script permanently failed", "itemID", item.ID, "retries", newRetryCount, "reason", reason)
+			return fmt.Errorf("script failed permanently (%s): %w", reason, err)
 		}
 
-		// Calculate next retry with exponential backoff
-		baseDelay := w.scriptConfig.RetryDelay.ToDuration()
-		backoffDelay := baseDelay * time.Duration(1<<newRetryCount) // Exponential: base * 2^retryCount
-		nextRetry := time.Now().Add(backoffDelay)
+		// Calculate next retry with exponential backoff (capped)
+		backoffDelay := w.calculateBackoff(newRetryCount)
+		nextRetry := now.Add(backoffDelay)
 
 		// Update status for next retry
-		if updateErr := w.queue.UpdateScriptStatus(ctx, item.ID, "pending_retry", newRetryCount, errorMsg, &nextRetry); updateErr != nil {
+		if updateErr := w.queue.UpdateScriptStatus(ctx, item.ID, "pending_retry", newRetryCount, errorMsg, &nextRetry, &firstFailureAt); updateErr != nil {
 			slog.ErrorContext(ctx, "Failed to update script status for retry", "itemID", item.ID, "error", updateErr)
 		}
 
-		slog.InfoContext(ctx, "Scheduled script retry", "itemID", item.ID, "retryCount", newRetryCount, "nextRetry", nextRetry)
+		slog.InfoContext(ctx, "Scheduled script retry", "itemID", item.ID, "retryCount", newRetryCount, "nextRetry", nextRetry, "backoff", backoffDelay)
 		return fmt.Errorf("script retry failed, will retry in %v: %w", backoffDelay, err)
 	}
 
@@ -156,4 +171,53 @@ func (w *ScriptRetryWorker) executeScript(ctx context.Context, item queue.Comple
 
 	slog.InfoContext(ctx, "Post-upload script executed successfully on retry", "itemID", item.ID, "output", string(output))
 	return nil
+}
+
+// calculateBackoff calculates the backoff delay with exponential growth capped at MaxBackoff
+func (w *ScriptRetryWorker) calculateBackoff(retryCount int) time.Duration {
+	baseDelay := w.scriptConfig.RetryDelay.ToDuration()
+	maxBackoff := w.scriptConfig.MaxBackoff.ToDuration()
+
+	// Exponential backoff: base * 2^retryCount
+	backoff := baseDelay * time.Duration(1<<retryCount)
+
+	// Cap at max backoff
+	if maxBackoff > 0 && backoff > maxBackoff {
+		return maxBackoff
+	}
+
+	return backoff
+}
+
+// shouldRetry checks if we should continue retrying based on count and duration limits
+func (w *ScriptRetryWorker) shouldRetry(firstFailure time.Time, retryCount int) bool {
+	// Check time-based limit (max retry duration)
+	maxRetryDuration := w.scriptConfig.MaxRetryDuration.ToDuration()
+	if maxRetryDuration > 0 && time.Since(firstFailure) > maxRetryDuration {
+		return false
+	}
+
+	// Check count-based limit (0 = unlimited)
+	maxRetries := w.scriptConfig.MaxRetries
+	if maxRetries > 0 && retryCount >= maxRetries {
+		return false
+	}
+
+	return true
+}
+
+// getFailureReason returns a human-readable reason for why retries stopped
+func (w *ScriptRetryWorker) getFailureReason(firstFailure time.Time, retryCount int) string {
+	maxRetryDuration := w.scriptConfig.MaxRetryDuration.ToDuration()
+	maxRetries := w.scriptConfig.MaxRetries
+
+	// Check which limit was exceeded
+	if maxRetryDuration > 0 && time.Since(firstFailure) > maxRetryDuration {
+		return fmt.Sprintf("exceeded max retry duration of %v", maxRetryDuration)
+	}
+	if maxRetries > 0 && retryCount >= maxRetries {
+		return fmt.Sprintf("exceeded max retries of %d", maxRetries)
+	}
+
+	return "unknown reason"
 }

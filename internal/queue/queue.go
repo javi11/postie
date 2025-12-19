@@ -82,15 +82,16 @@ type FileJob struct {
 }
 
 type CompletedItem struct {
-	ID               string    `json:"id"`
-	Path             string    `json:"path"`
-	Size             int64     `json:"size"`
-	Priority         int       `json:"priority"`
-	NzbPath          string    `json:"nzbPath"`
-	CreatedAt        time.Time `json:"createdAt"`
-	CompletedAt      time.Time `json:"completedAt"`
-	JobData          []byte    `json:"jobData"`
-	ScriptRetryCount int       `json:"scriptRetryCount"` // Number of script retry attempts
+	ID                   string     `json:"id"`
+	Path                 string     `json:"path"`
+	Size                 int64      `json:"size"`
+	Priority             int        `json:"priority"`
+	NzbPath              string     `json:"nzbPath"`
+	CreatedAt            time.Time  `json:"createdAt"`
+	CompletedAt          time.Time  `json:"completedAt"`
+	JobData              []byte     `json:"jobData"`
+	ScriptRetryCount     int        `json:"scriptRetryCount"`     // Number of script retry attempts
+	ScriptFirstFailureAt *time.Time `json:"scriptFirstFailureAt"` // When the first script failure occurred
 }
 
 const (
@@ -1176,8 +1177,9 @@ func (q *Queue) RetryErroredJob(ctx context.Context, id string) error {
 	return nil
 }
 
-// UpdateScriptStatus updates the script execution status for a completed item
-func (q *Queue) UpdateScriptStatus(ctx context.Context, itemID string, status string, retryCount int, lastError string, nextRetryAt *time.Time) error {
+// UpdateScriptStatus updates the script execution status for a completed item.
+// If firstFailureAt is provided and it's the first failure (retryCount == 1), it will be recorded.
+func (q *Queue) UpdateScriptStatus(ctx context.Context, itemID string, status string, retryCount int, lastError string, nextRetryAt *time.Time, firstFailureAt *time.Time) error {
 	var nextRetryAtStr sql.NullString
 	if nextRetryAt != nil {
 		nextRetryAtStr = sql.NullString{String: nextRetryAt.Format("2006-01-02T15:04:05.000Z"), Valid: true}
@@ -1188,14 +1190,21 @@ func (q *Queue) UpdateScriptStatus(ctx context.Context, itemID string, status st
 		lastErrorStr = sql.NullString{String: lastError, Valid: true}
 	}
 
+	var firstFailureAtStr sql.NullString
+	if firstFailureAt != nil {
+		firstFailureAtStr = sql.NullString{String: firstFailureAt.Format("2006-01-02T15:04:05.000Z"), Valid: true}
+	}
+
+	// Only set first_failure_at if it's provided and the column is currently NULL
 	_, err := q.db.ExecContext(ctx, `
 		UPDATE completed_items
 		SET script_status = ?,
 		    script_retry_count = ?,
 		    script_last_error = ?,
-		    script_next_retry_at = ?
+		    script_next_retry_at = ?,
+		    script_first_failure_at = COALESCE(script_first_failure_at, ?)
 		WHERE id = ?
-	`, status, retryCount, lastErrorStr, nextRetryAtStr, itemID)
+	`, status, retryCount, lastErrorStr, nextRetryAtStr, firstFailureAtStr, itemID)
 
 	if err != nil {
 		return fmt.Errorf("failed to update script status: %w", err)
@@ -1210,7 +1219,8 @@ func (q *Queue) MarkScriptCompleted(ctx context.Context, itemID string) error {
 		UPDATE completed_items
 		SET script_status = 'completed',
 		    script_last_error = NULL,
-		    script_next_retry_at = NULL
+		    script_next_retry_at = NULL,
+		    script_first_failure_at = NULL
 		WHERE id = ?
 	`, itemID)
 
@@ -1244,7 +1254,7 @@ func (q *Queue) GetItemsForScriptRetry(ctx context.Context, limit int) ([]Comple
 
 	rows, err := q.db.QueryContext(ctx, `
 		SELECT id, path, size, priority, nzb_path, created_at, completed_at, job_data,
-		       script_retry_count, script_last_error, script_next_retry_at
+		       script_retry_count, script_last_error, script_next_retry_at, script_first_failure_at
 		FROM completed_items
 		WHERE script_status = 'pending_retry'
 		  AND (script_next_retry_at IS NULL OR script_next_retry_at <= ?)
@@ -1262,12 +1272,12 @@ func (q *Queue) GetItemsForScriptRetry(ctx context.Context, limit int) ([]Comple
 	var items []CompletedItem
 	for rows.Next() {
 		var item CompletedItem
-		var createdAtStr, completedAtStr, scriptLastErrorStr, scriptNextRetryAtStr sql.NullString
+		var createdAtStr, completedAtStr, scriptLastErrorStr, scriptNextRetryAtStr, scriptFirstFailureAtStr sql.NullString
 
 		err := rows.Scan(
 			&item.ID, &item.Path, &item.Size, &item.Priority, &item.NzbPath,
 			&createdAtStr, &completedAtStr, &item.JobData,
-			&item.ScriptRetryCount, &scriptLastErrorStr, &scriptNextRetryAtStr,
+			&item.ScriptRetryCount, &scriptLastErrorStr, &scriptNextRetryAtStr, &scriptFirstFailureAtStr,
 		)
 		if err != nil {
 			continue
@@ -1281,6 +1291,11 @@ func (q *Queue) GetItemsForScriptRetry(ctx context.Context, limit int) ([]Comple
 		if completedAtStr.Valid {
 			if t, err := time.Parse("2006-01-02T15:04:05.000Z", completedAtStr.String); err == nil {
 				item.CompletedAt = t
+			}
+		}
+		if scriptFirstFailureAtStr.Valid {
+			if t, err := time.Parse("2006-01-02T15:04:05.000Z", scriptFirstFailureAtStr.String); err == nil {
+				item.ScriptFirstFailureAt = &t
 			}
 		}
 

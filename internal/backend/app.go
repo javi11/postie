@@ -467,8 +467,9 @@ func (a *App) RetryScript(id string) error {
 	}
 
 	// Reset the script status to pending_retry with immediate retry
+	// Pass nil for firstFailureAt to preserve existing value (if any) or set it on first failure
 	nextRetry := time.Now()
-	if err := a.queue.UpdateScriptStatus(a.ctx, id, "pending_retry", 0, "", &nextRetry); err != nil {
+	if err := a.queue.UpdateScriptStatus(a.ctx, id, "pending_retry", 0, "", &nextRetry, nil); err != nil {
 		return fmt.Errorf("failed to reset script status: %w", err)
 	}
 

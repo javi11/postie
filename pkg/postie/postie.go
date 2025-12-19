@@ -36,7 +36,7 @@ type Postie struct {
 
 // QueueInterface defines the queue methods needed by Postie
 type QueueInterface interface {
-	UpdateScriptStatus(ctx context.Context, itemID string, status string, retryCount int, lastError string, nextRetryAt *time.Time) error
+	UpdateScriptStatus(ctx context.Context, itemID string, status string, retryCount int, lastError string, nextRetryAt *time.Time, firstFailureAt *time.Time) error
 	MarkScriptCompleted(ctx context.Context, itemID string) error
 }
 
@@ -531,9 +531,11 @@ func (p *Postie) ExecutePostUploadScript(ctx context.Context, nzbPath string, it
 		if p.queue != nil {
 			// Calculate next retry time with exponential backoff
 			baseDelay := p.postUploadScriptCfg.RetryDelay.ToDuration()
-			nextRetry := time.Now().Add(baseDelay)
+			now := time.Now()
+			nextRetry := now.Add(baseDelay)
 
-			if updateErr := p.queue.UpdateScriptStatus(ctx, itemID, "pending_retry", 0, errorMsg, &nextRetry); updateErr != nil {
+			// This is the first failure, so set firstFailureAt to now
+			if updateErr := p.queue.UpdateScriptStatus(ctx, itemID, "pending_retry", 0, errorMsg, &nextRetry, &now); updateErr != nil {
 				slog.ErrorContext(ctx, "Failed to track script failure", "error", updateErr)
 			}
 		}

@@ -403,10 +403,21 @@ type PostUploadScriptConfig struct {
 	Command string `yaml:"command" json:"command"`
 	// Timeout for script execution. Default value is `30s`.
 	Timeout Duration `yaml:"timeout" json:"timeout"`
-	// Maximum number of retry attempts for failed script executions. Default value is `3`.
+	// Maximum number of retry attempts for failed script executions.
+	// Set to 0 for unlimited retries (will use MaxRetryDuration as the limit).
+	// Default value is `3`.
 	MaxRetries int `yaml:"max_retries" json:"max_retries"`
 	// Base delay for retry attempts with exponential backoff. Default value is `30s`.
 	RetryDelay Duration `yaml:"retry_delay" json:"retry_delay"`
+	// Maximum backoff duration. Caps the exponential backoff to prevent very long waits.
+	// Default value is `1h`.
+	MaxBackoff Duration `yaml:"max_backoff" json:"max_backoff"`
+	// Maximum duration to keep retrying after the first failure.
+	// After this duration, the script is marked as permanently failed.
+	// Default value is `24h`.
+	MaxRetryDuration Duration `yaml:"max_retry_duration" json:"max_retry_duration"`
+	// How often to check for pending retries. Default value is `1m`.
+	RetryCheckInterval Duration `yaml:"retry_check_interval" json:"retry_check_interval"`
 }
 
 // Par2DownloadStatus represents the status of par2 executable download
@@ -487,11 +498,20 @@ func Load(path string) (*ConfigData, error) {
 	if cfg.PostUploadScript.Timeout == "" {
 		cfg.PostUploadScript.Timeout = Duration("30s")
 	}
-	if cfg.PostUploadScript.MaxRetries <= 0 {
-		cfg.PostUploadScript.MaxRetries = 3
+	if cfg.PostUploadScript.MaxRetries < 0 {
+		cfg.PostUploadScript.MaxRetries = 3 // 0 means unlimited
 	}
 	if cfg.PostUploadScript.RetryDelay == "" {
 		cfg.PostUploadScript.RetryDelay = Duration("30s")
+	}
+	if cfg.PostUploadScript.MaxBackoff == "" {
+		cfg.PostUploadScript.MaxBackoff = Duration("1h")
+	}
+	if cfg.PostUploadScript.MaxRetryDuration == "" {
+		cfg.PostUploadScript.MaxRetryDuration = Duration("24h")
+	}
+	if cfg.PostUploadScript.RetryCheckInterval == "" {
+		cfg.PostUploadScript.RetryCheckInterval = Duration("1m")
 	}
 
 	if cfg.Posting.ArticleSizeInBytes <= 0 {
@@ -997,11 +1017,14 @@ func GetDefaultConfig() ConfigData {
 		OutputDir:                 "./output",
 		MaintainOriginalExtension: &enabled,
 		PostUploadScript: PostUploadScriptConfig{
-			Enabled:    false,
-			Command:    "",
-			Timeout:    Duration("30s"),
-			MaxRetries: 3,
-			RetryDelay: Duration("30s"),
+			Enabled:            false,
+			Command:            "",
+			Timeout:            Duration("30s"),
+			MaxRetries:         3,
+			RetryDelay:         Duration("30s"),
+			MaxBackoff:         Duration("1h"),
+			MaxRetryDuration:   Duration("24h"),
+			RetryCheckInterval: Duration("1m"),
 		},
 	}
 }
