@@ -87,9 +87,6 @@ RUN apt-get update && \
 # Make binary executable
 RUN chmod +x /app/postie-web
 
-# Copy s6-overlay service configuration
-COPY docker/root/ /
-
 # Create necessary directories
 RUN mkdir -p /config /watch /output
 
@@ -110,3 +107,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 LABEL org.opencontainers.image.source="https://github.com/javi11/postie"
 LABEL build_version="version: Build-date:- ${VERSION}  ${BUILD_DATE}"
 LABEL maintainer="javi11"
+
+# Start the application
+CMD ["/app/postie-web"]
