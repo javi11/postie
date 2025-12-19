@@ -246,7 +246,7 @@ async function handleUpload() {
 <div style="--wails-drop-target: drop">
   <!-- Drag and Drop Overlay -->
   {#if isDragOver}
-    <div class="drag-overlay">
+    <div class="drag-overlay" style="--wails-drop-target: drop">
       <div class="drag-overlay-content">
         <div class="drag-icon">
           <Plus class="w-16 h-16 text-white" />
