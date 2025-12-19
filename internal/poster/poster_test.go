@@ -124,7 +124,6 @@ func TestPost(t *testing.T) {
 
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 		nzbGen.EXPECT().AddArticle(gomock.Any()).Return().AnyTimes()
-		nzbGen.EXPECT().AddFileHash(gomock.Any(), gomock.Any()).Return().AnyTimes()
 
 		// Mock the job progress
 		mockJobProgress := mocks.NewMockJobProgress(ctrl)
@@ -194,7 +193,6 @@ func TestPost(t *testing.T) {
 
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 		nzbGen.EXPECT().AddArticle(gomock.Any()).Return().AnyTimes()
-		nzbGen.EXPECT().AddFileHash(gomock.Any(), gomock.Any()).Return().AnyTimes()
 
 		// Create poster with check disabled to simplify test
 		checkCfg := createTestPostCheckConfig()
@@ -238,9 +236,7 @@ func TestPost(t *testing.T) {
 		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(errors.New("posting failed")).AnyTimes()
 
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
-		// When posting fails, AddArticle is still called but AddFileHash might not be called
 		nzbGen.EXPECT().AddArticle(gomock.Any()).Return().AnyTimes()
-		nzbGen.EXPECT().AddFileHash(gomock.Any(), gomock.Any()).Return().AnyTimes()
 
 		// Mock the job progress
 		mockJobProgress := mocks.NewMockJobProgress(ctrl)
@@ -296,7 +292,6 @@ func TestPost(t *testing.T) {
 
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 		nzbGen.EXPECT().AddArticle(gomock.Any()).Return().AnyTimes()
-		nzbGen.EXPECT().AddFileHash(gomock.Any(), gomock.Any()).Return().AnyTimes()
 
 		// Mock the job progress
 		mockJobProgress := mocks.NewMockJobProgress(ctrl)
@@ -351,7 +346,6 @@ func TestPost(t *testing.T) {
 
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 		nzbGen.EXPECT().AddArticle(gomock.Any()).Return().AnyTimes()
-		nzbGen.EXPECT().AddFileHash(gomock.Any(), gomock.Any()).Return().AnyTimes()
 
 		// Mock the job progress
 		mockJobProgress := mocks.NewMockJobProgress(ctrl)
@@ -527,7 +521,6 @@ func TestPost(t *testing.T) {
 		// Post the article
 		err = p.postArticle(ctx, art, file)
 		assert.NoError(t, err)
-		assert.NotEmpty(t, art.Hash) // Hash should be set
 		assert.Equal(t, int64(1), p.stats.ArticlesPosted)
 
 		// Check fails first time (simulating article not propagated yet)
@@ -592,37 +585,6 @@ func TestStats(t *testing.T) {
 	assert.Equal(t, startTime, stats.StartTime)
 }
 
-func TestCalculateHash(t *testing.T) {
-	testCases := []struct {
-		name     string
-		input    []byte
-		expected string
-	}{
-		{
-			name:     "empty buffer",
-			input:    []byte{},
-			expected: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-		},
-		{
-			name:     "simple text",
-			input:    []byte("hello world"),
-			expected: "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
-		},
-		{
-			name:     "binary data",
-			input:    []byte{0x00, 0x01, 0x02, 0x03, 0xFF},
-			expected: "ff5d8507b6a72bee2debce2c0054798deaccdc5d8a1b945b6280ce8aa9cba52e",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result := CalculateHash(tc.input)
-			assert.Equal(t, tc.expected, result)
-		})
-	}
-}
-
 func TestPostArticle(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		ctx := context.Background()
@@ -675,7 +637,6 @@ func TestPostArticle(t *testing.T) {
 		err = p.postArticle(ctx, art, file)
 
 		assert.NoError(t, err)
-		assert.NotEmpty(t, art.Hash) // Hash should be calculated and set
 		assert.Equal(t, int64(1), p.stats.ArticlesPosted)
 		assert.Equal(t, int64(len(content)), p.stats.BytesPosted)
 	})
@@ -1040,7 +1001,6 @@ func TestPostIntegration(t *testing.T) {
 		// Mock NZB generator
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 		nzbGen.EXPECT().AddArticle(gomock.Any()).Return()
-		nzbGen.EXPECT().AddFileHash(gomock.Any(), gomock.Any()).Return()
 
 		// Create poster with realistic config
 		cfg := createTestConfig()

@@ -33,6 +33,7 @@ type NZBGenerator interface {
 // Generator creates NZB files
 type Generator struct {
 	articles                  map[string][]*article.Article // filename -> articles
+	articleIdx                map[string]map[string]int     // filename -> messageID -> index (for O(1) lookup)
 	filesHash                 map[string]string             // filename -> checksums
 	segmentSize               uint64                        // size of each segment in bytes
 	compressionConfig         config.NzbCompressionConfig   // compression configuration
@@ -44,6 +45,7 @@ type Generator struct {
 func NewGenerator(segmentSize uint64, compressionConfig config.NzbCompressionConfig, maintainOriginalExtension bool) NZBGenerator {
 	return &Generator{
 		articles:                  make(map[string][]*article.Article),
+		articleIdx:                make(map[string]map[string]int),
 		filesHash:                 make(map[string]string),
 		segmentSize:               segmentSize,
 		compressionConfig:         compressionConfig,
@@ -57,16 +59,22 @@ func (g *Generator) AddArticle(art *article.Article) {
 	defer g.mx.Unlock()
 	filename := art.OriginalName
 
-	// Check if we already have this article (by message ID)
-	for i, existingArt := range g.articles[filename] {
-		if existingArt.MessageID == art.MessageID {
+	// O(1) lookup for existing article by message ID
+	if idx, ok := g.articleIdx[filename]; ok {
+		if i, exists := idx[art.MessageID]; exists {
 			// Replace the existing article
 			g.articles[filename][i] = art
 			return
 		}
 	}
 
-	// If we didn't find an existing article with the same message ID, append it
+	// Initialize index map for this filename if needed
+	if g.articleIdx[filename] == nil {
+		g.articleIdx[filename] = make(map[string]int)
+	}
+
+	// Add to index and append to articles
+	g.articleIdx[filename][art.MessageID] = len(g.articles[filename])
 	g.articles[filename] = append(g.articles[filename], art)
 }
 

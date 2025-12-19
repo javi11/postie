@@ -3,15 +3,12 @@ package poster
 import (
 	"context"
 	"crypto/md5"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
 	"math/rand"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -33,6 +30,14 @@ var (
 	// ErrPosterClosed is returned when attempting to post after the poster has been closed
 	ErrPosterClosed = errors.New("poster is closed")
 )
+
+// bodyBufferPool provides reusable buffers for article body read-ahead to reduce GC pressure
+var bodyBufferPool = sync.Pool{
+	New: func() interface{} {
+		// Pre-allocate 768KB (slightly larger than default article size of 750KB)
+		return make([]byte, 768*1024)
+	},
+}
 
 // Poster defines the interface for posting articles to Usenet
 type Poster interface {
@@ -76,8 +81,9 @@ type Post struct {
 
 // articleWithBody holds an article with its pre-read body data for read-ahead buffering
 type articleWithBody struct {
-	article *article.Article
-	body    []byte
+	article  *article.Article
+	body     []byte
+	poolBuf  []byte // original pooled buffer (may be larger than body)
 }
 
 // Stats tracks posting statistics
@@ -289,8 +295,8 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			post.Status = PostStatusPosting
 			post.mu.Unlock()
 
-			// Create read-ahead channel (buffer 10 articles ahead to overlap I/O with network)
-			readAheadChan := make(chan articleWithBody, 10)
+			// Create read-ahead channel (buffer 50 articles ahead to overlap I/O with network)
+			readAheadChan := make(chan articleWithBody, 50)
 
 			// Start read-ahead goroutine to pre-read article bodies
 			go func() {
@@ -300,15 +306,26 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 					case <-ctx.Done():
 						return
 					default:
-						body := make([]byte, art.Size)
+						// Get buffer from pool, resize if needed
+						poolBuf := bodyBufferPool.Get().([]byte)
+						if cap(poolBuf) < int(art.Size) {
+							// Buffer too small, allocate a larger one (won't go back to pool)
+							poolBuf = make([]byte, art.Size)
+						}
+						body := poolBuf[:art.Size]
+
 						if _, err := post.file.ReadAt(body, art.Offset); err != nil {
+							// Return buffer to pool on error
+							bodyBufferPool.Put(poolBuf[:cap(poolBuf)])
 							slog.ErrorContext(ctx, "Error pre-reading article", "error", err, "offset", art.Offset)
 							return
 						}
 
 						select {
-						case readAheadChan <- articleWithBody{article: art, body: body}:
+						case readAheadChan <- articleWithBody{article: art, body: body, poolBuf: poolBuf}:
 						case <-ctx.Done():
+							// Return buffer to pool if context cancelled
+							bodyBufferPool.Put(poolBuf[:cap(poolBuf)])
 							return
 						}
 					}
@@ -318,17 +335,24 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			// Create a pool with error handling - use all available connections
 			pool := concpool.New().WithContext(ctx).WithMaxGoroutines(numOfConnections).WithCancelOnError().WithFirstError()
 
-			// Pre-allocate slice for article hashes to avoid string concatenation memory issues
-			// Using part number as index (1-based, so we subtract 1)
-			// This avoids creating intermediate strings which caused memory issues on Windows with large files
-			articleHashes := make([]string, len(post.Articles))
+			// Collect completed articles for batch NZB addition (reduces lock contention)
+			var completedArticles []*article.Article
+			var completedMu sync.Mutex
 
 			// Consume from read-ahead channel and submit to posting pool
 			for artWithBody := range readAheadChan {
 				art := artWithBody.article
 				body := artWithBody.body
+				poolBuf := artWithBody.poolBuf
 
 				pool.Go(func(ctx context.Context) error {
+					// Return buffer to pool when done (even on error)
+					defer func() {
+						if poolBuf != nil {
+							bodyBufferPool.Put(poolBuf[:cap(poolBuf)])
+						}
+					}()
+
 					if ctx.Err() != nil {
 						return ctx.Err()
 					}
@@ -342,19 +366,13 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 						return err
 					}
 
-					// Store hash at the correct index (thread-safe since each article has unique part number)
-					// PartNumber is 1-based, so subtract 1 for 0-based index
-					if art.PartNumber > 0 && art.PartNumber <= len(articleHashes) {
-						articleHashes[art.PartNumber-1] = art.Hash
-					}
-
 					// Update progress if manager is available
 					post.progress.UpdateProgress(int64(art.Size))
 
-					// Add article to NZB generator (still needs mutex for thread safety)
-					post.mu.Lock()
-					nzbGen.AddArticle(art)
-					post.mu.Unlock()
+					// Collect completed article for batch NZB addition
+					completedMu.Lock()
+					completedArticles = append(completedArticles, art)
+					completedMu.Unlock()
 
 					return nil
 				})
@@ -362,6 +380,11 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 
 			// Wait for all workers to complete and collect errors
 			errs := pool.Wait()
+
+			// Batch add completed articles to NZB generator (reduces lock contention)
+			for _, art := range completedArticles {
+				nzbGen.AddArticle(art)
+			}
 
 			p.jobProgress.FinishProgress(post.progress.GetID())
 
@@ -386,19 +409,9 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 				return
 			}
 
-			// Calculate file hash by merging all article hashes
 			post.mu.Lock()
 			post.Status = PostStatusPosted
-
 			post.mu.Unlock()
-
-			// Add file hash to NZB generator (defensive check for empty posts)
-			// Use strings.Join instead of concatenation to avoid memory fragmentation
-			if len(post.Articles) > 0 {
-				combinedHash := strings.Join(articleHashes, "")
-				fileHash := CalculateHash([]byte(combinedHash))
-				nzbGen.AddFileHash(post.Articles[0].OriginalName, fileHash)
-			}
 
 			if p.checkCfg.Enabled != nil && *p.checkCfg.Enabled {
 				checkQueue <- post
@@ -841,10 +854,6 @@ func (p *poster) postArticleWithBody(ctx context.Context, article *article.Artic
 		return err
 	}
 
-	// Calculate and set hash for the article
-	articleHash := CalculateHash(body)
-	article.Hash = articleHash
-
 	// Create article (with buffer pooling)
 	buff, cleanup, err := article.Encode(body)
 	if err != nil {
@@ -908,12 +917,4 @@ func (p *poster) Stats() Stats {
 		ArticleErrors:   p.stats.ArticleErrors,
 		StartTime:       p.stats.StartTime,
 	}
-}
-
-func CalculateHash(buff []byte) string {
-	hash := sha256.New()
-	hash.Write(buff[:])
-	hashInBytes := hash.Sum(nil)
-
-	return hex.EncodeToString(hashInBytes)
 }
