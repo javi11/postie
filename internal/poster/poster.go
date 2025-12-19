@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -317,8 +318,10 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			// Create a pool with error handling - use all available connections
 			pool := concpool.New().WithContext(ctx).WithMaxGoroutines(numOfConnections).WithCancelOnError().WithFirstError()
 
-			var combinedHash string
-			var hashMu sync.Mutex
+			// Pre-allocate slice for article hashes to avoid string concatenation memory issues
+			// Using part number as index (1-based, so we subtract 1)
+			// This avoids creating intermediate strings which caused memory issues on Windows with large files
+			articleHashes := make([]string, len(post.Articles))
 
 			// Consume from read-ahead channel and submit to posting pool
 			for artWithBody := range readAheadChan {
@@ -339,10 +342,11 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 						return err
 					}
 
-					// Update combined hash (thread-safe)
-					hashMu.Lock()
-					combinedHash += art.Hash
-					hashMu.Unlock()
+					// Store hash at the correct index (thread-safe since each article has unique part number)
+					// PartNumber is 1-based, so subtract 1 for 0-based index
+					if art.PartNumber > 0 && art.PartNumber <= len(articleHashes) {
+						articleHashes[art.PartNumber-1] = art.Hash
+					}
 
 					// Update progress if manager is available
 					post.progress.UpdateProgress(int64(art.Size))
@@ -389,7 +393,9 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			post.mu.Unlock()
 
 			// Add file hash to NZB generator (defensive check for empty posts)
+			// Use strings.Join instead of concatenation to avoid memory fragmentation
 			if len(post.Articles) > 0 {
+				combinedHash := strings.Join(articleHashes, "")
 				fileHash := CalculateHash([]byte(combinedHash))
 				nzbGen.AddFileHash(post.Articles[0].OriginalName, fileHash)
 			}
