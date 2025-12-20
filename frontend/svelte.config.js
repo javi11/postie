@@ -12,7 +12,7 @@ const config = {
 			pages: "build",
 			assets: "build",
 			out: "build",
-			fallback: undefined,
+			fallback: "index.html",
 			precompress: false,
 			strict: true,
 		}),
