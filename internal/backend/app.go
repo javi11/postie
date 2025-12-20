@@ -111,11 +111,36 @@ type App struct {
 	procCtx              context.Context
 	procCancel           context.CancelFunc
 	criticalErrorMessage string
+	loggingError         string // Error message if file logging setup failed
+	actualLogPath        string // The actual log path being used (may differ from appPaths.Log if fallback was used)
 	isWebMode            bool
 	webEventEmitter      func(eventType string, data interface{})
 	firstStart           bool
 	pendingConfig        *config.ConfigData
 	pendingConfigMux     sync.RWMutex
+}
+
+// getCrashLogPath returns the path for crash logs
+// It tries to use the app's data directory, falling back to temp directory or current directory
+func getCrashLogPath(appPaths *AppPaths) string {
+	// Try to use the app's data directory first
+	if appPaths != nil && appPaths.Data != "" {
+		crashPath := filepath.Join(appPaths.Data, "postie_crash.log")
+		// Verify the directory is writable
+		if _, err := verifyLogDirectory(crashPath); err == nil {
+			return crashPath
+		}
+	}
+
+	// Try temp directory as fallback
+	tempDir := os.TempDir()
+	tempPath := filepath.Join(tempDir, "postie", "postie_crash.log")
+	if err := os.MkdirAll(filepath.Dir(tempPath), 0755); err == nil {
+		return tempPath
+	}
+
+	// Last resort: current directory
+	return "postie_crash.log"
 }
 
 // recoverPanic handles panic recovery with logging
@@ -133,8 +158,10 @@ func (a *App) recoverPanic(methodName string) {
 		}
 
 		// Write to crash log file for debugging, especially useful on Windows
-		if crashFile, err := os.OpenFile("postie_backend_crash.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		crashLogPath := getCrashLogPath(a.appPaths)
+		if crashFile, err := os.OpenFile(crashLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
 			_, _ = fmt.Fprintf(crashFile, "=== POSTIE BACKEND PANIC ===\n")
+			_, _ = fmt.Fprintf(crashFile, "Time: %s\n", time.Now().Format(time.RFC3339))
 			_, _ = fmt.Fprintf(crashFile, "Method: %s\n", methodName)
 			_, _ = fmt.Fprintf(crashFile, "OS: %s\n", runtime.GOOS)
 			_, _ = fmt.Fprintf(crashFile, "Arch: %s\n", runtime.GOARCH)
@@ -147,21 +174,73 @@ func (a *App) recoverPanic(methodName string) {
 	}
 }
 
-// setupLogging configures logging with Windows-specific optimizations
-func setupLogging(logPath string) error {
-	// Ensure log directory exists with proper permissions
+// verifyLogDirectory checks if the log directory is writable
+// Returns the verified log path, or an alternative path if the original fails
+func verifyLogDirectory(logPath string) (string, error) {
 	logDir := filepath.Dir(logPath)
+
+	// Ensure log directory exists
 	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return fmt.Errorf("failed to create log directory: %w", err)
+		return "", fmt.Errorf("failed to create log directory %s: %w", logDir, err)
+	}
+
+	// Test write permissions by creating a temporary file
+	testFile := filepath.Join(logDir, ".postie_write_test")
+	f, err := os.Create(testFile)
+	if err != nil {
+		return "", fmt.Errorf("log directory %s is not writable: %w", logDir, err)
+	}
+
+	// Write a small amount of data to verify actual write capability
+	if _, err := f.WriteString("test"); err != nil {
+		_ = f.Close()
+		_ = os.Remove(testFile)
+		return "", fmt.Errorf("failed to write to log directory %s: %w", logDir, err)
+	}
+
+	_ = f.Close()
+	_ = os.Remove(testFile)
+
+	return logPath, nil
+}
+
+// getFallbackLogPath returns a fallback log path using the system temp directory
+func getFallbackLogPath() string {
+	tempDir := os.TempDir()
+	return filepath.Join(tempDir, "postie", "postie.log")
+}
+
+// setupLogging configures logging with Windows-specific optimizations
+// Returns the actual log path being used (may differ from input if fallback was needed) and any error
+func setupLogging(logPath string) (string, error) {
+	// Verify the log directory is writable
+	verifiedPath, err := verifyLogDirectory(logPath)
+	if err != nil {
+		// Try fallback to temp directory
+		slog.Warn("Primary log directory not writable, trying fallback",
+			"originalPath", logPath,
+			"error", err)
+
+		fallbackPath := getFallbackLogPath()
+		verifiedPath, err = verifyLogDirectory(fallbackPath)
+		if err != nil {
+			return "", fmt.Errorf("neither primary nor fallback log directory is writable: primary=%s, fallback=%s: %w",
+				logPath, fallbackPath, err)
+		}
+
+		slog.Info("Using fallback log path", "path", verifiedPath)
 	}
 
 	// Configure lumberjack with Windows-optimized settings
+	// Disable compression on Windows to avoid file locking issues during rotation
+	compress := runtime.GOOS != "windows"
+
 	logFile := &lumberjack.Logger{
-		Filename:   logPath,
+		Filename:   verifiedPath,
 		MaxSize:    5, // megabytes
 		MaxBackups: 3,
 		MaxAge:     28, // days
-		Compress:   true,
+		Compress:   compress,
 	}
 
 	multiWriter := io.MultiWriter(os.Stdout, logFile)
@@ -171,14 +250,18 @@ func setupLogging(logPath string) error {
 	slog.SetDefault(logger)
 
 	slog.Info("Logging initialized successfully",
-		"logPath", logPath,
-		"os", runtime.GOOS)
+		"logPath", verifiedPath,
+		"os", runtime.GOOS,
+		"compression", compress)
 
-	return nil
+	return verifiedPath, nil
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
+	var loggingError string
+	var actualLogPath string
+
 	// Get OS-specific paths
 	appPaths, err := GetAppPaths()
 	if err != nil {
@@ -194,12 +277,14 @@ func NewApp() *App {
 	}
 
 	// Setup logging with Windows-specific optimizations
-	if err := setupLogging(appPaths.Log); err != nil {
+	actualLogPath, err = setupLogging(appPaths.Log)
+	if err != nil {
 		// Fallback to basic stdout logging if file logging fails
 		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 			Level: slog.LevelDebug,
 		}))
 		slog.SetDefault(logger)
+		loggingError = fmt.Sprintf("File logging unavailable: %v", err)
 		slog.Error("Failed to setup file logging, using stdout only", "error", err)
 	}
 
@@ -208,12 +293,15 @@ func NewApp() *App {
 		"database", appPaths.Database,
 		"par2", appPaths.Par2,
 		"data", appPaths.Data,
-		"log", appPaths.Log)
+		"log", appPaths.Log,
+		"actualLogPath", actualLogPath)
 
 	return &App{
-		configPath: appPaths.Config,
-		appPaths:   appPaths,
-		isWebMode:  false,
+		configPath:    appPaths.Config,
+		appPaths:      appPaths,
+		loggingError:  loggingError,
+		actualLogPath: actualLogPath,
+		isWebMode:     false,
 	}
 }
 
@@ -369,23 +457,41 @@ func (a *App) GetAppStatus() AppStatus {
 
 // GetLoggingStatus returns information about logging configuration
 func (a *App) GetLoggingStatus() map[string]interface{} {
+	// Determine the actual log path being used
+	logPath := a.actualLogPath
+	if logPath == "" {
+		logPath = a.appPaths.Log
+	}
+
 	status := map[string]interface{}{
-		"logPath":    a.appPaths.Log,
-		"os":         runtime.GOOS,
-		"canWrite":   false,
-		"fileExists": false,
-		"error":      "",
+		"configuredLogPath": a.appPaths.Log,            // The originally configured path
+		"actualLogPath":     logPath,                   // The actual path being used (may be fallback)
+		"usingFallback":     logPath != a.appPaths.Log, // True if using a fallback path
+		"os":                runtime.GOOS,
+		"canWrite":          false,
+		"fileExists":        false,
+		"fileLoggingActive": a.loggingError == "", // True if file logging is working
+		"error":             a.loggingError,       // Any error from logging setup
 	}
 
 	// Check if log file exists
-	if _, err := os.Stat(a.appPaths.Log); err == nil {
+	if _, err := os.Stat(logPath); err == nil {
 		status["fileExists"] = true
+
+		// Get file info for additional details
+		if info, err := os.Stat(logPath); err == nil {
+			status["fileSize"] = info.Size()
+			status["lastModified"] = info.ModTime().Format(time.RFC3339)
+		}
 	}
 
-	// Test write permissions
-	testFile := filepath.Join(filepath.Dir(a.appPaths.Log), ".write_test")
+	// Test current write permissions
+	logDir := filepath.Dir(logPath)
+	testFile := filepath.Join(logDir, ".write_test")
 	if f, err := os.Create(testFile); err != nil {
-		status["error"] = fmt.Sprintf("Cannot write to log directory: %v", err)
+		if status["error"] == "" {
+			status["error"] = fmt.Sprintf("Cannot write to log directory: %v", err)
+		}
 	} else {
 		_ = f.Close()
 		_ = os.Remove(testFile)
@@ -496,9 +602,15 @@ func (a *App) GetLogs() (string, error) {
 func (a *App) GetLogsPaginated(limit, offset int) (string, error) {
 	defer a.recoverPanic("GetLogsPaginated")
 
-	file, err := os.Open(a.appPaths.Log)
+	// Use actual log path if available (may differ from configured path if using fallback)
+	logPath := a.actualLogPath
+	if logPath == "" {
+		logPath = a.appPaths.Log
+	}
+
+	file, err := os.Open(logPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to open log file: %w", err)
+		return "", fmt.Errorf("failed to open log file at %s: %w", logPath, err)
 	}
 	defer func() {
 		if err := file.Close(); err != nil {

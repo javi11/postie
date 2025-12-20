@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"time"
 
 	"github.com/javi11/postie/internal/backend"
 	"github.com/wailsapp/wails/v2"
@@ -26,6 +28,30 @@ var assets embed.FS
 //go:embed build/appicon.png
 var icon []byte
 
+// getMainCrashLogPath returns a writable path for crash logs
+// It tries temp directory first, then falls back to current directory
+func getMainCrashLogPath() string {
+	// Try to get app paths first (may fail early in startup)
+	if appPaths, err := backend.GetAppPaths(); err == nil && appPaths.Data != "" {
+		crashPath := filepath.Join(appPaths.Data, "postie_crash.log")
+		// Verify the directory exists or can be created
+		crashDir := filepath.Dir(crashPath)
+		if err := os.MkdirAll(crashDir, 0755); err == nil {
+			return crashPath
+		}
+	}
+
+	// Try temp directory as fallback
+	tempDir := os.TempDir()
+	tempPath := filepath.Join(tempDir, "postie", "postie_crash.log")
+	if err := os.MkdirAll(filepath.Dir(tempPath), 0755); err == nil {
+		return tempPath
+	}
+
+	// Last resort: current directory
+	return "postie_crash.log"
+}
+
 // recoverMainPanic handles panic recovery at the main function level
 func recoverMainPanic() {
 	if r := recover(); r != nil {
@@ -35,16 +61,16 @@ func recoverMainPanic() {
 			"stack", string(stack))
 
 		// Create detailed crash log for debugging, especially on Windows
-		crashLogPath := "postie_crash.log"
-		if crashFile, err := os.Create(crashLogPath); err == nil {
+		crashLogPath := getMainCrashLogPath()
+		if crashFile, err := os.OpenFile(crashLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
 			_, _ = fmt.Fprintf(crashFile, "=== POSTIE CRASH REPORT ===\n")
-			_, _ = fmt.Fprintf(crashFile, "Time: %s\n", os.Getenv("TIME"))
+			_, _ = fmt.Fprintf(crashFile, "Time: %s\n", time.Now().Format(time.RFC3339))
 			_, _ = fmt.Fprintf(crashFile, "OS: %s\n", runtime.GOOS)
 			_, _ = fmt.Fprintf(crashFile, "Arch: %s\n", runtime.GOARCH)
 			_, _ = fmt.Fprintf(crashFile, "Go Version: %s\n", runtime.Version())
 			_, _ = fmt.Fprintf(crashFile, "Panic: %v\n\n", r)
 			_, _ = fmt.Fprintf(crashFile, "Stack trace:\n%s\n", string(stack))
-			_, _ = fmt.Fprintf(crashFile, "=== END CRASH REPORT ===\n")
+			_, _ = fmt.Fprintf(crashFile, "=== END CRASH REPORT ===\n\n")
 			_ = crashFile.Close()
 
 			fmt.Printf("Critical error: %v\n", r)
@@ -161,9 +187,15 @@ func main() {
 						// Emit error event to frontend
 						wailsruntime.EventsEmit(ctx, "file-drop-error", fmt.Sprintf("Critical error: %v", r))
 
-						// Write to crash log for debugging
-						if crashFile, err := os.OpenFile("postie_crash.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-							_, _ = fmt.Fprintf(crashFile, "File drop panic: %v\nPaths: %v\nStack:\n%s\n\n", r, paths, string(stack))
+						// Write to crash log for debugging using consistent path
+						crashLogPath := getMainCrashLogPath()
+						if crashFile, err := os.OpenFile(crashLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+							_, _ = fmt.Fprintf(crashFile, "=== FILE DROP PANIC ===\n")
+							_, _ = fmt.Fprintf(crashFile, "Time: %s\n", time.Now().Format(time.RFC3339))
+							_, _ = fmt.Fprintf(crashFile, "Paths: %v\n", paths)
+							_, _ = fmt.Fprintf(crashFile, "Panic: %v\n", r)
+							_, _ = fmt.Fprintf(crashFile, "Stack:\n%s\n", string(stack))
+							_, _ = fmt.Fprintf(crashFile, "=== END FILE DROP PANIC ===\n\n")
 							_ = crashFile.Close()
 						}
 					}
