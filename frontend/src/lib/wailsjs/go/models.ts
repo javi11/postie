@@ -209,6 +209,7 @@ export namespace backend {
 	    limit: number;
 	    sortBy: string;
 	    order: string;
+	    status: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new PaginationParams(source);
@@ -220,6 +221,7 @@ export namespace backend {
 	        this.limit = source["limit"];
 	        this.sortBy = source["sortBy"];
 	        this.order = source["order"];
+	        this.status = source["status"];
 	    }
 	}
 	export class ProcessorStatus {
