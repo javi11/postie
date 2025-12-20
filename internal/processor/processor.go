@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/javi11/nntppool"
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/pausable"
 	"github.com/javi11/postie/internal/pool"
@@ -51,6 +50,10 @@ type Processor struct {
 	providerCheckCancel context.CancelFunc
 	// Callback to check if processor can start new items
 	canProcessNextItem func() bool
+	// Callback when job fails permanently
+	onJobError func(fileName, errorMessage string)
+	// Shutdown flag to prevent new operations during close
+	isShuttingDown bool
 }
 
 type ProcessorOptions struct {
@@ -62,7 +65,8 @@ type ProcessorOptions struct {
 	DeleteOriginalFile        bool
 	MaintainOriginalExtension bool
 	WatchFolder               string
-	CanProcessNextItem        func() bool // Callback to check if processor can start new items
+	CanProcessNextItem        func() bool                     // Callback to check if processor can start new items
+	OnJobError                func(fileName, errorMessage string) // Callback when job fails permanently
 }
 type RunningJobDetails struct {
 	ID       string                   `json:"id"`
@@ -101,6 +105,7 @@ func New(opts ProcessorOptions) *Processor {
 		providerCheckCtx:          providerCtx,
 		providerCheckCancel:       providerCancel,
 		canProcessNextItem:        opts.CanProcessNextItem,
+		onJobError:                opts.OnJobError,
 	}
 
 	// Start provider availability monitoring if we have a pool manager
@@ -187,10 +192,15 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 	default:
 	}
 
-	// Check if pool manager is still available before processing
+	// Check if processor is shutting down or pool manager is unavailable
 	p.runningMux.Lock()
+	shuttingDown := p.isShuttingDown
 	poolManager := p.poolManager
 	p.runningMux.Unlock()
+
+	if shuttingDown {
+		return nil
+	}
 
 	if poolManager == nil {
 		slog.WarnContext(ctx, "Pool manager is not available, skipping item processing")
@@ -210,8 +220,8 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 
 	slog.Info("Processing file", "msg", msg.ID, "path", job.Path, "priority", job.Priority)
 
-	// Process the file
-	actualNzbPath, err := p.processFile(ctx, msg, job)
+	// Process the file and get both NZB path and postie instance
+	actualNzbPath, jobPostie, err := p.processFile(ctx, msg, job)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			slog.Info("Job cancelled", "msg", msg.ID, "path", job.Path)
@@ -229,31 +239,38 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 		return err
 	}
 
+	// Execute post upload script if configured
+	// Note: We don't return the error here to avoid failing the completion if the script fails
+	// The script failure will be tracked in the database for retry
+	if scriptErr := jobPostie.ExecutePostUploadScript(ctx, actualNzbPath, string(msg.ID)); scriptErr != nil {
+		slog.ErrorContext(ctx, "Post upload script execution failed", "error", scriptErr, "nzbPath", actualNzbPath)
+	}
+
 	return nil
 }
 
-func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *queue.FileJob) (string, error) {
+func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *queue.FileJob) (string, *postie.Postie, error) {
 	// Check if this is a folder job
 	isFolder := strings.HasPrefix(job.Path, "FOLDER:")
 	var fileName string
 	var filesToProcess []fileinfo.FileInfo
 	var folderPath string
-	
+
 	if isFolder {
 		// Extract the actual folder path
 		folderPath = strings.TrimPrefix(job.Path, "FOLDER:")
 		fileName = filepath.Base(folderPath)
-		
+
 		// Collect all files in the folder
 		files, err := p.collectFilesInFolder(folderPath)
 		if err != nil {
-			return "", fmt.Errorf("failed to collect files in folder %s: %w", folderPath, err)
+			return "", nil, fmt.Errorf("failed to collect files in folder %s: %w", folderPath, err)
 		}
 		if len(files) == 0 {
-			return "", fmt.Errorf("no files found in folder %s", folderPath)
+			return "", nil, fmt.Errorf("no files found in folder %s", folderPath)
 		}
 		filesToProcess = files
-		
+
 		slog.InfoContext(ctx, "Processing folder as single NZB", "folder", fileName, "files", len(files))
 	} else {
 		// Single file processing
@@ -318,13 +335,13 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 	p.runningMux.Unlock()
 
 	if poolManager == nil {
-		return "", fmt.Errorf("pool manager is not available for job %s", jobID)
+		return "", nil, fmt.Errorf("pool manager is not available for job %s", jobID)
 	}
 
 	// Create a postie instance for this job with progress manager
-	jobPostie, err := postie.New(jobCtx, p.config, poolManager, progressJob)
+	jobPostie, err := postie.New(jobCtx, p.config, poolManager, progressJob, p.queue)
 	if err != nil {
-		return "", fmt.Errorf("failed to create postie instance for job %s: %w", jobID, err)
+		return "", nil, fmt.Errorf("failed to create postie instance for job %s: %w", jobID, err)
 	}
 	defer jobPostie.Close()
 
@@ -346,9 +363,10 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 	}
 
 	// Post the files using the job-specific postie instance with pausable context
-	actualNzbPath, err := jobPostie.Post(pausableCtx, filesToProcess, inputFolder, p.outputFolder)
+	// Pass isFolder flag to force folder mode (single NZB) for explicit folder uploads
+	actualNzbPath, err := jobPostie.Post(pausableCtx, filesToProcess, inputFolder, p.outputFolder, isFolder)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	// Delete the original files if configured
@@ -360,18 +378,36 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 		}
 	}
 
-	return actualNzbPath, nil
+	return actualNzbPath, jobPostie, nil
 }
 
 func (p *Processor) handleProcessingError(ctx context.Context, msg *goqite.Message, job *queue.FileJob, jobID string, err error) error {
-	slog.ErrorContext(ctx, "Error processing file", "error", err, "path", job.Path, "retryCount", job.RetryCount)
+	slog.ErrorContext(ctx, "Error processing file",
+		"error", err,
+		"path", job.Path,
+		"retryCount", job.RetryCount,
+		"maxRetries", maxRetries,
+		"jobID", jobID,
+	)
 
 	job.RetryCount++
 
 	if job.RetryCount >= maxRetries {
-		slog.ErrorContext(ctx, "Job failed permanently after reaching max retries", "path", job.Path)
-		if err := p.queue.MarkAsError(ctx, msg.ID, job, err.Error()); err != nil {
-			slog.ErrorContext(ctx, "Failed to mark job as error", "error", err, "path", job.Path)
+		fileName := getFileName(job.Path)
+		slog.ErrorContext(ctx, "Job failed permanently after reaching max retries",
+			"path", job.Path,
+			"fileName", fileName,
+			"retryCount", job.RetryCount,
+			"error", err.Error(),
+		)
+
+		// Notify UI about the permanent failure
+		if p.onJobError != nil {
+			p.onJobError(fileName, err.Error())
+		}
+
+		if markErr := p.queue.MarkAsError(ctx, msg.ID, job, err.Error()); markErr != nil {
+			slog.ErrorContext(ctx, "Failed to mark job as error", "error", markErr, "path", job.Path)
 			// Re-add to queue as a fallback
 			if readdErr := p.queue.ReaddJob(ctx, job); readdErr != nil {
 				slog.ErrorContext(ctx, "Failed to re-add job to queue", "error", readdErr, "path", job.Path)
@@ -529,9 +565,11 @@ func (p *Processor) IsPaused() bool {
 func (p *Processor) Close() error {
 	slog.Info("Processor shutdown initiated")
 
-	// Set pool manager to nil to prevent new jobs from using it
+	// Set shutdown flag to prevent new operations
+	// Note: Don't set poolManager to nil - it's a shared reference
+	// and setting it to nil can affect other processors
 	p.runningMux.Lock()
-	p.poolManager = nil
+	p.isShuttingDown = true
 	p.runningMux.Unlock()
 
 	// Stop provider monitoring
@@ -641,13 +679,13 @@ func (p *Processor) checkAndHandleProviderAvailability() {
 		return
 	}
 
-	// Count connected/active providers
+	// Count connected/active providers from map
 	activeProviders := 0
 	totalProviders := len(metrics.ProviderMetrics)
 
 	for _, provider := range metrics.ProviderMetrics {
-		// Consider a provider active if it's connected or has a good state
-		if provider.State == nntppool.ProviderStateActive {
+		// Consider a provider active if it's in "active" state (string comparison for v2)
+		if provider.State == "active" {
 			activeProviders++
 		}
 	}
@@ -690,32 +728,49 @@ func (p *Processor) checkAndHandleProviderAvailability() {
 }
 
 // collectFilesInFolder collects all files in the specified folder recursively
+// It also calculates the relative path for each file, including the folder name
+// e.g., if folderPath is "/home/user/MyFolder" and file is at "/home/user/MyFolder/sub/video.mp4"
+// the RelativePath will be "MyFolder/sub/video.mp4"
 func (p *Processor) collectFilesInFolder(folderPath string) ([]fileinfo.FileInfo, error) {
 	var files []fileinfo.FileInfo
-	
+
+	// Get the parent directory to calculate relative paths that include the folder name
+	parentDir := filepath.Dir(folderPath)
+
 	err := filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		
+
 		// Skip directories
 		if info.IsDir() {
 			return nil
 		}
-		
+
+		// Calculate relative path from parent directory (includes folder name)
+		relativePath, relErr := filepath.Rel(parentDir, path)
+		if relErr != nil {
+			// Fallback to just the filename if relative path calculation fails
+			relativePath = filepath.Base(path)
+		}
+
+		// Normalize path separators to forward slashes for cross-platform NZB compatibility
+		relativePath = filepath.ToSlash(relativePath)
+
 		// Add file to the list
 		files = append(files, fileinfo.FileInfo{
-			Path: path,
-			Size: uint64(info.Size()),
+			Path:         path,
+			Size:         uint64(info.Size()),
+			RelativePath: relativePath,
 		})
-		
+
 		return nil
 	})
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return files, nil
 }
 

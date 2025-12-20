@@ -31,6 +31,13 @@ type Postie struct {
 	postUploadScriptCfg       config.PostUploadScriptConfig
 	maintainOriginalExtension bool
 	jobProgress               progress.JobProgress
+	queue                     QueueInterface
+}
+
+// QueueInterface defines the queue methods needed by Postie
+type QueueInterface interface {
+	UpdateScriptStatus(ctx context.Context, itemID string, status string, retryCount int, lastError string, nextRetryAt *time.Time, firstFailureAt *time.Time) error
+	MarkScriptCompleted(ctx context.Context, itemID string) error
 }
 
 func New(
@@ -38,6 +45,7 @@ func New(
 	cfg config.Config,
 	poolManager *pool.Manager,
 	jobProgress progress.JobProgress,
+	queue QueueInterface,
 ) (*Postie, error) {
 	// Ensure par2 executable exists and get its path
 	par2Cfg, err := cfg.GetPar2Config(ctx)
@@ -70,6 +78,7 @@ func New(
 		postUploadScriptCfg:       postUploadScriptConfig,
 		maintainOriginalExtension: maintainOriginalExtension,
 		jobProgress:               jobProgress,
+		queue:                     queue,
 	}, nil
 }
 
@@ -150,24 +159,16 @@ func safeRemoveFile(ctx context.Context, filePath string) {
 	_ = os.Remove(filePath)
 }
 
-func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir string, outputDir string) (string, error) {
-	defer func() {
-		if r := recover(); r != nil {
-			slog.ErrorContext(ctx, "Panic in Postie.Post",
-				"panic", r,
-				"files", len(files),
-				"rootDir", rootDir,
-				"outputDir", outputDir,
-				"os", runtime.GOOS)
-		}
-	}()
-
+func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir string, outputDir string, forceFolderMode bool) (string, error) {
 	if len(files) == 0 {
 		return "", fmt.Errorf("no files to post")
 	}
 
-	// Check if we should create one NZB per folder
-	if p.postingCfg.SingleNzbPerFolder && len(files) > 1 {
+	// Use folder mode (single NZB) if explicitly requested via forceFolderMode
+	// This is set to true for:
+	// - Add Folder button (explicit folder upload)
+	// - Watch mode with SingleNzbPerFolder enabled (FOLDER: prefix in queue)
+	if forceFolderMode {
 		// Post all files as a single unit (folder mode)
 		return p.postFolder(ctx, files, rootDir, outputDir)
 	}
@@ -284,12 +285,6 @@ func (p *Postie) postInParallel(
 		return "", fmt.Errorf("error generating NZB file: %w", err)
 	}
 
-	// Execute post upload script if configured
-	if err := p.executePostUploadScript(ctx, finalPath); err != nil {
-		slog.ErrorContext(ctx, "Post upload script execution failed", "error", err, "nzbPath", finalPath)
-		// Note: We don't return the error here to avoid failing the upload if the script fails
-	}
-
 	// Mark posting as successful so PAR2 files get cleaned up
 	postingSucceeded = true
 	return finalPath, nil
@@ -356,12 +351,6 @@ func (p *Postie) post(
 		return "", fmt.Errorf("error generating NZB file: %w", err)
 	}
 
-	// Execute post upload script if configured
-	if err := p.executePostUploadScript(ctx, finalPath); err != nil {
-		slog.ErrorContext(ctx, "Post upload script execution failed", "error", err, "nzbPath", finalPath)
-		// Note: We don't return the error here to avoid failing the upload if the script fails
-	}
-
 	// Mark posting as successful so PAR2 files get cleaned up
 	postingSucceeded = true
 	return finalPath, nil
@@ -374,7 +363,7 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 	}
 
 	startTime := time.Now()
-	
+
 	// Determine the folder name from the first file's path
 	// This will be used as the NZB filename
 	firstFilePath := files[0].Path
@@ -384,15 +373,15 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 		// If files are in root, use a default name
 		folderName = "upload"
 	}
-	
+
 	slog.InfoContext(ctx, "Posting folder as single NZB", "folder", folderName, "files", len(files))
-	
+
 	var (
 		createdPar2Paths []string
 		err              error
 		postingSucceeded bool
 	)
-	
+
 	defer func() {
 		// Only clean up PAR2 files if posting was successful AND maintain_par2_files is false
 		shouldCleanup := postingSucceeded && (p.par2Cfg.MaintainPar2Files == nil || !*p.par2Cfg.MaintainPar2Files)
@@ -409,10 +398,15 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 	// Create a single NZB generator for all files
 	nzbGen := nzb.NewGenerator(p.postingCfg.ArticleSizeInBytes, p.compressionCfg, p.maintainOriginalExtension)
 
-	// Collect all file paths for posting
+	// Collect all file paths and build relative paths map for subject generation
 	var allFilePaths []string
+	relativePaths := make(map[string]string)
 	for _, f := range files {
 		allFilePaths = append(allFilePaths, f.Path)
+		// Use RelativePath for subject if available, otherwise use filename
+		if f.RelativePath != "" {
+			relativePaths[f.Path] = f.RelativePath
+		}
 	}
 
 	if *p.postingCfg.WaitForPar2 {
@@ -429,8 +423,8 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 			}
 		}
 
-		// Post all files (including PAR2) together
-		if err := p.poster.Post(ctx, allFilePaths, rootDir, nzbGen); err != nil {
+		// Post all files (including PAR2) together with relative paths for subjects
+		if err := p.poster.PostWithRelativePaths(ctx, allFilePaths, rootDir, nzbGen, relativePaths); err != nil {
 			if !errors.Is(err, context.Canceled) {
 				slog.ErrorContext(ctx, "Error during folder upload", "folder", folderName, "error", err)
 			}
@@ -453,6 +447,7 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 				return nil
 			}
 
+			// PAR2 files don't need relative paths - use standard Post
 			if err := p.poster.Post(ctx, createdPar2Paths, rootDir, nzbGen); err != nil {
 				if !errors.Is(err, context.Canceled) {
 					slog.ErrorContext(ctx, "Error during upload of par2 files. Upload will continue without par2.", "error", err)
@@ -462,9 +457,9 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 			return nil
 		})
 
-		// Post main files
+		// Post main files with relative paths for subjects
 		errg.Go(func() error {
-			if err := p.poster.Post(ctx, allFilePaths, rootDir, nzbGen); err != nil {
+			if err := p.poster.PostWithRelativePaths(ctx, allFilePaths, rootDir, nzbGen, relativePaths); err != nil {
 				if !errors.Is(err, context.Canceled) {
 					slog.ErrorContext(ctx, "Error during folder upload", "folder", folderName, "error", err)
 				}
@@ -486,12 +481,6 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 		return "", fmt.Errorf("error generating NZB file for folder: %w", err)
 	}
 
-	// Execute post upload script if configured
-	if err := p.executePostUploadScript(ctx, finalPath); err != nil {
-		slog.ErrorContext(ctx, "Post upload script execution failed", "error", err, "nzbPath", finalPath)
-		// Note: We don't return the error here to avoid failing the upload if the script fails
-	}
-
 	// Mark posting as successful so PAR2 files get cleaned up
 	postingSucceeded = true
 
@@ -508,12 +497,14 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 	return finalPath, nil
 }
 
-func (p *Postie) executePostUploadScript(ctx context.Context, nzbPath string) error {
+// ExecutePostUploadScript executes the post-upload script for a completed item
+// This should be called after the file has been marked as completed in the database
+func (p *Postie) ExecutePostUploadScript(ctx context.Context, nzbPath string, itemID string) error {
 	if !p.postUploadScriptCfg.Enabled || p.postUploadScriptCfg.Command == "" {
 		return nil
 	}
 
-	slog.InfoContext(ctx, "Executing post upload script", "command", p.postUploadScriptCfg.Command, "nzb_path", nzbPath)
+	slog.InfoContext(ctx, "Executing post upload script", "command", p.postUploadScriptCfg.Command, "nzb_path", nzbPath, "item_id", itemID)
 
 	// Create timeout context
 	timeoutCtx, cancel := context.WithTimeout(ctx, p.postUploadScriptCfg.Timeout.ToDuration())
@@ -533,8 +524,30 @@ func (p *Postie) executePostUploadScript(ctx context.Context, nzbPath string) er
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		errorMsg := fmt.Sprintf("script failed: %v, output: %s", err, string(output))
 		slog.ErrorContext(ctx, "Error executing post upload script", "error", err, "output", string(output), "command", command)
+
+		// Track failure in database for retry if queue is available
+		if p.queue != nil {
+			// Calculate next retry time with exponential backoff
+			baseDelay := p.postUploadScriptCfg.RetryDelay.ToDuration()
+			now := time.Now()
+			nextRetry := now.Add(baseDelay)
+
+			// This is the first failure, so set firstFailureAt to now
+			if updateErr := p.queue.UpdateScriptStatus(ctx, itemID, "pending_retry", 0, errorMsg, &nextRetry, &now); updateErr != nil {
+				slog.ErrorContext(ctx, "Failed to track script failure", "error", updateErr)
+			}
+		}
+
 		return fmt.Errorf("post upload script failed: %w", err)
+	}
+
+	// Mark script as completed in database if queue is available
+	if p.queue != nil {
+		if updateErr := p.queue.MarkScriptCompleted(ctx, itemID); updateErr != nil {
+			slog.ErrorContext(ctx, "Failed to mark script as completed", "error", updateErr)
+		}
 	}
 
 	slog.InfoContext(ctx, "Post upload script executed successfully", "command", command, "output", string(output))

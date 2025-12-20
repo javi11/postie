@@ -1,12 +1,12 @@
 <script lang="ts">
 import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
-  import { backend } from "$lib/wailsjs/go/models";
+import { backend } from "$lib/wailsjs/go/models";
 import { CheckCircle, Clock, AlertCircle, Server, WifiOff } from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
 
 let poolMetrics = $state<backend.NntpPoolMetrics | null>(null);
-let loading = $state(true);
+let initialLoad = $state(true);
 let error = $state("");
 let refreshInterval: NodeJS.Timeout | null = null;
 
@@ -15,7 +15,6 @@ const REFRESH_INTERVAL = 5000;
 
 async function fetchProviderStatus() {
 	try {
-		loading = true;
 		error = "";
 		poolMetrics = await apiClient.getNntpPoolMetrics();
 	} catch (err) {
@@ -23,7 +22,7 @@ async function fetchProviderStatus() {
 		error = String(err);
 		poolMetrics = null;
 	} finally {
-		loading = false;
+		initialLoad = false;
 	}
 }
 
@@ -92,13 +91,9 @@ function formatBytes(bytes: number): string {
 	return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
-function formatSuccessRate(rate: number): string {
-	return (rate * 100).toFixed(1) + "%";
-}
-
 onMount(() => {
 	fetchProviderStatus();
-	
+
 	// Set up auto-refresh
 	refreshInterval = setInterval(fetchProviderStatus, REFRESH_INTERVAL);
 });
@@ -117,7 +112,7 @@ onDestroy(() => {
 			{$t("dashboard.provider.title")}
 		</h2>
 
-		{#if loading && !poolMetrics}
+		{#if initialLoad && !poolMetrics}
 			<div class="flex justify-center py-4">
 				<span class="loading loading-spinner loading-md"></span>
 			</div>
@@ -128,7 +123,7 @@ onDestroy(() => {
 			</div>
 		{:else if poolMetrics?.providers && poolMetrics.providers.length > 0}
 			<div class="space-y-3">
-				{#each poolMetrics.providers as provider}
+				{#each poolMetrics.providers as provider (provider.host)}
 					{@const StatusIcon = getProviderStatusIcon(provider)}
 					<div class="border border-base-300 rounded-lg p-4">
 						<div class="flex items-center justify-between mb-3">
@@ -138,9 +133,6 @@ onDestroy(() => {
 									<h3 class="font-semibold text-base-content">
 										{provider.host}
 									</h3>
-									<p class="text-sm text-base-content/70">
-										{provider.username || $t("dashboard.provider.anonymous")}
-									</p>
 								</div>
 							</div>
 							<div class="text-right">
@@ -148,28 +140,24 @@ onDestroy(() => {
 									{getProviderStatusText(provider)}
 								</div>
 								<div class="text-xs text-base-content/60">
-									{$t("dashboard.provider.connections")}: {provider.acquiredConnections}/{provider.maxConnections}
+									{$t("dashboard.provider.connections")}: {provider.activeConnections}/{provider.maxConnections}
 								</div>
 							</div>
 						</div>
 
 						{#if provider.state?.toLowerCase() === "connected" || provider.state?.toLowerCase() === "active"}
-							<div class="grid grid-cols-2 gap-4 text-sm">
-								<div>
-									<span class="text-base-content/70">{$t("dashboard.provider.success_rate")}:</span>
-									<span class="font-medium ml-1">{formatSuccessRate(provider.successRate)}</span>
-								</div>
+							<div class="grid grid-cols-3 gap-4 text-sm">
 								<div>
 									<span class="text-base-content/70">{$t("dashboard.provider.uploaded")}:</span>
 									<span class="font-medium ml-1">{formatBytes(provider.totalBytesUploaded)}</span>
 								</div>
 								<div>
-									<span class="text-base-content/70">{$t("dashboard.provider.articles")}:</span>
+									<span class="text-base-content/70">{$t("dashboard.provider.articles_posted")}:</span>
 									<span class="font-medium ml-1">{provider.totalArticlesPosted.toLocaleString()}</span>
 								</div>
 								<div>
-									<span class="text-base-content/70">{$t("dashboard.provider.idle_connections")}:</span>
-									<span class="font-medium ml-1">{provider.idleConnections}</span>
+									<span class="text-base-content/70">{$t("dashboard.provider.errors")}:</span>
+									<span class="font-medium ml-1 {provider.totalErrors > 0 ? 'text-error' : ''}">{provider.totalErrors.toLocaleString()}</span>
 								</div>
 							</div>
 						{/if}
@@ -180,14 +168,16 @@ onDestroy(() => {
 			<!-- Pool Summary -->
 			<div class="mt-4 p-3 bg-base-200 rounded-lg">
 				<div class="flex justify-between items-center text-sm">
-					<span class="text-base-content/70">{$t("dashboard.provider.pool_summary")}:</span>
-					<span class="font-medium">
-						{poolMetrics.activeConnections} {$t("dashboard.provider.active_connections")}
-					</span>
-				</div>
-				<div class="flex justify-between items-center text-sm mt-1">
 					<span class="text-base-content/70">{$t("dashboard.provider.total_uploaded")}:</span>
 					<span class="font-medium">{formatBytes(poolMetrics.totalBytesUploaded)}</span>
+				</div>
+				<div class="flex justify-between items-center text-sm mt-1">
+					<span class="text-base-content/70">{$t("dashboard.provider.total_articles")}:</span>
+					<span class="font-medium">{poolMetrics.totalArticlesPosted.toLocaleString()}</span>
+				</div>
+				<div class="flex justify-between items-center text-sm mt-1">
+					<span class="text-base-content/70">{$t("dashboard.provider.total_errors")}:</span>
+					<span class="font-medium">{poolMetrics.totalErrors.toLocaleString()}</span>
 				</div>
 			</div>
 		{:else}

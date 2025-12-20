@@ -174,6 +174,10 @@ export function RetryJob(arg1) {
   return window['go']['backend']['App']['RetryJob'](arg1);
 }
 
+export function RetryScript(arg1) {
+  return window['go']['backend']['App']['RetryScript'](arg1);
+}
+
 export function RollbackMigration() {
   return window['go']['backend']['App']['RollbackMigration']();
 }
@@ -188,6 +192,10 @@ export function SaveConfig(arg1) {
 
 export function SelectConfigFile() {
   return window['go']['backend']['App']['SelectConfigFile']();
+}
+
+export function SelectFolder() {
+  return window['go']['backend']['App']['SelectFolder']();
 }
 
 export function SelectOutputDirectory() {
@@ -232,6 +240,10 @@ export function TestProviderConnectivity(arg1) {
 
 export function UploadFiles() {
   return window['go']['backend']['App']['UploadFiles']();
+}
+
+export function UploadFolder(arg1) {
+  return window['go']['backend']['App']['UploadFolder'](arg1);
 }
 
 export function ValidateNNTPServer(arg1) {

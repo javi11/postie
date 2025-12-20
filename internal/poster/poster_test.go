@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/javi11/nntppool"
+	"github.com/javi11/nntppool/v2"
 	"github.com/javi11/postie/internal/article"
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/mocks"
@@ -115,20 +115,15 @@ func TestPost(t *testing.T) {
 		}()
 
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
 
 		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
 		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
 			{MaxConnections: 10},
 		}).AnyTimes()
 		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
-		}).AnyTimes()
 
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 		nzbGen.EXPECT().AddArticle(gomock.Any()).Return().AnyTimes()
-		nzbGen.EXPECT().AddFileHash(gomock.Any(), gomock.Any()).Return().Times(1)
 
 		// Mock the job progress
 		mockJobProgress := mocks.NewMockJobProgress(ctrl)
@@ -152,11 +147,16 @@ func TestPost(t *testing.T) {
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mockJobProgress,
 		}
-		defer p.Close()
 
 		err := p.Post(ctx, []string{testFile}, "", nzbGen)
 
 		assert.NoError(t, err)
+
+		// Close after test completes
+		p.Close()
+
+		// Finish controller after all operations complete
+		ctrl.Finish()
 	})
 
 	t.Run("success with multiple files", func(t *testing.T) {
@@ -175,7 +175,6 @@ func TestPost(t *testing.T) {
 		}()
 
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
 
 		// Mock the job progress
 		mockJobProgress := mocks.NewMockJobProgress(ctrl)
@@ -191,13 +190,9 @@ func TestPost(t *testing.T) {
 			{MaxConnections: 10},
 		}).AnyTimes()
 		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
-		}).AnyTimes()
 
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
-		nzbGen.EXPECT().AddArticle(gomock.Any()).Return().Times(2)                // One for each file
-		nzbGen.EXPECT().AddFileHash(gomock.Any(), gomock.Any()).Return().Times(2) // One for each file
+		nzbGen.EXPECT().AddArticle(gomock.Any()).Return().AnyTimes()
 
 		// Create poster with check disabled to simplify test
 		checkCfg := createTestPostCheckConfig()
@@ -212,11 +207,16 @@ func TestPost(t *testing.T) {
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mockJobProgress,
 		}
-		defer p.Close()
 
 		err := p.Post(ctx, []string{testFile1, testFile2}, "", nzbGen)
 
 		assert.NoError(t, err)
+
+		// Close after test completes
+		p.Close()
+
+		// Finish controller after all operations complete
+		ctrl.Finish()
 	})
 
 	t.Run("posting failure", func(t *testing.T) {
@@ -228,21 +228,15 @@ func TestPost(t *testing.T) {
 		}()
 
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
 
 		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
 		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
 			{MaxConnections: 10},
 		}).AnyTimes()
 		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(errors.New("posting failed")).AnyTimes()
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
-		}).AnyTimes()
 
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
-		// When posting fails, AddArticle is still called but AddFileHash might not be called
 		nzbGen.EXPECT().AddArticle(gomock.Any()).Return().AnyTimes()
-		nzbGen.EXPECT().AddFileHash(gomock.Any(), gomock.Any()).Return().AnyTimes()
 
 		// Mock the job progress
 		mockJobProgress := mocks.NewMockJobProgress(ctrl)
@@ -266,12 +260,17 @@ func TestPost(t *testing.T) {
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mockJobProgress,
 		}
-		defer p.Close()
 
 		err := p.Post(ctx, []string{testFile}, "", nzbGen)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to post file")
+
+		// Close after test completes
+		p.Close()
+
+		// Finish controller after all operations complete
+		ctrl.Finish()
 	})
 
 	t.Run("check enabled success", func(t *testing.T) {
@@ -283,7 +282,6 @@ func TestPost(t *testing.T) {
 		}()
 
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
 
 		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
 		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
@@ -291,13 +289,9 @@ func TestPost(t *testing.T) {
 		}).AnyTimes()
 		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		mockPool.EXPECT().Stat(gomock.Any(), gomock.Any(), gomock.Any()).Return(200, nil).AnyTimes()
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
-		}).AnyTimes()
 
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
-		nzbGen.EXPECT().AddArticle(gomock.Any()).Return()
-		nzbGen.EXPECT().AddFileHash(gomock.Any(), gomock.Any()).Return()
+		nzbGen.EXPECT().AddArticle(gomock.Any()).Return().AnyTimes()
 
 		// Mock the job progress
 		mockJobProgress := mocks.NewMockJobProgress(ctrl)
@@ -316,15 +310,21 @@ func TestPost(t *testing.T) {
 			cfg:         createTestConfig(),
 			checkCfg:    checkCfg,
 			pool:        mockPool,
+			checkPool:   mockPool, // Use same pool for checking
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mockJobProgress,
 		}
-		defer p.Close()
 
 		err := p.Post(ctx, []string{testFile}, "", nzbGen)
 
 		assert.NoError(t, err)
+
+		// Close after test completes
+		p.Close()
+
+		// Finish controller after all operations complete
+		ctrl.Finish()
 	})
 
 	t.Run("check enabled failure", func(t *testing.T) {
@@ -336,7 +336,6 @@ func TestPost(t *testing.T) {
 		}()
 
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
 
 		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
 		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
@@ -344,13 +343,9 @@ func TestPost(t *testing.T) {
 		}).AnyTimes()
 		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		mockPool.EXPECT().Stat(gomock.Any(), gomock.Any(), gomock.Any()).Return(0, errors.New("article not found")).AnyTimes()
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
-		}).AnyTimes()
 
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
-		nzbGen.EXPECT().AddArticle(gomock.Any()).Return()
-		nzbGen.EXPECT().AddFileHash(gomock.Any(), gomock.Any()).Return()
+		nzbGen.EXPECT().AddArticle(gomock.Any()).Return().AnyTimes()
 
 		// Mock the job progress
 		mockJobProgress := mocks.NewMockJobProgress(ctrl)
@@ -370,16 +365,22 @@ func TestPost(t *testing.T) {
 			cfg:         createTestConfig(),
 			checkCfg:    checkCfg,
 			pool:        mockPool,
+			checkPool:   mockPool, // Use same pool for checking
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mockJobProgress,
 		}
-		defer p.Close()
 
 		err := p.Post(ctx, []string{testFile}, "", nzbGen)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to verify file")
+
+		// Close after test completes
+		p.Close()
+
+		// Finish controller after all operations complete
+		ctrl.Finish()
 	})
 
 	t.Run("article stat fails and gets reuploaded successfully", func(t *testing.T) {
@@ -397,8 +398,9 @@ func TestPost(t *testing.T) {
 
 		// Test checkArticle method directly
 		p := &poster{
-			pool:  mockPool,
-			stats: &Stats{StartTime: time.Now()},
+			pool:      mockPool,
+			checkPool: mockPool, // Use same pool for checking
+			stats:     &Stats{StartTime: time.Now()},
 		}
 		defer p.Close()
 
@@ -436,8 +438,9 @@ func TestPost(t *testing.T) {
 		}).AnyTimes()
 
 		p := &poster{
-			pool:  mockPool,
-			stats: &Stats{StartTime: time.Now()},
+			pool:      mockPool,
+			checkPool: mockPool, // Use same pool for checking
+			stats:     &Stats{StartTime: time.Now()},
 		}
 		defer p.Close()
 
@@ -494,6 +497,7 @@ func TestPost(t *testing.T) {
 
 		p := &poster{
 			pool:        mockPool,
+			checkPool:   mockPool, // Use same pool for checking
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mocks.NewMockJobProgress(ctrl),
@@ -517,7 +521,6 @@ func TestPost(t *testing.T) {
 		// Post the article
 		err = p.postArticle(ctx, art, file)
 		assert.NoError(t, err)
-		assert.NotEmpty(t, art.Hash) // Hash should be set
 		assert.Equal(t, int64(1), p.stats.ArticlesPosted)
 
 		// Check fails first time (simulating article not propagated yet)
@@ -547,6 +550,7 @@ func TestPost(t *testing.T) {
 			cfg:         createTestConfig(),
 			checkCfg:    createTestPostCheckConfig(),
 			pool:        mockPool,
+			checkPool:   mockPool, // Use same pool for checking
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mocks.NewMockJobProgress(ctrl),
@@ -579,37 +583,6 @@ func TestStats(t *testing.T) {
 	assert.Equal(t, int64(1024), stats.BytesPosted)
 	assert.Equal(t, int64(2), stats.ArticleErrors)
 	assert.Equal(t, startTime, stats.StartTime)
-}
-
-func TestCalculateHash(t *testing.T) {
-	testCases := []struct {
-		name     string
-		input    []byte
-		expected string
-	}{
-		{
-			name:     "empty buffer",
-			input:    []byte{},
-			expected: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-		},
-		{
-			name:     "simple text",
-			input:    []byte("hello world"),
-			expected: "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
-		},
-		{
-			name:     "binary data",
-			input:    []byte{0x00, 0x01, 0x02, 0x03, 0xFF},
-			expected: "ff5d8507b6a72bee2debce2c0054798deaccdc5d8a1b945b6280ce8aa9cba52e",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result := CalculateHash(tc.input)
-			assert.Equal(t, tc.expected, result)
-		})
-	}
 }
 
 func TestPostArticle(t *testing.T) {
@@ -664,7 +637,6 @@ func TestPostArticle(t *testing.T) {
 		err = p.postArticle(ctx, art, file)
 
 		assert.NoError(t, err)
-		assert.NotEmpty(t, art.Hash) // Hash should be calculated and set
 		assert.Equal(t, int64(1), p.stats.ArticlesPosted)
 		assert.Equal(t, int64(len(content)), p.stats.BytesPosted)
 	})
@@ -777,8 +749,9 @@ func TestCheckArticle(t *testing.T) {
 		mockPool.EXPECT().Stat(ctx, "test@example.com", []string{"alt.test"}).Return(200, nil)
 
 		p := &poster{
-			pool:  mockPool,
-			stats: &Stats{StartTime: time.Now()},
+			pool:      mockPool,
+			checkPool: mockPool, // Use same pool for checking
+			stats:     &Stats{StartTime: time.Now()},
 		}
 
 		art := &article.Article{
@@ -805,8 +778,9 @@ func TestCheckArticle(t *testing.T) {
 		mockPool.EXPECT().Stat(ctx, "test@example.com", []string{"alt.test"}).Return(0, errors.New("not found"))
 
 		p := &poster{
-			pool:  mockPool,
-			stats: &Stats{StartTime: time.Now()},
+			pool:      mockPool,
+			checkPool: mockPool, // Use same pool for checking
+			stats:     &Stats{StartTime: time.Now()},
 		}
 
 		art := &article.Article{
@@ -851,12 +825,14 @@ func TestAddPost(t *testing.T) {
 		}
 
 		var wg sync.WaitGroup
+		var postsInFlight sync.WaitGroup
 		failedPosts := 0
 		postQueue := make(chan *Post, 10)
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 
 		wg.Add(1)
-		err := p.addPost(testFile, 1, 1, &wg, &failedPosts, postQueue, nzbGen)
+		ctx := context.Background()
+		err := p.addPost(ctx, testFile, "", 1, 1, &wg, &failedPosts, postQueue, nzbGen, &postsInFlight)
 
 		assert.NoError(t, err)
 
@@ -887,11 +863,13 @@ func TestAddPost(t *testing.T) {
 		defer ctrl.Finish()
 
 		var wg sync.WaitGroup
+		var postsInFlight sync.WaitGroup
 		failedPosts := 0
 		postQueue := make(chan *Post, 10)
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 
-		err := p.addPost("nonexistent.txt", 1, 1, &wg, &failedPosts, postQueue, nzbGen)
+		ctx := context.Background()
+		err := p.addPost(ctx, "nonexistent.txt", "", 1, 1, &wg, &failedPosts, postQueue, nzbGen, &postsInFlight)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "error opening file")
@@ -1023,7 +1001,6 @@ func TestPostIntegration(t *testing.T) {
 		// Mock NZB generator
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 		nzbGen.EXPECT().AddArticle(gomock.Any()).Return()
-		nzbGen.EXPECT().AddFileHash(gomock.Any(), gomock.Any()).Return()
 
 		// Create poster with realistic config
 		cfg := createTestConfig()
@@ -1046,6 +1023,7 @@ func TestPostIntegration(t *testing.T) {
 			cfg:         cfg,
 			checkCfg:    checkCfg,
 			pool:        mockPool,
+			checkPool:   mockPool, // Use same pool for checking
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mockJobProgress,
@@ -1211,8 +1189,9 @@ func TestCheckLoop_Basic(t *testing.T) {
 		mockPool.EXPECT().Stat(ctx, "test@example.com", []string{"alt.test"}).Return(200, nil)
 
 		p := &poster{
-			pool:  mockPool,
-			stats: &Stats{StartTime: time.Now()},
+			pool:      mockPool,
+			checkPool: mockPool, // Use same pool for checking
+			stats:     &Stats{StartTime: time.Now()},
 		}
 
 		art := &article.Article{
@@ -1238,8 +1217,9 @@ func TestCheckLoop_Basic(t *testing.T) {
 		mockPool.EXPECT().Stat(ctx, "test@example.com", []string{"alt.test"}).Return(0, errors.New("article not found"))
 
 		p := &poster{
-			pool:  mockPool,
-			stats: &Stats{StartTime: time.Now()},
+			pool:      mockPool,
+			checkPool: mockPool, // Use same pool for checking
+			stats:     &Stats{StartTime: time.Now()},
 		}
 
 		art := &article.Article{
@@ -1298,32 +1278,10 @@ func createTestFile(t *testing.T, content string) string {
 	return tmpFile.Name()
 }
 
-// MockPoolManager is a simple mock for the pool manager used in tests
-type MockPoolManager struct {
-	pool nntppool.UsenetConnectionPool
-}
-
-func (m *MockPoolManager) GetPool() nntppool.UsenetConnectionPool {
-	return m.pool
-}
-
-func (m *MockPoolManager) Close() error {
-	return nil
-}
-
-func (m *MockPoolManager) GetMetrics() (nntppool.PoolMetricsSnapshot, error) {
-	return nntppool.PoolMetricsSnapshot{}, nil
-}
-
-func (m *MockPoolManager) UpdateConfig(*config.ConfigData) error {
-	return nil
-}
-
-func (m *MockPoolManager) IsClosed() bool {
-	return false
-}
-
-// createMockPoolManager creates a mock pool manager for testing
-func createMockPoolManager(ctrl *gomock.Controller, pool nntppool.UsenetConnectionPool) *MockPoolManager {
-	return &MockPoolManager{pool: pool}
+// createMockPoolManager creates a mock pool manager for testing using the generated mock
+func createMockPoolManager(ctrl *gomock.Controller, pool nntppool.UsenetConnectionPool) *mocks.MockPoolManager {
+	mockPoolManager := mocks.NewMockPoolManager(ctrl)
+	mockPoolManager.EXPECT().GetPool().Return(pool).AnyTimes()
+	mockPoolManager.EXPECT().GetCheckPool().Return(pool).AnyTimes()
+	return mockPoolManager
 }

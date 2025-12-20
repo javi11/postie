@@ -112,6 +112,13 @@ export const uploadActions = {
 		}));
 	},
 
+	updateTotalProgress: (progress: number) => {
+		uploadStore.update((state) => ({
+			...state,
+			totalProgress: progress,
+		}));
+	},
+
 	cancelUpload: () => {
 		uploadStore.update((state) => {
 			// Abort the current request if it exists

@@ -21,11 +21,13 @@ let queueStats: backend.QueueStats = {
 };
 
 let intervalId: ReturnType<typeof setInterval> | undefined;
+let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
 onMount(async () => {
-	// Listen for queue updates
+	// Listen for queue updates with debouncing to prevent double-fetches
 	await apiClient.on("queue-updated", () => {
-		loadQueueStats();
+		clearTimeout(debounceTimer);
+		debounceTimer = setTimeout(loadQueueStats, 100);
 	});
 
   // Set up polling to refresh stats every 10 seconds
@@ -38,10 +40,9 @@ onMount(async () => {
 });
 
 onDestroy(async () => {
-	// Clean up event listener
+	// Clean up event listener and timers
 	await apiClient.off("queue-updated");
-
-  // Clear the interval to stop polling
+	clearTimeout(debounceTimer);
 	if (intervalId) {
 		clearInterval(intervalId);
 	}

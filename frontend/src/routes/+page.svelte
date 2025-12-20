@@ -54,6 +54,13 @@ onMount(() => {
 		toastStore.error($t("common.common.error"), errMessage || "Upload failed");
 	});
 
+	// Listen for job permanent failure events
+	apiClient.on("job-error", (data) => {
+		const { fileName, error } = data as { fileName: string; error: string };
+		console.log("Job failed permanently:", fileName, error);
+		toastStore.error($t("dashboard.job_failed", { fileName }), error);
+	});
+
 	// Listen for job status events - the ProgressSection component now fetches progress directly
 	apiClient.on("queue-updated", () => {
 		// Refresh progress when queue is updated
@@ -239,7 +246,7 @@ async function handleUpload() {
 <div style="--wails-drop-target: drop">
   <!-- Drag and Drop Overlay -->
   {#if isDragOver}
-    <div class="drag-overlay">
+    <div class="drag-overlay" style="--wails-drop-target: drop">
       <div class="drag-overlay-content">
         <div class="drag-icon">
           <Plus class="w-16 h-16 text-white" />

@@ -16,16 +16,16 @@ func TestNewThrottle(t *testing.T) {
 
 	assert.Equal(t, rate, throttle.rate, "Rate should be initialized correctly")
 	assert.Equal(t, interval, throttle.interval, "Interval should be initialized correctly")
-	assert.False(t, throttle.lastTime.IsZero(), "LastTime should be initialized")
-	assert.False(t, throttle.disabled, "Throttle should not be disabled with positive rate")
+	assert.NotZero(t, throttle.lastTime.Load(), "LastTime should be initialized")
+	assert.False(t, throttle.disabled.Load(), "Throttle should not be disabled with positive rate")
 
 	// Test with rate 0 (disabled)
 	throttleDisabled := NewThrottle(0, interval)
-	assert.True(t, throttleDisabled.disabled, "Throttle should be disabled when rate is 0")
+	assert.True(t, throttleDisabled.disabled.Load(), "Throttle should be disabled when rate is 0")
 
 	// Test with negative rate (disabled)
 	throttleNegative := NewThrottle(-100, interval)
-	assert.True(t, throttleNegative.disabled, "Throttle should be disabled when rate is negative")
+	assert.True(t, throttleNegative.disabled.Load(), "Throttle should be disabled when rate is negative")
 }
 
 func TestThrottleWait(t *testing.T) {

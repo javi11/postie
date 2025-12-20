@@ -56,19 +56,11 @@ RUN --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
     CGO_ENABLED=1 GOOS=linux \
     go build -a -ldflags '-linkmode external -extldflags "-static"' -o postie-web cmd/web/main.go
 
-# Final stage - use Ubuntu base image
-ARG TARGETARCH
-FROM ubuntu:jammy
+# Final stage - use LinuxServer.io base image (has s6-overlay + PUID/PGID support)
+FROM ghcr.io/linuxserver/baseimage-ubuntu:jammy
 
-ARG DEBIAN_FRONTEND="noninteractive"
 ARG BUILD_DATE
 ARG VERSION
-ARG PUID=1000
-ARG PGID=1000
-
-# Set up environment variables for PUID and PGID
-ENV PUID=${PUID}
-ENV PGID=${PGID}
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -77,21 +69,15 @@ WORKDIR /app
 COPY --from=backend-builder /app/postie-web /app/postie-web
 COPY --from=frontend-builder /app/frontend/build ./frontend/build
 
-# Install required packages for runtime
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        wget \
-        ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
-
 # Make binary executable
 RUN chmod +x /app/postie-web
 
 # Copy s6-overlay service configuration
 COPY docker/root/ /
 
-# Create necessary directories
-RUN mkdir -p /config /watch /output
+# Create necessary directories and set ownership for abc user
+RUN mkdir -p /config /watch /output && \
+    chown -R abc:abc /app /config /watch /output
 
 # Set environment variables
 ENV PORT=8080
@@ -108,5 +94,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/live || exit 1
 
 LABEL org.opencontainers.image.source="https://github.com/javi11/postie"
-LABEL build_version="version: Build-date:- ${VERSION}  ${BUILD_DATE}"
+LABEL build_version="version: Build-date:- ${VERSION} ${BUILD_DATE}"
 LABEL maintainer="javi11"
+
+# Base image provides ENTRYPOINT ["/init"]

@@ -1,7 +1,7 @@
 {
 	"metrics": {
-		"title": "Métricas del Pool NNTP",
-		"description": "Métricas de rendimiento y conexión en tiempo real para tus servidores NNTP",
+		"title": "Métricas del Pool de Conexiones",
+		"description": "Métricas de rendimiento y conexión en tiempo real para tu pool de conexiones",
 		"auto_refresh": "Auto-actualizar",
 		"refresh": "Actualizar",
 		"error_loading": "Error al cargar métricas",
@@ -40,7 +40,9 @@
 		"data_transfer": "Transferencia de Datos",
 		"total_downloaded": "Total Descargado",
 		"total_uploaded": "Total Subido",
-		
+		"data_uploaded": "Datos Subidos",
+		"errors": "Errores",
+
 		"providers": "Proveedores NNTP",
 		"provider_host": "Host/Servidor",
 		"status": "Estado",

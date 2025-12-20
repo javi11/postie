@@ -19,8 +19,12 @@ func (a *App) initializeProcessor() error {
 		return fmt.Errorf("config not loaded")
 	}
 
-	// Stop previous processor if running
+	// Stop previous processor if running - properly close it first
 	if a.processor != nil {
+		slog.Info("Closing existing processor before reinitialization")
+		if err := a.processor.Close(); err != nil {
+			slog.Error("Error closing existing processor", "error", err)
+		}
 		a.processor = nil
 	}
 
@@ -75,6 +79,18 @@ func (a *App) initializeProcessor() error {
 		MaintainOriginalExtension: a.config.GetMaintainOriginalExtension(),
 		WatchFolder:               watcherCfg.WatchDirectory,
 		CanProcessNextItem:        a.canProcessNextItem,
+		OnJobError: func(fileName, errorMessage string) {
+			// Emit job-error event to notify UI about permanent failure
+			eventData := map[string]string{
+				"fileName": fileName,
+				"error":    errorMessage,
+			}
+			if !a.isWebMode {
+				runtime.EventsEmit(a.ctx, "job-error", eventData)
+			} else if a.webEventEmitter != nil {
+				a.webEventEmitter("job-error", eventData)
+			}
+		},
 	})
 
 	// Start processor

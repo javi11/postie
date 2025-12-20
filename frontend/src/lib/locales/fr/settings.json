@@ -142,6 +142,9 @@
 			"behavior_description": "Configurez comment les fichiers traités doivent être gérés",
 			"delete_original_file": "Supprimer les fichiers originaux après le téléchargement",
 			"delete_original_file_description": "Supprime définitivement les fichiers source du répertoire de surveillance après un téléchargement réussi. Utilisez avec prudence car cette action ne peut pas être annulée.",
+			"single_nzb_per_folder": "Un Seul NZB Par Dossier",
+			"single_nzb_per_folder_description": "Créer un NZB par dossier au lieu d'un NZB par fichier en mode surveillant. Lorsqu'activé, tous les fichiers d'un dossier seront combinés en un seul fichier NZB.",
+			"single_nzb_per_folder_info": "<strong>Mode Surveillant Uniquement :</strong> Lorsque le surveillant détecte des fichiers dans un dossier, crée un NZB nommé d'après le dossier contenant tous les fichiers (ex., 'dossier.nzb' avec 'sous-dossier/fichier1.mkv' et 'fichier2.mkv'). Note : Les téléchargements directs de dossiers via le bouton Ajouter Dossier créent toujours un seul NZB indépendamment de ce paramètre.",
 			"posting_schedule": "Planification de Publication",
 			"posting_schedule_description": "Définissez quand le surveillant peut publier des fichiers (format 24 heures)",
 			"time_range": "Plage de Temps",
@@ -236,9 +239,6 @@
 			"group_policy_description": "Comment distribuer les fichiers entre les groupes de nouvelles",
 			"wait_for_par2": "Attendre PAR2",
 			"wait_for_par2_description": "Attendre que les fichiers PAR2 soient créés avant de commencer le téléchargement",
-			"single_nzb_per_folder": "Un Seul NZB Par Dossier",
-			"single_nzb_per_folder_description": "Créer un NZB par dossier au lieu d'un NZB par fichier. Particulièrement utile pour les ensembles de fichiers organisés en dossiers.",
-			"single_nzb_per_folder_info": "<strong>Mode Surveillance :</strong> Crée un NZB nommé d'après le dossier contenant tous les fichiers avec les chemins relatifs préservés.<br><strong>Téléchargement Direct :</strong> Lors du téléchargement d'un dossier, crée un seul NZB pour tout le contenu du dossier.",
 			"obfuscation": {
 				"none": "Aucune",
 				"partial": "Partielle",
@@ -411,8 +411,13 @@
 				"cannot_disable_all": "Impossible de désactiver tous les fournisseurs. Au moins un doit rester actif."
 			},
 			"validation": {
-				"cannot_disable_last": "Impossible de désactiver le dernier fournisseur actif. Au moins un fournisseur doit rester activé."
+				"cannot_disable_last": "Impossible de désactiver le dernier fournisseur actif. Au moins un fournisseur doit rester activé.",
+				"cannot_set_all_check_only": "Impossible de configurer tous les fournisseurs en vérification uniquement. Au moins un fournisseur doit être disponible pour la publication."
 			},
+			"check_only": "Vérification Uniquement",
+			"check_only_description": "Utiliser ce fournisseur uniquement pour vérifier les articles téléchargés, pas pour publier",
+			"check_only_enabled_description": "Ce fournisseur vérifiera uniquement les articles, il ne les publiera pas",
+			"check_only_badge": "Vérif. Seule",
 			"validation_errors": {
 				"host_required": "Serveur {number} : L'hôte est requis",
 				"port_invalid": "Serveur {number} : Un numéro de port valide est requis (1-65535)"

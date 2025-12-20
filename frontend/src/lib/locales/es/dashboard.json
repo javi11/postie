@@ -5,6 +5,10 @@
 			"title": "Panel de Subidas",
 			"description": "Gestiona tus cargas de archivos y monitorea el progreso",
 			"add_files": "Agregar Archivos",
+			"add_folder": "Agregar Carpeta",
+			"add_folder_tooltip": "Subir una carpeta entera como un solo NZB",
+			"folder_added": "Carpeta Agregada",
+			"folder_added_description": "La carpeta ha sido agregada a la cola de carga",
 			"import_files": "Importar Archivos",
 			"import_files_tooltip": "Explorar e importar archivos desde el servidor remoto",
 			"clear_completed": "Limpiar Completados"
@@ -33,6 +37,10 @@
 			"updated_at": "Actualizado:",
 			"remove_from_queue": "Eliminar de la cola",
 			"items_per_page": "Elementos por página",
+			"filter_all": "Todos los estados",
+			"filter_pending": "Pendiente",
+			"filter_complete": "Completo",
+			"filter_error": "Error",
 			"showing": "Mostrando",
 			"to": "a",
 			"of": "de",
@@ -116,6 +124,7 @@
 			"auto_paused": "Procesamiento Pausado Automáticamente",
 			"settings_link": "Configuración"
 		},
+		"job_failed": "Subida fallida: {fileName}",
 		"file_explorer": {
 			"title": "Agregar Archivos del Servidor a la Cola",
 			"import_success": "Archivos agregados a la cola exitosamente"

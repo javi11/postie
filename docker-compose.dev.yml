@@ -1,13 +1,18 @@
+# Development docker-compose for building from source
+# Usage: docker compose -f docker-compose.dev.yml up --build
 services:
   postie:
-    container_name: postie
-    image: ghcr.io/javi11/postie:latest
+    container_name: postie-dev
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: postie:dev
     ports:
       - "8080:8080"
     volumes:
-      - ./config:/config
-      - ./watch:/watch
-      - ./output:/output
+      - ./example/config:/config
+      - ./example/watch:/watch
+      - ./example/output:/output
     environment:
       - PORT=8080
       - HOST=0.0.0.0

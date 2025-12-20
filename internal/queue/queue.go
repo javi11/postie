@@ -20,8 +20,9 @@ var _ QueueInterface = (*Queue)(nil)
 type PaginationParams struct {
 	Page   int    `json:"page"`   // 1-based page number
 	Limit  int    `json:"limit"`  // Items per page
-	SortBy string `json:"sortBy"` // Sort field: "created", "priority", "status", "filename"
+	SortBy string `json:"sortBy"` // Sort field: "created", "priority", "status", "filename", "size"
 	Order  string `json:"order"`  // Sort order: "asc", "desc"
+	Status string `json:"status"` // Status filter: "pending", "complete", "error", or "" for all
 }
 
 // PaginatedResult contains paginated queue items and metadata
@@ -66,6 +67,11 @@ type QueueItem struct {
 	UpdatedAt    time.Time  `json:"updatedAt"`
 	CompletedAt  *time.Time `json:"completedAt"`
 	NzbPath      *string    `json:"nzbPath"`
+	// Script execution tracking fields
+	ScriptStatus      *string    `json:"scriptStatus"`      // null, completed, pending_retry, failed_permanent
+	ScriptRetryCount  int        `json:"scriptRetryCount"`
+	ScriptLastError   *string    `json:"scriptLastError"`
+	ScriptNextRetryAt *time.Time `json:"scriptNextRetryAt"`
 }
 
 type FileJob struct {
@@ -77,14 +83,16 @@ type FileJob struct {
 }
 
 type CompletedItem struct {
-	ID          string    `json:"id"`
-	Path        string    `json:"path"`
-	Size        int64     `json:"size"`
-	Priority    int       `json:"priority"`
-	NzbPath     string    `json:"nzbPath"`
-	CreatedAt   time.Time `json:"createdAt"`
-	CompletedAt time.Time `json:"completedAt"`
-	JobData     []byte    `json:"jobData"`
+	ID                   string     `json:"id"`
+	Path                 string     `json:"path"`
+	Size                 int64      `json:"size"`
+	Priority             int        `json:"priority"`
+	NzbPath              string     `json:"nzbPath"`
+	CreatedAt            time.Time  `json:"createdAt"`
+	CompletedAt          time.Time  `json:"completedAt"`
+	JobData              []byte     `json:"jobData"`
+	ScriptRetryCount     int        `json:"scriptRetryCount"`     // Number of script retry attempts
+	ScriptFirstFailureAt *time.Time `json:"scriptFirstFailureAt"` // When the first script failure occurred
 }
 
 const (
@@ -308,27 +316,75 @@ func (q *Queue) GetQueueItems(params PaginationParams) (*PaginatedResult, error)
 	orderBy := q.buildOrderByClause(params.SortBy, params.Order)
 
 	var allItems []QueueItem
+	var err error
 	totalCount := 0
 
-	// Get total counts first
-	var activeCount, completedCount, erroredCount int
+	// Handle status filtering
+	switch params.Status {
+	case "pending":
+		// Only query pending items from goqite
+		err = q.db.QueryRow("SELECT COUNT(*) FROM goqite WHERE queue = 'file_jobs'").Scan(&totalCount)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get pending items count: %w", err)
+		}
+		if totalCount > 0 {
+			allItems, err = q.getPendingItemsPaginated(orderBy, offset, params.Limit)
+		}
+	case "complete":
+		// Only query completed items
+		err = q.db.QueryRow("SELECT COUNT(*) FROM completed_items").Scan(&totalCount)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get completed items count: %w", err)
+		}
+		if totalCount > 0 {
+			allItems, err = q.getCompletedItemsPaginatedWithSort(orderBy, offset, params.Limit)
+		}
+	case "error":
+		// Only query errored items
+		err = q.db.QueryRow("SELECT COUNT(*) FROM errored_items").Scan(&totalCount)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get errored items count: %w", err)
+		}
+		if totalCount > 0 {
+			allItems, err = q.getErroredItemsPaginatedWithSort(orderBy, offset, params.Limit)
+		}
+	default:
+		// No filter or "all" - query all tables
+		var activeCount, completedCount, erroredCount int
 
-	err := q.db.QueryRow("SELECT COUNT(*) FROM goqite WHERE queue = 'file_jobs'").Scan(&activeCount)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get active items count: %w", err)
+		err = q.db.QueryRow("SELECT COUNT(*) FROM goqite WHERE queue = 'file_jobs'").Scan(&activeCount)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get active items count: %w", err)
+		}
+
+		err = q.db.QueryRow("SELECT COUNT(*) FROM completed_items").Scan(&completedCount)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get completed items count: %w", err)
+		}
+
+		err = q.db.QueryRow("SELECT COUNT(*) FROM errored_items").Scan(&erroredCount)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get errored items count: %w", err)
+		}
+
+		totalCount = activeCount + completedCount + erroredCount
+
+		if totalCount > 0 {
+			// Get items based on sort order and pagination
+			switch params.SortBy {
+			case "status":
+				// When sorting by status, we need to merge results in order
+				allItems, err = q.getMergedItemsByStatus(params.Order, offset, params.Limit)
+			default:
+				// For other sort fields, get from union query
+				allItems, err = q.getMergedItemsPaginated(orderBy, offset, params.Limit)
+			}
+		}
 	}
 
-	err = q.db.QueryRow("SELECT COUNT(*) FROM completed_items").Scan(&completedCount)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get completed items count: %w", err)
+		return nil, err
 	}
-
-	err = q.db.QueryRow("SELECT COUNT(*) FROM errored_items").Scan(&erroredCount)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get errored items count: %w", err)
-	}
-
-	totalCount = activeCount + completedCount + erroredCount
 
 	// If no items, return empty result
 	if totalCount == 0 {
@@ -341,20 +397,6 @@ func (q *Queue) GetQueueItems(params PaginationParams) (*PaginatedResult, error)
 			HasNext:      false,
 			HasPrev:      false,
 		}, nil
-	}
-
-	// Get items based on sort order and pagination
-	switch params.SortBy {
-	case "status":
-		// When sorting by status, we need to merge results in order
-		allItems, err = q.getMergedItemsByStatus(params.Order, offset, params.Limit)
-	default:
-		// For other sort fields, get from union query
-		allItems, err = q.getMergedItemsPaginated(orderBy, offset, params.Limit)
-	}
-
-	if err != nil {
-		return nil, err
 	}
 
 	// Calculate pagination metadata
@@ -385,6 +427,8 @@ func (q *Queue) buildOrderByClause(sortBy, order string) string {
 		column = "file_name"
 	case "size":
 		column = "size"
+	case "status":
+		column = "status"
 	default:
 		column = "created_at"
 	}
@@ -401,11 +445,12 @@ func (q *Queue) buildOrderByClause(sortBy, order string) string {
 func (q *Queue) getMergedItemsPaginated(orderBy string, offset, limit int) ([]QueueItem, error) {
 	// Union query to get all items with unified sorting
 	query := fmt.Sprintf(`
-		SELECT id, path, size, priority, status, retry_count, error_message, 
-		       created_at, updated_at, completed_at, nzb_path, file_name
+		SELECT id, path, size, priority, status, retry_count, error_message,
+		       created_at, updated_at, completed_at, nzb_path, file_name,
+		       script_status, script_retry_count, script_last_error, script_next_retry_at
 		FROM (
 			-- Active queue items
-			SELECT id, 
+			SELECT id,
 				   json_extract(body, '$.path') as path,
 				   json_extract(body, '$.size') as size,
 				   json_extract(body, '$.priority') as priority,
@@ -416,29 +461,38 @@ func (q *Queue) getMergedItemsPaginated(orderBy string, offset, limit int) ([]Qu
 				   updated as updated_at,
 				   NULL as completed_at,
 				   NULL as nzb_path,
-				   json_extract(body, '$.path') as file_name
-			FROM goqite 
+				   json_extract(body, '$.path') as file_name,
+				   NULL as script_status,
+				   0 as script_retry_count,
+				   NULL as script_last_error,
+				   NULL as script_next_retry_at
+			FROM goqite
 			WHERE queue = 'file_jobs'
-			
+
 			UNION ALL
-			
+
 			-- Completed items
-			SELECT id, path, size, priority, 'complete' as status, 
+			SELECT id, path, size, priority, 'complete' as status,
 				   0 as retry_count, NULL as error_message,
 				   created_at, completed_at as updated_at, completed_at, nzb_path,
-				   path as file_name
+				   path as file_name,
+				   script_status, script_retry_count, script_last_error, script_next_retry_at
 			FROM completed_items
-			
+
 			UNION ALL
-			
+
 			-- Errored items
 			SELECT id, path, size, priority, 'error' as status,
-				   json_extract(job_data, '$.retryCount') as retry_count, 
-				   error_message, created_at, errored_at as updated_at, 
+				   json_extract(job_data, '$.retryCount') as retry_count,
+				   error_message, created_at, errored_at as updated_at,
 				   NULL as completed_at, NULL as nzb_path,
-				   path as file_name
+				   path as file_name,
+				   NULL as script_status,
+				   0 as script_retry_count,
+				   NULL as script_last_error,
+				   NULL as script_next_retry_at
 			FROM errored_items
-		) 
+		)
 		ORDER BY %s
 		LIMIT ? OFFSET ?`, orderBy)
 
@@ -454,12 +508,14 @@ func (q *Queue) getMergedItemsPaginated(orderBy string, offset, limit int) ([]Qu
 	for rows.Next() {
 		var item QueueItem
 		var completedAtStr, nzbPathStr, errorMsgStr sql.NullString
+		var scriptStatusStr, scriptLastErrorStr, scriptNextRetryAtStr sql.NullString
 		var createdAtStr, updatedAtStr string
 
 		err := rows.Scan(
 			&item.ID, &item.Path, &item.Size, &item.Priority, &item.Status,
 			&item.RetryCount, &errorMsgStr, &createdAtStr, &updatedAtStr,
 			&completedAtStr, &nzbPathStr, &item.FileName,
+			&scriptStatusStr, &item.ScriptRetryCount, &scriptLastErrorStr, &scriptNextRetryAtStr,
 		)
 		if err != nil {
 			continue // Skip invalid rows
@@ -477,6 +533,11 @@ func (q *Queue) getMergedItemsPaginated(orderBy string, offset, limit int) ([]Qu
 				item.CompletedAt = &completedTime
 			}
 		}
+		if scriptNextRetryAtStr.Valid {
+			if nextRetryTime, err := time.Parse("2006-01-02T15:04:05.000Z", scriptNextRetryAtStr.String); err == nil {
+				item.ScriptNextRetryAt = &nextRetryTime
+			}
+		}
 
 		// Set optional fields
 		if errorMsgStr.Valid {
@@ -484,6 +545,12 @@ func (q *Queue) getMergedItemsPaginated(orderBy string, offset, limit int) ([]Qu
 		}
 		if nzbPathStr.Valid {
 			item.NzbPath = &nzbPathStr.String
+		}
+		if scriptStatusStr.Valid {
+			item.ScriptStatus = &scriptStatusStr.String
+		}
+		if scriptLastErrorStr.Valid {
+			item.ScriptLastError = &scriptLastErrorStr.String
 		}
 
 		// Extract filename from path if needed
@@ -599,7 +666,8 @@ func (q *Queue) getActiveItemsPaginated(offset, limit int) ([]QueueItem, error) 
 
 func (q *Queue) getCompletedItemsPaginated(offset, limit int) ([]QueueItem, error) {
 	rows, err := q.db.Query(`
-		SELECT id, path, size, priority, nzb_path, created_at, completed_at
+		SELECT id, path, size, priority, nzb_path, created_at, completed_at,
+		       script_status, script_retry_count, script_last_error, script_next_retry_at
 		FROM completed_items
 		ORDER BY completed_at DESC
 		LIMIT ? OFFSET ?`, limit, offset)
@@ -613,10 +681,12 @@ func (q *Queue) getCompletedItemsPaginated(offset, limit int) ([]QueueItem, erro
 	var items []QueueItem
 	for rows.Next() {
 		var id, path, nzbPath, createdAt, completedAt string
+		var scriptStatusStr, scriptLastErrorStr, scriptNextRetryAtStr sql.NullString
 		var size int64
-		var priority int
+		var priority, scriptRetryCount int
 
-		if err := rows.Scan(&id, &path, &size, &priority, &nzbPath, &createdAt, &completedAt); err != nil {
+		if err := rows.Scan(&id, &path, &size, &priority, &nzbPath, &createdAt, &completedAt,
+			&scriptStatusStr, &scriptRetryCount, &scriptLastErrorStr, &scriptNextRetryAtStr); err != nil {
 			continue
 		}
 
@@ -624,17 +694,31 @@ func (q *Queue) getCompletedItemsPaginated(offset, limit int) ([]QueueItem, erro
 		completedTime, _ := time.Parse("2006-01-02T15:04:05.000Z", completedAt)
 
 		item := QueueItem{
-			ID:          id,
-			Path:        path,
-			FileName:    getFileName(path),
-			Size:        size,
-			Status:      StatusComplete,
-			RetryCount:  0,
-			Priority:    priority,
-			CreatedAt:   createdTime,
-			UpdatedAt:   completedTime,
-			CompletedAt: &completedTime,
-			NzbPath:     &nzbPath,
+			ID:               id,
+			Path:             path,
+			FileName:         getFileName(path),
+			Size:             size,
+			Status:           StatusComplete,
+			RetryCount:       0,
+			Priority:         priority,
+			CreatedAt:        createdTime,
+			UpdatedAt:        completedTime,
+			CompletedAt:      &completedTime,
+			NzbPath:          &nzbPath,
+			ScriptRetryCount: scriptRetryCount,
+		}
+
+		// Set optional script fields
+		if scriptStatusStr.Valid {
+			item.ScriptStatus = &scriptStatusStr.String
+		}
+		if scriptLastErrorStr.Valid {
+			item.ScriptLastError = &scriptLastErrorStr.String
+		}
+		if scriptNextRetryAtStr.Valid {
+			if nextRetryTime, err := time.Parse("2006-01-02T15:04:05.000Z", scriptNextRetryAtStr.String); err == nil {
+				item.ScriptNextRetryAt = &nextRetryTime
+			}
 		}
 
 		items = append(items, item)
@@ -649,6 +733,198 @@ func (q *Queue) getErroredItemsPaginated(offset, limit int) ([]QueueItem, error)
 		FROM errored_items
 		ORDER BY errored_at DESC
 		LIMIT ? OFFSET ?`, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	var items []QueueItem
+	for rows.Next() {
+		var id, path, errMsg, createdAt, erroredAt string
+		var size int64
+		var priority int
+		var jobData []byte
+
+		if err := rows.Scan(&id, &path, &size, &priority, &errMsg, &createdAt, &erroredAt, &jobData); err != nil {
+			continue
+		}
+
+		var job FileJob
+		if err := json.Unmarshal(jobData, &job); err != nil {
+			continue
+		}
+
+		createdTime, _ := time.Parse("2006-01-02T15:04:05.000Z", createdAt)
+		erroredTime, _ := time.Parse("2006-01-02T15:04:05.000Z", erroredAt)
+
+		item := QueueItem{
+			ID:           id,
+			Path:         path,
+			FileName:     getFileName(path),
+			Size:         size,
+			Status:       StatusError,
+			RetryCount:   job.RetryCount,
+			Priority:     priority,
+			ErrorMessage: &errMsg,
+			CreatedAt:    createdTime,
+			UpdatedAt:    erroredTime,
+		}
+
+		items = append(items, item)
+	}
+
+	return items, rows.Err()
+}
+
+// getPendingItemsPaginated gets pending items with custom sorting
+func (q *Queue) getPendingItemsPaginated(orderBy string, offset, limit int) ([]QueueItem, error) {
+	// Map column names for goqite table (which uses JSON body)
+	var sortColumn string
+	switch {
+	case orderBy == "created_at DESC" || orderBy == "created_at ASC":
+		sortColumn = orderBy
+	case orderBy == "size DESC":
+		sortColumn = "CAST(json_extract(body, '$.size') AS INTEGER) DESC"
+	case orderBy == "size ASC":
+		sortColumn = "CAST(json_extract(body, '$.size') AS INTEGER) ASC"
+	case orderBy == "priority DESC":
+		sortColumn = "CAST(json_extract(body, '$.priority') AS INTEGER) DESC"
+	case orderBy == "priority ASC":
+		sortColumn = "CAST(json_extract(body, '$.priority') AS INTEGER) ASC"
+	case orderBy == "file_name DESC":
+		sortColumn = "json_extract(body, '$.path') DESC"
+	case orderBy == "file_name ASC":
+		sortColumn = "json_extract(body, '$.path') ASC"
+	default:
+		sortColumn = "created DESC"
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, created, updated, body
+		FROM goqite
+		WHERE queue = 'file_jobs'
+		ORDER BY %s
+		LIMIT ? OFFSET ?`, sortColumn)
+
+	rows, err := q.db.Query(query, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	var items []QueueItem
+	for rows.Next() {
+		var id, created, updated string
+		var body []byte
+
+		if err := rows.Scan(&id, &created, &updated, &body); err != nil {
+			continue
+		}
+
+		var job FileJob
+		if err := json.Unmarshal(body, &job); err != nil {
+			continue
+		}
+
+		createdTime, _ := time.Parse("2006-01-02T15:04:05.000Z", created)
+		updatedTime, _ := time.Parse("2006-01-02T15:04:05.000Z", updated)
+
+		item := QueueItem{
+			ID:         id,
+			Path:       job.Path,
+			FileName:   getFileName(job.Path),
+			Size:       job.Size,
+			Status:     StatusPending,
+			RetryCount: job.RetryCount,
+			Priority:   job.Priority,
+			CreatedAt:  createdTime,
+			UpdatedAt:  updatedTime,
+		}
+
+		items = append(items, item)
+	}
+
+	return items, rows.Err()
+}
+
+// getCompletedItemsPaginatedWithSort gets completed items with custom sorting
+func (q *Queue) getCompletedItemsPaginatedWithSort(orderBy string, offset, limit int) ([]QueueItem, error) {
+	query := fmt.Sprintf(`
+		SELECT id, path, size, priority, nzb_path, created_at, completed_at,
+		       script_status, script_retry_count, script_last_error, script_next_retry_at
+		FROM completed_items
+		ORDER BY %s
+		LIMIT ? OFFSET ?`, orderBy)
+
+	rows, err := q.db.Query(query, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	var items []QueueItem
+	for rows.Next() {
+		var id, path, nzbPath, createdAt, completedAt string
+		var scriptStatusStr, scriptLastErrorStr, scriptNextRetryAtStr sql.NullString
+		var size int64
+		var priority, scriptRetryCount int
+
+		if err := rows.Scan(&id, &path, &size, &priority, &nzbPath, &createdAt, &completedAt,
+			&scriptStatusStr, &scriptRetryCount, &scriptLastErrorStr, &scriptNextRetryAtStr); err != nil {
+			continue
+		}
+
+		createdTime, _ := time.Parse("2006-01-02T15:04:05.000Z", createdAt)
+		completedTime, _ := time.Parse("2006-01-02T15:04:05.000Z", completedAt)
+
+		item := QueueItem{
+			ID:               id,
+			Path:             path,
+			FileName:         getFileName(path),
+			Size:             size,
+			Status:           StatusComplete,
+			RetryCount:       0,
+			Priority:         priority,
+			CreatedAt:        createdTime,
+			UpdatedAt:        completedTime,
+			CompletedAt:      &completedTime,
+			NzbPath:          &nzbPath,
+			ScriptRetryCount: scriptRetryCount,
+		}
+
+		if scriptStatusStr.Valid {
+			item.ScriptStatus = &scriptStatusStr.String
+		}
+		if scriptLastErrorStr.Valid {
+			item.ScriptLastError = &scriptLastErrorStr.String
+		}
+		if scriptNextRetryAtStr.Valid {
+			if nextRetryTime, err := time.Parse("2006-01-02T15:04:05.000Z", scriptNextRetryAtStr.String); err == nil {
+				item.ScriptNextRetryAt = &nextRetryTime
+			}
+		}
+
+		items = append(items, item)
+	}
+
+	return items, rows.Err()
+}
+
+// getErroredItemsPaginatedWithSort gets errored items with custom sorting
+func (q *Queue) getErroredItemsPaginatedWithSort(orderBy string, offset, limit int) ([]QueueItem, error) {
+	query := fmt.Sprintf(`
+		SELECT id, path, size, priority, error_message, created_at, errored_at, job_data
+		FROM errored_items
+		ORDER BY %s
+		LIMIT ? OFFSET ?`, orderBy)
+
+	rows, err := q.db.Query(query, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -1128,4 +1404,132 @@ func (q *Queue) RetryErroredJob(ctx context.Context, id string) error {
 	}
 
 	return nil
+}
+
+// UpdateScriptStatus updates the script execution status for a completed item.
+// If firstFailureAt is provided and it's the first failure (retryCount == 1), it will be recorded.
+func (q *Queue) UpdateScriptStatus(ctx context.Context, itemID string, status string, retryCount int, lastError string, nextRetryAt *time.Time, firstFailureAt *time.Time) error {
+	var nextRetryAtStr sql.NullString
+	if nextRetryAt != nil {
+		nextRetryAtStr = sql.NullString{String: nextRetryAt.Format("2006-01-02T15:04:05.000Z"), Valid: true}
+	}
+
+	var lastErrorStr sql.NullString
+	if lastError != "" {
+		lastErrorStr = sql.NullString{String: lastError, Valid: true}
+	}
+
+	var firstFailureAtStr sql.NullString
+	if firstFailureAt != nil {
+		firstFailureAtStr = sql.NullString{String: firstFailureAt.Format("2006-01-02T15:04:05.000Z"), Valid: true}
+	}
+
+	// Only set first_failure_at if it's provided and the column is currently NULL
+	_, err := q.db.ExecContext(ctx, `
+		UPDATE completed_items
+		SET script_status = ?,
+		    script_retry_count = ?,
+		    script_last_error = ?,
+		    script_next_retry_at = ?,
+		    script_first_failure_at = COALESCE(script_first_failure_at, ?)
+		WHERE id = ?
+	`, status, retryCount, lastErrorStr, nextRetryAtStr, firstFailureAtStr, itemID)
+
+	if err != nil {
+		return fmt.Errorf("failed to update script status: %w", err)
+	}
+
+	return nil
+}
+
+// MarkScriptCompleted marks the script execution as completed for a completed item
+func (q *Queue) MarkScriptCompleted(ctx context.Context, itemID string) error {
+	_, err := q.db.ExecContext(ctx, `
+		UPDATE completed_items
+		SET script_status = 'completed',
+		    script_last_error = NULL,
+		    script_next_retry_at = NULL,
+		    script_first_failure_at = NULL
+		WHERE id = ?
+	`, itemID)
+
+	if err != nil {
+		return fmt.Errorf("failed to mark script as completed: %w", err)
+	}
+
+	return nil
+}
+
+// MarkScriptFailed marks the script execution as permanently failed
+func (q *Queue) MarkScriptFailed(ctx context.Context, itemID string, lastError string) error {
+	_, err := q.db.ExecContext(ctx, `
+		UPDATE completed_items
+		SET script_status = 'failed_permanent',
+		    script_last_error = ?,
+		    script_next_retry_at = NULL
+		WHERE id = ?
+	`, lastError, itemID)
+
+	if err != nil {
+		return fmt.Errorf("failed to mark script as failed: %w", err)
+	}
+
+	return nil
+}
+
+// GetItemsForScriptRetry retrieves completed items that need script retry
+func (q *Queue) GetItemsForScriptRetry(ctx context.Context, limit int) ([]CompletedItem, error) {
+	now := time.Now().Format("2006-01-02T15:04:05.000Z")
+
+	rows, err := q.db.QueryContext(ctx, `
+		SELECT id, path, size, priority, nzb_path, created_at, completed_at, job_data,
+		       script_retry_count, script_last_error, script_next_retry_at, script_first_failure_at
+		FROM completed_items
+		WHERE script_status = 'pending_retry'
+		  AND (script_next_retry_at IS NULL OR script_next_retry_at <= ?)
+		ORDER BY script_next_retry_at ASC
+		LIMIT ?
+	`, now, limit)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to query items for script retry: %w", err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	var items []CompletedItem
+	for rows.Next() {
+		var item CompletedItem
+		var createdAtStr, completedAtStr, scriptLastErrorStr, scriptNextRetryAtStr, scriptFirstFailureAtStr sql.NullString
+
+		err := rows.Scan(
+			&item.ID, &item.Path, &item.Size, &item.Priority, &item.NzbPath,
+			&createdAtStr, &completedAtStr, &item.JobData,
+			&item.ScriptRetryCount, &scriptLastErrorStr, &scriptNextRetryAtStr, &scriptFirstFailureAtStr,
+		)
+		if err != nil {
+			continue
+		}
+
+		if createdAtStr.Valid {
+			if t, err := time.Parse("2006-01-02T15:04:05.000Z", createdAtStr.String); err == nil {
+				item.CreatedAt = t
+			}
+		}
+		if completedAtStr.Valid {
+			if t, err := time.Parse("2006-01-02T15:04:05.000Z", completedAtStr.String); err == nil {
+				item.CompletedAt = t
+			}
+		}
+		if scriptFirstFailureAtStr.Valid {
+			if t, err := time.Parse("2006-01-02T15:04:05.000Z", scriptFirstFailureAtStr.String); err == nil {
+				item.ScriptFirstFailureAt = &t
+			}
+		}
+
+		items = append(items, item)
+	}
+
+	return items, rows.Err()
 }

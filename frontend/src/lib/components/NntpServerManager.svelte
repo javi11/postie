@@ -104,8 +104,29 @@
         return;
       }
     }
-    
+
     localServers[index].enabled = enabled;
+    onServerFieldChange(index);
+  }
+
+  function onServerCheckOnlyChange(index: number, checkOnly: boolean): void {
+    // If trying to enable check_only, verify at least one posting server will remain
+    if (checkOnly) {
+      const postingServersCount = localServers.filter((s, i) => {
+        const isEnabled = s.enabled !== false;
+        const willBeCheckOnly = i === index ? true : (s.check_only === true);
+        return isEnabled && !willBeCheckOnly;
+      }).length;
+
+      if (postingServersCount < 1) {
+        toastStore.error($t("settings.server.validation.cannot_set_all_check_only"));
+        // Revert the change
+        localServers[index].check_only = false;
+        return;
+      }
+    }
+
+    localServers[index].check_only = checkOnly;
     onServerFieldChange(index);
   }
 
@@ -380,7 +401,7 @@
                       type="checkbox"
                       class="checkbox checkbox-primary"
                       checked={localServers[index].enabled !== false}
-                      onchange={(e) => onServerEnabledChange(index, e.target.checked)}
+                      onchange={(e) => onServerEnabledChange(index, (e.target as HTMLInputElement).checked)}
                     />
                     <label
                       for="server-enabled-{index}"
@@ -388,12 +409,72 @@
                     >
                       <span class="font-medium">{$t("settings.server.enabled")}</span>
                       <p class="text-sm opacity-70">
-                        {isEnabled 
+                        {isEnabled
                           ? $t("settings.server.enabled_description")
                           : $t("settings.server.disabled_description")
                         }
                       </p>
                     </label>
+                  </div>
+                </div>
+              {/if}
+
+              <!-- Check Only toggle - shown in both setup and settings -->
+              {#if variant === "settings"}
+                {@const isCheckOnly = localServers[index].check_only === true}
+                <div class="md:col-span-2">
+                  <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg {isCheckOnly ? 'border border-info' : ''}">
+                    <input
+                      id="server-check-only-{index}"
+                      type="checkbox"
+                      class="checkbox checkbox-info"
+                      checked={isCheckOnly}
+                      onchange={(e) => onServerCheckOnlyChange(index, (e.target as HTMLInputElement).checked)}
+                    />
+                    <label
+                      for="server-check-only-{index}"
+                      class="label-text cursor-pointer flex-1"
+                    >
+                      <span class="font-medium">{$t("settings.server.check_only")}</span>
+                      <p class="text-sm opacity-70">
+                        {isCheckOnly
+                          ? $t("settings.server.check_only_enabled_description")
+                          : $t("settings.server.check_only_description")
+                        }
+                      </p>
+                    </label>
+                    {#if isCheckOnly}
+                      <div class="badge badge-info badge-sm">
+                        {$t("settings.server.check_only_badge")}
+                      </div>
+                    {/if}
+                  </div>
+                </div>
+              {:else if variant === "setup"}
+                {@const isCheckOnly = localServers[index].check_only === true}
+                <div class="md:col-span-2">
+                  <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg {isCheckOnly ? 'border border-info' : ''}">
+                    <input
+                      id="server-check-only-{index}"
+                      type="checkbox"
+                      class="checkbox checkbox-info"
+                      checked={isCheckOnly}
+                      onchange={(e) => onServerCheckOnlyChange(index, (e.target as HTMLInputElement).checked)}
+                    />
+                    <label
+                      for="server-check-only-{index}"
+                      class="label-text cursor-pointer flex-1"
+                    >
+                      <span class="font-medium">{$t("settings.server.check_only")}</span>
+                      <p class="text-sm opacity-70">
+                        {$t("settings.server.check_only_description")}
+                      </p>
+                    </label>
+                    {#if isCheckOnly}
+                      <div class="badge badge-info badge-sm">
+                        {$t("settings.server.check_only_badge")}
+                      </div>
+                    {/if}
                   </div>
                 </div>
               {/if}

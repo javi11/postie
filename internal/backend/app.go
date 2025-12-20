@@ -9,11 +9,10 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/javi11/nntppool"
+	"github.com/javi11/nntppool/v2"
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/database"
 	"github.com/javi11/postie/internal/pool"
@@ -72,73 +71,28 @@ type ProcessorStatus struct {
 
 // NntpPoolMetrics represents NNTP connection pool metrics
 type NntpPoolMetrics struct {
-	Timestamp              string                `json:"timestamp"`
-	Uptime                 float64               `json:"uptime"`
-	ActiveConnections      int                   `json:"activeConnections"`
-	UploadSpeed            float64               `json:"uploadSpeed"`
-	CommandSuccessRate     float64               `json:"commandSuccessRate"`
-	ErrorRate              float64               `json:"errorRate"`
-	TotalAcquires          int64                 `json:"totalAcquires"`
-	TotalBytesUploaded     int64                 `json:"totalBytesUploaded"`
-	TotalArticlesRetrieved int64                 `json:"totalArticlesRetrieved"`
-	TotalArticlesPosted    int64                 `json:"totalArticlesPosted"`
-	AverageAcquireWaitTime float64               `json:"averageAcquireWaitTime"`
-	TotalErrors            int64                 `json:"totalErrors"`
-	Providers              []NntpProviderMetrics `json:"providers"`
-	// Daily and Weekly compressed metrics from nntppool v1.3.1+
-	DailyMetrics  *MetricSummary `json:"dailyMetrics,omitempty"`
-	WeeklyMetrics *MetricSummary `json:"weeklyMetrics,omitempty"`
-}
-
-// MetricSummary represents aggregated metrics for a time period
-type MetricSummary struct {
-	StartTime                 string  `json:"startTime"`
-	EndTime                   string  `json:"endTime"`
-	TotalConnectionsCreated   int64   `json:"totalConnectionsCreated"`
-	TotalConnectionsDestroyed int64   `json:"totalConnectionsDestroyed"`
-	TotalAcquires             int64   `json:"totalAcquires"`
-	TotalReleases             int64   `json:"totalReleases"`
-	TotalErrors               int64   `json:"totalErrors"`
-	TotalRetries              int64   `json:"totalRetries"`
-	TotalAcquireWaitTime      int64   `json:"totalAcquireWaitTime"`
-	TotalBytesDownloaded      int64   `json:"totalBytesDownloaded"`
-	TotalBytesUploaded        int64   `json:"totalBytesUploaded"`
-	TotalArticlesRetrieved    int64   `json:"totalArticlesRetrieved"`
-	TotalArticlesPosted       int64   `json:"totalArticlesPosted"`
-	TotalCommandCount         int64   `json:"totalCommandCount"`
-	TotalCommandErrors        int64   `json:"totalCommandErrors"`
-	AverageConnectionsPerHour float64 `json:"averageConnectionsPerHour"`
-	AverageErrorRate          float64 `json:"averageErrorRate"`
-	AverageSuccessRate        float64 `json:"averageSuccessRate"`
-	AverageAcquireWaitTime    int64   `json:"averageAcquireWaitTime"`
-	WindowCount               int     `json:"windowCount"`
-}
-
-// CompressedMetrics represents compressed historical metrics for daily/weekly periods (legacy)
-type CompressedMetrics struct {
-	Timestamp           string  `json:"timestamp"`
-	Period              string  `json:"period"` // "daily" or "weekly"
-	TotalBytesUploaded  int64   `json:"totalBytesUploaded"`
-	TotalArticlesPosted int64   `json:"totalArticlesPosted"`
-	AverageUploadSpeed  float64 `json:"averageUploadSpeed"`
-	AverageSuccessRate  float64 `json:"averageSuccessRate"`
-	TotalErrors         int64   `json:"totalErrors"`
-	AverageConnections  float64 `json:"averageConnections"`
+	Timestamp               string                `json:"timestamp"`
+	ActiveConnections       int                   `json:"activeConnections"`
+	TotalBytesUploaded      int64                 `json:"totalBytesUploaded"`
+	TotalBytesDownloaded    int64                 `json:"totalBytesDownloaded"`
+	TotalArticlesPosted     int64                 `json:"totalArticlesPosted"`
+	TotalArticlesDownloaded int64                 `json:"totalArticlesDownloaded"`
+	TotalErrors             int64                 `json:"totalErrors"`
+	ProviderErrors          map[string]int64      `json:"providerErrors"`
+	Providers               []NntpProviderMetrics `json:"providers"`
 }
 
 // NntpProviderMetrics represents metrics for individual NNTP providers
 type NntpProviderMetrics struct {
-	Host                 string  `json:"host"`
-	Username             string  `json:"username"`
-	State                string  `json:"state"`
-	TotalConnections     int     `json:"totalConnections"`
-	MaxConnections       int     `json:"maxConnections"`
-	AcquiredConnections  int     `json:"acquiredConnections"`
-	IdleConnections      int     `json:"idleConnections"`
-	TotalBytesUploaded   int64   `json:"totalBytesUploaded"`
-	TotalArticlesPosted  int64   `json:"totalArticlesPosted"`
-	SuccessRate          float64 `json:"successRate"`
-	AverageConnectionAge float64 `json:"averageConnectionAge"`
+	Host                    string `json:"host"`
+	State                   string `json:"state"`
+	ActiveConnections       int    `json:"activeConnections"`
+	MaxConnections          int    `json:"maxConnections"`
+	TotalBytesUploaded      int64  `json:"totalBytesUploaded"`
+	TotalBytesDownloaded    int64  `json:"totalBytesDownloaded"`
+	TotalArticlesPosted     int64  `json:"totalArticlesPosted"`
+	TotalArticlesDownloaded int64  `json:"totalArticlesDownloaded"`
+	TotalErrors             int64  `json:"totalErrors"`
 }
 
 // App struct for the Wails application
@@ -157,11 +111,36 @@ type App struct {
 	procCtx              context.Context
 	procCancel           context.CancelFunc
 	criticalErrorMessage string
+	loggingError         string // Error message if file logging setup failed
+	actualLogPath        string // The actual log path being used (may differ from appPaths.Log if fallback was used)
 	isWebMode            bool
 	webEventEmitter      func(eventType string, data interface{})
 	firstStart           bool
 	pendingConfig        *config.ConfigData
 	pendingConfigMux     sync.RWMutex
+}
+
+// getCrashLogPath returns the path for crash logs
+// It tries to use the app's data directory, falling back to temp directory or current directory
+func getCrashLogPath(appPaths *AppPaths) string {
+	// Try to use the app's data directory first
+	if appPaths != nil && appPaths.Data != "" {
+		crashPath := filepath.Join(appPaths.Data, "postie_crash.log")
+		// Verify the directory is writable
+		if _, err := verifyLogDirectory(crashPath); err == nil {
+			return crashPath
+		}
+	}
+
+	// Try temp directory as fallback
+	tempDir := os.TempDir()
+	tempPath := filepath.Join(tempDir, "postie", "postie_crash.log")
+	if err := os.MkdirAll(filepath.Dir(tempPath), 0755); err == nil {
+		return tempPath
+	}
+
+	// Last resort: current directory
+	return "postie_crash.log"
 }
 
 // recoverPanic handles panic recovery with logging
@@ -179,8 +158,10 @@ func (a *App) recoverPanic(methodName string) {
 		}
 
 		// Write to crash log file for debugging, especially useful on Windows
-		if crashFile, err := os.OpenFile("postie_backend_crash.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		crashLogPath := getCrashLogPath(a.appPaths)
+		if crashFile, err := os.OpenFile(crashLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
 			_, _ = fmt.Fprintf(crashFile, "=== POSTIE BACKEND PANIC ===\n")
+			_, _ = fmt.Fprintf(crashFile, "Time: %s\n", time.Now().Format(time.RFC3339))
 			_, _ = fmt.Fprintf(crashFile, "Method: %s\n", methodName)
 			_, _ = fmt.Fprintf(crashFile, "OS: %s\n", runtime.GOOS)
 			_, _ = fmt.Fprintf(crashFile, "Arch: %s\n", runtime.GOARCH)
@@ -193,21 +174,73 @@ func (a *App) recoverPanic(methodName string) {
 	}
 }
 
-// setupLogging configures logging with Windows-specific optimizations
-func setupLogging(logPath string) error {
-	// Ensure log directory exists with proper permissions
+// verifyLogDirectory checks if the log directory is writable
+// Returns the verified log path, or an alternative path if the original fails
+func verifyLogDirectory(logPath string) (string, error) {
 	logDir := filepath.Dir(logPath)
+
+	// Ensure log directory exists
 	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return fmt.Errorf("failed to create log directory: %w", err)
+		return "", fmt.Errorf("failed to create log directory %s: %w", logDir, err)
+	}
+
+	// Test write permissions by creating a temporary file
+	testFile := filepath.Join(logDir, ".postie_write_test")
+	f, err := os.Create(testFile)
+	if err != nil {
+		return "", fmt.Errorf("log directory %s is not writable: %w", logDir, err)
+	}
+
+	// Write a small amount of data to verify actual write capability
+	if _, err := f.WriteString("test"); err != nil {
+		_ = f.Close()
+		_ = os.Remove(testFile)
+		return "", fmt.Errorf("failed to write to log directory %s: %w", logDir, err)
+	}
+
+	_ = f.Close()
+	_ = os.Remove(testFile)
+
+	return logPath, nil
+}
+
+// getFallbackLogPath returns a fallback log path using the system temp directory
+func getFallbackLogPath() string {
+	tempDir := os.TempDir()
+	return filepath.Join(tempDir, "postie", "postie.log")
+}
+
+// setupLogging configures logging with Windows-specific optimizations
+// Returns the actual log path being used (may differ from input if fallback was needed) and any error
+func setupLogging(logPath string) (string, error) {
+	// Verify the log directory is writable
+	verifiedPath, err := verifyLogDirectory(logPath)
+	if err != nil {
+		// Try fallback to temp directory
+		slog.Warn("Primary log directory not writable, trying fallback",
+			"originalPath", logPath,
+			"error", err)
+
+		fallbackPath := getFallbackLogPath()
+		verifiedPath, err = verifyLogDirectory(fallbackPath)
+		if err != nil {
+			return "", fmt.Errorf("neither primary nor fallback log directory is writable: primary=%s, fallback=%s: %w",
+				logPath, fallbackPath, err)
+		}
+
+		slog.Info("Using fallback log path", "path", verifiedPath)
 	}
 
 	// Configure lumberjack with Windows-optimized settings
+	// Disable compression on Windows to avoid file locking issues during rotation
+	compress := runtime.GOOS != "windows"
+
 	logFile := &lumberjack.Logger{
-		Filename:   logPath,
+		Filename:   verifiedPath,
 		MaxSize:    5, // megabytes
 		MaxBackups: 3,
 		MaxAge:     28, // days
-		Compress:   true,
+		Compress:   compress,
 	}
 
 	multiWriter := io.MultiWriter(os.Stdout, logFile)
@@ -217,14 +250,18 @@ func setupLogging(logPath string) error {
 	slog.SetDefault(logger)
 
 	slog.Info("Logging initialized successfully",
-		"logPath", logPath,
-		"os", runtime.GOOS)
+		"logPath", verifiedPath,
+		"os", runtime.GOOS,
+		"compression", compress)
 
-	return nil
+	return verifiedPath, nil
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
+	var loggingError string
+	var actualLogPath string
+
 	// Get OS-specific paths
 	appPaths, err := GetAppPaths()
 	if err != nil {
@@ -240,12 +277,14 @@ func NewApp() *App {
 	}
 
 	// Setup logging with Windows-specific optimizations
-	if err := setupLogging(appPaths.Log); err != nil {
+	actualLogPath, err = setupLogging(appPaths.Log)
+	if err != nil {
 		// Fallback to basic stdout logging if file logging fails
 		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 			Level: slog.LevelDebug,
 		}))
 		slog.SetDefault(logger)
+		loggingError = fmt.Sprintf("File logging unavailable: %v", err)
 		slog.Error("Failed to setup file logging, using stdout only", "error", err)
 	}
 
@@ -254,12 +293,15 @@ func NewApp() *App {
 		"database", appPaths.Database,
 		"par2", appPaths.Par2,
 		"data", appPaths.Data,
-		"log", appPaths.Log)
+		"log", appPaths.Log,
+		"actualLogPath", actualLogPath)
 
 	return &App{
-		configPath: appPaths.Config,
-		appPaths:   appPaths,
-		isWebMode:  false,
+		configPath:    appPaths.Config,
+		appPaths:      appPaths,
+		loggingError:  loggingError,
+		actualLogPath: actualLogPath,
+		isWebMode:     false,
 	}
 }
 
@@ -415,23 +457,41 @@ func (a *App) GetAppStatus() AppStatus {
 
 // GetLoggingStatus returns information about logging configuration
 func (a *App) GetLoggingStatus() map[string]interface{} {
+	// Determine the actual log path being used
+	logPath := a.actualLogPath
+	if logPath == "" {
+		logPath = a.appPaths.Log
+	}
+
 	status := map[string]interface{}{
-		"logPath":    a.appPaths.Log,
-		"os":         runtime.GOOS,
-		"canWrite":   false,
-		"fileExists": false,
-		"error":      "",
+		"configuredLogPath": a.appPaths.Log,            // The originally configured path
+		"actualLogPath":     logPath,                   // The actual path being used (may be fallback)
+		"usingFallback":     logPath != a.appPaths.Log, // True if using a fallback path
+		"os":                runtime.GOOS,
+		"canWrite":          false,
+		"fileExists":        false,
+		"fileLoggingActive": a.loggingError == "", // True if file logging is working
+		"error":             a.loggingError,       // Any error from logging setup
 	}
 
 	// Check if log file exists
-	if _, err := os.Stat(a.appPaths.Log); err == nil {
+	if _, err := os.Stat(logPath); err == nil {
 		status["fileExists"] = true
+
+		// Get file info for additional details
+		if info, err := os.Stat(logPath); err == nil {
+			status["fileSize"] = info.Size()
+			status["lastModified"] = info.ModTime().Format(time.RFC3339)
+		}
 	}
 
-	// Test write permissions
-	testFile := filepath.Join(filepath.Dir(a.appPaths.Log), ".write_test")
+	// Test current write permissions
+	logDir := filepath.Dir(logPath)
+	testFile := filepath.Join(logDir, ".write_test")
 	if f, err := os.Create(testFile); err != nil {
-		status["error"] = fmt.Sprintf("Cannot write to log directory: %v", err)
+		if status["error"] == "" {
+			status["error"] = fmt.Sprintf("Cannot write to log directory: %v", err)
+		}
 	} else {
 		_ = f.Close()
 		_ = os.Remove(testFile)
@@ -504,13 +564,29 @@ func (a *App) RetryJob(id string) error {
 	return nil
 }
 
-// Helper function to get keys from map
-func getKeys(m map[string]bool) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
+// RetryScript manually retries a failed post-upload script execution
+func (a *App) RetryScript(id string) error {
+	defer a.recoverPanic("RetryScript")
+
+	if a.queue == nil {
+		return fmt.Errorf("queue is not available")
 	}
-	return keys
+
+	// Reset the script status to pending_retry with immediate retry
+	// Pass nil for firstFailureAt to preserve existing value (if any) or set it on first failure
+	nextRetry := time.Now()
+	if err := a.queue.UpdateScriptStatus(a.ctx, id, "pending_retry", 0, "", &nextRetry, nil); err != nil {
+		return fmt.Errorf("failed to reset script status: %w", err)
+	}
+
+	// Emit events for both desktop and web modes
+	if !a.isWebMode {
+		wailsruntime.EventsEmit(a.ctx, "queue:updated")
+	} else if a.webEventEmitter != nil {
+		a.webEventEmitter("queue:updated", nil)
+	}
+
+	return nil
 }
 
 // GetLogs returns the content of the log file.
@@ -526,9 +602,15 @@ func (a *App) GetLogs() (string, error) {
 func (a *App) GetLogsPaginated(limit, offset int) (string, error) {
 	defer a.recoverPanic("GetLogsPaginated")
 
-	file, err := os.Open(a.appPaths.Log)
+	// Use actual log path if available (may differ from configured path if using fallback)
+	logPath := a.actualLogPath
+	if logPath == "" {
+		logPath = a.appPaths.Log
+	}
+
+	file, err := os.Open(logPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to open log file: %w", err)
+		return "", fmt.Errorf("failed to open log file at %s: %w", logPath, err)
 	}
 	defer func() {
 		if err := file.Close(); err != nil {
@@ -559,68 +641,7 @@ func (a *App) GetLogsPaginated(limit, offset int) (string, error) {
 	}
 
 	// New paginated behavior
-	return a.readLogLines(file, limit, offset)
-}
-
-// readLogLines reads lines from the log file with pagination
-func (a *App) readLogLines(file *os.File, limit, offset int) (string, error) {
-	// For very large files (>10MB), we should optimize this
-	// For now, we'll read the entire file for simplicity
-	content, err := io.ReadAll(file)
-	if err != nil {
-		return "", fmt.Errorf("failed to read log file: %w", err)
-	}
-
-	if len(content) == 0 {
-		return "", nil
-	}
-
-	// Split into lines
-	lines := strings.Split(string(content), "\n")
-
-	// Remove empty last line if it exists (common with newline-terminated files)
-	if len(lines) > 0 && lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
-
-	totalLines := len(lines)
-	if totalLines == 0 {
-		return "", nil
-	}
-
-	// Validate parameters
-	if offset < 0 {
-		offset = 0
-	}
-	if limit <= 0 {
-		return "", fmt.Errorf("limit must be positive")
-	}
-
-	// Calculate start and end indices
-	// We want the most recent lines, so we work backwards from the end
-	endIndex := totalLines - offset
-	if endIndex <= 0 {
-		return "", nil // No lines to return
-	}
-
-	startIndex := endIndex - limit
-	if startIndex < 0 {
-		startIndex = 0
-	}
-
-	// Ensure we don't go out of bounds
-	if startIndex >= totalLines {
-		return "", nil
-	}
-	if endIndex > totalLines {
-		endIndex = totalLines
-	}
-
-	// Get the requested lines
-	requestedLines := lines[startIndex:endIndex]
-
-	// Join with newlines and return
-	return strings.Join(requestedLines, "\n"), nil
+	return readLogLines(file, limit, offset)
 }
 
 // NavigateToSettings emits an event to navigate to the settings page
@@ -639,37 +660,6 @@ func (a *App) NavigateToDashboard() {
 	} else if a.webEventEmitter != nil {
 		a.webEventEmitter("navigate-to-dashboard", nil)
 	}
-}
-
-// processDirectoryRecursively processes a directory and returns collected files grouped by folder
-func (a *App) processDirectoryRecursively(dirPath string) (map[string][]string, map[string]int64, error) {
-	filesByFolder := make(map[string][]string)
-	sizeByFolder := make(map[string]int64)
-
-	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			slog.Warn("Error walking directory", "path", path, "error", err)
-			return nil // Continue processing other files
-		}
-
-		// Skip directories
-		if info.IsDir() {
-			return nil
-		}
-
-		// Get the parent directory
-		folderPath := filepath.Dir(path)
-
-		// Add file to the folder's file list
-		filesByFolder[folderPath] = append(filesByFolder[folderPath], path)
-		sizeByFolder[folderPath] += info.Size()
-
-		slog.Debug("Found file in directory", "file", path, "folder", folderPath, "size", info.Size())
-
-		return nil
-	})
-
-	return filesByFolder, sizeByFolder, err
 }
 
 // HandleDroppedFiles processes files that are dropped onto the application window
@@ -702,9 +692,9 @@ func (a *App) HandleDroppedFiles(filePaths []string) error {
 			// Handle directories by processing them as single NZB units
 			if info.IsDir() {
 				slog.Info("Processing dropped directory", "path", filePath)
-				
+
 				// Process directory recursively to collect files
-				filesByFolder, sizeByFolder, err := a.processDirectoryRecursively(filePath)
+				filesByFolder, sizeByFolder, err := processDirectoryRecursively(filePath)
 				if err != nil {
 					slog.Error("Error processing directory", "path", filePath, "error", err)
 					continue
@@ -768,45 +758,6 @@ func (a *App) HandleDroppedFiles(filePaths []string) error {
 	}
 
 	return fmt.Errorf("queue not initialized")
-}
-
-// determineFirstStart checks if this is the first time the application is being run
-// This must be called BEFORE any config creation
-func (a *App) determineFirstStart() bool {
-	// Check if config file exists
-	if _, err := os.Stat(a.configPath); os.IsNotExist(err) {
-		slog.Info("Config file does not exist, treating as first start", "configPath", a.configPath)
-		return true
-	}
-
-	// If config file exists, try to load it to check if it has meaningful content
-	cfg, err := config.Load(a.configPath)
-	if err != nil {
-		slog.Info("Config file exists but cannot be loaded, treating as first start", "error", err)
-		return true
-	}
-
-	// Check if config has any configured servers with actual host values
-	hasValidServers := false
-	for _, server := range cfg.Servers {
-		if server.Host != "" {
-			hasValidServers = true
-			break
-		}
-	}
-
-	if !hasValidServers {
-		slog.Info("Config file exists but has no valid servers, treating as first start")
-		return true
-	}
-
-	slog.Info("Config file exists with valid servers, not first start")
-	return false
-}
-
-// isFirstStart returns whether this is the first time the application is being run
-func (a *App) isFirstStart() bool {
-	return a.firstStart
 }
 
 // SetupWizardComplete saves the configuration from the setup wizard
@@ -881,7 +832,7 @@ func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 	slog.Info("Saving setup wizard configuration", "configPath", a.configPath)
 	if err := a.SaveConfig(&cfg); err != nil {
 		slog.Error("Failed to save setup wizard configuration", "error", err, "configPath", a.configPath)
-		return fmt.Errorf("failed to save configuration: %w", err)
+		return a.wrapSaveConfigError(err)
 	}
 
 	// Mark as no longer first start since setup is complete
@@ -1030,18 +981,15 @@ func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 
 	// Default empty metrics if no pool available
 	emptyMetrics := NntpPoolMetrics{
-		Timestamp:              time.Now().Format(time.RFC3339),
-		Uptime:                 0,
-		ActiveConnections:      0,
-		UploadSpeed:            0,
-		CommandSuccessRate:     0,
-		ErrorRate:              0,
-		TotalAcquires:          0,
-		TotalBytesUploaded:     0,
-		TotalArticlesRetrieved: 0,
-		AverageAcquireWaitTime: 0,
-		TotalErrors:            0,
-		Providers:              []NntpProviderMetrics{},
+		Timestamp:               time.Now().Format(time.RFC3339),
+		ActiveConnections:       0,
+		TotalBytesUploaded:      0,
+		TotalBytesDownloaded:    0,
+		TotalArticlesPosted:     0,
+		TotalArticlesDownloaded: 0,
+		TotalErrors:             0,
+		ProviderErrors:          make(map[string]int64),
+		Providers:               []NntpProviderMetrics{},
 	}
 
 	// Get metrics from the connection pool manager
@@ -1057,96 +1005,64 @@ func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 		return emptyMetrics, fmt.Errorf("failed to get pool metrics: %w", err)
 	}
 
+	// Sum active connections from all providers
+	activeConnections := 0
+	for _, provider := range snapshot.ProviderMetrics {
+		activeConnections += provider.ActiveConnections
+	}
+
 	// Convert pool metrics to our metrics structure
 	metrics := NntpPoolMetrics{
-		Timestamp:              snapshot.Timestamp.Format(time.RFC3339),
-		Uptime:                 snapshot.Uptime.Seconds(),
-		ActiveConnections:      int(snapshot.ActiveConnections),
-		UploadSpeed:            snapshot.UploadSpeed,
-		CommandSuccessRate:     snapshot.CommandSuccessRate,
-		ErrorRate:              snapshot.ErrorRate,
-		TotalAcquires:          snapshot.TotalAcquires,
-		TotalBytesUploaded:     snapshot.TotalBytesUploaded,
-		TotalArticlesRetrieved: snapshot.TotalArticlesRetrieved,
-		AverageAcquireWaitTime: float64(snapshot.AverageAcquireWaitTime.Milliseconds()), // Convert to milliseconds
-		TotalErrors:            snapshot.TotalErrors,
-		TotalArticlesPosted:    snapshot.TotalArticlesPosted,
+		Timestamp:               snapshot.Timestamp.Format(time.RFC3339),
+		ActiveConnections:       activeConnections,
+		TotalBytesUploaded:      snapshot.BytesUploaded,
+		TotalBytesDownloaded:    snapshot.BytesDownloaded,
+		TotalArticlesPosted:     snapshot.ArticlesPosted,
+		TotalArticlesDownloaded: snapshot.ArticlesDownloaded,
+		TotalErrors:             snapshot.TotalErrors,
+		ProviderErrors:          snapshot.ProviderErrors,
 	}
 
-	// Convert daily summary directly from snapshot.DailySummary
-	if snapshot.DailySummary != nil {
-		metrics.DailyMetrics = &MetricSummary{
-			StartTime:                 snapshot.DailySummary.StartTime.Format(time.RFC3339),
-			EndTime:                   snapshot.DailySummary.EndTime.Format(time.RFC3339),
-			TotalConnectionsCreated:   snapshot.DailySummary.TotalConnectionsCreated,
-			TotalConnectionsDestroyed: snapshot.DailySummary.TotalConnectionsDestroyed,
-			TotalAcquires:             snapshot.DailySummary.TotalAcquires,
-			TotalReleases:             snapshot.DailySummary.TotalReleases,
-			TotalErrors:               snapshot.DailySummary.TotalErrors,
-			TotalRetries:              snapshot.DailySummary.TotalRetries,
-			TotalAcquireWaitTime:      snapshot.DailySummary.TotalAcquireWaitTime,
-			TotalBytesDownloaded:      snapshot.DailySummary.TotalBytesDownloaded,
-			TotalBytesUploaded:        snapshot.DailySummary.TotalBytesUploaded,
-			TotalArticlesRetrieved:    snapshot.DailySummary.TotalArticlesRetrieved,
-			TotalArticlesPosted:       snapshot.DailySummary.TotalArticlesPosted,
-			TotalCommandCount:         snapshot.DailySummary.TotalCommandCount,
-			TotalCommandErrors:        snapshot.DailySummary.TotalCommandErrors,
-			AverageConnectionsPerHour: snapshot.DailySummary.AverageConnectionsPerHour,
-			AverageErrorRate:          snapshot.DailySummary.AverageErrorRate,
-			AverageSuccessRate:        snapshot.DailySummary.AverageSuccessRate,
-			AverageAcquireWaitTime:    snapshot.DailySummary.AverageAcquireWaitTime,
-			WindowCount:               snapshot.DailySummary.WindowCount,
-		}
-	}
-
-	// Convert weekly summary directly from snapshot.WeeklySummary
-	if snapshot.WeeklySummary != nil {
-		metrics.WeeklyMetrics = &MetricSummary{
-			StartTime:                 snapshot.WeeklySummary.StartTime.Format(time.RFC3339),
-			EndTime:                   snapshot.WeeklySummary.EndTime.Format(time.RFC3339),
-			TotalConnectionsCreated:   snapshot.WeeklySummary.TotalConnectionsCreated,
-			TotalConnectionsDestroyed: snapshot.WeeklySummary.TotalConnectionsDestroyed,
-			TotalAcquires:             snapshot.WeeklySummary.TotalAcquires,
-			TotalReleases:             snapshot.WeeklySummary.TotalReleases,
-			TotalErrors:               snapshot.WeeklySummary.TotalErrors,
-			TotalRetries:              snapshot.WeeklySummary.TotalRetries,
-			TotalAcquireWaitTime:      snapshot.WeeklySummary.TotalAcquireWaitTime,
-			TotalBytesDownloaded:      snapshot.WeeklySummary.TotalBytesDownloaded,
-			TotalBytesUploaded:        snapshot.WeeklySummary.TotalBytesUploaded,
-			TotalArticlesRetrieved:    snapshot.WeeklySummary.TotalArticlesRetrieved,
-			TotalArticlesPosted:       snapshot.WeeklySummary.TotalArticlesPosted,
-			TotalCommandCount:         snapshot.WeeklySummary.TotalCommandCount,
-			TotalCommandErrors:        snapshot.WeeklySummary.TotalCommandErrors,
-			AverageConnectionsPerHour: snapshot.WeeklySummary.AverageConnectionsPerHour,
-			AverageErrorRate:          snapshot.WeeklySummary.AverageErrorRate,
-			AverageSuccessRate:        snapshot.WeeklySummary.AverageSuccessRate,
-			AverageAcquireWaitTime:    snapshot.WeeklySummary.AverageAcquireWaitTime,
-			WindowCount:               snapshot.WeeklySummary.WindowCount,
-		}
-	}
-
-	// Convert provider metrics
-	providers := make([]NntpProviderMetrics, len(snapshot.ProviderMetrics))
-	for i, provider := range snapshot.ProviderMetrics {
-		providers[i] = NntpProviderMetrics{
-			Host:                 provider.Host,
-			Username:             provider.Username,
-			State:                provider.State.String(),
-			TotalConnections:     int(provider.TotalConnections),    // Convert int32 to int
-			MaxConnections:       int(provider.MaxConnections),      // Convert int32 to int
-			AcquiredConnections:  int(provider.AcquiredConnections), // Convert int32 to int
-			IdleConnections:      int(provider.IdleConnections),     // Convert int32 to int
-			TotalBytesUploaded:   provider.TotalBytesUploaded,
-			SuccessRate:          provider.SuccessRate,
-			AverageConnectionAge: provider.AverageConnectionAge.Seconds(),
-			TotalArticlesPosted:  provider.TotalArticlesPosted,
-		}
+	// Convert provider metrics from map to array
+	providers := make([]NntpProviderMetrics, 0, len(snapshot.ProviderMetrics))
+	for _, provider := range snapshot.ProviderMetrics {
+		providers = append(providers, NntpProviderMetrics{
+			Host:                    provider.Host,
+			State:                   provider.State,
+			ActiveConnections:       provider.ActiveConnections,
+			MaxConnections:          provider.MaxConnections,
+			TotalBytesUploaded:      provider.BytesUploaded,
+			TotalBytesDownloaded:    provider.BytesDownloaded,
+			TotalArticlesPosted:     provider.ArticlesPosted,
+			TotalArticlesDownloaded: provider.ArticlesDownloaded,
+			TotalErrors:             provider.TotalErrors,
+		})
 	}
 	metrics.Providers = providers
 
-	slog.Debug("Retrieved NNTP pool metrics successfully",
-		"activeConnections", metrics.ActiveConnections,
-		"providerCount", len(metrics.Providers))
-
 	return metrics, nil
+}
+
+// determineFirstStart checks if this is the first time the application is being run
+// This must be called BEFORE any config creation
+func (a *App) determineFirstStart() bool {
+	// Check if config file exists
+	if _, err := os.Stat(a.configPath); os.IsNotExist(err) {
+		slog.Info("Config file does not exist, treating as first start", "configPath", a.configPath)
+		return true
+	}
+
+	// If config file exists, try to load it to check if it has meaningful content
+	_, err := config.Load(a.configPath)
+	if err != nil {
+		slog.Info("Config file exists but cannot be loaded, treating as first start", "error", err)
+		return true
+	}
+
+	return false
+}
+
+// isFirstStart returns whether this is the first time the application is being run
+func (a *App) isFirstStart() bool {
+	return a.firstStart
 }

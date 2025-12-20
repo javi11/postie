@@ -94,7 +94,7 @@ func (a *App) SaveConfig(configData *config.ConfigData) error {
 
 	// Validate server connections before saving
 	if err := a.validateServerConnections(configData); err != nil {
-		return fmt.Errorf("server validation failed: %w", err)
+		return err // Pass through - validateServerConnections already has descriptive messages
 	}
 
 	// Check if there are active uploads or running jobs

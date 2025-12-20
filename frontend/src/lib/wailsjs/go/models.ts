@@ -32,68 +32,16 @@ export namespace backend {
 	        this.needsConfiguration = source["needsConfiguration"];
 	    }
 	}
-	export class MetricSummary {
-	    startTime: string;
-	    endTime: string;
-	    totalConnectionsCreated: number;
-	    totalConnectionsDestroyed: number;
-	    totalAcquires: number;
-	    totalReleases: number;
-	    totalErrors: number;
-	    totalRetries: number;
-	    totalAcquireWaitTime: number;
-	    totalBytesDownloaded: number;
-	    totalBytesUploaded: number;
-	    totalArticlesRetrieved: number;
-	    totalArticlesPosted: number;
-	    totalCommandCount: number;
-	    totalCommandErrors: number;
-	    averageConnectionsPerHour: number;
-	    averageErrorRate: number;
-	    averageSuccessRate: number;
-	    averageAcquireWaitTime: number;
-	    windowCount: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new MetricSummary(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.startTime = source["startTime"];
-	        this.endTime = source["endTime"];
-	        this.totalConnectionsCreated = source["totalConnectionsCreated"];
-	        this.totalConnectionsDestroyed = source["totalConnectionsDestroyed"];
-	        this.totalAcquires = source["totalAcquires"];
-	        this.totalReleases = source["totalReleases"];
-	        this.totalErrors = source["totalErrors"];
-	        this.totalRetries = source["totalRetries"];
-	        this.totalAcquireWaitTime = source["totalAcquireWaitTime"];
-	        this.totalBytesDownloaded = source["totalBytesDownloaded"];
-	        this.totalBytesUploaded = source["totalBytesUploaded"];
-	        this.totalArticlesRetrieved = source["totalArticlesRetrieved"];
-	        this.totalArticlesPosted = source["totalArticlesPosted"];
-	        this.totalCommandCount = source["totalCommandCount"];
-	        this.totalCommandErrors = source["totalCommandErrors"];
-	        this.averageConnectionsPerHour = source["averageConnectionsPerHour"];
-	        this.averageErrorRate = source["averageErrorRate"];
-	        this.averageSuccessRate = source["averageSuccessRate"];
-	        this.averageAcquireWaitTime = source["averageAcquireWaitTime"];
-	        this.windowCount = source["windowCount"];
-	    }
-	}
 	export class NntpProviderMetrics {
 	    host: string;
-	    username: string;
 	    state: string;
-	    totalConnections: number;
+	    activeConnections: number;
 	    maxConnections: number;
-	    acquiredConnections: number;
-	    idleConnections: number;
 	    totalBytesUploaded: number;
+	    totalBytesDownloaded: number;
 	    totalArticlesPosted: number;
-	    successRate: number;
-	    averageConnectionAge: number;
+	    totalArticlesDownloaded: number;
+	    totalErrors: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new NntpProviderMetrics(source);
@@ -102,34 +50,26 @@ export namespace backend {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.host = source["host"];
-	        this.username = source["username"];
 	        this.state = source["state"];
-	        this.totalConnections = source["totalConnections"];
+	        this.activeConnections = source["activeConnections"];
 	        this.maxConnections = source["maxConnections"];
-	        this.acquiredConnections = source["acquiredConnections"];
-	        this.idleConnections = source["idleConnections"];
 	        this.totalBytesUploaded = source["totalBytesUploaded"];
+	        this.totalBytesDownloaded = source["totalBytesDownloaded"];
 	        this.totalArticlesPosted = source["totalArticlesPosted"];
-	        this.successRate = source["successRate"];
-	        this.averageConnectionAge = source["averageConnectionAge"];
+	        this.totalArticlesDownloaded = source["totalArticlesDownloaded"];
+	        this.totalErrors = source["totalErrors"];
 	    }
 	}
 	export class NntpPoolMetrics {
 	    timestamp: string;
-	    uptime: number;
 	    activeConnections: number;
-	    uploadSpeed: number;
-	    commandSuccessRate: number;
-	    errorRate: number;
-	    totalAcquires: number;
 	    totalBytesUploaded: number;
-	    totalArticlesRetrieved: number;
+	    totalBytesDownloaded: number;
 	    totalArticlesPosted: number;
-	    averageAcquireWaitTime: number;
+	    totalArticlesDownloaded: number;
 	    totalErrors: number;
+	    providerErrors: Record<string, number>;
 	    providers: NntpProviderMetrics[];
-	    dailyMetrics?: MetricSummary;
-	    weeklyMetrics?: MetricSummary;
 	
 	    static createFrom(source: any = {}) {
 	        return new NntpPoolMetrics(source);
@@ -138,20 +78,14 @@ export namespace backend {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.timestamp = source["timestamp"];
-	        this.uptime = source["uptime"];
 	        this.activeConnections = source["activeConnections"];
-	        this.uploadSpeed = source["uploadSpeed"];
-	        this.commandSuccessRate = source["commandSuccessRate"];
-	        this.errorRate = source["errorRate"];
-	        this.totalAcquires = source["totalAcquires"];
 	        this.totalBytesUploaded = source["totalBytesUploaded"];
-	        this.totalArticlesRetrieved = source["totalArticlesRetrieved"];
+	        this.totalBytesDownloaded = source["totalBytesDownloaded"];
 	        this.totalArticlesPosted = source["totalArticlesPosted"];
-	        this.averageAcquireWaitTime = source["averageAcquireWaitTime"];
+	        this.totalArticlesDownloaded = source["totalArticlesDownloaded"];
 	        this.totalErrors = source["totalErrors"];
+	        this.providerErrors = source["providerErrors"];
 	        this.providers = this.convertValues(source["providers"], NntpProviderMetrics);
-	        this.dailyMetrics = this.convertValues(source["dailyMetrics"], MetricSummary);
-	        this.weeklyMetrics = this.convertValues(source["weeklyMetrics"], MetricSummary);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -275,6 +209,7 @@ export namespace backend {
 	    limit: number;
 	    sortBy: string;
 	    order: string;
+	    status: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new PaginationParams(source);
@@ -286,6 +221,7 @@ export namespace backend {
 	        this.limit = source["limit"];
 	        this.sortBy = source["sortBy"];
 	        this.order = source["order"];
+	        this.status = source["status"];
 	    }
 	}
 	export class ProcessorStatus {
@@ -404,6 +340,11 @@ export namespace config {
 	    enabled: boolean;
 	    command: string;
 	    timeout: string;
+	    max_retries: number;
+	    retry_delay: string;
+	    max_backoff: string;
+	    max_retry_duration: string;
+	    retry_check_interval: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new PostUploadScriptConfig(source);
@@ -414,6 +355,11 @@ export namespace config {
 	        this.enabled = source["enabled"];
 	        this.command = source["command"];
 	        this.timeout = source["timeout"];
+	        this.max_retries = source["max_retries"];
+	        this.retry_delay = source["retry_delay"];
+	        this.max_backoff = source["max_backoff"];
+	        this.max_retry_duration = source["max_retry_duration"];
+	        this.retry_check_interval = source["retry_check_interval"];
 	    }
 	}
 	export class QueueConfig {
@@ -481,6 +427,7 @@ export namespace config {
 	    min_file_size: number;
 	    check_interval: string;
 	    delete_original_file: boolean;
+	    single_nzb_per_folder: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new WatcherConfig(source);
@@ -496,6 +443,7 @@ export namespace config {
 	        this.min_file_size = source["min_file_size"];
 	        this.check_interval = source["check_interval"];
 	        this.delete_original_file = source["delete_original_file"];
+	        this.single_nzb_per_folder = source["single_nzb_per_folder"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -632,7 +580,6 @@ export namespace config {
 	    obfuscation_policy: string;
 	    par2_obfuscation_policy: string;
 	    group_policy: string;
-	    single_nzb_per_folder: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new PostingConfig(source);
@@ -651,7 +598,6 @@ export namespace config {
 	        this.obfuscation_policy = source["obfuscation_policy"];
 	        this.par2_obfuscation_policy = source["par2_obfuscation_policy"];
 	        this.group_policy = source["group_policy"];
-	        this.single_nzb_per_folder = source["single_nzb_per_folder"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -697,6 +643,7 @@ export namespace config {
 	    max_connection_ttl_in_seconds: number;
 	    insecure_ssl: boolean;
 	    enabled?: boolean;
+	    check_only?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ServerConfig(source);
@@ -714,6 +661,7 @@ export namespace config {
 	        this.max_connection_ttl_in_seconds = source["max_connection_ttl_in_seconds"];
 	        this.insecure_ssl = source["insecure_ssl"];
 	        this.enabled = source["enabled"];
+	        this.check_only = source["check_only"];
 	    }
 	}
 	export class ConfigData {

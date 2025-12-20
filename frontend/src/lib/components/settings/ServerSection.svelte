@@ -31,6 +31,7 @@ let managedServers = $derived(config.servers.map(server => ({
 	insecure_ssl: server.insecure_ssl ?? false,
 	max_connection_idle_time_in_seconds: server.max_connection_idle_time_in_seconds || 300,
 	max_connection_ttl_in_seconds: server.max_connection_ttl_in_seconds || 3600,
+	check_only: server.check_only ?? false,
 })));
 
 function handleServerUpdate(updatedServers: any[]) {
@@ -47,6 +48,7 @@ function handleServerUpdate(updatedServers: any[]) {
 		serverConfig.insecure_ssl = server.insecure_ssl ?? false;
 		serverConfig.max_connection_idle_time_in_seconds = server.max_connection_idle_time_in_seconds || 300;
 		serverConfig.max_connection_ttl_in_seconds = server.max_connection_ttl_in_seconds || 3600;
+		serverConfig.check_only = server.check_only ?? false;
 		return serverConfig;
 	});
 }

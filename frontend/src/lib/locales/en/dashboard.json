@@ -5,6 +5,10 @@
 			"title": "Upload Dashboard",
 			"description": "Manage your file uploads and monitor progress",
 			"add_files": "Add Files",
+			"add_folder": "Add Folder",
+			"add_folder_tooltip": "Upload an entire folder as a single NZB",
+			"folder_added": "Folder Added",
+			"folder_added_description": "Folder has been added to the upload queue",
 			"import_files": "Import Files",
 			"import_files_tooltip": "Browse and import files from the remote server",
 			"clear_completed": "Clear Completed"
@@ -32,6 +36,10 @@
 			"decrease_priority": "Decrease priority",
 			"remove_from_queue": "Remove from queue",
 			"items_per_page": "Items per page",
+			"filter_all": "All statuses",
+			"filter_pending": "Pending",
+			"filter_complete": "Complete",
+			"filter_error": "Error",
 			"showing": "Showing",
 			"to": "to",
 			"of": "of",
@@ -114,6 +122,7 @@
 			"auto_paused": "Processing Auto-Paused",
 			"settings_link": "Settings"
 		},
+		"job_failed": "Upload failed: {fileName}",
 		"file_explorer": {
 			"title": "Add Files from Server to Queue",
 			"import_success": "Files added to queue successfully"

@@ -53,7 +53,7 @@ It supports configuration via a YAML file and can process multiple files in a di
 		jobProgress := progress.NewProgressJob("postie-job")
 		defer jobProgress.Close()
 
-		poster, err := postie.New(ctx, cfg, poolManager, jobProgress)
+		poster, err := postie.New(ctx, cfg, poolManager, jobProgress, nil)
 		if err != nil {
 			slog.ErrorContext(ctx, "Error creating postie", "error", err)
 			return err
@@ -94,7 +94,8 @@ It supports configuration via a YAML file and can process multiple files in a di
 			}
 		}
 
-		_, err = poster.Post(ctx, files, dirPath, outputDir)
+		// CLI mode: use config-based folder mode decision (not forced)
+		_, err = poster.Post(ctx, files, dirPath, outputDir, false)
 		return err
 	},
 }

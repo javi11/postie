@@ -7,12 +7,16 @@ import type { backend } from "$lib/wailsjs/go/models";
 // Using backend types for pagination
 import {
 	AlertCircle,
+	ArrowDown,
+	ArrowUp,
+	ArrowUpDown,
 	CheckCircle,
 	ChevronLeft,
 	ChevronRight,
 	Clock,
 	Download,
 	FileText,
+	Filter,
 	List,
 	Play,
 	Trash2,
@@ -20,13 +24,15 @@ import {
 import { onDestroy, onMount } from "svelte";
 
 let paginatedResult: backend.PaginatedQueueResult | null = null;
-let loading = false;
+let initialLoad = true;
+let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
 // Pagination state - now controlled by server
 let currentPage = 1;
 let itemsPerPage = 10;
 let sortBy = "created";
 let sortOrder = "desc";
+let statusFilter = ""; // "" = all, "pending", "complete", "error"
 
 // Computed properties for pagination - now from server response
 $: queueItems = paginatedResult?.items || [];
@@ -40,14 +46,15 @@ $: hasPrev = paginatedResult?.hasPrev || false;
 let intervalId: ReturnType<typeof setInterval> | undefined;
 
 // Reactive statements to reload queue when pagination parameters change
-$: if (currentPage || itemsPerPage || sortBy || sortOrder) {
+$: if (currentPage || itemsPerPage || sortBy || sortOrder || statusFilter !== undefined) {
 	loadQueue();
 }
 
 onMount(() => {
-	// Listen for queue updates
+	// Listen for queue updates with debouncing to prevent double-fetches
 	apiClient.on("queue-updated", () => {
-		loadQueue();
+		clearTimeout(debounceTimer);
+		debounceTimer = setTimeout(loadQueue, 100);
 	});
 
   // Set up periodic refresh for queue
@@ -60,21 +67,22 @@ onMount(() => {
 });
 
 onDestroy(() => {
-	// Clean up event listener
+	// Clean up event listener and timers
 	apiClient.off("queue-updated");
-  if (intervalId) {
-    clearInterval(intervalId);
-  }
+	clearTimeout(debounceTimer);
+	if (intervalId) {
+		clearInterval(intervalId);
+	}
 });
 
 async function loadQueue() {
 	try {
-		loading = true;
 		const result = await apiClient.getQueueItems({
 			page: currentPage,
 			limit: itemsPerPage,
 			sortBy: sortBy,
 			order: sortOrder,
+			status: statusFilter,
 		});
 		paginatedResult = result;
 	} catch (error) {
@@ -82,7 +90,7 @@ async function loadQueue() {
 		toastStore.error($t("common.messages.failed_to_load_queue"), String(error));
 		paginatedResult = null;
 	} finally {
-		loading = false;
+		initialLoad = false;
 	}
 }
 
@@ -165,6 +173,29 @@ function changeItemsPerPage(event: Event) {
 	itemsPerPage = Number.parseInt(target.value);
 	currentPage = 1; // Reset to first page when changing items per page
 }
+
+function toggleSort(column: string) {
+	if (sortBy === column) {
+		sortOrder = sortOrder === "asc" ? "desc" : "asc";
+	} else {
+		sortBy = column;
+		sortOrder = "desc";
+	}
+	currentPage = 1; // Reset to first page when changing sort
+}
+
+function changeStatusFilter(event: Event) {
+	const target = event.target as HTMLSelectElement;
+	statusFilter = target.value;
+	currentPage = 1; // Reset to first page when changing filter
+}
+
+function getSortIcon(column: string) {
+	if (sortBy !== column) {
+		return ArrowUpDown;
+	}
+	return sortOrder === "asc" ? ArrowUp : ArrowDown;
+}
 </script>
 
 <div class="space-y-6">
@@ -177,13 +208,29 @@ function changeItemsPerPage(event: Event) {
       <h2 class="text-xl font-semibold">
         {$t("dashboard.queue.title")}
       </h2>
-      <div class="flex items-center gap-3 mt-1">
+      <div class="flex flex-wrap items-center gap-3 mt-1">
         <div class="badge badge-info">
           <span class="text-sm font-medium">
             {totalItems} {$t("dashboard.queue.items")}
           </span>
         </div>
-        {#if totalItems > 0 && !loading}
+        {#if !initialLoad}
+          <!-- Status Filter -->
+          <div class="flex items-center gap-2">
+            <Filter class="w-4 h-4 text-base-content/70" />
+            <select
+              id="status-filter"
+              class="select select-bordered select-sm"
+              value={statusFilter}
+              onchange={changeStatusFilter}
+            >
+              <option value="">{$t("dashboard.queue.filter_all")}</option>
+              <option value="pending">{$t("dashboard.queue.filter_pending")}</option>
+              <option value="complete">{$t("dashboard.queue.filter_complete")}</option>
+              <option value="error">{$t("dashboard.queue.filter_error")}</option>
+            </select>
+          </div>
+          <!-- Items per page -->
           <div class="flex items-center gap-2">
             <label for="items-per-page" class="text-sm text-base-content/70">
               {$t("dashboard.queue.items_per_page")}:
@@ -205,7 +252,7 @@ function changeItemsPerPage(event: Event) {
     </div>
   </div>
 
-  {#if loading}
+  {#if initialLoad}
     <!-- Loading State -->
     <div class="text-center py-12">
       <div class="loading loading-spinner loading-lg mb-4"></div>
@@ -230,11 +277,66 @@ function changeItemsPerPage(event: Event) {
           <table class="table table-zebra">
             <thead>
               <tr>
-                <th>{$t("dashboard.queue.file")}</th>
-                <th>{$t("dashboard.queue.size")}</th>
-                <th>{$t("dashboard.queue.status")}</th>
-                <th>{$t("dashboard.queue.priority")}</th>
-                <th>{$t("dashboard.queue.created")}</th>
+                <th
+                  class="cursor-pointer hover:bg-base-200 select-none"
+                  onclick={() => toggleSort("filename")}
+                >
+                  <div class="flex items-center gap-1">
+                    {$t("dashboard.queue.file")}
+                    <svelte:component
+                      this={getSortIcon("filename")}
+                      class="w-4 h-4 {sortBy === 'filename' ? 'text-primary' : 'text-base-content/40'}"
+                    />
+                  </div>
+                </th>
+                <th
+                  class="cursor-pointer hover:bg-base-200 select-none"
+                  onclick={() => toggleSort("size")}
+                >
+                  <div class="flex items-center gap-1">
+                    {$t("dashboard.queue.size")}
+                    <svelte:component
+                      this={getSortIcon("size")}
+                      class="w-4 h-4 {sortBy === 'size' ? 'text-primary' : 'text-base-content/40'}"
+                    />
+                  </div>
+                </th>
+                <th
+                  class="cursor-pointer hover:bg-base-200 select-none"
+                  onclick={() => toggleSort("status")}
+                >
+                  <div class="flex items-center gap-1">
+                    {$t("dashboard.queue.status")}
+                    <svelte:component
+                      this={getSortIcon("status")}
+                      class="w-4 h-4 {sortBy === 'status' ? 'text-primary' : 'text-base-content/40'}"
+                    />
+                  </div>
+                </th>
+                <th
+                  class="cursor-pointer hover:bg-base-200 select-none"
+                  onclick={() => toggleSort("priority")}
+                >
+                  <div class="flex items-center gap-1">
+                    {$t("dashboard.queue.priority")}
+                    <svelte:component
+                      this={getSortIcon("priority")}
+                      class="w-4 h-4 {sortBy === 'priority' ? 'text-primary' : 'text-base-content/40'}"
+                    />
+                  </div>
+                </th>
+                <th
+                  class="cursor-pointer hover:bg-base-200 select-none"
+                  onclick={() => toggleSort("created")}
+                >
+                  <div class="flex items-center gap-1">
+                    {$t("dashboard.queue.created")}
+                    <svelte:component
+                      this={getSortIcon("created")}
+                      class="w-4 h-4 {sortBy === 'created' ? 'text-primary' : 'text-base-content/40'}"
+                    />
+                  </div>
+                </th>
                 <th class="text-right">{$t("dashboard.queue.actions")}</th>
               </tr>
             </thead>

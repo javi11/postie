@@ -142,6 +142,9 @@
 			"behavior_description": "Configure cómo deben manejarse los archivos procesados",
 			"delete_original_file": "Eliminar archivos originales después de la carga",
 			"delete_original_file_description": "Elimina permanentemente los archivos fuente del directorio de monitoreo después de una carga exitosa. Use con precaución ya que esta acción no se puede deshacer.",
+			"single_nzb_per_folder": "Un Solo NZB Por Carpeta",
+			"single_nzb_per_folder_description": "Crear un NZB por carpeta en lugar de un NZB por archivo en modo monitor. Cuando está habilitado, todos los archivos en una carpeta se combinarán en un solo archivo NZB.",
+			"single_nzb_per_folder_info": "<strong>Solo Modo Monitor:</strong> Cuando el monitor detecta archivos en una carpeta, crea un NZB con el nombre de la carpeta conteniendo todos los archivos (ej., 'carpeta.nzb' con 'subcarpeta/archivo1.mkv' y 'archivo2.mkv'). Nota: Las cargas directas de carpetas mediante el botón Agregar Carpeta siempre crean un solo NZB independientemente de esta configuración.",
 			"posting_schedule": "Programación de Publicación",
 			"posting_schedule_description": "Defina cuándo el monitor puede publicar archivos (formato 24 horas)",
 			"time_range": "Rango de Tiempo",
@@ -236,9 +239,6 @@
 			"group_policy_description": "Cómo distribuir archivos entre grupos de noticias",
 			"wait_for_par2": "Esperar PAR2",
 			"wait_for_par2_description": "Esperar a que se creen los archivos PAR2 antes de comenzar la carga",
-			"single_nzb_per_folder": "Un Solo NZB Por Carpeta",
-			"single_nzb_per_folder_description": "Crear un NZB por carpeta en lugar de un NZB por archivo. Especialmente útil para sets de archivos organizados en carpetas.",
-			"single_nzb_per_folder_info": "<strong>Modo Observación:</strong> Crea un NZB con el nombre de la carpeta conteniendo todos los archivos con rutas relativas preservadas.<br><strong>Carga Directa:</strong> Al cargar una carpeta, crea un solo NZB para todo el contenido de la carpeta.",
 			"obfuscation": {
 				"none": "Ninguno",
 				"partial": "Parcial",
@@ -411,8 +411,13 @@
 				"cannot_disable_all": "No se pueden deshabilitar todos los proveedores. Al menos uno debe permanecer activo."
 			},
 			"validation": {
-				"cannot_disable_last": "No se puede deshabilitar el último proveedor activo. Al menos un proveedor debe permanecer habilitado."
+				"cannot_disable_last": "No se puede deshabilitar el último proveedor activo. Al menos un proveedor debe permanecer habilitado.",
+				"cannot_set_all_check_only": "No se pueden configurar todos los proveedores como solo verificación. Al menos un proveedor debe estar disponible para publicar."
 			},
+			"check_only": "Solo Verificación",
+			"check_only_description": "Usar este proveedor solo para verificar artículos cargados, no para publicar",
+			"check_only_enabled_description": "Este proveedor solo verificará artículos, no los publicará",
+			"check_only_badge": "Solo Verificar",
 			"validation_errors": {
 				"host_required": "Servidor {number}: Se requiere host",
 				"port_invalid": "Servidor {number}: Se requiere un número de puerto válido (1-65535)"

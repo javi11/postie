@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/javi11/nntppool"
+	"github.com/javi11/nntppool/v2"
 	"github.com/javi11/postie/pkg/parpardownloader"
 	"gopkg.in/yaml.v3"
 )
@@ -24,6 +24,29 @@ const (
 	CurrentConfigVersion = 1
 )
 
+// #region agent log
+const agentDebugLogPath = "/Users/javi/mio/postie/.cursor/debug.log"
+
+func agentDebugLog(payload map[string]any) {
+	// Best-effort, never fail config parsing because of debug logging.
+	payload["timestamp"] = time.Now().UnixMilli()
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	// Ensure parent directory exists (manual cleanup may remove it).
+	if err := os.MkdirAll(filepath.Dir(agentDebugLogPath), 0755); err != nil {
+		return
+	}
+	f, err := os.OpenFile(agentDebugLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	_, _ = f.Write(append(b, '\n'))
+	_ = f.Close()
+}
+// #endregion agent log
+
 // Duration wraps time.Duration to provide custom JSON and YAML marshalling
 type Duration string
 
@@ -36,11 +59,56 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 func (d *Duration) UnmarshalJSON(data []byte) error {
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
+		// #region agent log
+		agentDebugLog(map[string]any{
+			"sessionId":    "debug-session",
+			"runId":        "pre-fix",
+			"hypothesisId": "D",
+			"location":     "internal/config/config.go:Duration.UnmarshalJSON",
+			"message":      "json.Unmarshal into string failed for Duration",
+			"data": map[string]any{
+				"raw_json_len": len(data),
+			},
+		})
+		// #endregion agent log
 		return err
+	}
+
+	// Allow empty duration strings (treat as zero) so partial configs or missing fields don't hard-fail.
+	// Defaults (where applicable) are applied at higher levels (e.g. config load / validation).
+	if s == "" {
+		// #region agent log
+		agentDebugLog(map[string]any{
+			"sessionId":    "debug-session",
+			"runId":        "pre-fix",
+			"hypothesisId": "E",
+			"location":     "internal/config/config.go:Duration.UnmarshalJSON",
+			"message":      "Empty duration string accepted (treated as zero)",
+			"data": map[string]any{
+				"raw_json": string(data),
+			},
+		})
+		// #endregion agent log
+		*d = Duration("")
+		return nil
 	}
 
 	duration, err := time.ParseDuration(s)
 	if err != nil {
+		// #region agent log
+		agentDebugLog(map[string]any{
+			"sessionId":    "debug-session",
+			"runId":        "pre-fix",
+			"hypothesisId": "C",
+			"location":     "internal/config/config.go:Duration.UnmarshalJSON",
+			"message":      "time.ParseDuration failed for Duration",
+			"data": map[string]any{
+				"duration_str": s, // safe: duration strings only
+				"raw_json":     string(data),
+				"error":        err.Error(),
+			},
+		})
+		// #endregion agent log
 		return err
 	}
 
@@ -57,11 +125,55 @@ func (d Duration) MarshalYAML() (interface{}, error) {
 func (d *Duration) UnmarshalYAML(value *yaml.Node) error {
 	var s string
 	if err := value.Decode(&s); err != nil {
+		// #region agent log
+		agentDebugLog(map[string]any{
+			"sessionId":    "debug-session",
+			"runId":        "pre-fix",
+			"hypothesisId": "Y1",
+			"location":     "internal/config/config.go:Duration.UnmarshalYAML",
+			"message":      "yaml.Node.Decode into string failed for Duration",
+			"data": map[string]any{
+				"line":   value.Line,
+				"column": value.Column,
+			},
+		})
+		// #endregion agent log
 		return err
 	}
 
+	// #region agent log
+	if s == "" {
+		agentDebugLog(map[string]any{
+			"sessionId":    "debug-session",
+			"runId":        "pre-fix",
+			"hypothesisId": "Y2",
+			"location":     "internal/config/config.go:Duration.UnmarshalYAML",
+			"message":      "Duration string is empty before ParseDuration (YAML)",
+			"data": map[string]any{
+				"line":   value.Line,
+				"column": value.Column,
+			},
+		})
+	}
+	// #endregion agent log
+
 	duration, err := time.ParseDuration(s)
 	if err != nil {
+		// #region agent log
+		agentDebugLog(map[string]any{
+			"sessionId":    "debug-session",
+			"runId":        "pre-fix",
+			"hypothesisId": "Y3",
+			"location":     "internal/config/config.go:Duration.UnmarshalYAML",
+			"message":      "time.ParseDuration failed for Duration (YAML)",
+			"data": map[string]any{
+				"duration_str": s, // safe
+				"line":         value.Line,
+				"column":       value.Column,
+				"error":        err.Error(),
+			},
+		})
+		// #endregion agent log
 		return err
 	}
 
@@ -165,15 +277,15 @@ type ConfigData struct {
 }
 
 type Par2Config struct {
-	Enabled          *bool     `yaml:"enabled" json:"enabled"`
-	Par2Path         string    `yaml:"par2_path" json:"par2_path"`
-	Redundancy       string    `yaml:"redundancy" json:"redundancy"`
-	VolumeSize       int       `yaml:"volume_size" json:"volume_size"`
-	MaxInputSlices   int       `yaml:"max_input_slices" json:"max_input_slices"`
-	ExtraPar2Options []string  `yaml:"extra_par2_options" json:"extra_par2_options"`
-	TempDir          string    `yaml:"temp_dir" json:"temp_dir"`
-	MaintainPar2Files *bool    `yaml:"maintain_par2_files" json:"maintain_par2_files"`
-	once             sync.Once `json:"-"`
+	Enabled           *bool     `yaml:"enabled" json:"enabled"`
+	Par2Path          string    `yaml:"par2_path" json:"par2_path"`
+	Redundancy        string    `yaml:"redundancy" json:"redundancy"`
+	VolumeSize        int       `yaml:"volume_size" json:"volume_size"`
+	MaxInputSlices    int       `yaml:"max_input_slices" json:"max_input_slices"`
+	ExtraPar2Options  []string  `yaml:"extra_par2_options" json:"extra_par2_options"`
+	TempDir           string    `yaml:"temp_dir" json:"temp_dir"`
+	MaintainPar2Files *bool     `yaml:"maintain_par2_files" json:"maintain_par2_files"`
+	once              sync.Once `json:"-"`
 }
 
 // ServerConfig represents a Usenet server configuration
@@ -188,6 +300,9 @@ type ServerConfig struct {
 	MaxConnectionTTLInSeconds      int    `yaml:"max_connection_ttl_in_seconds" json:"max_connection_ttl_in_seconds"`
 	InsecureSSL                    bool   `yaml:"insecure_ssl" json:"insecure_ssl"`
 	Enabled                        *bool  `yaml:"enabled" json:"enabled"`
+	// CheckOnly when true, this server will only be used for article verification (STAT command)
+	// and not for posting articles. Useful for cheap/slow providers that have good retention.
+	CheckOnly *bool `yaml:"check_only" json:"check_only"`
 }
 
 type PostHeaders struct {
@@ -223,21 +338,19 @@ type NewsgroupConfig struct {
 
 // PostingConfig represents posting configuration
 type PostingConfig struct {
-	WaitForPar2        *bool               `yaml:"wait_for_par2" json:"wait_for_par2"`
-	MaxRetries         int                 `yaml:"max_retries" json:"max_retries"`
-	RetryDelay         Duration            `yaml:"retry_delay" json:"retry_delay"`
-	ArticleSizeInBytes uint64              `yaml:"article_size_in_bytes" json:"article_size_in_bytes"`
-	Groups             []NewsgroupConfig   `yaml:"groups" json:"groups"`
-	ThrottleRate       int64               `yaml:"throttle_rate" json:"throttle_rate"` // bytes per second
-	MessageIDFormat    MessageIDFormat     `yaml:"message_id_format" json:"message_id_format"`
-	PostHeaders        PostHeaders         `yaml:"post_headers" json:"post_headers"`
+	WaitForPar2        *bool             `yaml:"wait_for_par2" json:"wait_for_par2"`
+	MaxRetries         int               `yaml:"max_retries" json:"max_retries"`
+	RetryDelay         Duration          `yaml:"retry_delay" json:"retry_delay"`
+	ArticleSizeInBytes uint64            `yaml:"article_size_in_bytes" json:"article_size_in_bytes"`
+	Groups             []NewsgroupConfig `yaml:"groups" json:"groups"`
+	ThrottleRate       int64             `yaml:"throttle_rate" json:"throttle_rate"` // bytes per second
+	MessageIDFormat    MessageIDFormat   `yaml:"message_id_format" json:"message_id_format"`
+	PostHeaders        PostHeaders       `yaml:"post_headers" json:"post_headers"`
 	// If true the uploaded subject and filename will be obfuscated. Default value is `true`.
 	ObfuscationPolicy     ObfuscationPolicy `yaml:"obfuscation_policy" json:"obfuscation_policy"`
 	Par2ObfuscationPolicy ObfuscationPolicy `yaml:"par2_obfuscation_policy" json:"par2_obfuscation_policy"`
 	//  If you give several Groups you've 3 policy when posting
 	GroupPolicy GroupPolicy `yaml:"group_policy" json:"group_policy"`
-	// If true, creates one NZB per folder instead of one NZB per file. Default value is `false`.
-	SingleNzbPerFolder bool `yaml:"single_nzb_per_folder" json:"single_nzb_per_folder"`
 }
 
 type WatcherConfig struct {
@@ -249,6 +362,8 @@ type WatcherConfig struct {
 	MinFileSize        int64          `yaml:"min_file_size" json:"min_file_size"`
 	CheckInterval      Duration       `yaml:"check_interval" json:"check_interval"`
 	DeleteOriginalFile bool           `yaml:"delete_original_file" json:"delete_original_file"`
+	// If true, creates one NZB per folder instead of one NZB per file in watch mode. Default value is `false`.
+	SingleNzbPerFolder bool `yaml:"single_nzb_per_folder" json:"single_nzb_per_folder"`
 }
 
 type ScheduleConfig struct {
@@ -288,6 +403,21 @@ type PostUploadScriptConfig struct {
 	Command string `yaml:"command" json:"command"`
 	// Timeout for script execution. Default value is `30s`.
 	Timeout Duration `yaml:"timeout" json:"timeout"`
+	// Maximum number of retry attempts for failed script executions.
+	// Set to 0 for unlimited retries (will use MaxRetryDuration as the limit).
+	// Default value is `3`.
+	MaxRetries int `yaml:"max_retries" json:"max_retries"`
+	// Base delay for retry attempts with exponential backoff. Default value is `30s`.
+	RetryDelay Duration `yaml:"retry_delay" json:"retry_delay"`
+	// Maximum backoff duration. Caps the exponential backoff to prevent very long waits.
+	// Default value is `1h`.
+	MaxBackoff Duration `yaml:"max_backoff" json:"max_backoff"`
+	// Maximum duration to keep retrying after the first failure.
+	// After this duration, the script is marked as permanently failed.
+	// Default value is `24h`.
+	MaxRetryDuration Duration `yaml:"max_retry_duration" json:"max_retry_duration"`
+	// How often to check for pending retries. Default value is `1m`.
+	RetryCheckInterval Duration `yaml:"retry_check_interval" json:"retry_check_interval"`
 }
 
 // Par2DownloadStatus represents the status of par2 executable download
@@ -362,6 +492,26 @@ func Load(path string) (*ConfigData, error) {
 
 	if cfg.Posting.RetryDelay == "" {
 		cfg.Posting.RetryDelay = Duration("5s")
+	}
+
+	// Post-upload script defaults (YAML may omit these fields)
+	if cfg.PostUploadScript.Timeout == "" {
+		cfg.PostUploadScript.Timeout = Duration("30s")
+	}
+	if cfg.PostUploadScript.MaxRetries < 0 {
+		cfg.PostUploadScript.MaxRetries = 3 // 0 means unlimited
+	}
+	if cfg.PostUploadScript.RetryDelay == "" {
+		cfg.PostUploadScript.RetryDelay = Duration("30s")
+	}
+	if cfg.PostUploadScript.MaxBackoff == "" {
+		cfg.PostUploadScript.MaxBackoff = Duration("1h")
+	}
+	if cfg.PostUploadScript.MaxRetryDuration == "" {
+		cfg.PostUploadScript.MaxRetryDuration = Duration("24h")
+	}
+	if cfg.PostUploadScript.RetryCheckInterval == "" {
+		cfg.PostUploadScript.RetryCheckInterval = Duration("1m")
 	}
 
 	if cfg.Posting.ArticleSizeInBytes <= 0 {
@@ -542,9 +692,66 @@ func (c *ConfigData) validate() error {
 	return nil
 }
 
+// GetPostingServers returns enabled servers that are NOT check-only (used for posting)
+func (c *ConfigData) GetPostingServers() []ServerConfig {
+	var servers []ServerConfig
+	for _, s := range c.Servers {
+		isEnabled := s.Enabled == nil || *s.Enabled
+		isCheckOnly := s.CheckOnly != nil && *s.CheckOnly
+		if isEnabled && !isCheckOnly {
+			servers = append(servers, s)
+		}
+	}
+	return servers
+}
+
+// GetCheckOnlyServers returns enabled servers that are check-only (used only for article verification)
+func (c *ConfigData) GetCheckOnlyServers() []ServerConfig {
+	var servers []ServerConfig
+	for _, s := range c.Servers {
+		isEnabled := s.Enabled == nil || *s.Enabled
+		isCheckOnly := s.CheckOnly != nil && *s.CheckOnly
+		if isEnabled && isCheckOnly {
+			servers = append(servers, s)
+		}
+	}
+	return servers
+}
+
+// serverConfigToProviderConfig converts a ServerConfig to nntppool.UsenetProviderConfig
+func serverConfigToProviderConfig(s ServerConfig) nntppool.UsenetProviderConfig {
+	maxConnections := s.MaxConnections
+	if maxConnections <= 0 {
+		maxConnections = 10 // default value if not specified
+	}
+
+	maxIdleTime := s.MaxConnectionIdleTimeInSeconds
+	if maxIdleTime <= 0 {
+		maxIdleTime = 300
+	}
+
+	maxTTL := s.MaxConnectionTTLInSeconds
+	if maxTTL <= 0 {
+		maxTTL = 3600
+	}
+
+	return nntppool.UsenetProviderConfig{
+		Host:                           s.Host,
+		Port:                           s.Port,
+		Username:                       s.Username,
+		Password:                       s.Password,
+		TLS:                            s.SSL,
+		MaxConnections:                 maxConnections,
+		MaxConnectionIdleTimeInSeconds: maxIdleTime,
+		MaxConnectionTTLInSeconds:      maxTTL,
+		InsecureSSL:                    s.InsecureSSL,
+	}
+}
+
 // GetNNTPPoolConfig returns the nntppool configuration without creating the actual pool
+// This returns ALL enabled servers (for backwards compatibility)
 func (c *ConfigData) GetNNTPPoolConfig() (nntppool.Config, error) {
-	// Filter enabled servers
+	// Filter enabled servers (all enabled, regardless of check_only)
 	var enabledServers []ServerConfig
 	for _, s := range c.Servers {
 		if s.Enabled == nil || *s.Enabled {
@@ -554,41 +761,56 @@ func (c *ConfigData) GetNNTPPoolConfig() (nntppool.Config, error) {
 
 	providers := make([]nntppool.UsenetProviderConfig, len(enabledServers))
 	for i, s := range enabledServers {
-		maxConnections := s.MaxConnections
-		if maxConnections <= 0 {
-			maxConnections = 10 // default value if not specified
-		}
-
-		if s.MaxConnectionIdleTimeInSeconds <= 0 {
-			s.MaxConnectionIdleTimeInSeconds = 300
-		}
-
-		if s.MaxConnectionTTLInSeconds <= 0 {
-			s.MaxConnectionTTLInSeconds = 3600
-		}
-
-		providers[i] = nntppool.UsenetProviderConfig{
-			Host:                           s.Host,
-			Port:                           s.Port,
-			Username:                       s.Username,
-			Password:                       s.Password,
-			TLS:                            s.SSL,
-			MaxConnections:                 maxConnections,
-			MaxConnectionIdleTimeInSeconds: s.MaxConnectionIdleTimeInSeconds,
-			MaxConnectionTTLInSeconds:      s.MaxConnectionTTLInSeconds,
-			InsecureSSL:                    s.InsecureSSL,
-		}
+		providers[i] = serverConfigToProviderConfig(s)
 	}
 
+	return c.buildPoolConfig(providers), nil
+}
+
+// GetPostingPoolConfig returns pool configuration for posting servers only (excluding check-only)
+func (c *ConfigData) GetPostingPoolConfig() (nntppool.Config, error) {
+	postingServers := c.GetPostingServers()
+	if len(postingServers) == 0 {
+		return nntppool.Config{}, fmt.Errorf("no posting servers configured (all servers are check-only)")
+	}
+
+	providers := make([]nntppool.UsenetProviderConfig, len(postingServers))
+	for i, s := range postingServers {
+		providers[i] = serverConfigToProviderConfig(s)
+	}
+
+	return c.buildPoolConfig(providers), nil
+}
+
+// GetCheckPoolConfig returns pool configuration for article verification
+// If there are check-only servers, use those; otherwise fall back to posting servers
+func (c *ConfigData) GetCheckPoolConfig() (nntppool.Config, error) {
+	checkOnlyServers := c.GetCheckOnlyServers()
+
+	// If we have dedicated check-only servers, use them
+	if len(checkOnlyServers) > 0 {
+		providers := make([]nntppool.UsenetProviderConfig, len(checkOnlyServers))
+		for i, s := range checkOnlyServers {
+			providers[i] = serverConfigToProviderConfig(s)
+		}
+		return c.buildPoolConfig(providers), nil
+	}
+
+	// Fall back to posting servers for checking
+	return c.GetPostingPoolConfig()
+}
+
+// buildPoolConfig creates a pool config with common settings
+func (c *ConfigData) buildPoolConfig(providers []nntppool.UsenetProviderConfig) nntppool.Config {
 	if c.ConnectionPool.HealthCheckInterval == "" {
 		c.ConnectionPool.HealthCheckInterval = Duration("1m")
 	}
 
 	if c.ConnectionPool.MinConnections <= 0 {
-		c.ConnectionPool.MinConnections = 5
+		c.ConnectionPool.MinConnections = 0
 	}
 
-	config := nntppool.Config{
+	return nntppool.Config{
 		Providers:           providers,
 		HealthCheckInterval: c.ConnectionPool.HealthCheckInterval.ToDuration(),
 		MinConnections:      c.ConnectionPool.MinConnections,
@@ -596,11 +818,9 @@ func (c *ConfigData) GetNNTPPoolConfig() (nntppool.Config, error) {
 		DelayType:           nntppool.DelayTypeExponential,
 		RetryDelay:          c.Posting.RetryDelay.ToDuration(),
 	}
-
-	return config, nil
 }
 
-// GetNNTPPool returns the NNTP connection pool
+// GetNNTPPool returns the NNTP connection pool (all enabled servers)
 func (c *ConfigData) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
 	config, err := c.GetNNTPPoolConfig()
 	if err != nil {
@@ -610,6 +830,37 @@ func (c *ConfigData) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
 	pool, err := nntppool.NewConnectionPool(config)
 	if err != nil {
 		return nil, fmt.Errorf("error creating connection pool: %w", err)
+	}
+
+	return pool, nil
+}
+
+// GetPostingPool returns the NNTP connection pool for posting (excludes check-only servers)
+func (c *ConfigData) GetPostingPool() (nntppool.UsenetConnectionPool, error) {
+	config, err := c.GetPostingPoolConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	pool, err := nntppool.NewConnectionPool(config)
+	if err != nil {
+		return nil, fmt.Errorf("error creating posting pool: %w", err)
+	}
+
+	return pool, nil
+}
+
+// GetCheckPool returns the NNTP connection pool for article verification
+// Uses check-only servers if available, otherwise falls back to posting servers
+func (c *ConfigData) GetCheckPool() (nntppool.UsenetConnectionPool, error) {
+	config, err := c.GetCheckPoolConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	pool, err := nntppool.NewConnectionPool(config)
+	if err != nil {
+		return nil, fmt.Errorf("error creating check pool: %w", err)
 	}
 
 	return pool, nil
@@ -711,8 +962,8 @@ func GetDefaultConfig() ConfigData {
 			Groups: []NewsgroupConfig{
 				{Name: "alt.binaries.test", Enabled: &enabled},
 			},
-			ThrottleRate:       0, // 0 means no throttling
-			MessageIDFormat:    MessageIDFormatRandom,
+			ThrottleRate:    0, // 0 means no throttling
+			MessageIDFormat: MessageIDFormatRandom,
 			PostHeaders: PostHeaders{
 				AddNXGHeader:  false,
 				DefaultFrom:   "",
@@ -721,7 +972,6 @@ func GetDefaultConfig() ConfigData {
 			ObfuscationPolicy:     ObfuscationPolicyFull,
 			Par2ObfuscationPolicy: ObfuscationPolicyFull,
 			GroupPolicy:           GroupPolicyEachFile,
-			SingleNzbPerFolder:    false, // Default to false for backward compatibility
 		},
 		PostCheck: PostCheck{
 			Enabled:    &enabled,
@@ -739,9 +989,9 @@ func GetDefaultConfig() ConfigData {
 			MaintainPar2Files: &disabled, // Default to false to preserve current behavior
 		},
 		Watcher: WatcherConfig{
-			Enabled:        false,
-			WatchDirectory: "",        // Will be set to default in backend if empty
-			SizeThreshold:  104857600, // 100MB
+			Enabled:            false,
+			WatchDirectory:     "",        // Will be set to default in backend if empty
+			SizeThreshold:      104857600, // 100MB
 			Schedule: ScheduleConfig{
 				StartTime: "00:00",
 				EndTime:   "23:59",
@@ -750,6 +1000,7 @@ func GetDefaultConfig() ConfigData {
 			MinFileSize:        1048576, // 1MB
 			CheckInterval:      Duration("5m"),
 			DeleteOriginalFile: false, // Default to keeping original files for safety
+			SingleNzbPerFolder: false, // Default to false for backward compatibility
 		},
 		NzbCompression: NzbCompressionConfig{
 			Enabled: disabled,
@@ -766,9 +1017,14 @@ func GetDefaultConfig() ConfigData {
 		OutputDir:                 "./output",
 		MaintainOriginalExtension: &enabled,
 		PostUploadScript: PostUploadScriptConfig{
-			Enabled: false,
-			Command: "",
-			Timeout: Duration("30s"),
+			Enabled:            false,
+			Command:            "",
+			Timeout:            Duration("30s"),
+			MaxRetries:         3,
+			RetryDelay:         Duration("30s"),
+			MaxBackoff:         Duration("1h"),
+			MaxRetryDuration:   Duration("24h"),
+			RetryCheckInterval: Duration("1m"),
 		},
 	}
 }
@@ -777,11 +1033,11 @@ func GetDefaultConfig() ConfigData {
 func SaveConfig(configData *ConfigData, path string) error {
 	data, err := yaml.Marshal(configData)
 	if err != nil {
-		return fmt.Errorf("error marshaling YAML: %w", err)
+		return fmt.Errorf("Invalid configuration format: %v", err)
 	}
 
 	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("error writing config file: %w", err)
+		return err // Let caller wrap with path context and user-friendly message
 	}
 
 	return nil

@@ -42,8 +42,9 @@ type QueueStats struct {
 type PaginationParams struct {
 	Page   int    `json:"page"`   // 1-based page number
 	Limit  int    `json:"limit"`  // Items per page
-	SortBy string `json:"sortBy"` // Sort field: "created", "priority", "status", "filename"
+	SortBy string `json:"sortBy"` // Sort field: "created", "priority", "status", "filename", "size"
 	Order  string `json:"order"`  // Sort order: "asc", "desc"
+	Status string `json:"status"` // Status filter: "pending", "complete", "error", or "" for all
 }
 
 // PaginatedQueueResult contains paginated queue items and metadata
@@ -185,6 +186,7 @@ func (a *App) GetQueueItems(params PaginationParams) (*PaginatedQueueResult, err
 		Limit:  params.Limit,
 		SortBy: params.SortBy,
 		Order:  params.Order,
+		Status: params.Status,
 	}
 
 	result, err := a.queue.GetQueueItems(queueParams)

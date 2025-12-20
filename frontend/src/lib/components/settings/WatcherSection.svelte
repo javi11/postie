@@ -28,6 +28,7 @@ let checkInterval = $state(config.watcher?.check_interval || "5m");
 let sizeThreshold = $state(config.watcher?.size_threshold || 104857600); // 100MB
 let minFileSize = $state(config.watcher?.min_file_size || 1048576); // 1MB
 let deleteOriginalFile = $state(config.watcher?.delete_original_file ?? false);
+let singleNzbPerFolder = $state(config.watcher?.single_nzb_per_folder ?? false);
 let startTime = $state(config.watcher?.schedule?.start_time || "00:00");
 let endTime = $state(config.watcher?.schedule?.end_time || "23:59");
 let ignorePatterns = $state<string[]>(config.watcher?.ignore_patterns || []);
@@ -50,6 +51,7 @@ const sizeThresholdPresets = [
 ];
 
 const minFileSizePresets = [
+  { label: "0B", value: 0, unit: "B" },
   { label: "1MB", value: 1, unit: "MB" },
   { label: "10MB", value: 10, unit: "MB" },
   { label: "50MB", value: 50, unit: "MB" },
@@ -74,6 +76,7 @@ $effect(() => {
 		config.watcher.size_threshold = sizeThreshold;
 		config.watcher.min_file_size = minFileSize;
 		config.watcher.delete_original_file = deleteOriginalFile;
+		config.watcher.single_nzb_per_folder = singleNzbPerFolder;
 		if (!config.watcher.schedule) {
 			config.watcher.schedule = { start_time: "00:00", end_time: "23:59" };
 		}
@@ -111,6 +114,7 @@ $effect(() => {
 			sizeThreshold = config.watcher?.size_threshold || 104857600;
 			minFileSize = config.watcher?.min_file_size || 1048576;
 			deleteOriginalFile = config.watcher?.delete_original_file ?? false;
+			singleNzbPerFolder = config.watcher?.single_nzb_per_folder ?? false;
 			startTime = config.watcher?.schedule?.start_time || "00:00";
 			endTime = config.watcher?.schedule?.end_time || "23:59";
 			ignorePatterns = config.watcher?.ignore_patterns || [];
@@ -180,6 +184,7 @@ async function saveWatcherSettings() {
     currentConfig.watcher.min_file_size = config.watcher.min_file_size ?? currentConfig.watcher.min_file_size;
     currentConfig.watcher.check_interval = config.watcher.check_interval || currentConfig.watcher.check_interval;
     currentConfig.watcher.delete_original_file = config.watcher.delete_original_file ?? currentConfig.watcher.delete_original_file;
+    currentConfig.watcher.single_nzb_per_folder = config.watcher.single_nzb_per_folder ?? currentConfig.watcher.single_nzb_per_folder;
     
     // Update schedule if it exists
     if (config.watcher.schedule) {
@@ -330,6 +335,23 @@ async function saveWatcherSettings() {
                   <p class="text-sm text-base-content/70">
                     {$t('settings.watcher.delete_original_file_description')}
                   </p>
+                </div>
+
+                <div>
+                  <div class="form-control">
+                    <label class="label cursor-pointer justify-start gap-3">
+                      <input type="checkbox" class="toggle toggle-primary" bind:checked={singleNzbPerFolder} />
+                      <span class="label-text">{$t('settings.watcher.single_nzb_per_folder')}</span>
+                    </label>
+                  </div>
+                  <p class="text-sm text-base-content/70">
+                    {$t('settings.watcher.single_nzb_per_folder_description')}
+                  </p>
+                  <div class="mt-2 p-3 bg-base-200 rounded text-xs">
+                    <p class="text-base-content/70">
+                      {@html $t('settings.watcher.single_nzb_per_folder_info')}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

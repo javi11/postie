@@ -147,6 +147,9 @@
 			"behavior_description": "Configure how processed files should be handled",
 			"delete_original_file": "Delete original files after upload",
 			"delete_original_file_description": "Permanently removes source files from the watch directory after successful upload. Use with caution as this action cannot be undone.",
+			"single_nzb_per_folder": "Single NZB Per Folder",
+			"single_nzb_per_folder_description": "Create one NZB per folder instead of one NZB per file in watch mode. When enabled, all files in a folder will be combined into a single NZB file.",
+			"single_nzb_per_folder_info": "<strong>Watch Mode Only:</strong> When the watcher detects files in a folder, creates one NZB named after the folder containing all files (e.g., 'folder.nzb' with 'subfolder/file1.mkv' and 'file2.mkv'). Note: Direct folder uploads via the Add Folder button always create a single NZB regardless of this setting.",
 			"posting_schedule": "Posting Schedule",
 			"posting_schedule_description": "Define when the watcher is allowed to post files (24-hour format)",
 			"time_range": "Time Range",
@@ -241,9 +244,6 @@
 			"group_policy_description": "How to distribute files across newsgroups",
 			"wait_for_par2": "Wait for PAR2",
 			"wait_for_par2_description": "Wait for PAR2 files to be created before starting upload",
-			"single_nzb_per_folder": "Single NZB Per Folder",
-			"single_nzb_per_folder_description": "Create one NZB per folder instead of one NZB per file. When enabled, all files in a folder will be combined into a single NZB file.",
-			"single_nzb_per_folder_info": "<strong>Watch Mode:</strong> Creates one NZB named after the folder containing all files (e.g., 'folder.nzb' with 'subfolder/file1.mkv' and 'file2.mkv'). <strong>Direct Upload:</strong> When uploading a folder, creates one NZB for the entire folder contents.",
 			"obfuscation": {
 				"none": "None",
 				"partial": "Partial",
@@ -372,8 +372,13 @@
 				"cannot_disable_all": "Cannot disable all providers. At least one must remain active."
 			},
 			"validation": {
-				"cannot_disable_last": "Cannot disable the last active provider. At least one provider must remain enabled."
+				"cannot_disable_last": "Cannot disable the last active provider. At least one provider must remain enabled.",
+				"cannot_set_all_check_only": "Cannot set all providers to check-only. At least one provider must be available for posting."
 			},
+			"check_only": "Check Only",
+			"check_only_description": "Use this provider only for verifying uploaded articles, not for posting",
+			"check_only_enabled_description": "This provider will only verify articles, not post them",
+			"check_only_badge": "Verify Only",
 			"validation_errors": {
 				"host_required": "Server {number}: Host is required",
 				"port_invalid": "Server {number}: Valid port number is required (1-65535)"

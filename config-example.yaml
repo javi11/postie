@@ -19,7 +19,8 @@ posting:
   retry_delay: 5s
   article_size_in_bytes: 750000
   groups:
-    - 'alt.binaries.test'
+    - name: 'alt.binaries.test'
+      enabled: true
   throttle_rate: 0
   message_id_format: 'random'
   obfuscation_policy: 'full'
@@ -43,7 +44,7 @@ par2:
   max_input_slices: 4000
   extra_par2_options: []
   # Directory where PAR2 files are temporarily created (uses system temp by default)
-  temp_dir: ""
+  temp_dir: ''
   # Whether to keep PAR2 files after successful upload (false = cleanup after success)
   maintain_par2_files: false
 
