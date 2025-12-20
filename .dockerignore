@@ -26,9 +26,6 @@ wails.json
 frontend/node_modules/
 frontend/.svelte-kit/
 frontend/static/
-frontend/svelte.config.js
-frontend/vite.config.ts
-frontend/tsconfig.json
 frontend/README.md
 frontend/package.json.md5
 frontend/index.html
