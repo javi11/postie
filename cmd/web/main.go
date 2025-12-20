@@ -282,21 +282,57 @@ func (ws *WebServer) setupRoutes() {
 }
 
 func (ws *WebServer) getStaticFileHandler() http.Handler {
+	var fs http.FileSystem
+
 	// Check if we should use embedded filesystem or development path
 	if _, err := os.Stat(frontendBuildPath); err == nil {
 		// Development mode - serve from disk
-		return http.StripPrefix("/", http.FileServer(http.Dir(frontendBuildPath)))
+		fs = http.Dir(frontendBuildPath)
+	} else {
+		// Production mode - serve from embedded filesystem
+		buildFS, err := frontend.GetBuildFS()
+		if err != nil {
+			log.Printf("Failed to get embedded filesystem: %v", err)
+			fs = http.Dir(frontendBuildPath)
+		} else {
+			fs = http.FS(buildFS)
+		}
 	}
 
-	// Production mode - serve from embedded filesystem
-	buildFS, err := frontend.GetBuildFS()
-	if err != nil {
-		log.Printf("Failed to get embedded filesystem: %v", err)
-		// Fallback to disk if embedded fails
-		return http.StripPrefix("/", http.FileServer(http.Dir(frontendBuildPath)))
-	}
+	fileServer := http.FileServer(fs)
 
-	return http.StripPrefix("/", http.FileServer(http.FS(buildFS)))
+	// SPA fallback handler with prerendered page support
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+
+		// Try to open the exact file
+		if f, err := fs.Open(path); err == nil {
+			f.Close()
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+
+		// For paths without extension, try .html version (SvelteKit prerendered pages)
+		ext := filepath.Ext(path)
+		if ext == "" {
+			htmlPath := path + ".html"
+			if f, err := fs.Open(htmlPath); err == nil {
+				f.Close()
+				// Serve the prerendered .html file
+				r.URL.Path = htmlPath
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+
+			// No prerendered page exists - serve index.html as SPA fallback
+			r.URL.Path = "/index.html"
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+
+		// Asset file not found - return 404
+		http.NotFound(w, r)
+	})
 }
 
 // LiveHandler returns a simple response to indicate the server is live
