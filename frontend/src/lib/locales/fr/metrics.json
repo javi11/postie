@@ -40,7 +40,9 @@
 		"data_transfer": "Transfert de Données",
 		"total_downloaded": "Total Téléchargé",
 		"total_uploaded": "Total Uploadé",
-		
+		"data_uploaded": "Données Téléversées",
+		"errors": "Erreurs",
+
 		"providers": "Fournisseurs NNTP",
 		"provider_host": "Hôte/Serveur",
 		"status": "Statut",
