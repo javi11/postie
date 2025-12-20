@@ -51,6 +51,7 @@ const sizeThresholdPresets = [
 ];
 
 const minFileSizePresets = [
+  { label: "0B", value: 0, unit: "B" },
   { label: "1MB", value: 1, unit: "MB" },
   { label: "10MB", value: 10, unit: "MB" },
   { label: "50MB", value: 50, unit: "MB" },

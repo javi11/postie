@@ -29,10 +29,15 @@ let {
 
 // State - local state for form inputs (following best practices)
 function parseSize(val: number | undefined): { value: number; unit: string } {
-	if (!val || typeof val !== "number" || Number.isNaN(val)) {
-		return { value: 100, unit: "MB" };
+	if (val === undefined || typeof val !== "number" || Number.isNaN(val)) {
+		return { value: 0, unit: "B" };
 	}
-	
+
+	// Handle 0 explicitly
+	if (val === 0) {
+		return { value: 0, unit: "B" };
+	}
+
 	if (val >= 1073741824 && val % 1073741824 === 0) {
 		return { value: val / 1073741824, unit: "GB" };
 	}
@@ -41,7 +46,11 @@ function parseSize(val: number | undefined): { value: number; unit: string } {
 		return { value: val / 1048576, unit: "MB" };
 	}
 
-	return { value: val / 1024, unit: "KB" };	;	
+	if (val >= 1024 && val % 1024 === 0) {
+		return { value: val / 1024, unit: "KB" };
+	}
+
+	return { value: val, unit: "B" };
 }
 
 // Initialize with current value
@@ -72,9 +81,10 @@ $effect(() => {
 
 // Derived state - reactive calculations
 const sizeUnitOptions = $derived([
+	{ value: "B", name: "B" },
+	{ value: "KB", name: "KB" },
 	{ value: "MB", name: "MB" },
 	{ value: "GB", name: "GB" },
-	{ value: "KB", name: "KB" },
 ]);
 
 const dynamicMaxValue = $derived(
@@ -98,6 +108,9 @@ function unitToBytes(val: number, unit: string): number {
 	}
 	if (unit === "KB") {
 		return val * 1024;
+	}
+	if (unit === "B") {
+		return val;
 	}
 	return val;
 }
