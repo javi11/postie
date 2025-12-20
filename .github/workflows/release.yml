@@ -3,7 +3,7 @@ name: Build
 on:
   push:
     tags:
-      - "v*.*.*"
+      - 'v*.*.*'
 
 env:
   # Use docker.io for Docker Hub if empty
@@ -96,12 +96,12 @@ jobs:
           # macOS builds
           - goos: darwin
             goarch: amd64
-            runner: macos-13
-            cc: ""
+            runner: macos-latest
+            cc: ''
           - goos: darwin
             goarch: arm64
-            runner: macos-13
-            cc: ""
+            runner: macos-latest
+            cc: ''
           # Windows builds
           - goos: windows
             goarch: amd64
@@ -185,7 +185,7 @@ jobs:
           retention-days: 1
 
   create-universal-darwin:
-    runs-on: macos-13
+    runs-on: macos-latest
     needs: build-cli
     permissions:
       contents: write
@@ -360,7 +360,7 @@ jobs:
           go-version: 1.24.5
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
 
       # checkout
       - name: Checkout
@@ -390,7 +390,7 @@ jobs:
           path: build/bin
 
   build-gui-macos:
-    runs-on: macos-13
+    runs-on: macos-latest
     needs: test
     permissions:
       contents: write
@@ -400,7 +400,7 @@ jobs:
           go-version: 1.24.5
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
 
       # checkout
       - name: Checkout
