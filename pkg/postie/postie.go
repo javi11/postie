@@ -220,16 +220,19 @@ func (p *Postie) postInParallel(
 		postingSucceeded bool
 	)
 	defer func() {
-		// Only clean up PAR2 files if posting was successful AND maintain_par2_files is false
-		// This preserves them for retry attempts on failure, and permanently if maintain_par2_files is true
-		shouldCleanup := postingSucceeded && (p.par2Cfg.MaintainPar2Files == nil || !*p.par2Cfg.MaintainPar2Files)
-		if shouldCleanup {
+		// Only process PAR2 files if posting was successful
+		if !postingSucceeded {
+			// Keep PAR2 files on failure for retry attempts
+			return
+		}
+
+		// Only clean up if maintain_par2_files is disabled
+		// If enabled, files are already in output directory - no action needed
+		if p.par2Cfg.MaintainPar2Files == nil || !*p.par2Cfg.MaintainPar2Files {
+			// Clean up PAR2 files when maintain_par2_files is disabled (default)
 			for _, path := range createdPar2Paths {
 				safeRemoveFile(ctx, path)
 			}
-		} else if postingSucceeded && p.par2Cfg.MaintainPar2Files != nil && *p.par2Cfg.MaintainPar2Files {
-			slog.InfoContext(ctx, "PAR2 files preserved due to maintain_par2_files setting",
-				"sourceFile", f.Path, "par2Files", len(createdPar2Paths))
 		}
 	}()
 
@@ -238,7 +241,20 @@ func (p *Postie) postInParallel(
 	errg := errgroup.Group{}
 
 	errg.Go(func() error {
-		createdPar2Paths, err = p.par2runner.Create(ctx, []fileinfo.FileInfo{f})
+		// Determine PAR2 output directory based on maintain_par2_files setting
+		var par2OutputDir string
+		if p.par2Cfg.MaintainPar2Files != nil && *p.par2Cfg.MaintainPar2Files {
+			// Generate PAR2 files directly in output directory
+			dirPath := filepath.Dir(f.Path)
+			relativePath := strings.TrimPrefix(dirPath, rootDir)
+			par2OutputDir = filepath.Join(outputDir, relativePath)
+
+			slog.DebugContext(ctx, "Generating PAR2 files directly in output directory",
+				"sourceFile", f.Path, "outputDir", par2OutputDir)
+		}
+		// If par2OutputDir is empty, CreateInDirectory will use default behavior (temp/source dir)
+
+		createdPar2Paths, err = p.par2runner.CreateInDirectory(ctx, []fileinfo.FileInfo{f}, par2OutputDir)
 		if err != nil {
 			if !errors.Is(err, context.Canceled) {
 				slog.ErrorContext(ctx, "Error during par2 creation. Upload will continue without par2.", "error", err)
@@ -303,16 +319,19 @@ func (p *Postie) post(
 	)
 
 	defer func() {
-		// Only clean up PAR2 files if posting was successful AND maintain_par2_files is false
-		// This preserves them for retry attempts on failure, and permanently if maintain_par2_files is true
-		shouldCleanup := postingSucceeded && (p.par2Cfg.MaintainPar2Files == nil || !*p.par2Cfg.MaintainPar2Files)
-		if shouldCleanup {
+		// Only process PAR2 files if posting was successful
+		if !postingSucceeded {
+			// Keep PAR2 files on failure for retry attempts
+			return
+		}
+
+		// Only clean up if maintain_par2_files is disabled
+		// If enabled, files are already in output directory - no action needed
+		if p.par2Cfg.MaintainPar2Files == nil || !*p.par2Cfg.MaintainPar2Files {
+			// Clean up PAR2 files when maintain_par2_files is disabled (default)
 			for _, path := range createdPar2Paths {
 				safeRemoveFile(ctx, path)
 			}
-		} else if postingSucceeded && p.par2Cfg.MaintainPar2Files != nil && *p.par2Cfg.MaintainPar2Files {
-			slog.InfoContext(ctx, "PAR2 files preserved due to maintain_par2_files setting",
-				"sourceFile", f.Path, "par2Files", len(createdPar2Paths))
 		}
 	}()
 
@@ -320,7 +339,20 @@ func (p *Postie) post(
 	nzbGen := nzb.NewGenerator(p.postingCfg.ArticleSizeInBytes, p.compressionCfg, p.maintainOriginalExtension)
 
 	if *p.par2Cfg.Enabled {
-		createdPar2Paths, err = p.par2runner.Create(ctx, []fileinfo.FileInfo{f})
+		// Determine PAR2 output directory based on maintain_par2_files setting
+		var par2OutputDir string
+		if p.par2Cfg.MaintainPar2Files != nil && *p.par2Cfg.MaintainPar2Files {
+			// Generate PAR2 files directly in output directory
+			dirPath := filepath.Dir(f.Path)
+			relativePath := strings.TrimPrefix(dirPath, rootDir)
+			par2OutputDir = filepath.Join(outputDir, relativePath)
+
+			slog.DebugContext(ctx, "Generating PAR2 files directly in output directory",
+				"sourceFile", f.Path, "outputDir", par2OutputDir)
+		}
+		// If par2OutputDir is empty, CreateInDirectory will use default behavior (temp/source dir)
+
+		createdPar2Paths, err = p.par2runner.CreateInDirectory(ctx, []fileinfo.FileInfo{f}, par2OutputDir)
 		if err != nil {
 			if !errors.Is(err, context.Canceled) {
 				slog.ErrorContext(ctx, "Error during par2 creation. Upload will continue without par2.", "error", err)
@@ -383,15 +415,19 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 	)
 
 	defer func() {
-		// Only clean up PAR2 files if posting was successful AND maintain_par2_files is false
-		shouldCleanup := postingSucceeded && (p.par2Cfg.MaintainPar2Files == nil || !*p.par2Cfg.MaintainPar2Files)
-		if shouldCleanup {
+		// Only process PAR2 files if posting was successful
+		if !postingSucceeded {
+			// Keep PAR2 files on failure for retry attempts
+			return
+		}
+
+		// Only clean up if maintain_par2_files is disabled
+		// If enabled, files are already in output directory - no action needed
+		if p.par2Cfg.MaintainPar2Files == nil || !*p.par2Cfg.MaintainPar2Files {
+			// Clean up PAR2 files when maintain_par2_files is disabled (default)
 			for _, path := range createdPar2Paths {
 				safeRemoveFile(ctx, path)
 			}
-		} else if postingSucceeded && p.par2Cfg.MaintainPar2Files != nil && *p.par2Cfg.MaintainPar2Files {
-			slog.InfoContext(ctx, "PAR2 files preserved due to maintain_par2_files setting",
-				"folder", folderName, "par2Files", len(createdPar2Paths))
 		}
 	}()
 
@@ -412,7 +448,18 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 	if *p.postingCfg.WaitForPar2 {
 		// Create PAR2 files for all files in the folder
 		if *p.par2Cfg.Enabled {
-			createdPar2Paths, err = p.par2runner.Create(ctx, files)
+			// Determine PAR2 output directory based on maintain_par2_files setting
+			var par2OutputDir string
+			if p.par2Cfg.MaintainPar2Files != nil && *p.par2Cfg.MaintainPar2Files {
+				// For folder posting, PAR2 files go directly in outputDir
+				par2OutputDir = outputDir
+
+				slog.DebugContext(ctx, "Generating PAR2 files directly in output directory",
+					"folder", folderName, "outputDir", par2OutputDir)
+			}
+			// If par2OutputDir is empty, CreateInDirectory will use default behavior (temp/source dir)
+
+			createdPar2Paths, err = p.par2runner.CreateInDirectory(ctx, files, par2OutputDir)
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
 					slog.ErrorContext(ctx, "Error during par2 creation. Upload will continue without par2.", "error", err)
@@ -439,7 +486,18 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 			if !*p.par2Cfg.Enabled {
 				return nil
 			}
-			createdPar2Paths, err = p.par2runner.Create(ctx, files)
+
+			// Determine PAR2 output directory based on maintain_par2_files setting
+			var par2OutputDir string
+			if p.par2Cfg.MaintainPar2Files != nil && *p.par2Cfg.MaintainPar2Files {
+				// For folder posting, PAR2 files go directly in outputDir
+				par2OutputDir = outputDir
+
+				slog.DebugContext(ctx, "Generating PAR2 files directly in output directory",
+					"folder", folderName, "outputDir", par2OutputDir)
+			}
+
+			createdPar2Paths, err = p.par2runner.CreateInDirectory(ctx, files, par2OutputDir)
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
 					slog.ErrorContext(ctx, "Error during par2 creation. Upload will continue without par2.", "error", err)
