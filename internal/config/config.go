@@ -24,29 +24,6 @@ const (
 	CurrentConfigVersion = 1
 )
 
-// #region agent log
-const agentDebugLogPath = "/Users/javi/mio/postie/.cursor/debug.log"
-
-func agentDebugLog(payload map[string]any) {
-	// Best-effort, never fail config parsing because of debug logging.
-	payload["timestamp"] = time.Now().UnixMilli()
-	b, err := json.Marshal(payload)
-	if err != nil {
-		return
-	}
-	// Ensure parent directory exists (manual cleanup may remove it).
-	if err := os.MkdirAll(filepath.Dir(agentDebugLogPath), 0755); err != nil {
-		return
-	}
-	f, err := os.OpenFile(agentDebugLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return
-	}
-	_, _ = f.Write(append(b, '\n'))
-	_ = f.Close()
-}
-// #endregion agent log
-
 // Duration wraps time.Duration to provide custom JSON and YAML marshalling
 type Duration string
 
@@ -59,56 +36,18 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 func (d *Duration) UnmarshalJSON(data []byte) error {
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
-		// #region agent log
-		agentDebugLog(map[string]any{
-			"sessionId":    "debug-session",
-			"runId":        "pre-fix",
-			"hypothesisId": "D",
-			"location":     "internal/config/config.go:Duration.UnmarshalJSON",
-			"message":      "json.Unmarshal into string failed for Duration",
-			"data": map[string]any{
-				"raw_json_len": len(data),
-			},
-		})
-		// #endregion agent log
 		return err
 	}
 
 	// Allow empty duration strings (treat as zero) so partial configs or missing fields don't hard-fail.
 	// Defaults (where applicable) are applied at higher levels (e.g. config load / validation).
 	if s == "" {
-		// #region agent log
-		agentDebugLog(map[string]any{
-			"sessionId":    "debug-session",
-			"runId":        "pre-fix",
-			"hypothesisId": "E",
-			"location":     "internal/config/config.go:Duration.UnmarshalJSON",
-			"message":      "Empty duration string accepted (treated as zero)",
-			"data": map[string]any{
-				"raw_json": string(data),
-			},
-		})
-		// #endregion agent log
 		*d = Duration("")
 		return nil
 	}
 
 	duration, err := time.ParseDuration(s)
 	if err != nil {
-		// #region agent log
-		agentDebugLog(map[string]any{
-			"sessionId":    "debug-session",
-			"runId":        "pre-fix",
-			"hypothesisId": "C",
-			"location":     "internal/config/config.go:Duration.UnmarshalJSON",
-			"message":      "time.ParseDuration failed for Duration",
-			"data": map[string]any{
-				"duration_str": s, // safe: duration strings only
-				"raw_json":     string(data),
-				"error":        err.Error(),
-			},
-		})
-		// #endregion agent log
 		return err
 	}
 
@@ -125,55 +64,19 @@ func (d Duration) MarshalYAML() (interface{}, error) {
 func (d *Duration) UnmarshalYAML(value *yaml.Node) error {
 	var s string
 	if err := value.Decode(&s); err != nil {
-		// #region agent log
-		agentDebugLog(map[string]any{
-			"sessionId":    "debug-session",
-			"runId":        "pre-fix",
-			"hypothesisId": "Y1",
-			"location":     "internal/config/config.go:Duration.UnmarshalYAML",
-			"message":      "yaml.Node.Decode into string failed for Duration",
-			"data": map[string]any{
-				"line":   value.Line,
-				"column": value.Column,
-			},
-		})
-		// #endregion agent log
 		return err
 	}
 
-	// #region agent log
+	// Allow empty duration strings (treat as zero) so partial configs or missing fields don't hard-fail.
+	// Defaults (where applicable) are applied at higher levels (e.g. config load / validation).
 	if s == "" {
-		agentDebugLog(map[string]any{
-			"sessionId":    "debug-session",
-			"runId":        "pre-fix",
-			"hypothesisId": "Y2",
-			"location":     "internal/config/config.go:Duration.UnmarshalYAML",
-			"message":      "Duration string is empty before ParseDuration (YAML)",
-			"data": map[string]any{
-				"line":   value.Line,
-				"column": value.Column,
-			},
-		})
+		// #endregion agent log
+		*d = Duration("")
+		return nil
 	}
-	// #endregion agent log
 
 	duration, err := time.ParseDuration(s)
 	if err != nil {
-		// #region agent log
-		agentDebugLog(map[string]any{
-			"sessionId":    "debug-session",
-			"runId":        "pre-fix",
-			"hypothesisId": "Y3",
-			"location":     "internal/config/config.go:Duration.UnmarshalYAML",
-			"message":      "time.ParseDuration failed for Duration (YAML)",
-			"data": map[string]any{
-				"duration_str": s, // safe
-				"line":         value.Line,
-				"column":       value.Column,
-				"error":        err.Error(),
-			},
-		})
-		// #endregion agent log
 		return err
 	}
 
@@ -989,9 +892,9 @@ func GetDefaultConfig() ConfigData {
 			MaintainPar2Files: &disabled, // Default to false to preserve current behavior
 		},
 		Watcher: WatcherConfig{
-			Enabled:            false,
-			WatchDirectory:     "",        // Will be set to default in backend if empty
-			SizeThreshold:      104857600, // 100MB
+			Enabled:        false,
+			WatchDirectory: "",        // Will be set to default in backend if empty
+			SizeThreshold:  104857600, // 100MB
 			Schedule: ScheduleConfig{
 				StartTime: "00:00",
 				EndTime:   "23:59",

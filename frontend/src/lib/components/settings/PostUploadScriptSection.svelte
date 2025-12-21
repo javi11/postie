@@ -66,7 +66,9 @@ async function savePostUploadScriptSettings() {
 			throw new Error("Timeout is required");
 		}
 
+		// Preserve existing fields and only update the ones managed by this UI
 		currentConfig.post_upload_script = {
+			...currentConfig.post_upload_script,
 			enabled: enabled,
 			command: command.trim(),
 			timeout: timeout.trim(),
