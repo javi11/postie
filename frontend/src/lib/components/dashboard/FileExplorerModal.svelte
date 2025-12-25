@@ -108,7 +108,7 @@ function handlePathInputKeydown(event: KeyboardEvent) {
 
 async function importSelectedFiles() {
   if (selectedFiles.size === 0) {
-    toastStore.error($t("common.messages.error"), "No files selected");
+    toastStore.error($t("common.messages.error"), $t("dashboard.file_explorer.no_files_selected"));
     return;
   }
 
@@ -116,10 +116,10 @@ async function importSelectedFiles() {
   try {
     const filePaths = Array.from(selectedFiles);
     await apiClient.importFiles(filePaths);
-    
+
     toastStore.success(
       $t("dashboard.file_explorer.import_success"),
-      `Successfully added ${filePaths.length} file${filePaths.length !== 1 ? 's' : ''} to queue`
+      $t("dashboard.file_explorer.import_success_description", { values: { count: filePaths.length } })
     );
     
     // Clear selection and close modal
@@ -216,15 +216,15 @@ onMount(() => {
             class="btn btn-ghost btn-sm"
             onclick={goBack}
             disabled={pathHistory.length === 0}
-            title="Go back"
+            title={$t('dashboard.file_explorer.go_back_tooltip')}
           >
             <ArrowLeft class="w-4 h-4" />
           </button>
-          
+
           <button
             class="btn btn-ghost btn-sm"
             onclick={goHome}
-            title="Go to root"
+            title={$t('dashboard.file_explorer.go_home_tooltip')}
           >
             <Home class="w-4 h-4" />
           </button>
@@ -236,16 +236,16 @@ onMount(() => {
               class="input input-bordered input-sm w-full"
               bind:value={pathInput}
               onkeydown={handlePathInputKeydown}
-              placeholder="Enter path (e.g., /home/user/documents)"
+              placeholder={$t('dashboard.file_explorer.path_placeholder')}
             />
           </div>
-          
+
           <button
             class="btn btn-primary btn-sm"
             onclick={() => navigateToPath(pathInput)}
             disabled={loading}
           >
-            Go
+            {$t('dashboard.file_explorer.go_button')}
           </button>
         </div>
 
@@ -254,13 +254,13 @@ onMount(() => {
           <div class="flex items-center gap-2">
             {#if hasSelectedFiles}
               <span class="text-sm text-base-content/70">
-                {selectedFileCount} item{selectedFileCount !== 1 ? 's' : ''} selected
+                {$t('dashboard.file_explorer.items_selected', { values: { count: selectedFileCount } })}
               </span>
               <button
                 class="btn btn-ghost btn-xs"
                 onclick={clearSelection}
               >
-                Clear
+                {$t('dashboard.file_explorer.clear_selection')}
               </button>
             {/if}
 
@@ -269,12 +269,12 @@ onMount(() => {
               onclick={selectAll}
               disabled={fileManagerData.length === 0}
             >
-              Select All
+              {$t('dashboard.file_explorer.select_all')}
             </button>
           </div>
-          
+
           <div class="text-sm text-base-content/70">
-            Current: {currentPath}
+            {$t('dashboard.file_explorer.current_path', { values: { path: currentPath } })}
           </div>
         </div>
       </div>
@@ -285,17 +285,17 @@ onMount(() => {
           <div class="absolute inset-0 bg-base-100/80 flex items-center justify-center z-10">
             <div class="flex items-center gap-2">
               <Loader class="w-6 h-6 animate-spin text-primary" />
-              <span class="text-base-content/70">Loading...</span>
+              <span class="text-base-content/70">{$t('dashboard.file_explorer.loading')}</span>
             </div>
           </div>
         {/if}
-        
+
         <div class="h-full overflow-y-auto">
           {#if fileManagerData.length === 0 && !loading}
             <div class="flex items-center justify-center h-full text-base-content/50">
               <div class="text-center">
                 <div class="text-6xl mb-4">📁</div>
-                <p>This directory is empty</p>
+                <p>{$t('dashboard.file_explorer.empty_directory')}</p>
               </div>
             </div>
           {:else}
@@ -331,7 +331,10 @@ onMount(() => {
                     <div class="font-medium truncate">{item.id.split('/').pop()}</div>
                     <div class="text-sm text-base-content/70 flex items-center gap-2 mt-1">
                       <span>
-                        {item.type === "file" ? `${(item.size / 1024).toFixed(1)} KB` : "Folder"}
+                        {item.type === "file"
+                          ? $t('dashboard.file_explorer.file_size_kb', { values: { size: (item.size / 1024).toFixed(1) } })
+                          : $t('dashboard.file_explorer.folder_type')
+                        }
                       </span>
                       <span>•</span>
                       <span>{item.date.toLocaleDateString()}</span>
@@ -364,20 +367,20 @@ onMount(() => {
       <div class="flex items-center justify-between p-4 border-t border-base-300 bg-base-50">
         <div class="text-sm text-base-content/70">
           {#if hasSelectedFiles}
-            {selectedFileCount} item{selectedFileCount !== 1 ? 's' : ''} selected
+            {$t('dashboard.file_explorer.items_selected', { values: { count: selectedFileCount } })}
           {:else}
-            {fileManagerData.length} item{fileManagerData.length !== 1 ? 's' : ''}
+            {$t('dashboard.file_explorer.item_count_footer', { values: { count: fileManagerData.length } })}
           {/if}
         </div>
-        
+
         <div class="flex gap-2">
           <button
             class="btn btn-ghost"
             onclick={onClose}
           >
-            Cancel
+            {$t('dashboard.file_explorer.cancel_button')}
           </button>
-          
+
           <button
             class="btn btn-primary"
             onclick={importSelectedFiles}
@@ -385,10 +388,10 @@ onMount(() => {
           >
             {#if importing}
               <Loader class="w-4 h-4 animate-spin" />
-              Adding to Queue...
+              {$t('dashboard.file_explorer.adding_to_queue')}
             {:else}
               <Upload class="w-4 h-4" />
-              Add {selectedFileCount > 0 ? selectedFileCount : ''} Item{selectedFileCount !== 1 ? 's' : ''} to Queue
+              {$t('dashboard.file_explorer.add_to_queue_button', { values: { count: selectedFileCount } })}
             {/if}
           </button>
         </div>

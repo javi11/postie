@@ -86,7 +86,13 @@
 			"details": "Détails",
 			"last_update": "Dernière Mise à Jour",
 			"no_upload_title": "Aucun téléchargement en cours",
-			"no_upload_description": "Cliquez sur \"Démarrer le Téléchargement\" pour commencer le traitement de la file d'attente"
+			"no_upload_description": "Cliquez sur \"Démarrer le Téléchargement\" pour commencer le traitement de la file d'attente",
+			"active_tasks": "Tâches Actives",
+			"elapsed": "Écoulé",
+			"remaining": "Restant",
+			"speed": "Vitesse",
+			"current": "Actuel",
+			"total": "Total"
 		},
 		"stats": {
 			"title": "Statistiques",
@@ -126,7 +132,25 @@
 		"job_failed": "Échec du téléchargement: {fileName}",
 		"file_explorer": {
 			"title": "Ajouter des Fichiers du Serveur à la File",
-			"import_success": "Fichiers ajoutés à la file avec succès"
+			"import_success": "Fichiers ajoutés à la file avec succès",
+			"no_files_selected": "Aucun fichier sélectionné",
+			"import_success_description": "{count} {count, plural, =1 {fichier ajouté} other {fichiers ajoutés}} à la file avec succès",
+			"go_back_tooltip": "Retour",
+			"go_home_tooltip": "Aller à la racine",
+			"path_placeholder": "Entrez le chemin (ex., /home/utilisateur/documents)",
+			"go_button": "Aller",
+			"items_selected": "{count} {count, plural, =1 {élément sélectionné} other {éléments sélectionnés}}",
+			"clear_selection": "Effacer",
+			"select_all": "Tout Sélectionner",
+			"current_path": "Actuel : {path}",
+			"loading": "Chargement...",
+			"empty_directory": "Ce répertoire est vide",
+			"file_size_kb": "{size} Ko",
+			"folder_type": "Dossier",
+			"cancel_button": "Annuler",
+			"adding_to_queue": "Ajout à la File...",
+			"add_to_queue_button": "Ajouter {count} {count, plural, =1 {Élément} other {Éléments}} à la File",
+			"item_count_footer": "{count} {count, plural, =1 {élément} other {éléments}}"
 		},
 		"provider": {
 			"title": "État du Fournisseur",

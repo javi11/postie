@@ -87,7 +87,13 @@
 			"details": "Detalles",
 			"last_update": "Última Actualización",
 			"no_upload_title": "No hay carga en progreso",
-			"no_upload_description": "Haga clic en \"Iniciar Carga\" para comenzar a procesar la cola"
+			"no_upload_description": "Haga clic en \"Iniciar Carga\" para comenzar a procesar la cola",
+			"active_tasks": "Tareas Activas",
+			"elapsed": "Transcurrido",
+			"remaining": "Restante",
+			"speed": "Velocidad",
+			"current": "Actual",
+			"total": "Total"
 		},
 		"stats": {
 			"title": "Estadísticas",
@@ -127,7 +133,25 @@
 		"job_failed": "Subida fallida: {fileName}",
 		"file_explorer": {
 			"title": "Agregar Archivos del Servidor a la Cola",
-			"import_success": "Archivos agregados a la cola exitosamente"
+			"import_success": "Archivos agregados a la cola exitosamente",
+			"no_files_selected": "No se han seleccionado archivos",
+			"import_success_description": "Se {count, plural, =1 {agregó} other {agregaron}} {count} {count, plural, =1 {archivo} other {archivos}} a la cola correctamente",
+			"go_back_tooltip": "Volver",
+			"go_home_tooltip": "Ir a raíz",
+			"path_placeholder": "Ingrese la ruta (ej., /home/usuario/documentos)",
+			"go_button": "Ir",
+			"items_selected": "{count} {count, plural, =1 {elemento seleccionado} other {elementos seleccionados}}",
+			"clear_selection": "Limpiar",
+			"select_all": "Seleccionar Todo",
+			"current_path": "Actual: {path}",
+			"loading": "Cargando...",
+			"empty_directory": "Este directorio está vacío",
+			"file_size_kb": "{size} KB",
+			"folder_type": "Carpeta",
+			"cancel_button": "Cancelar",
+			"adding_to_queue": "Agregando a la Cola...",
+			"add_to_queue_button": "Agregar {count} {count, plural, =1 {Elemento} other {Elementos}} a la Cola",
+			"item_count_footer": "{count} {count, plural, =1 {elemento} other {elementos}}"
 		},
 		"provider": {
 			"title": "Estado de los Proveedores",

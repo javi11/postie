@@ -72,7 +72,7 @@
 			"resume_processing": "Resume Processing",
 			"paused": "Processing Paused",
 			"paused_description": "All upload tasks have been paused",
-			"resumed": "Processing Resumed", 
+			"resumed": "Processing Resumed",
 			"resumed_description": "Upload tasks have been resumed",
 			"job_title": "Job {jobId}",
 			"cancel_upload": "Cancel Upload",
@@ -85,7 +85,13 @@
 			"details": "Details",
 			"last_update": "Last Update",
 			"no_upload_title": "No upload in progress",
-			"no_upload_description": "Click \"Start Upload\" to begin processing the queue"
+			"no_upload_description": "Click \"Start Upload\" to begin processing the queue",
+			"active_tasks": "Active Tasks",
+			"elapsed": "Elapsed",
+			"remaining": "Remaining",
+			"speed": "Speed",
+			"current": "Current",
+			"total": "Total"
 		},
 		"stats": {
 			"title": "Statistics",
@@ -125,7 +131,25 @@
 		"job_failed": "Upload failed: {fileName}",
 		"file_explorer": {
 			"title": "Add Files from Server to Queue",
-			"import_success": "Files added to queue successfully"
+			"import_success": "Files added to queue successfully",
+			"no_files_selected": "No files selected",
+			"import_success_description": "Successfully added {count} {count, plural, =1 {file} other {files}} to queue",
+			"go_back_tooltip": "Go back",
+			"go_home_tooltip": "Go to root",
+			"path_placeholder": "Enter path (e.g., /home/user/documents)",
+			"go_button": "Go",
+			"items_selected": "{count} {count, plural, =1 {item} other {items}} selected",
+			"clear_selection": "Clear",
+			"select_all": "Select All",
+			"current_path": "Current: {path}",
+			"loading": "Loading...",
+			"empty_directory": "This directory is empty",
+			"file_size_kb": "{size} KB",
+			"folder_type": "Folder",
+			"cancel_button": "Cancel",
+			"adding_to_queue": "Adding to Queue...",
+			"add_to_queue_button": "Add {count} {count, plural, =1 {Item} other {Items}} to Queue",
+			"item_count_footer": "{count} {count, plural, =1 {item} other {items}}"
 		},
 		"provider": {
 			"title": "Provider Status",
