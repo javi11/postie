@@ -4,7 +4,7 @@ import { t } from "$lib/i18n";
 import { isUploading, runningJobs } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import { formatSpeed, formatTime, formatFileSize } from "$lib/utils";
-import { ChartPie, CheckCircle, Play, X, Upload, Package, Check, Pause } from "lucide-svelte";
+import { ChartPie, CheckCircle, Play, X, Upload, Package, Check } from "lucide-svelte";
 import { onMount, onDestroy } from "svelte";
 
 // Use the generated types from Wails
@@ -177,7 +177,7 @@ function cancelUpload(jobID: string) {
           <!-- Individual Progress Indicators -->
           {#if job.progress.length > 0}
             <div class="space-y-4">
-              <h4 class="text-md font-medium text-base-content">Active Tasks</h4>
+              <h4 class="text-md font-medium text-base-content">{$t('dashboard.progress.active_tasks')}</h4>
               {#each job.progress as progressState}
                 {@const IconComponent = getProgressIcon(progressState?.Type)}
                 <div class="bg-base-100 rounded-xl border border-base-300 p-4">
@@ -230,32 +230,32 @@ function cancelUpload(jobID: string) {
                   {#if !progressState?.IsPaused}
                     <div class="grid grid-cols-2 gap-4 text-xs text-base-content/70">
                       <div>
-                        <span class="block">Elapsed</span>
+                        <span class="block">{$t('dashboard.progress.elapsed')}</span>
                         <span class="font-medium text-base-content">{formatTime((progressState?.SecondsSince || 0) * 1000)}</span>
                       </div>
                       <div>
-                        <span class="block">Remaining</span>
+                        <span class="block">{$t('dashboard.progress.remaining')}</span>
                         <span class="font-medium text-base-content">{formatTime((progressState?.SecondsLeft || 0) * 1000)}</span>
                       </div>
-                      
+
                       <!-- Show speed for upload tasks -->
                       {#if (progressState.Type === "uploading" || progressState.Type === "checking") && progressState?.KBsPerSecond}
                         <div>
-                          <span class="block">Speed</span>
+                          <span class="block">{$t('dashboard.progress.speed')}</span>
                           <span class="font-medium text-base-content">{formatSpeed((progressState.KBsPerSecond || 0) * 1024)}</span>
                         </div>
                       {/if}
-                      
+
                       <!-- Hide current/total for par2 generation, show as formatted bytes for uploads -->
                       {#if progressState.Type !== "par2_generation"}
                         <div>
-                          <span class="block">Current</span>
+                          <span class="block">{$t('dashboard.progress.current')}</span>
                           <span class="font-medium text-base-content">
                               {formatFileSize(progressState.CurrentBytes)}
                           </span>
                         </div>
                         <div>
-                          <span class="block">Total</span>
+                          <span class="block">{$t('dashboard.progress.total')}</span>
                           <span class="font-medium text-base-content">
                               {formatFileSize(progressState.Max)}
                           </span>
@@ -267,13 +267,13 @@ function cancelUpload(jobID: string) {
                     {#if progressState.Type !== "par2_generation"}
                       <div class="grid grid-cols-2 gap-4 text-xs text-base-content/70">
                         <div>
-                          <span class="block">Current</span>
+                          <span class="block">{$t('dashboard.progress.current')}</span>
                           <span class="font-medium text-base-content">
                               {formatFileSize(progressState.CurrentBytes)}
                           </span>
                         </div>
                         <div>
-                          <span class="block">Total</span>
+                          <span class="block">{$t('dashboard.progress.total')}</span>
                           <span class="font-medium text-base-content">
                               {formatFileSize(progressState.Max)}
                           </span>
