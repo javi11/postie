@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/javi11/postie/internal/config"
+	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/pkg/parpardownloader"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -201,7 +202,7 @@ func (a *App) applyConfigChanges(configData *config.ConfigData) error {
 		slog.Error("Failed to re-initialize watcher after config change", "error", err)
 	}
 
-	// Update the connection pool manager only if pool-related configuration has changed
+	// Update or create the connection pool manager
 	if a.poolManager != nil && poolCfgChanged {
 		if err := a.poolManager.UpdateConfig(a.config); err != nil {
 			slog.Error("Failed to update connection pool manager with new config", "error", err)
@@ -211,6 +212,22 @@ func (a *App) applyConfigChanges(configData *config.ConfigData) error {
 		}
 	} else if a.poolManager != nil {
 		slog.Info("Pool configuration unchanged, skipping pool update")
+	} else if a.poolManager == nil && len(a.config.Servers) > 0 {
+		// Create pool manager if it doesn't exist but we now have servers configured
+		slog.Info("Creating connection pool manager for newly configured servers")
+		poolManager, err := pool.New(a.config)
+		if err != nil {
+			slog.Error("Failed to create connection pool manager", "error", err)
+			// Don't fail the entire config update, but log the error
+		} else {
+			a.poolManager = poolManager
+			slog.Info("Connection pool manager created successfully")
+
+			// Re-initialize processor with the new pool manager
+			if err := a.initializeProcessor(); err != nil {
+				slog.Error("Failed to re-initialize processor with new pool manager", "error", err)
+			}
+		}
 	}
 
 	// Clear any pending config since we just applied changes
