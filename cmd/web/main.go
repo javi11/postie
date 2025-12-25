@@ -1003,12 +1003,16 @@ func (ws *WebServer) handleImportFiles(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Check if file exists and is readable
-		if info, err := os.Stat(cleanPath); err != nil {
-			log.Printf("Skipping inaccessible file: %s (%v)", filePath, err)
+		// Check if path exists and is readable
+		info, err := os.Stat(cleanPath)
+		if err != nil {
+			log.Printf("Skipping inaccessible path: %s (%v)", filePath, err)
 			continue
-		} else if info.IsDir() {
-			log.Printf("Skipping directory: %s", filePath)
+		}
+
+		if info.IsDir() {
+			// Pass directory path directly - HandleDroppedFiles will process it as a single NZB
+			validFiles = append(validFiles, cleanPath)
 			continue
 		}
 

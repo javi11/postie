@@ -134,9 +134,8 @@ async function importSelectedFiles() {
   }
 }
 
-function selectAllFiles() {
-  const fileItems = fileManagerData.filter(item => item.type === "file");
-  for (const item of fileItems) {
+function selectAll() {
+  for (const item of fileManagerData) {
     selectedFiles.add(item.id);
   }
   selectedFiles = new Set(selectedFiles);
@@ -255,7 +254,7 @@ onMount(() => {
           <div class="flex items-center gap-2">
             {#if hasSelectedFiles}
               <span class="text-sm text-base-content/70">
-                {selectedFileCount} file{selectedFileCount !== 1 ? 's' : ''} selected
+                {selectedFileCount} item{selectedFileCount !== 1 ? 's' : ''} selected
               </span>
               <button
                 class="btn btn-ghost btn-xs"
@@ -264,13 +263,13 @@ onMount(() => {
                 Clear
               </button>
             {/if}
-            
+
             <button
               class="btn btn-ghost btn-xs"
-              onclick={selectAllFiles}
-              disabled={fileManagerData.filter(item => item.type === "file").length === 0}
+              onclick={selectAll}
+              disabled={fileManagerData.length === 0}
             >
-              Select All Files
+              Select All
             </button>
           </div>
           
@@ -307,23 +306,25 @@ onMount(() => {
                     {item.type === "folder" ? "📁" : "📄"}
                   </div>
                   
-                  <button 
+                  <button
                     onclick={() => {
+                      // Toggle selection for both files and folders
+                      if (selectedFiles.has(item.id)) {
+                        selectedFiles.delete(item.id);
+                      } else {
+                        selectedFiles.add(item.id);
+                      }
+                      selectedFiles = new Set(selectedFiles);
+                    }}
+                    ondblclick={() => {
+                      // Double-click navigates into folders
                       if (item.type === "folder") {
                         navigateToPath(item.id);
-                      } else {
-                        // Toggle file selection
-                        if (selectedFiles.has(item.id)) {
-                          selectedFiles.delete(item.id);
-                        } else {
-                          selectedFiles.add(item.id);
-                        }
-                        selectedFiles = new Set(selectedFiles);
                       }
                     }}
                     class={`flex-1 text-left min-w-0 ${
-                      selectedFiles.has(item.id) 
-                        ? "text-primary font-medium" 
+                      selectedFiles.has(item.id)
+                        ? "text-primary font-medium"
                         : "text-base-content hover:text-primary"
                     }`}
                   >
@@ -337,23 +338,21 @@ onMount(() => {
                     </div>
                   </button>
                   
-                  {#if item.type === "file"}
-                    <div class="flex-shrink-0">
-                      <input
-                        type="checkbox"
-                        class="checkbox checkbox-primary"
-                        checked={selectedFiles.has(item.id)}
-                        onchange={() => {
-                          if (selectedFiles.has(item.id)) {
-                            selectedFiles.delete(item.id);
-                          } else {
-                            selectedFiles.add(item.id);
-                          }
-                          selectedFiles = new Set(selectedFiles);
-                        }}
-                      />
-                    </div>
-                  {/if}
+                  <div class="flex-shrink-0">
+                    <input
+                      type="checkbox"
+                      class="checkbox checkbox-primary"
+                      checked={selectedFiles.has(item.id)}
+                      onchange={() => {
+                        if (selectedFiles.has(item.id)) {
+                          selectedFiles.delete(item.id);
+                        } else {
+                          selectedFiles.add(item.id);
+                        }
+                        selectedFiles = new Set(selectedFiles);
+                      }}
+                    />
+                  </div>
                 </div>
               {/each}
             </div>
@@ -365,7 +364,7 @@ onMount(() => {
       <div class="flex items-center justify-between p-4 border-t border-base-300 bg-base-50">
         <div class="text-sm text-base-content/70">
           {#if hasSelectedFiles}
-            {selectedFileCount} file{selectedFileCount !== 1 ? 's' : ''} selected
+            {selectedFileCount} item{selectedFileCount !== 1 ? 's' : ''} selected
           {:else}
             {fileManagerData.length} item{fileManagerData.length !== 1 ? 's' : ''}
           {/if}
@@ -389,7 +388,7 @@ onMount(() => {
               Adding to Queue...
             {:else}
               <Upload class="w-4 h-4" />
-              Add {selectedFileCount > 0 ? selectedFileCount : ''} File{selectedFileCount !== 1 ? 's' : ''} to Queue
+              Add {selectedFileCount > 0 ? selectedFileCount : ''} Item{selectedFileCount !== 1 ? 's' : ''} to Queue
             {/if}
           </button>
         </div>
