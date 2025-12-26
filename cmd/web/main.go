@@ -260,6 +260,7 @@ func (ws *WebServer) setupRoutes() {
 	api.HandleFunc("/queue/stats", ws.handleGetQueueStats).Methods("GET")
 	api.HandleFunc("/logs", ws.handleGetLogs).Methods("GET")
 	api.HandleFunc("/upload", ws.handleUpload).Methods("POST")
+	api.HandleFunc("/upload-folder", ws.handleUploadFolder).Methods("POST")
 	api.HandleFunc("/upload/cancel", ws.handleCancelUpload).Methods("POST")
 	api.HandleFunc("/nzb/{id}/download", ws.handleDownloadNZB).Methods("GET")
 	api.HandleFunc("/processor/status", ws.handleGetProcessorStatus).Methods("GET")
@@ -621,6 +622,127 @@ func (ws *WebServer) handleUpload(w http.ResponseWriter, r *http.Request) {
 	ws.wsHub.EmitEvent("upload-complete", map[string]interface{}{
 		"fileCount": len(files),
 		"message":   "Files successfully processed and added to queue",
+	})
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// handleUploadFolder handles folder uploads from the web UI
+// It preserves the folder structure and processes the folder as a single NZB
+func (ws *WebServer) handleUploadFolder(w http.ResponseWriter, r *http.Request) {
+	// Parse multipart form with larger limit for folders (100 MB)
+	if err := r.ParseMultipartForm(100 << 20); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	folderName := r.FormValue("folderName")
+	if folderName == "" {
+		http.Error(w, "Folder name is required", http.StatusBadRequest)
+		return
+	}
+
+	files := r.MultipartForm.File["files"]
+	paths := r.MultipartForm.Value["paths"]
+
+	if len(files) == 0 {
+		http.Error(w, "No files provided", http.StatusBadRequest)
+		return
+	}
+
+	if len(files) != len(paths) {
+		http.Error(w, "Mismatch between files and paths count", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("Processing folder upload: %s with %d files", folderName, len(files))
+
+	// Emit initial upload progress
+	ws.wsHub.EmitEvent("upload-progress", map[string]interface{}{
+		"stage":      "saving",
+		"progress":   0,
+		"fileCount":  len(files),
+		"folderName": folderName,
+	})
+
+	// Create temporary directory for the folder
+	tempDir, err := os.MkdirTemp("", "postie-folder-*")
+	if err != nil {
+		http.Error(w, "Failed to create temporary directory", http.StatusInternalServerError)
+		return
+	}
+
+	// Save uploaded files preserving directory structure
+	for i, fileHeader := range files {
+		relativePath := paths[i]
+
+		file, err := fileHeader.Open()
+		if err != nil {
+			http.Error(w, "Failed to open uploaded file", http.StatusInternalServerError)
+			return
+		}
+
+		// Create the full destination path (preserving folder structure)
+		destPath := filepath.Join(tempDir, relativePath)
+
+		// Ensure parent directories exist
+		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+			file.Close()
+			http.Error(w, "Failed to create directory structure", http.StatusInternalServerError)
+			return
+		}
+
+		// Create destination file
+		destFile, err := os.Create(destPath)
+		if err != nil {
+			file.Close()
+			http.Error(w, "Failed to create file", http.StatusInternalServerError)
+			return
+		}
+
+		// Copy file content
+		if _, err := io.Copy(destFile, file); err != nil {
+			file.Close()
+			destFile.Close()
+			http.Error(w, "Failed to save file", http.StatusInternalServerError)
+			return
+		}
+
+		file.Close()
+		destFile.Close()
+
+		// Emit progress for file saving
+		progress := float64(i+1) / float64(len(files)) * 50 // 50% for saving files
+		ws.wsHub.EmitEvent("upload-progress", map[string]interface{}{
+			"stage":       "saving",
+			"progress":    progress,
+			"currentFile": fileHeader.Filename,
+			"fileCount":   len(files),
+			"folderName":  folderName,
+		})
+	}
+
+	// Emit progress for processing stage
+	ws.wsHub.EmitEvent("upload-progress", map[string]interface{}{
+		"stage":      "processing",
+		"progress":   75,
+		"fileCount":  len(files),
+		"folderName": folderName,
+	})
+
+	// Call HandleDroppedFiles with the folder path (this will trigger FOLDER: prefix handling)
+	folderPath := filepath.Join(tempDir, folderName)
+	if err := ws.app.HandleDroppedFiles([]string{folderPath}); err != nil {
+		ws.wsHub.EmitEvent("upload-error", err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Emit completion
+	ws.wsHub.EmitEvent("upload-complete", map[string]interface{}{
+		"fileCount":  len(files),
+		"folderName": folderName,
+		"message":    "Folder successfully processed and added to queue as single NZB",
 	})
 
 	w.WriteHeader(http.StatusOK)

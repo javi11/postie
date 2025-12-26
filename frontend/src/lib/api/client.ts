@@ -422,6 +422,15 @@ export class UnifiedClient {
 
 		if (this._environment === "web") {
 			const client = await getWebClient();
+
+			// Check if this is a folder upload (files have webkitRelativePath)
+			const firstFile = files[0] as File & { webkitRelativePath?: string };
+			if (firstFile?.webkitRelativePath) {
+				// Use folder upload endpoint to preserve directory structure
+				return client.uploadFolderFiles(files, onProgress, setRequest);
+			}
+
+			// Regular file upload
 			return client.uploadFiles(files, onProgress, setRequest);
 		}
 
