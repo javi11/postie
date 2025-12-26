@@ -644,6 +644,7 @@ export namespace config {
 	    insecure_ssl: boolean;
 	    enabled?: boolean;
 	    check_only?: boolean;
+	    proxy_url?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ServerConfig(source);
@@ -662,6 +663,7 @@ export namespace config {
 	        this.insecure_ssl = source["insecure_ssl"];
 	        this.enabled = source["enabled"];
 	        this.check_only = source["check_only"];
+	        this.proxy_url = source["proxy_url"];
 	    }
 	}
 	export class ConfigData {

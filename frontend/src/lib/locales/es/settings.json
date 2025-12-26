@@ -422,7 +422,16 @@
 				"host_required": "Servidor {number}: Se requiere host",
 				"port_invalid": "Servidor {number}: Se requiere un número de puerto válido (1-65535)"
 			},
-			"tip": "<strong>Consejo:</strong> Configure múltiples servidores para mejor redundancia y velocidades de carga. La aplicación distribuirá automáticamente las cargas entre todos los servidores configurados."
+			"tip": "<strong>Consejo:</strong> Configure múltiples servidores para mejor redundancia y velocidades de carga. La aplicación distribuirá automáticamente las cargas entre todos los servidores configurados.",
+			"proxy": {
+				"section_title": "Configuración de Proxy",
+				"enable_proxy": "Usar Proxy SOCKS5",
+				"optional": "Opcional",
+				"url_label": "URL del Proxy",
+				"url_description": "Formato: socks5://usuario:contraseña@nombrehost:puerto (credenciales opcionales)",
+				"invalid_url": "Formato de URL de proxy no válido",
+				"info_message": "La configuración del proxy SOCKS5 se aplica por servidor. Incluya credenciales en la URL si es necesario."
+			}
 		}
 	}
 }

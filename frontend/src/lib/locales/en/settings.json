@@ -383,7 +383,16 @@
 				"host_required": "Server {number}: Host is required",
 				"port_invalid": "Server {number}: Valid port number is required (1-65535)"
 			},
-			"tip": "<strong>Tip:</strong> Configure multiple servers for better redundancy and upload speeds. The application will automatically distribute uploads across all configured servers."
+			"tip": "<strong>Tip:</strong> Configure multiple servers for better redundancy and upload speeds. The application will automatically distribute uploads across all configured servers.",
+			"proxy": {
+				"section_title": "Proxy Settings",
+				"enable_proxy": "Use SOCKS5 Proxy",
+				"optional": "Optional",
+				"url_label": "Proxy URL",
+				"url_description": "Format: socks5://username:password@hostname:port (credentials optional)",
+				"invalid_url": "Invalid proxy URL format",
+				"info_message": "SOCKS5 proxy configuration is applied per server. Include credentials in the URL if required."
+			}
 		},
 		"fields": {
 			"enabled": "Enabled",

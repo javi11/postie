@@ -513,6 +513,37 @@
                 />
               </div>
 
+              <div class="flex items-center space-x-4 pt-2">
+                <div class="flex items-center">
+                  <input
+                    type="checkbox"
+                    class="checkbox mr-2"
+                    bind:checked={localServers[index].ssl}
+                    onchange={() => onServerFieldChange(index)}
+                  />
+                  <label for="ssl-{index}" class="label-text cursor-pointer">
+                    {$t("settings.server.use_ssl_tls")}
+                  </label>
+                </div>
+
+                {#if variant === "settings" && showAdvancedFields}
+                  <div class="flex items-center">
+                    <input
+                      type="checkbox"
+                      class="checkbox mr-2"
+                      bind:checked={localServers[index].insecure_ssl}
+                      onchange={() => onServerFieldChange(index)}
+                    />
+                    <label
+                      for="insecure-ssl-{index}"
+                      class="label-text cursor-pointer"
+                    >
+                      {$t("settings.server.allow_insecure_ssl")}
+                    </label>
+                  </div>
+                {/if}
+              </div>
+
               <div>
                 <label for="username-{index}" class="label">
                   <span class="label-text">
@@ -557,37 +588,6 @@
                   max="50"
                   oninput={() => onServerFieldChange(index)}
                 />
-              </div>
-
-              <div class="flex items-center space-x-4 pt-6">
-                <div class="flex items-center">
-                  <input
-                    type="checkbox"
-                    class="checkbox mr-2"
-                    bind:checked={localServers[index].ssl}
-                    onchange={() => onServerFieldChange(index)}
-                  />
-                  <label for="ssl-{index}" class="label-text cursor-pointer">
-                    {$t("settings.server.use_ssl_tls")}
-                  </label>
-                </div>
-
-                {#if variant === "settings" && showAdvancedFields}
-                  <div class="flex items-center">
-                    <input
-                      type="checkbox"
-                      class="checkbox mr-2"
-                      bind:checked={localServers[index].insecure_ssl}
-                      onchange={() => onServerFieldChange(index)}
-                    />
-                    <label
-                      for="insecure-ssl-{index}"
-                      class="label-text cursor-pointer"
-                    >
-                      {$t("settings.server.allow_insecure_ssl")}
-                    </label>
-                  </div>
-                {/if}
               </div>
 
               {#if variant === "settings" && showAdvancedFields}
@@ -637,6 +637,26 @@
                   </p>
                 </div>
               {/if}
+
+              <!-- Proxy URL Field -->
+              <div>
+                <label for="proxy-url-{index}" class="label">
+                  <span class="label-text">
+                    {$t("settings.server.proxy.url_label")}
+                  </span>
+                </label>
+                <input
+                  id="proxy-url-{index}"
+                  type="text"
+                  class="input input-bordered w-full"
+                  bind:value={localServers[index].proxy_url}
+                  placeholder="socks5://user:pass@proxy.example.com:1080"
+                  oninput={() => onServerFieldChange(index)}
+                />
+                <p class="text-sm text-base-content/70 mt-1">
+                  {$t("settings.server.proxy.url_description")}
+                </p>
+              </div>
             </div>
           </div>
         </div>
