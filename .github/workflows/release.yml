@@ -33,7 +33,7 @@ jobs:
 
       # Install Bun for frontend build
       - name: Install Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
@@ -278,7 +278,7 @@ jobs:
 
       # Create GitHub release
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             artifacts/postie-cli_v${{ steps.version.outputs.version }}_*.*
@@ -297,7 +297,7 @@ jobs:
     steps:
       - uses: actions/setup-go@v5
         with:
-          go-version: 1.24.5
+          go-version: 1.25.1
 
       # checkout
       - name: Checkout
@@ -357,7 +357,7 @@ jobs:
     steps:
       - uses: actions/setup-go@v5
         with:
-          go-version: 1.24.5
+          go-version: 1.25.1
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -397,7 +397,7 @@ jobs:
     steps:
       - uses: actions/setup-go@v5
         with:
-          go-version: 1.24.5
+          go-version: 1.25.1
       - uses: actions/setup-node@v4
         with:
           node-version: '20'

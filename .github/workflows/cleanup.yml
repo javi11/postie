@@ -37,6 +37,6 @@ jobs:
       - uses: actions/delete-package-versions@v5
         if: ${{ steps.version.outputs.ids != '' }}
         with:
-          package-version-ids: "${{ steps.versions.outputs.ids }}"
+          package-version-ids: "${{ steps.version.outputs.ids }}"
           package-name: postie
           package-type: container
