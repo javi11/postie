@@ -50,39 +50,40 @@ func (a *App) UploadFiles() error {
 		if info.IsDir() {
 			slog.Info("Processing selected directory", "path", filePath)
 
-			// Process directory recursively to collect files
+			// Process directory recursively to collect files and calculate total size
 			filesByFolder, sizeByFolder, err := processDirectoryRecursively(filePath)
 			if err != nil {
 				slog.Error("Error processing directory", "path", filePath, "error", err)
 				continue
 			}
 
-			// Add each folder as a single queue entry (following watcher pattern)
-			for folderPath, files := range filesByFolder {
-				if len(files) == 0 {
-					continue
-				}
-
-				folderSize := sizeByFolder[folderPath]
-				folderName := filepath.Base(folderPath)
-
-				slog.Info("Adding folder to queue", "folder", folderName, "files", len(files), "size", folderSize)
-
-				// Add the folder to the queue with FOLDER: prefix to indicate it's a folder
-				folderQueuePath := "FOLDER:" + folderPath
-				if err := a.queue.AddFile(context.Background(), folderQueuePath, folderSize); err != nil {
-					slog.Warn("Could not add folder to queue, skipping", "folder", folderPath, "error", err)
-					continue
-				}
-
-				addedCount++
-				slog.Info("Selected folder added to queue", "folder", folderName, "files", len(files), "size", folderSize)
-
-				// Log the files in the folder for debugging
-				for _, file := range files {
-					slog.Debug("File in selected folder", "folder", folderName, "file", filepath.Base(file))
-				}
+			// Calculate total files and size across all subfolders
+			var totalFiles int
+			var totalSize int64
+			for _, files := range filesByFolder {
+				totalFiles += len(files)
 			}
+			for _, size := range sizeByFolder {
+				totalSize += size
+			}
+
+			if totalFiles == 0 {
+				slog.Warn("Directory contains no files, skipping", "path", filePath)
+				continue
+			}
+
+			folderName := filepath.Base(filePath)
+			slog.Info("Adding folder to queue as single NZB", "folder", folderName, "files", totalFiles, "size", totalSize)
+
+			// Add the root folder to the queue with FOLDER: prefix (processor will collect all nested files)
+			folderQueuePath := "FOLDER:" + filePath
+			if err := a.queue.AddFile(context.Background(), folderQueuePath, totalSize); err != nil {
+				slog.Warn("Could not add folder to queue, skipping", "folder", filePath, "error", err)
+				continue
+			}
+
+			addedCount++
+			slog.Info("Selected folder added to queue", "folder", folderName, "files", totalFiles, "size", totalSize)
 
 			continue
 		}
@@ -176,62 +177,42 @@ func (a *App) UploadFolder(folderPath string) error {
 		return fmt.Errorf("queue not initialized")
 	}
 
-	// Process directory recursively to collect files
+	// Process directory recursively to collect files and calculate total size
 	filesByFolder, sizeByFolder, err := processDirectoryRecursively(folderPath)
 	if err != nil {
 		return fmt.Errorf("error processing folder: %w", err)
 	}
 
-	// Check if folder has any files
-	totalFiles := 0
+	// Calculate total files and size across all subfolders
+	var totalFiles int
+	var totalSize int64
 	for _, files := range filesByFolder {
 		totalFiles += len(files)
 	}
+	for _, size := range sizeByFolder {
+		totalSize += size
+	}
+
 	if totalFiles == 0 {
 		return fmt.Errorf("folder is empty or contains no files: %s", folderPath)
 	}
 
-	// Add each folder as a single queue entry (following watcher pattern)
-	addedCount := 0
-	for folderSubPath, files := range filesByFolder {
-		if len(files) == 0 {
-			continue
-		}
+	folderName := filepath.Base(folderPath)
+	slog.Info("Adding folder to queue as single NZB", "folder", folderName, "files", totalFiles, "size", totalSize)
 
-		folderSize := sizeByFolder[folderSubPath]
-		folderName := filepath.Base(folderSubPath)
-
-		slog.Info("Adding folder to queue", "folder", folderName, "files", len(files), "size", folderSize)
-
-		// Add the folder to the queue with FOLDER: prefix to indicate it's a folder
-		folderQueuePath := "FOLDER:" + folderSubPath
-		if err := a.queue.AddFile(context.Background(), folderQueuePath, folderSize); err != nil {
-			slog.Warn("Could not add folder to queue, skipping", "folder", folderSubPath, "error", err)
-			continue
-		}
-
-		addedCount++
-		slog.Info("Folder added to queue", "folder", folderName, "files", len(files), "size", folderSize)
-
-		// Log the files in the folder for debugging
-		for _, file := range files {
-			slog.Debug("File in folder", "folder", folderName, "file", filepath.Base(file))
-		}
+	// Add the root folder to the queue with FOLDER: prefix (processor will collect all nested files)
+	folderQueuePath := "FOLDER:" + folderPath
+	if err := a.queue.AddFile(context.Background(), folderQueuePath, totalSize); err != nil {
+		return fmt.Errorf("could not add folder to queue: %w", err)
 	}
 
-	if addedCount > 0 {
-		slog.Info("Added folder to queue", "folder", filepath.Base(folderPath), "subfolders", addedCount, "totalFiles", totalFiles)
+	slog.Info("Folder added to queue", "folder", folderName, "files", totalFiles, "size", totalSize)
 
-		// Emit event to refresh queue in frontend
-		if !a.isWebMode {
-			runtime.EventsEmit(a.ctx, "queue-updated")
-		} else if a.webEventEmitter != nil {
-			a.webEventEmitter("queue-updated", nil)
-		}
-	}
-
-	if addedCount == 0 {
-		return fmt.Errorf("no valid files or folders could be added to queue")
+	// Emit event to refresh queue in frontend
+	if !a.isWebMode {
+		runtime.EventsEmit(a.ctx, "queue-updated")
+	} else if a.webEventEmitter != nil {
+		a.webEventEmitter("queue-updated", nil)
 	}
 
 	return nil

@@ -307,6 +307,66 @@ export class WebClient {
 		return this.post<void>("/upload/cancel");
 	}
 
+	// Upload folder files preserving directory structure (for webkitdirectory uploads)
+	async uploadFolderFiles(
+		files: FileList,
+		onProgress?: (progress: number) => void,
+		setRequest?: (xhr: XMLHttpRequest) => void,
+	): Promise<void> {
+		const formData = new FormData();
+
+		// Extract root folder name from first file's webkitRelativePath
+		const firstFile = files[0] as File & { webkitRelativePath?: string };
+		const rootFolder = firstFile.webkitRelativePath?.split("/")[0] || "folder";
+		formData.append("folderName", rootFolder);
+
+		// Append files with their relative paths
+		for (let i = 0; i < files.length; i++) {
+			const file = files[i] as File & { webkitRelativePath?: string };
+			const relativePath = file.webkitRelativePath || file.name;
+			formData.append("files", file);
+			formData.append("paths", relativePath);
+		}
+
+		return new Promise((resolve, reject) => {
+			const xhr = new XMLHttpRequest();
+
+			// Store the request reference for cancellation
+			if (setRequest) {
+				setRequest(xhr);
+			}
+
+			// Track upload progress
+			if (onProgress) {
+				xhr.upload.addEventListener("progress", (event) => {
+					if (event.lengthComputable) {
+						const progress = (event.loaded / event.total) * 100;
+						onProgress(progress);
+					}
+				});
+			}
+
+			xhr.addEventListener("load", () => {
+				if (xhr.status >= 200 && xhr.status < 300) {
+					resolve();
+				} else {
+					reject(new Error(`HTTP error! status: ${xhr.status}`));
+				}
+			});
+
+			xhr.addEventListener("error", () => {
+				reject(new Error("Upload failed"));
+			});
+
+			xhr.addEventListener("abort", () => {
+				reject(new Error("Upload cancelled"));
+			});
+
+			xhr.open("POST", `${API_BASE}/upload-folder`);
+			xhr.send(formData);
+		});
+	}
+
 	// NZB operations
 	async downloadNZB(id: string): Promise<void> {
 		const response = await fetch(`${API_BASE}/nzb/${id}/download`);
