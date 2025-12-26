@@ -422,7 +422,16 @@
 				"host_required": "Serveur {number} : L'hôte est requis",
 				"port_invalid": "Serveur {number} : Un numéro de port valide est requis (1-65535)"
 			},
-			"tip": "<strong>Astuce :</strong> Configurez plusieurs serveurs pour une meilleure redondance et des vitesses de téléchargement. L'application distribuera automatiquement les téléchargements entre tous les serveurs configurés."
+			"tip": "<strong>Astuce :</strong> Configurez plusieurs serveurs pour une meilleure redondance et des vitesses de téléchargement. L'application distribuera automatiquement les téléchargements entre tous les serveurs configurés.",
+			"proxy": {
+				"section_title": "Paramètres du Proxy",
+				"enable_proxy": "Utiliser un Proxy SOCKS5",
+				"optional": "Optionnel",
+				"url_label": "URL du Proxy",
+				"url_description": "Format: socks5://utilisateur:motdepasse@nomhôte:port (identifiants optionnels)",
+				"invalid_url": "Format d'URL de proxy invalide",
+				"info_message": "La configuration du proxy SOCKS5 est appliquée par serveur. Incluez les identifiants dans l'URL si nécessaire."
+			}
 		}
 	}
 }

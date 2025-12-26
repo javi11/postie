@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -206,6 +208,8 @@ type ServerConfig struct {
 	// CheckOnly when true, this server will only be used for article verification (STAT command)
 	// and not for posting articles. Useful for cheap/slow providers that have good retention.
 	CheckOnly *bool `yaml:"check_only" json:"check_only"`
+	// SOCKS5 Proxy URL (optional, format: socks5://username:password@hostname:port)
+	ProxyURL string `yaml:"proxy_url,omitempty" json:"proxy_url,omitempty"`
 }
 
 type PostHeaders struct {
@@ -621,6 +625,37 @@ func (c *ConfigData) GetCheckOnlyServers() []ServerConfig {
 	return servers
 }
 
+// validateProxyURL validates SOCKS5 proxy URL format
+// Accepts: socks5://hostname:port or hostname:port (assumes socks5://)
+func validateProxyURL(proxyURL string) error {
+	if proxyURL == "" {
+		return nil // Empty is valid (no proxy)
+	}
+
+	// Add socks5:// prefix if missing
+	if !strings.HasPrefix(proxyURL, "socks5://") {
+		proxyURL = "socks5://" + proxyURL
+	}
+
+	// Parse as URL
+	parsedURL, err := url.Parse(proxyURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL format: %w", err)
+	}
+
+	// Validate scheme
+	if parsedURL.Scheme != "socks5" {
+		return fmt.Errorf("only socks5:// scheme is supported, got: %s", parsedURL.Scheme)
+	}
+
+	// Validate host is present
+	if parsedURL.Host == "" {
+		return fmt.Errorf("proxy URL must include hostname and port")
+	}
+
+	return nil
+}
+
 // serverConfigToProviderConfig converts a ServerConfig to nntppool.UsenetProviderConfig
 func serverConfigToProviderConfig(s ServerConfig) nntppool.UsenetProviderConfig {
 	maxConnections := s.MaxConnections
@@ -648,6 +683,7 @@ func serverConfigToProviderConfig(s ServerConfig) nntppool.UsenetProviderConfig 
 		MaxConnectionIdleTimeInSeconds: maxIdleTime,
 		MaxConnectionTTLInSeconds:      maxTTL,
 		InsecureSSL:                    s.InsecureSSL,
+		ProxyURL:                       s.ProxyURL,
 	}
 }
 
