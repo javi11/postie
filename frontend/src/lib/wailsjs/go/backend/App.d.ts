@@ -20,6 +20,8 @@ export function DebugQueueItem(arg1:string):Promise<Record<string, any>>;
 
 export function DiscardPendingConfig():Promise<void>;
 
+export function DownloadLogFile():Promise<void>;
+
 export function DownloadNZB(arg1:string):Promise<void>;
 
 export function GetAppStatus():Promise<backend.AppStatus>;

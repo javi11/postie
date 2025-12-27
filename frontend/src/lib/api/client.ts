@@ -494,6 +494,22 @@ export class UnifiedClient {
 		throw new Error("No client available");
 	}
 
+	async downloadLogFile(): Promise<void> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			return client.App.DownloadLogFile();
+		}
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.downloadLogs();
+		}
+
+		throw new Error("No client available");
+	}
+
 	// Event Handling
 	async on(event: string, callback: EventCallback): Promise<void> {
 		await this.initialize();

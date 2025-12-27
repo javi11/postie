@@ -87,5 +87,11 @@
 			"item_cancelled": "Elemento cancelado",
 			"failed_to_cancel_item": "Error al cancelar el elemento"
 		}
+	},
+	"logs": {
+		"download": "Descargar",
+		"download_success": "Archivo de registro descargado",
+		"download_success_description": "El archivo de registro se ha guardado correctamente",
+		"download_error": "Error al descargar el archivo de registro"
 	}
 }

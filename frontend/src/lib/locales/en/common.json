@@ -87,5 +87,11 @@
 			"failed_to_cancel_item": "Failed to cancel item"
 		},
 		"app_name": "Postie"
+	},
+	"logs": {
+		"download": "Download",
+		"download_success": "Log file downloaded",
+		"download_success_description": "The log file has been saved successfully",
+		"download_error": "Failed to download log file"
 	}
 }

@@ -30,6 +30,10 @@ export function DiscardPendingConfig() {
   return window['go']['backend']['App']['DiscardPendingConfig']();
 }
 
+export function DownloadLogFile() {
+  return window['go']['backend']['App']['DownloadLogFile']();
+}
+
 export function DownloadNZB(arg1) {
   return window['go']['backend']['App']['DownloadNZB'](arg1);
 }

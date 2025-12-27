@@ -2,7 +2,8 @@
 import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { frontendLogs, type LogEntry } from "$lib/stores/logs";
-import { ChevronDown, Pause, Play, RotateCcw } from "lucide-svelte";
+import { toastStore } from "$lib/stores/toast";
+import { ChevronDown, Download, Pause, Play, RotateCcw } from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
 
 type BackendLogEntry = {
@@ -30,6 +31,7 @@ $: {
 }
 
 let loading = true;
+let downloading = false;
 let autoRefreshEnabled = false;
 let intervalId: ReturnType<typeof setTimeout> | undefined;
 let logContainer: HTMLDivElement | undefined;
@@ -152,10 +154,14 @@ function parseLogLines(rawLogs: string): LogEntry[] {
 		.map((line) => {
 			try {
 				const entry: BackendLogEntry = JSON.parse(line);
+				// Extract custom attributes (everything except time, level, msg)
+				const { time, level, msg, ...attributes } = entry;
+
 				return {
-					timestamp: new Date(entry.time),
-					level: entry.level.toLowerCase() as LogEntry["level"],
-					message: entry.msg,
+					timestamp: new Date(time),
+					level: level.toLowerCase() as LogEntry["level"],
+					message: msg,
+					attributes: Object.keys(attributes).length > 0 ? attributes : undefined,
 				};
 			} catch (e) {
 				return {
@@ -205,6 +211,19 @@ onDestroy(() => {
 		clearTimeout(scrollDebounceTimer);
 	}
 });
+
+function formatAttributeValue(value: unknown): string {
+	if (typeof value === "number") {
+		return value.toLocaleString();
+	}
+	if (typeof value === "boolean") {
+		return value ? "true" : "false";
+	}
+	if (value === null || value === undefined) {
+		return "null";
+	}
+	return String(value);
+}
 
 function getLevelColor(level: LogEntry["level"]) {
 	switch (level) {
@@ -264,6 +283,19 @@ function handleRefresh() {
 	});
 }
 
+async function handleDownload() {
+	downloading = true;
+	try {
+		await apiClient.downloadLogFile();
+		toastStore.success($t("logs.download_success"), $t("logs.download_success_description"));
+	} catch (error) {
+		console.error("Failed to download log file:", error);
+		toastStore.error($t("logs.download_error"), String(error));
+	} finally {
+		downloading = false;
+	}
+}
+
 $: if (autoScroll && logContainer) {
 	// scroll to bottom after logs update
 	logContainer.scrollTo({ top: logContainer.scrollHeight });
@@ -295,13 +327,25 @@ $: if (autoScroll && logContainer) {
 							{$t('common.common.start_auto_refresh')}
 						{/if}
 					</button>
-					<button 
-						class="btn btn-sm" 
-						onclick={handleRefresh} 
+					<button
+						class="btn btn-sm"
+						onclick={handleRefresh}
 						disabled={loading || autoRefreshEnabled}
 					>
 						<RotateCcw class="w-4 h-4" />
 						{$t('common.common.refresh')}
+					</button>
+					<button
+						class="btn btn-sm"
+						onclick={handleDownload}
+						disabled={downloading}
+					>
+						{#if downloading}
+							<span class="loading loading-spinner loading-xs"></span>
+						{:else}
+							<Download class="w-4 h-4" />
+						{/if}
+						{$t('logs.download')}
 					</button>
 				</div>
 			</div>
@@ -344,7 +388,18 @@ $: if (autoScroll && logContainer) {
 							>
 								[{log.level}]
 							</span>
-							<span class="min-w-0 flex-1 whitespace-pre-wrap">{log.message}</span>
+							<span class="min-w-0 flex-1 whitespace-pre-wrap">
+								{log.message}
+								{#if log.attributes && Object.keys(log.attributes).length > 0}
+									<span class="ml-2 inline-flex flex-wrap gap-1">
+										{#each Object.entries(log.attributes) as [key, value]}
+											<span class="badge badge-ghost badge-xs text-base-content/60">
+												{key}={formatAttributeValue(value)}
+											</span>
+										{/each}
+									</span>
+								{/if}
+							</span>
 						</div>
 					{/each}
 					

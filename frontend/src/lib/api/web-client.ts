@@ -455,6 +455,31 @@ export class WebClient {
 	}> {
 		return this.post("/filesystem/import", { filePaths });
 	}
+
+	// Log download
+	async downloadLogs(): Promise<void> {
+		const response = await fetch(`${API_BASE}/logs/download`);
+
+		if (!response.ok) {
+			throw new Error(`HTTP error! status: ${response.status}`);
+		}
+
+		// Create a blob from the response and trigger download
+		const blob = await response.blob();
+		const url = window.URL.createObjectURL(blob);
+		const filename =
+			response.headers
+				.get("Content-Disposition")
+				?.match(/filename="(.+?)"/)?.[1] ||
+			`postie-${new Date().toISOString().split("T")[0]}.log`;
+		const a = document.createElement("a");
+		a.href = url;
+		a.download = filename;
+		document.body.appendChild(a);
+		a.click();
+		window.URL.revokeObjectURL(url);
+		document.body.removeChild(a);
+	}
 }
 
 // Singleton instance

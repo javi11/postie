@@ -259,6 +259,7 @@ func (ws *WebServer) setupRoutes() {
 	api.HandleFunc("/queue/{id}/priority", ws.handleSetQueueItemPriority).Methods("POST")
 	api.HandleFunc("/queue/stats", ws.handleGetQueueStats).Methods("GET")
 	api.HandleFunc("/logs", ws.handleGetLogs).Methods("GET")
+	api.HandleFunc("/logs/download", ws.handleDownloadLogs).Methods("GET")
 	api.HandleFunc("/upload", ws.handleUpload).Methods("POST")
 	api.HandleFunc("/upload-folder", ws.handleUploadFolder).Methods("POST")
 	api.HandleFunc("/upload/cancel", ws.handleCancelUpload).Methods("POST")
@@ -533,6 +534,26 @@ func (ws *WebServer) handleGetLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
+	_, _ = w.Write([]byte(logs))
+}
+
+func (ws *WebServer) handleDownloadLogs(w http.ResponseWriter, r *http.Request) {
+	// Get full log content (0, 0 means get last 1MB)
+	logs, err := ws.app.GetLogs()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Generate filename with current date
+	filename := fmt.Sprintf("postie-%s.log", time.Now().Format("2006-01-02"))
+
+	// Set headers for file download
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(logs)))
+
+	// Write the log content
 	_, _ = w.Write([]byte(logs))
 }
 
