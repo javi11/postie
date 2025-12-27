@@ -167,6 +167,8 @@ func main() {
 		DragAndDrop: &options.DragAndDrop{
 			EnableFileDrop:     true,
 			DisableWebViewDrop: true,
+			CSSDropProperty:    "--wails-drop-target",
+			CSSDropValue:       "drop",
 		},
 		Logger: logger.NewDefaultLogger(),
 		OnStartup: func(ctx context.Context) {
