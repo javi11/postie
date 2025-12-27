@@ -654,6 +654,50 @@ func (a *App) GetLogsPaginated(limit, offset int) (string, error) {
 	return readLogLines(file, limit, offset)
 }
 
+// DownloadLogFile opens a save dialog and downloads the log file
+func (a *App) DownloadLogFile() error {
+	defer a.recoverPanic("DownloadLogFile")
+
+	// Use actual log path if available (may differ from configured path if using fallback)
+	logPath := a.actualLogPath
+	if logPath == "" {
+		logPath = a.appPaths.Log
+	}
+
+	// Check if the log file exists
+	if _, err := os.Stat(logPath); os.IsNotExist(err) {
+		return fmt.Errorf("log file not found: %s", logPath)
+	}
+
+	// Open save dialog with default filename including date
+	savePath, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
+		Title:           "Save Log File",
+		DefaultFilename: fmt.Sprintf("postie-%s.log", time.Now().Format("2006-01-02")),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to show save dialog: %w", err)
+	}
+
+	// If user cancelled the dialog, savePath will be empty
+	if savePath == "" {
+		return nil // User cancelled, not an error
+	}
+
+	// Read the log file content
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		return fmt.Errorf("failed to read log file: %w", err)
+	}
+
+	// Write to the selected path
+	if err := os.WriteFile(savePath, content, 0644); err != nil {
+		return fmt.Errorf("failed to save log file: %w", err)
+	}
+
+	slog.Info("Log file downloaded", "savePath", savePath)
+	return nil
+}
+
 // NavigateToSettings emits an event to navigate to the settings page
 func (a *App) NavigateToSettings() {
 	if a.ctx != nil && !a.isWebMode {

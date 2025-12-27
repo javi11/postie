@@ -105,5 +105,11 @@
 			"configuration_saved_description": "Votre configuration a été sauvegardée avec succès !",
 			"configuration_save_failed": "Échec de la sauvegarde de la configuration"
 		}
+	},
+	"logs": {
+		"download": "Télécharger",
+		"download_success": "Fichier journal téléchargé",
+		"download_success_description": "Le fichier journal a été enregistré avec succès",
+		"download_error": "Échec du téléchargement du fichier journal"
 	}
 }

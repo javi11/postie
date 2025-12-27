@@ -4,6 +4,7 @@ export type LogEntry = {
 	timestamp: Date;
 	level: "log" | "info" | "warn" | "error" | "debug";
 	message: string;
+	attributes?: Record<string, unknown>;
 };
 
 export const frontendLogs = writable<LogEntry[]>([]);
