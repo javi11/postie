@@ -12,11 +12,12 @@ export namespace backend {
 	    validServerCount: number;
 	    configValid: boolean;
 	    needsConfiguration: boolean;
-	
+	    version: string;
+
 	    static createFrom(source: any = {}) {
 	        return new AppStatus(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.hasConfig = source["hasConfig"];
@@ -30,6 +31,7 @@ export namespace backend {
 	        this.validServerCount = source["validServerCount"];
 	        this.configValid = source["configValid"];
 	        this.needsConfiguration = source["needsConfiguration"];
+	        this.version = source["version"];
 	    }
 	}
 	export class NntpProviderMetrics {

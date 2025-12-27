@@ -91,8 +91,6 @@ export class UnifiedClient {
 			console.warn("Unable to detect environment, some features may not work");
 		}
 
-		console.log(`API Client initialized in ${this._environment} mode`);
-
 		this._isReady = true;
 	}
 
