@@ -60,6 +60,7 @@ type AppStatus struct {
 	ValidServerCount    int    `json:"validServerCount"`
 	ConfigValid         bool   `json:"configValid"`
 	NeedsConfiguration  bool   `json:"needsConfiguration"`
+	Version             string `json:"version"`
 }
 
 // ProcessorStatus represents the current processor status
@@ -417,6 +418,14 @@ func (a *App) Shutdown() {
 func (a *App) GetAppStatus() AppStatus {
 	defer a.recoverPanic("GetAppStatus")
 
+	// Get version from build info (works with go install, goreleaser, git tags)
+	version := "dev"
+	if info, ok := debug.ReadBuildInfo(); ok {
+		if info.Main.Version != "(devel)" && info.Main.Version != "" {
+			version = info.Main.Version
+		}
+	}
+
 	status := AppStatus{
 		HasConfig:           a.config != nil,
 		ConfigPath:          a.configPath,
@@ -424,6 +433,7 @@ func (a *App) GetAppStatus() AppStatus {
 		CriticalConfigError: false, // Default to false
 		Error:               "",
 		IsFirstStart:        a.isFirstStart(),
+		Version:             version,
 	}
 
 	if a.config != nil {

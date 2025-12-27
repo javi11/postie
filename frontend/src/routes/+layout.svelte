@@ -197,7 +197,11 @@ function handler(error: unknown, _reset: () => void) {
 				</div>
 
 				<div class="navbar-end">
-					<!-- Empty for now, can be used for user menu or other actions -->
+					{#if $appStatus?.version}
+						<span class="badge badge-ghost text-xs opacity-70">
+							{$appStatus.version}
+						</span>
+					{/if}
 				</div>
 			</div>
 
