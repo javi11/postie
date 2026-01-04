@@ -333,7 +333,9 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			}()
 
 			// Create a pool with error handling - use all available connections
-			pool := concpool.New().WithContext(ctx).WithMaxGoroutines(numOfConnections).WithCancelOnError().WithFirstError()
+			// Note: We intentionally don't use WithCancelOnError() to prevent cascading failures
+			// when a single article fails (e.g., TLS timeout). Other articles should continue.
+			pool := concpool.New().WithContext(ctx).WithMaxGoroutines(numOfConnections).WithFirstError()
 
 			// Collect completed articles for batch NZB addition (reduces lock contention)
 			var completedArticles []*article.Article
@@ -455,7 +457,9 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 				return
 			}
 			// Create a pool with error handling - use all available CPU cores
-			pool := concpool.New().WithContext(ctx).WithMaxGoroutines(numOfConnections).WithCancelOnError().WithFirstError()
+			// Note: We intentionally don't use WithCancelOnError() to prevent cascading failures
+			// when a single article check fails. Other checks should continue.
+			pool := concpool.New().WithContext(ctx).WithMaxGoroutines(numOfConnections).WithFirstError()
 			articlesChecked := 0
 			articleErrors := 0
 			var failedArticles []*article.Article
@@ -861,9 +865,12 @@ func (p *poster) postArticleWithBody(ctx context.Context, article *article.Artic
 	}
 	defer cleanup() // Return buffer to pool when done
 
-	// Post article
-	if err := p.pool.Post(ctx, buff); err != nil {
-		if errors.Is(err, context.Canceled) {
+	// Post article with timeout to prevent indefinite TLS hangs
+	postCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+
+	if err := p.pool.Post(postCtx, buff); err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return context.Canceled
 		}
 
