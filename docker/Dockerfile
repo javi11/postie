@@ -61,6 +61,12 @@ FROM ghcr.io/linuxserver/baseimage-ubuntu:jammy
 
 ARG BUILD_DATE
 ARG VERSION
+ARG PUID=1000
+ARG PGID=1000
+
+# Set up environment variables for PUID and PGID
+ENV PUID=${PUID}
+ENV PGID=${PGID}
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -75,9 +81,8 @@ RUN chmod +x /app/postie-web
 # Copy s6-overlay service configuration
 COPY docker/root/ /
 
-# Create necessary directories and set ownership for abc user
-RUN mkdir -p /config /watch /output && \
-    chown -R abc:abc /app /config /watch /output
+# Create necessary directories (ownership handled at runtime by init-adduser)
+RUN mkdir -p /config /watch /output
 
 # Set environment variables
 ENV PORT=8080
