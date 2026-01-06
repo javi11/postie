@@ -247,6 +247,24 @@ func (w *Watcher) scanDirectoryGroupByFolder(ctx context.Context) error {
 			continue
 		}
 
+		// First check if the folder itself is already in queue or being processed (with FOLDER: prefix)
+		folderQueuePath := "FOLDER:" + folderPath
+
+		// Check if folder is currently being processed
+		if w.processor != nil && w.processor.IsPathBeingProcessed(folderQueuePath) {
+			slog.InfoContext(ctx, "Folder is currently being processed, skipping", "folder", folderPath)
+			continue
+		}
+
+		// Check if folder is already in queue
+		inQueue, err := w.queue.IsPathInQueue(folderQueuePath)
+		if err != nil {
+			slog.ErrorContext(ctx, "Error checking if folder is in queue", "folder", folderPath, "error", err)
+		} else if inQueue {
+			slog.DebugContext(ctx, "Folder already in queue, skipping", "folder", folderPath)
+			continue
+		}
+
 		// Check if any file in the folder is being processed or in queue
 		skipFolder := false
 		for _, filePath := range files {
@@ -283,8 +301,7 @@ func (w *Watcher) scanDirectoryGroupByFolder(ctx context.Context) error {
 		slog.InfoContext(ctx, "Adding folder to queue", "folder", folderName, "files", len(files), "size", folderSize)
 
 		// Add the folder to the queue with a special marker to indicate it's a folder
-		// We'll use the folder path with a special prefix to distinguish from individual files
-		folderQueuePath := "FOLDER:" + folderPath
+		// folderQueuePath was already computed above with "FOLDER:" + folderPath prefix
 		err = w.queue.AddFile(ctx, folderQueuePath, folderSize)
 		if err != nil {
 			slog.ErrorContext(ctx, "Error adding folder to queue", "folder", folderPath, "error", err)

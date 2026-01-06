@@ -38,6 +38,10 @@ type Processor struct {
 	deleteOriginalFile        bool
 	maintainOriginalExtension bool
 	watchFolder               string // Path to the watch folder for maintaining folder structure
+	// Reserved paths - tracks jobs claimed from queue but not yet in runningJobs
+	// This prevents race conditions where watcher could re-add files during the gap
+	reservedPaths map[string]time.Time
+	reservedMux   sync.RWMutex
 	// Pause/resume functionality
 	isPaused  bool
 	pausedMux sync.RWMutex
@@ -99,6 +103,7 @@ func New(opts ProcessorOptions) *Processor {
 		poolManager:               opts.PoolManager,
 		outputFolder:              opts.OutputFolder,
 		runningJobs:               make(map[string]*RunningJob),
+		reservedPaths:             make(map[string]time.Time),
 		deleteOriginalFile:        opts.DeleteOriginalFile,
 		maintainOriginalExtension: opts.MaintainOriginalExtension,
 		watchFolder:               opts.WatchFolder,
@@ -218,11 +223,18 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 		return nil
 	}
 
+	// IMMEDIATELY reserve the path to prevent duplicates from watcher
+	// This closes the race condition gap between ReceiveFile() and processFile()
+	p.reservePath(job.Path)
+
 	slog.Info("Processing file", "msg", msg.ID, "path", job.Path, "priority", job.Priority)
 
 	// Process the file and get both NZB path and postie instance
 	actualNzbPath, jobPostie, err := p.processFile(ctx, msg, job)
 	if err != nil {
+		// Unreserve the path since processing failed before reaching runningJobs
+		p.unreservePath(job.Path)
+
 		if errors.Is(err, context.Canceled) {
 			slog.Info("Job cancelled", "msg", msg.ID, "path", job.Path)
 
@@ -311,6 +323,10 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 		cancel:      jobCancel,
 		pausableCtx: pausableCtx,
 	}
+
+	// Transfer from reserved to running state - the path is now tracked in runningJobs
+	// so we can remove it from reservedPaths
+	p.unreservePath(job.Path)
 
 	// Apply current pause state to new job
 	if p.isPaused {
@@ -490,8 +506,30 @@ func (p *Processor) GetRunningJobDetails() map[string]RunningJobDetails {
 	return details
 }
 
-// IsPathBeingProcessed checks if a file path is currently being processed
+// IsPathBeingProcessed checks if a file path is currently being processed.
+// It checks both reserved paths (claimed but not yet in runningJobs) and running jobs.
+// For folder mode (paths with FOLDER: prefix), it also checks if the path is within
+// a folder that is being processed.
 func (p *Processor) IsPathBeingProcessed(path string) bool {
+	// Check reserved paths first (claimed from queue but not yet in runningJobs)
+	p.reservedMux.RLock()
+	for reservedPath := range p.reservedPaths {
+		if reservedPath == path {
+			p.reservedMux.RUnlock()
+			return true
+		}
+		// Check if path is a file within a reserved folder
+		if strings.HasPrefix(reservedPath, "FOLDER:") {
+			folderPath := strings.TrimPrefix(reservedPath, "FOLDER:")
+			if isWithinPath(path, folderPath) {
+				p.reservedMux.RUnlock()
+				return true
+			}
+		}
+	}
+	p.reservedMux.RUnlock()
+
+	// Check running jobs
 	p.jobsMux.RLock()
 	defer p.jobsMux.RUnlock()
 
@@ -499,8 +537,32 @@ func (p *Processor) IsPathBeingProcessed(path string) bool {
 		if jobDetails.Path == path {
 			return true
 		}
+		// Check if path is a file within a folder being processed
+		if strings.HasPrefix(jobDetails.Path, "FOLDER:") {
+			folderPath := strings.TrimPrefix(jobDetails.Path, "FOLDER:")
+			if isWithinPath(path, folderPath) {
+				return true
+			}
+		}
 	}
 	return false
+}
+
+// reservePath marks a path as reserved (claimed from queue but not yet processing).
+// This prevents race conditions where the watcher could re-add files during the gap
+// between ReceiveFile() and processFile().
+func (p *Processor) reservePath(path string) {
+	p.reservedMux.Lock()
+	defer p.reservedMux.Unlock()
+	p.reservedPaths[path] = time.Now()
+}
+
+// unreservePath removes a path from the reserved set.
+// Called when a job moves to runningJobs or fails before processing starts.
+func (p *Processor) unreservePath(path string) {
+	p.reservedMux.Lock()
+	defer p.reservedMux.Unlock()
+	delete(p.reservedPaths, path)
 }
 
 // PauseProcessing pauses the processor, preventing new jobs from starting and pausing active jobs
@@ -622,6 +684,11 @@ func (p *Processor) Close() error {
 	p.jobsMux.Lock()
 	p.runningJobs = make(map[string]*RunningJob)
 	p.jobsMux.Unlock()
+
+	// Clear reserved paths
+	p.reservedMux.Lock()
+	p.reservedPaths = make(map[string]time.Time)
+	p.reservedMux.Unlock()
 
 	slog.Info("Processor shutdown completed")
 	return nil
