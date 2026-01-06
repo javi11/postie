@@ -226,6 +226,7 @@ func (p *Par2CmdExecutor) Create(ctx context.Context, files []fileinfo.FileInfo)
 				return nil, fmt.Errorf("failed to get stderr pipe for parpar: %w", err)
 			}
 		}
+		defer cmdReader.Close() // Ensure pipe is closed to prevent resource leak on Windows
 
 		scanner := bufio.NewScanner(cmdReader)
 		scanner.Split(scanLines)
@@ -418,6 +419,7 @@ func (p *Par2CmdExecutor) CreateInDirectory(ctx context.Context, files []fileinf
 				return nil, fmt.Errorf("failed to get stderr pipe for parpar: %w", err)
 			}
 		}
+		defer cmdReader.Close() // Ensure pipe is closed to prevent resource leak on Windows
 
 		scanner := bufio.NewScanner(cmdReader)
 		scanner.Split(scanLines)
