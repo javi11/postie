@@ -1,0 +1,97 @@
+{
+	"common": {
+		"nav": {
+			"dashboard": "Panel",
+			"settings": "Ayarlar",
+			"metrics": "Metrikler",
+			"logs": "Günlükler",
+			"language": "Dil"
+		},
+		"actions": {
+			"save": "Kaydet",
+			"cancel": "İptal",
+			"edit": "Düzenle",
+			"delete": "Sil",
+			"add": "Ekle",
+			"close": "Kapat",
+			"confirm": "Onayla",
+			"reset": "Sıfırla"
+		},
+		"common": {
+			"saving": "Kaydediliyor...",
+			"applying": "Uygulanıyor...",
+			"discarding": "Vazgeçiliyor...",
+			"clearing": "Temizleniyor...",
+			"clear": "Temizle",
+			"cancel": "İptal",
+			"start_auto_refresh": "Otomatik yenilemeyi başlat",
+			"stop_auto_refresh": "Otomatik yenilemeyi durdur",
+			"refresh": "Yenile",
+			"loading": "Yükleniyor...",
+			"error": "Hata",
+			"success": "Başarılı",
+			"warning": "Uyarı",
+			"info": "Bilgi",
+			"yes": "Evet",
+			"no": "Hayır",
+			"enabled": "Etkin",
+			"disabled": "Devre Dışı",
+			"status": "Durum",
+			"name": "İsim",
+			"value": "Değer",
+			"description": "Açıklama"
+		},
+		"inputs": {
+			"time_units": {
+				"seconds": "Saniye",
+				"minutes": "Dakika",
+				"hours": "Saat"
+			},
+			"bytes": "bayt",
+			"browse": "Gözat",
+			"select_directory": "Dizin seç",
+			"select_file": "Dosya seç..."
+		},
+		"messages": {
+			"saved_successfully": "Ayarlar başarıyla kaydedildi",
+			"error_saving": "Kaydetme başarısız",
+			"confirm_delete": "Bu öğeyi silmek istediğinizden emin misiniz?",
+			"no_data": "Veri yok",
+			"files_added": "Dosyalar eklendi",
+			"files_added_description": "Dosyalar kuyruğa eklendi",
+			"queue_cleared": "Kuyruk temizlendi",
+			"queue_cleared_description": "Tamamlanan ve hatalı öğeler kaldırıldı",
+			"upload_cancelled": "Yükleme iptal edildi",
+			"upload_cancelled_description": "Yükleme başarıyla iptal edildi",
+			"job_cancelled": "İş iptal edildi",
+			"failed_to_clear_queue": "Kuyruk temizlenemedi",
+			"failed_to_cancel": "İş iptal edilemedi",
+			"failed_to_cancel_upload": "Yükleme iptal edilemedi",
+			"failed_to_load_queue": "Kuyruk yüklenemedi",
+			"item_removed": "Öğe kaldırıldı",
+			"item_removed_description": "Öğe kuyruktan başarıyla kaldırıldı.",
+			"failed_to_remove_item": "Öğe kaldırılamadı",
+			"nzb_downloaded": "NZB indirildi",
+			"failed_to_download_nzb": "NZB indirilemedi",
+			"failed_to_update_priority": "Öncelik güncellenemedi",
+			"configuration_error": "Yapılandırma Hatası",
+			"no_servers_configured": "Sunucu yapılandırılmamış",
+			"server_host_required": "Sunucu {number}: Ana bilgisayar (Host) gerekli",
+			"server_port_required": "Sunucu {number}: Geçerli bir port numarası gerekli (1-65535)",
+			"configuration_saved": "Yapılandırma kaydedildi",
+			"configuration_saved_description": "Yapılandırmanız başarıyla kaydedildi!",
+			"configuration_save_failed": "Yapılandırma kaydedilemedi",
+			"item_retried": "Öğe başarıyla tekrar denendi",
+			"failed_to_retry_item": "Öğe tekrar denenemedi",
+			"item_cancelled": "Öğe iptal edildi",
+			"failed_to_cancel_item": "Öğe iptal edilemedi"
+		},
+		"app_name": "Postie"
+	},
+	"logs": {
+		"download": "İndir",
+		"download_success": "Günlük dosyası indirildi",
+		"download_success_description": "Günlük dosyası başarıyla kaydedildi",
+		"download_error": "Günlük dosyası indirilemedi"
+	}
+}

@@ -23,6 +23,12 @@ register('fr', () => import('./locales/fr/dashboard.json'));
 register('fr', () => import('./locales/fr/settings.json'));
 register('fr', () => import('./locales/fr/metrics.json'));
 
+register('tr', () => import('./locales/tr/common.json'));
+register('tr', () => import('./locales/tr/setup.json'));
+register('tr', () => import('./locales/tr/dashboard.json'));
+register('tr', () => import('./locales/tr/settings.json'));
+register('tr', () => import('./locales/tr/metrics.json'));
+
 // Initialize the i18n library
 init({
   fallbackLocale: 'en',
@@ -34,14 +40,14 @@ function getInitialLocale(): string {
   if (browser) {
     // Check localStorage first
     const stored = localStorage.getItem('locale');
-    if (stored && ['en', 'es', 'fr'].includes(stored)) {
+    if (stored && ['en', 'es', 'fr', 'tr'].includes(stored)) {
       return stored;
     }
-    
+
     // Fall back to browser language
     return getBrowserLocale();
   }
-  
+
   return 'en';
 }
 
@@ -51,6 +57,7 @@ export function getBrowserLocale(): string {
     const language = navigator.language;
     if (language.startsWith("es")) return "es";
     if (language.startsWith("fr")) return "fr";
+    if (language.startsWith("tr")) return "tr";
   }
   return "en"; // Default to English
 }
@@ -75,6 +82,7 @@ export const availableLocales = [
   { code: "en", name: "English", flag: "🇺🇸" },
   { code: "es", name: "Español", flag: "🇪🇸" },
   { code: "fr", name: "Français", flag: "🇫🇷" },
+  { code: "tr", name: "Türkçe", flag: "🇹🇷" },
 ];
 
 // Custom getLocale function
@@ -84,7 +92,7 @@ export function getLocale(): string {
 
 // Custom function to change locale and persist it
 export function setLocale(newLocale: string): void {
-  if (['en', 'es', 'fr'].includes(newLocale)) {
+  if (['en', 'es', 'fr', 'tr'].includes(newLocale)) {
     locale.set(newLocale);
     setStoredLocale(newLocale);
   }

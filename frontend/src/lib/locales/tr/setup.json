@@ -1,0 +1,92 @@
+{
+    "setup": {
+        "title": "Postie'ye Hoş Geldiniz",
+        "description": "Başlamak için NNTP sunucularınızı ve dizinlerinizi ayarlayalım.",
+        "wizard_title": "Postie Kurulumu",
+        "wizard_subtitle": "Postie ile başlamanıza yardımcı olalım",
+        "steps": {
+            "welcome": "Hoş Geldiniz",
+            "servers": "NNTP Sunucuları",
+            "directories": "Dizinler"
+        },
+        "welcome": {
+            "title": "Postie'ye Hoş Geldiniz!",
+            "subtitle": "Güvenilir NNTP yükleme yöneticiniz. Birkaç basit adımda kurulumu yapalım.",
+            "preferences_title": "Tercihlerinizi Seçin",
+            "language_title": "Dil",
+            "language_description": "Tercih ettiğiniz dili seçin",
+            "theme_title": "Tema",
+            "theme_description": "Aydınlık veya karanlık modu seçin",
+            "features": {
+                "upload": {
+                    "title": "Kolay Yüklemeler",
+                    "description": "Dosyaları sürükleyip bırakın veya NNTP sunucularınıza yüklemek için göz atın"
+                },
+                "reliable": {
+                    "title": "Güvenilir & Güvenli",
+                    "description": "Yerleşik doğrulama, PAR2 desteği ve hata kurtarma"
+                },
+                "fast": {
+                    "title": "Yüksek Performans",
+                    "description": "Bağlantı havuzu ile çok iş parçacıklı yüklemeler"
+                }
+            },
+            "gettingStarted": {
+                "title": "Neler kuracağız:",
+                "step1": "NNTP sunucu bağlantılarınızı yapılandırın",
+                "step2": "Çıktı dizinlerinizi ayarlayın",
+                "step3": "Dosyalarınızı yüklemeye başlayın!"
+            }
+        },
+        "directories": {
+            "title": "Dizinleri Yapılandır",
+            "description": "Dosyalarınızın nereye çıktı alınacağını ve isteğe bağlı olarak otomatik işlem için izlenecek dizini ayarlayın.",
+            "outputDirectory": "Çıktı Dizini",
+            "outputDescription": "Oluşturulan NZB dosyalarının ve yüklenen içeriğin kaydedileceği yer.",
+            "outputPath": "Çıktı Yolu",
+            "watchDirectory": "İzleme Dizini",
+            "watchDescription": "İsteğe bağlı: Otomatik olarak yüklenmek üzere yeni dosyaların izleneceği dizin.",
+            "watchPath": "İzleme Yolu",
+            "browse": "Gözat",
+            "optional": "İsteğe bağlı",
+            "requiredFields": "Zorunlu alanlar"
+        },
+        "summary": {
+            "title": "Yapılandırmayı Gözden Geçir",
+            "description": "Kurulumu bitirmeden önce ayarlarınızı gözden geçirin.",
+            "servers": "NNTP Sunucuları",
+            "directories": "Dizinler",
+            "outputDirectory": "Çıktı Dizini",
+            "watchDirectory": "İzleme Dizini",
+            "connections": "bağlantılar",
+            "notConfigured": "Yapılandırılmadı",
+            "readyMessage": "Yapılandırmanız iyi görünüyor! Kaydetmek ve Postie'yi kullanmaya başlamak için Bitir'e tıklayın."
+        },
+        "buttons": {
+            "previous": "Önceki",
+            "next": "Sonraki",
+            "finish": "Kurulumu Bitir"
+        },
+        "messages": {
+            "setupRequired": "Postie'yi kullanmak için kurulum gereklidir. Lütfen kurulum sihirbazını tamamlayın."
+        },
+        "success_title": "Kurulum Tamamlandı!",
+        "success_message": "Postie yapılandırmanız başarıyla kaydedildi. Artık dosyaları yüklemeye başlayabilirsiniz.",
+        "errors": {
+            "server_validation_title": "Sunucu Bağlantısı Başarısız",
+            "server_validation_message": "Bir veya daha fazla NNTP sunucusuna bağlanılamadı. Lütfen kimlik bilgilerinizi ve ağ bağlantınızı doğrulayın.",
+            "filesystem_title": "Dosya İzni Hatası",
+            "filesystem_message": "Dosya sistemi izinleri nedeniyle yapılandırma kaydedilemedi. Lütfen yazma erişimini kontrol edin.",
+            "config_save_title": "Yapılandırma Kaydetme Başarısız",
+            "config_save_message": "Yapılandırmanız kaydedilemedi. Lütfen yeterli disk alanı olduğundan emin olun ve tekrar deneyin.",
+            "invalid_input_title": "Geçersiz Yapılandırma",
+            "invalid_input_message": "Bazı yapılandırma değerleri geçersiz. Lütfen ayarlarınızı gözden geçirin ve düzeltin.",
+            "network_title": "Ağ Hatası",
+            "network_message": "Sunucuya bağlanılamadı. Lütfen internet bağlantınızı kontrol edin ve tekrar deneyin.",
+            "timeout_title": "İstek Zaman Aşımı",
+            "timeout_message": "Kurulum isteğinin tamamlanması çok uzun sürdü. Lütfen tekrar deneyin.",
+            "generic_title": "Kurulum Başarısız",
+            "generic_message": "Kurulum sırasında beklenmeyen bir hata oluştu. Lütfen tekrar deneyin."
+        }
+    }
+}
