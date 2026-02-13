@@ -11,7 +11,6 @@ import (
 
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/pool"
-	"github.com/javi11/postie/pkg/parpardownloader"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -435,9 +434,6 @@ func (a *App) createDefaultConfig() error {
 	// Directory creation is handled in GetAppPaths()
 	defaultConfig := config.GetDefaultConfig()
 
-	// Set the par2 path to the OS-specific location
-	defaultConfig.Par2.Par2Path = a.appPaths.Par2
-
 	// Set the database path to the OS-specific location
 	defaultConfig.Database.DatabasePath = a.appPaths.Database
 
@@ -447,62 +443,6 @@ func (a *App) createDefaultConfig() error {
 
 	slog.Info("Default config file created", "path", a.configPath)
 	return nil
-}
-
-// ensurePar2Executable downloads par2 executable if it doesn't exist
-func (a *App) ensurePar2Executable(_ context.Context) {
-	defer a.recoverPanic("ensurePar2Executable")
-
-	// Use the OS-specific par2 path
-	par2Path := a.appPaths.Par2
-
-	slog.Info("Checking for par2 executable", "path", par2Path)
-
-	// Check if par2 executable already exists
-	if _, err := os.Stat(par2Path); err == nil {
-		slog.Info("Par2 executable already exists", "path", par2Path)
-		return
-	}
-
-	slog.Info("Par2 executable not found, downloading...")
-
-	// Emit progress event to frontend for both desktop and web modes
-	status := config.Par2DownloadStatus{
-		Status:  "downloading",
-		Message: "Downloading par2 executable...",
-	}
-	if !a.isWebMode {
-		runtime.EventsEmit(a.ctx, "par2-download-status", status)
-	} else if a.webEventEmitter != nil {
-		a.webEventEmitter("par2-download-status", status)
-	}
-
-	// Download par2 executable
-	execPath, err := parpardownloader.DownloadParParCmd(par2Path)
-	if err != nil {
-		slog.Error("Failed to download par2 executable", "error", err)
-		errorStatus := config.Par2DownloadStatus{
-			Status:  "error",
-			Message: fmt.Sprintf("Failed to download par2 executable: %v", err),
-		}
-		if !a.isWebMode {
-			runtime.EventsEmit(a.ctx, "par2-download-status", errorStatus)
-		} else if a.webEventEmitter != nil {
-			a.webEventEmitter("par2-download-status", errorStatus)
-		}
-		return
-	}
-
-	slog.Info("Par2 executable downloaded successfully", "path", execPath)
-	completedStatus := config.Par2DownloadStatus{
-		Status:  "completed",
-		Message: "Par2 executable downloaded successfully",
-	}
-	if !a.isWebMode {
-		runtime.EventsEmit(a.ctx, "par2-download-status", completedStatus)
-	} else if a.webEventEmitter != nil {
-		a.webEventEmitter("par2-download-status", completedStatus)
-	}
 }
 
 // GetWatchDirectory returns the current watch directory

@@ -430,6 +430,7 @@ export namespace config {
 	    check_interval: string;
 	    delete_original_file: boolean;
 	    single_nzb_per_folder: boolean;
+	    follow_symlinks: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new WatcherConfig(source);
@@ -446,6 +447,7 @@ export namespace config {
 	        this.check_interval = source["check_interval"];
 	        this.delete_original_file = source["delete_original_file"];
 	        this.single_nzb_per_folder = source["single_nzb_per_folder"];
+	        this.follow_symlinks = source["follow_symlinks"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -468,11 +470,7 @@ export namespace config {
 	}
 	export class Par2Config {
 	    enabled?: boolean;
-	    par2_path: string;
 	    redundancy: string;
-	    volume_size: number;
-	    max_input_slices: number;
-	    extra_par2_options: string[];
 	    temp_dir: string;
 	    maintain_par2_files?: boolean;
 	
@@ -483,11 +481,7 @@ export namespace config {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.enabled = source["enabled"];
-	        this.par2_path = source["par2_path"];
 	        this.redundancy = source["redundancy"];
-	        this.volume_size = source["volume_size"];
-	        this.max_input_slices = source["max_input_slices"];
-	        this.extra_par2_options = source["extra_par2_options"];
 	        this.temp_dir = source["temp_dir"];
 	        this.maintain_par2_files = source["maintain_par2_files"];
 	    }

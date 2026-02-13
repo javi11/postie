@@ -6,20 +6,14 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/javi11/nntppool/v2"
-	"github.com/javi11/postie/pkg/parpardownloader"
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	defaultPar2Path       = "./parpar"
-	defaultVolumeSize     = 153600000 // 150MB
-	defaultRedundancy     = "1n*1.2"  //https://github.com/animetosho/ParPar/blob/6feee4dd94bb18480f0bf08cd9d17ffc7e671b69/help-full.txt#L75
-	defaultMaxInputSlices = 4000
+	defaultRedundancy = "1n*1.2" //https://github.com/animetosho/ParPar/blob/6feee4dd94bb18480f0bf08cd9d17ffc7e671b69/help-full.txt#L75
 	// CurrentConfigVersion represents the current configuration version
 	CurrentConfigVersion = 1
 )
@@ -180,15 +174,10 @@ type ConfigData struct {
 }
 
 type Par2Config struct {
-	Enabled           *bool     `yaml:"enabled" json:"enabled"`
-	Par2Path          string    `yaml:"par2_path" json:"par2_path"`
-	Redundancy        string    `yaml:"redundancy" json:"redundancy"`
-	VolumeSize        int       `yaml:"volume_size" json:"volume_size"`
-	MaxInputSlices    int       `yaml:"max_input_slices" json:"max_input_slices"`
-	ExtraPar2Options  []string  `yaml:"extra_par2_options" json:"extra_par2_options"`
-	TempDir           string    `yaml:"temp_dir" json:"temp_dir"`
-	MaintainPar2Files *bool     `yaml:"maintain_par2_files" json:"maintain_par2_files"`
-	once              sync.Once `json:"-"`
+	Enabled           *bool  `yaml:"enabled" json:"enabled"`
+	Redundancy        string `yaml:"redundancy" json:"redundancy"`
+	TempDir           string `yaml:"temp_dir" json:"temp_dir"`
+	MaintainPar2Files *bool  `yaml:"maintain_par2_files" json:"maintain_par2_files"`
 }
 
 // ServerConfig represents a Usenet server configuration
@@ -329,12 +318,6 @@ type PostUploadScriptConfig struct {
 	RetryCheckInterval Duration `yaml:"retry_check_interval" json:"retry_check_interval"`
 }
 
-// Par2DownloadStatus represents the status of par2 executable download
-type Par2DownloadStatus struct {
-	Status  string `json:"status"`  // "downloading", "completed", "error"
-	Message string `json:"message"` // Human readable message
-}
-
 // ProgressStatus represents the progress of file processing operations
 type ProgressStatus struct {
 	CurrentFile         string  `json:"currentFile"`
@@ -462,20 +445,8 @@ func Load(path string) (*ConfigData, error) {
 		cfg.PostCheck.Enabled = &enabled
 	}
 
-	if cfg.Par2.Par2Path == "" {
-		cfg.Par2.Par2Path = "./" + filepath.Join(filepath.Dir(path), defaultPar2Path)
-	}
-
-	if cfg.Par2.VolumeSize <= 0 {
-		cfg.Par2.VolumeSize = defaultVolumeSize
-	}
-
 	if cfg.Par2.Redundancy == "" {
 		cfg.Par2.Redundancy = defaultRedundancy
-	}
-
-	if cfg.Par2.MaxInputSlices <= 0 {
-		cfg.Par2.MaxInputSlices = defaultMaxInputSlices
 	}
 
 	// Set default for maintain par2 files (default to false to preserve current behavior)
@@ -776,24 +747,7 @@ func (c *ConfigData) GetCheckPool() (nntppool.UsenetConnectionPool, error) {
 	return pool, nil
 }
 
-func (c *ConfigData) GetPar2Config(ctx context.Context) (*Par2Config, error) {
-	var errDownload error
-	c.Par2.once.Do(func() {
-		par2ExePath, err := ensurePar2Executable(ctx, c.Par2.Par2Path)
-		if err != nil {
-			slog.ErrorContext(ctx, "Error ensuring par2 executable", "error", err)
-			errDownload = fmt.Errorf("error ensuring par2 executable: %w", err)
-
-			return
-		}
-
-		c.Par2.Par2Path = par2ExePath
-	})
-
-	if errDownload != nil {
-		return nil, errDownload
-	}
-
+func (c *ConfigData) GetPar2Config(_ context.Context) (*Par2Config, error) {
 	return &c.Par2, nil
 }
 
@@ -803,29 +757,6 @@ func (c *ConfigData) GetPostingConfig() PostingConfig {
 
 func (c *ConfigData) GetPostCheckConfig() PostCheck {
 	return c.PostCheck
-}
-
-// ensurePar2Executable checks if a par2 executable is configured, downloads one if necessary,
-// and returns the final path to the executable.
-func ensurePar2Executable(ctx context.Context, par2Path string) (string, error) {
-	slog.DebugContext(ctx, "Using configured Par2 executable", "path", par2Path)
-	// Verify it exists?
-	if _, err := os.Stat(par2Path); err == nil {
-		return par2Path, nil
-	}
-
-	slog.WarnContext(ctx, "Configured Par2 executable not found, proceeding to download", "path", par2Path)
-
-	// Download if not configured and not found in default path
-	slog.InfoContext(ctx, "No par2 executable configured or found, downloading parpar...")
-	execPath, err := parpardownloader.DownloadParParCmd(par2Path)
-	if err != nil {
-		return "", fmt.Errorf("failed to download parpar: %w", err)
-	}
-
-	slog.InfoContext(ctx, "Downloaded Par2 executable", "path", execPath)
-
-	return execPath, nil
 }
 
 func (c *ConfigData) GetWatcherConfig() WatcherConfig {
@@ -890,11 +821,7 @@ func GetDefaultConfig() ConfigData {
 		},
 		Par2: Par2Config{
 			Enabled:           &enabled,
-			Par2Path:          defaultPar2Path,
 			Redundancy:        defaultRedundancy,
-			VolumeSize:        defaultVolumeSize,
-			MaxInputSlices:    defaultMaxInputSlices,
-			ExtraPar2Options:  []string{},
 			TempDir:           os.TempDir(),
 			MaintainPar2Files: &disabled, // Default to false to preserve current behavior
 		},

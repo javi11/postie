@@ -165,8 +165,6 @@
 			"title": "Fichiers de Récupération PAR2",
 			"enable": "Activer la génération PAR2",
 			"enable_description": "Générer des fichiers de récupération pour la correction et la réparation d'erreurs",
-			"par2_path": "Chemin de l'Exécutable PAR2",
-			"par2_path_description": "Chemin vers l'exécutable PAR2 ou parpar",
 			"temp_dir": "Répertoire Temporaire",
 			"temp_dir_description": "Répertoire où les fichiers PAR2 sont créés temporairement pendant le traitement (utilise le temp système par défaut)",
 			"temp_dir_placeholder": "Laisser vide pour le répertoire temporaire du système",
@@ -174,32 +172,16 @@
 			"maintain_par2_files_description": "Conserver les fichiers PAR2 de façon permanente après un téléchargement réussi (utile pour l'intégrité des archives et les réparations futures)",
 			"redundancy": "Redondance",
 			"redundancy_description": "Pourcentage de données de récupération",
-			"volume_size": "Taille de Volume",
-			"volume_size_description": "Taille de chaque fichier de volume PAR2",
-			"max_input_slices": "Maximum de Tranches d'Entrée",
-			"max_input_slices_description": "Nombre maximum de tranches d'entrée pour le traitement",
-			"extra_options": {
-				"title": "Options PAR2 Supplémentaires",
-				"description": "Arguments de ligne de commande supplémentaires pour l'exécutable PAR2",
-				"add_option": "Ajouter une Option",
-				"remove": "Supprimer",
-				"placeholder": "--option=valeur",
-				"no_options": "Aucune option supplémentaire configurée. Ajoutez des arguments PAR2 personnalisés si nécessaire."
-			},
 			"info": {
 				"title": "Informations de Récupération PAR2",
 				"features": {
 					"par2_files_allow_recovery_of_damaged_or_missing_files": "Les fichiers PAR2 permettent la récupération de fichiers endommagés ou manquants",
 					"redundancy_percentage_determines_how_much_data_can_be_recovered": "Le pourcentage de redondance détermine combien de données peuvent être récupérées",
-					"higher_redundancy_better_recovery_but_larger_par2_files": "Plus de redondance = meilleure récupération mais fichiers PAR2 plus volumineux",
-					"volume_size_controls_how_par2_data_is_split_across_files": "La taille de volume contrôle comment les données PAR2 sont divisées entre les fichiers",
-					"extra_options_allow_fine_tuning_of_par2_generation": "Les options supplémentaires permettent l'ajustement fin de la génération PAR2"
+					"higher_redundancy_better_recovery_but_larger_par2_files": "Plus de redondance = meilleure récupération mais fichiers PAR2 plus volumineux"
 				}
 			},
 			"status": {
-				"redundancy": "Redondance",
-				"volume_size": "Taille de Volume",
-				"max_slices": "Max. Tranches"
+				"redundancy": "Redondance"
 			},
 			"save_button": "Sauvegarder les Paramètres PAR2",
 			"saving": "Sauvegarde...",

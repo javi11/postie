@@ -82,12 +82,9 @@ post_check:
 
 par2:
   enabled: true
-  par2_path: ./parpar
-  redundancy: "1n*1.2" # [redundancy](https://github.com/animetosho/ParPar/blob/6feee4dd94bb18480f0bf08cd9d17ffc7e671b69/help-full.txt#L75)
-  volume_size: 153600000 # 150MB
-  max_input_slices: 4000
-  extra_par2_options: []
+  redundancy: "10%" # Recovery data percentage (e.g., "5%", "10%", "20%")
   temp_dir: "" # Optional temporary directory for PAR2 operations
+  maintain_par2_files: false # Keep PAR2 files after successful upload
 
 nzb_compression:
   enabled: false # Whether to enable compression of the output NZB file
@@ -210,87 +207,19 @@ post_check:
 
 ### PAR2 Recovery Files
 
-The default par binary used is [parpar](https://github.com/animetosho/ParPar/blob/master/help-full.txt) but you can also specify [par2cmd](https://github.com/Parchive/par2cmdline) by specifying the path to the executable and naming it as par2cmd
+Postie includes a built-in PAR2 creator — no external binaries are required. PAR2 recovery files are generated natively in Go, producing output compatible with standard PAR2 repair tools (par2repair, MultiPar).
 
-See [parpar](https://github.com/animetosho/ParPar/blob/master/help-full.txt) for more info about the options.
 Configure PAR2 recovery file generation:
 
 ```yaml
 par2:
   enabled: true
-  par2_path: ./parpar # Path to PAR2 executable
-  redundancy: "1n*1.2" # [Redundancy level](https://github.com/animetosho/ParPar/blob/6feee4dd94bb18480f0bf08cd9d17ffc7e671b69/help-full.txt#L75)
-  volume_size: 153600000 # Size of each volume (150MB)
-  max_input_slices: 4000 # Maximum number of input slices
-  extra_par2_options: [] # Additional PAR2 command line options
+  redundancy: "10%" # Recovery data percentage (e.g., "5%", "10%", "20%")
   temp_dir: "" # Optional temporary directory for PAR2 operations
+  maintain_par2_files: false # Keep PAR2 files after successful upload
 ```
 
-**💡 Tip: The web UI automatically downloads and configures the PAR2 executable for you, and provides easy-to-use controls for redundancy settings.**
-
-#### PAR2 Troubleshooting
-
-**Architecture Detection Issues (Docker/ARM)**
-
-If you're running on ARM devices (Raspberry Pi, ARM servers) and getting errors about incorrect parpar executables:
-
-1. **Check logs for architecture detection**:
-   ```bash
-   docker logs postie 2>&1 | grep -i "arch"
-   ```
-
-2. **Common symptoms**:
-   - "exec format error" when running parpar
-   - "no such file or directory" errors
-   - Failed PAR2 generation
-
-3. **Solutions**:
-   
-   **Option 1: Explicit platform specification (Recommended)**
-   ```yaml
-   services:
-     postie:
-       platform: linux/arm64  # For ARM devices
-       # ... rest of config
-   ```
-
-   **Option 2: Manual parpar installation**
-   ```yaml
-   par2:
-     enabled: true
-     par2_path: /usr/local/bin/parpar  # Custom path
-     # ... rest of config
-   ```
-
-   **Option 3: Use Docker build arguments**
-   ```bash
-   docker run --platform linux/arm64 \
-     -e TARGETARCH=arm64 \
-     -e TARGETPLATFORM=linux/arm64 \
-     ghcr.io/javi11/postie:latest
-   ```
-
-4. **Verification**:
-   Check that the correct architecture is detected:
-   ```bash
-   # In container logs, you should see:
-   # "Selected parpar asset for Linux ARM64"
-   # instead of:
-   # "Selected parpar asset for Linux AMD64"
-   ```
-
-**Manual PAR2 Installation**
-
-If automatic download fails, you can manually install parpar:
-
-```dockerfile
-# In a custom Dockerfile extending the postie image:
-FROM ghcr.io/javi11/postie:latest
-RUN wget https://github.com/animetosho/ParPar/releases/latest/download/parpar-v0.4.1-linux-static-aarch64.xz \
-    && unxz parpar-v0.4.1-linux-static-aarch64.xz \
-    && chmod +x parpar-v0.4.1-linux-static-aarch64 \
-    && mv parpar-v0.4.1-linux-static-aarch64 /config/parpar
-```
+**💡 Tip: The web UI provides easy-to-use controls for redundancy settings with preset buttons for common percentages.**
 
 ### NZB Compression
 

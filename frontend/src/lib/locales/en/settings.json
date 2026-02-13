@@ -170,8 +170,6 @@
 			"title": "PAR2 Recovery Files",
 			"enable": "Enable PAR2 generation",
 			"enable_description": "Generate recovery files for error correction and repair",
-			"par2_path": "PAR2 Executable Path",
-			"par2_path_description": "Path to PAR2 executable or parpar",
 			"temp_dir": "Temporary Directory",
 			"temp_dir_description": "Directory where PAR2 files are temporarily created during processing (uses system temp by default)",
 			"temp_dir_placeholder": "Leave empty for system temp directory",
@@ -179,32 +177,16 @@
 			"maintain_par2_files_description": "Keep PAR2 files permanently after successful upload (useful for archive integrity and future repairs)",
 			"redundancy": "Redundancy",
 			"redundancy_description": "Recovery data percentage",
-			"volume_size": "Volume Size",
-			"volume_size_description": "Size of each PAR2 volume file",
-			"max_input_slices": "Max Input Slices",
-			"max_input_slices_description": "Maximum number of input slices for processing",
-			"extra_options": {
-				"title": "Extra PAR2 Options",
-				"description": "Additional command-line arguments for PAR2 executable",
-				"add_option": "Add Option",
-				"remove": "Remove",
-				"placeholder": "--option=value",
-				"no_options": "No extra options configured. Add custom PAR2 arguments if needed."
-			},
 			"info": {
 				"title": "PAR2 Recovery Information",
 				"features": {
 					"par2_files_allow_recovery_of_damaged_or_missing_files": "PAR2 files allow recovery of damaged or missing files",
 					"redundancy_percentage_determines_how_much_data_can_be_recovered": "Redundancy percentage determines how much data can be recovered",
-					"higher_redundancy_better_recovery_but_larger_par2_files": "Higher redundancy = better recovery but larger PAR2 files",
-					"volume_size_controls_how_par2_data_is_split_across_files": "Volume size controls how PAR2 data is split across files",
-					"extra_options_allow_fine_tuning_of_par2_generation": "Extra options allow fine-tuning of PAR2 generation"
+					"higher_redundancy_better_recovery_but_larger_par2_files": "Higher redundancy = better recovery but larger PAR2 files"
 				}
 			},
 			"status": {
-				"redundancy": "Redundancy",
-				"volume_size": "Volume Size",
-				"max_slices": "Max Slices"
+				"redundancy": "Redundancy"
 			},
 			"save_button": "Save PAR2 Settings",
 			"saving": "Saving...",

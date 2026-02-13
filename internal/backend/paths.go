@@ -10,7 +10,6 @@ import (
 type AppPaths struct {
 	Config   string
 	Database string
-	Par2     string
 	Data     string
 	Log      string
 }
@@ -77,18 +76,11 @@ func GetAppPaths() (*AppPaths, error) {
 		}
 	}
 
-	// Determine par2 executable name based on OS
-	par2Name := "parpar"
-	if runtime.GOOS == "windows" {
-		par2Name = "parpar.exe"
-	}
-
 	logPath := filepath.Join(dataDir, "postie.log")
 
 	return &AppPaths{
 		Config:   filepath.Join(configDir, "config.yaml"),
 		Database: filepath.Join(configDir, "postie.db"),
-		Par2:     filepath.Join(dataDir, par2Name),
 		Data:     dataDir,
 		Log:      logPath,
 	}, nil
