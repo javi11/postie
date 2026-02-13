@@ -114,7 +114,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: 1.25.1
+          go-version: 1.26
 
       # checkout
       - name: Checkout
@@ -297,7 +297,7 @@ jobs:
     steps:
       - uses: actions/setup-go@v5
         with:
-          go-version: 1.25.1
+          go-version: 1.26
 
       # checkout
       - name: Checkout
@@ -357,7 +357,7 @@ jobs:
     steps:
       - uses: actions/setup-go@v5
         with:
-          go-version: 1.25.1
+          go-version: 1.26
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -397,7 +397,7 @@ jobs:
     steps:
       - uses: actions/setup-go@v5
         with:
-          go-version: 1.25.1
+          go-version: 1.26
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
