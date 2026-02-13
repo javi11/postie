@@ -1,6 +1,8 @@
 {
 	"dashboard": {
 		"title": "Dashboard",
+		"drag_drop_title": "Drop Files Here",
+		"drag_drop_description": "Release to add files to queue",
 		"header": {
 			"title": "Upload Dashboard",
 			"description": "Manage your file uploads and monitor progress",
@@ -21,6 +23,7 @@
 			"progress": "Progress",
 			"no_items": "No items in queue",
 			"no_items_description": "Upload files to see them here",
+			"empty_hint": "Drag files here or click Add Files above to get started",
 			"file": "File",
 			"size": "Size",
 			"status": "Status",
@@ -46,6 +49,8 @@
 			"entries": "entries",
 			"previous": "Previous",
 			"next": "Next",
+			"retry_all_failed": "Retry Failed",
+			"bulk_retry_success": "Successfully retried {count} items",
 			"status_types": {
 				"pending": "pending",
 				"complete": "complete",

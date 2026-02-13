@@ -49,8 +49,14 @@ function createThemeStore() {
 		setTheme: (theme: ThemeValue) => {
 			if (availableThemes.some((t) => t.value === theme)) {
 				if (browser) {
+					// Add transition class for smooth theme switching
+					document.documentElement.classList.add("theme-transition");
 					document.documentElement.setAttribute("data-theme", theme);
 					localStorage.setItem("theme", theme);
+					// Remove transition class after animation completes
+					setTimeout(() => {
+						document.documentElement.classList.remove("theme-transition");
+					}, 250);
 				}
 				set(theme);
 			}

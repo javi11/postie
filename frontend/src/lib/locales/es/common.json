@@ -5,7 +5,8 @@
 			"settings": "Configuración",
 			"metrics": "Métricas",
 			"logs": "Logs",
-			"language": "Idioma"
+			"language": "Idioma",
+			"theme": "Tema"
 		},
 		"actions": {
 			"save": "Guardar",

@@ -91,17 +91,38 @@ function formatBytes(bytes: number): string {
 	return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
+function startPolling() {
+	if (refreshInterval) return;
+	refreshInterval = setInterval(fetchProviderStatus, REFRESH_INTERVAL);
+}
+
+function stopPolling() {
+	if (refreshInterval) {
+		clearInterval(refreshInterval);
+		refreshInterval = null;
+	}
+}
+
+function handleVisibilityChange() {
+	if (document.hidden) {
+		stopPolling();
+	} else {
+		fetchProviderStatus();
+		startPolling();
+	}
+}
+
 onMount(() => {
 	fetchProviderStatus();
 
-	// Set up auto-refresh
-	refreshInterval = setInterval(fetchProviderStatus, REFRESH_INTERVAL);
+	// Set up auto-refresh (pauses when tab inactive)
+	startPolling();
+	document.addEventListener("visibilitychange", handleVisibilityChange);
 });
 
 onDestroy(() => {
-	if (refreshInterval) {
-		clearInterval(refreshInterval);
-	}
+	stopPolling();
+	document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
 </script>
 

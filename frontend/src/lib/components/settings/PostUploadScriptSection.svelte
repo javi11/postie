@@ -10,7 +10,7 @@ interface Props {
 	config: configType.ConfigData;
 }
 
-const { config }: Props = $props();
+let { config = $bindable() }: Props = $props();
 
 // Initialize config defaults
 if (config && !config.post_upload_script) {

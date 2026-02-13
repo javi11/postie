@@ -12,7 +12,7 @@ interface Props {
 	config: configType.ConfigData;
 }
 
-const { config }: Props = $props();
+let { config = $bindable() }: Props = $props();
 
 // Reactive local state
 let outputDir = $state(config.output_dir || "./output");

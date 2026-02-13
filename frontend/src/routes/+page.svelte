@@ -251,8 +251,8 @@ async function handleUpload() {
         <div class="drag-icon">
           <Plus class="w-16 h-16 text-white" />
         </div>
-        <h2 class="text-2xl font-bold text-white mb-2">Drop Files Here</h2>
-        <p class="text-white/80">Release to add files to queue</p>
+        <h2 class="text-2xl font-bold text-white mb-2">{$t('dashboard.drag_drop_title')}</h2>
+        <p class="text-white/80">{$t('dashboard.drag_drop_description')}</p>
       </div>
     </div>
   {/if}
@@ -264,6 +264,9 @@ async function handleUpload() {
 			class:pointer-events-none={needsConfiguration || criticalConfigError}
 			class:opacity-50={needsConfiguration || criticalConfigError}
 		>
+			<!-- Queue Stats Overview -->
+			<QueueStats />
+
 			<!-- Main Content Area -->
 			<div class="space-y-8">
 				<ProgressSection />
@@ -274,7 +277,6 @@ async function handleUpload() {
 			<div class="space-y-8">
 				<ProviderStatus />
 				<WatcherStatus />
-				<QueueStats />
 			</div>
 		</div>
     </div>

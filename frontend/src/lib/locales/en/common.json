@@ -5,7 +5,8 @@
 			"settings": "Settings",
 			"metrics": "Metrics",
 			"logs": "Logs",
-			"language": "Language"
+			"language": "Language",
+			"theme": "Theme"
 		},
 		"actions": {
 			"save": "Save",

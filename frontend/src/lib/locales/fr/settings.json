@@ -15,6 +15,7 @@
 			"save_configuration": "Sauvegarder la Configuration",
 			"advanced_mode": "Mode Avancé",
 			"advanced_mode_description": "Afficher les options de configuration avancées pour un réglage fin",
+			"unsaved_changes": "Modifications non enregistrées",
 			"status": {
 				"configuration_error": "Erreur de Configuration",
 				"configuration_required": "Configuration Requise",

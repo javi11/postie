@@ -1,6 +1,8 @@
 {
 	"dashboard": {
 		"title": "Tableau de Bord",
+		"drag_drop_title": "Déposez les fichiers ici",
+		"drag_drop_description": "Relâchez pour ajouter les fichiers à la file d'attente",
 		"header": {
 			"title": "Tableau de Téléchargement",
 			"description": "Gérez vos téléchargements de fichiers et surveillez le progrès",
@@ -21,6 +23,7 @@
 			"progress": "Progrès",
 			"no_items": "Aucun élément dans la file d'attente",
 			"no_items_description": "Téléchargez des fichiers pour les voir ici",
+			"empty_hint": "Glissez des fichiers ici ou cliquez sur Ajouter des Fichiers pour commencer",
 			"file": "Fichier",
 			"size": "Taille",
 			"status": "Statut",
@@ -48,6 +51,8 @@
 			"entries": "entrées",
 			"previous": "Précédent",
 			"next": "Suivant",
+			"retry_all_failed": "Réessayer échoués",
+			"bulk_retry_success": "{count} éléments réessayés avec succès",
 			"status_types": {
 				"pending": "en attente",
 				"complete": "terminé",

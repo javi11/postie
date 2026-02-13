@@ -14,7 +14,7 @@ interface Props {
 	config: configType.ConfigData;
 }
 
-const { config }: Props = $props();
+let { config = $bindable() }: Props = $props();
 
 let saving = $state(false);
 let isAdvanced = $derived($advancedMode);
