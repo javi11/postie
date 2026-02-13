@@ -1,65 +1,49 @@
 package par2
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/google/uuid"
+	"github.com/javi11/par2go"
+
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/progress"
 	"github.com/javi11/postie/pkg/fileinfo"
 )
 
-type parExeType string
-
-const (
-	par2   parExeType = "par2"
-	parpar parExeType = "parpar"
-)
-
-var (
-	parregexp    = regexp.MustCompile(`(?i)(\.vol\d+\+(\d+))?\.par2$`)
-	commandFunc  = createCommand  // Function variable for testing
-)
+var parregexp = regexp.MustCompile(`(?i)(\.vol\d+\+(\d+))?\.par2$`)
 
 // Par2Executor defines the interface for executing par2 commands.
 type Par2Executor interface {
 	Create(ctx context.Context, files []fileinfo.FileInfo) ([]string, error)
 }
 
-// Par2CmdExecutor implements Par2Executor using the command line.
-type Par2CmdExecutor struct {
+// NativeExecutor implements Par2Executor using the built-in Go PAR2 creator.
+type NativeExecutor struct {
 	articleSize uint64
 	cfg         *config.Par2Config
-	parExeType  parExeType
 	jobProgress progress.JobProgress
 }
 
-func New(ctx context.Context, articleSize uint64, cfg *config.Par2Config, jobProgress progress.JobProgress) *Par2CmdExecutor {
-	// detect par executable
-	parExe := filepath.Base(cfg.Par2Path)
-	parExeFileName := strings.ToLower(parExe[:len(parExe)-len(filepath.Ext(parExe))])
-
-	return &Par2CmdExecutor{
+// New creates a new NativeExecutor.
+func New(articleSize uint64, cfg *config.Par2Config, jobProgress progress.JobProgress) *NativeExecutor {
+	return &NativeExecutor{
 		articleSize: articleSize,
 		cfg:         cfg,
-		parExeType:  parExeType(parExeFileName),
 		jobProgress: jobProgress,
 	}
 }
 
-// checkExistingPar2Files checks if PAR2 files already exist for the given source file
-func (p *Par2CmdExecutor) checkExistingPar2Files(ctx context.Context, sourceFile fileinfo.FileInfo) ([]string, bool) {
+// checkExistingPar2Files checks if PAR2 files already exist for the given source file.
+func (p *NativeExecutor) checkExistingPar2Files(ctx context.Context, sourceFile fileinfo.FileInfo) ([]string, bool) {
 	var dirPath string
 	if p.cfg.TempDir != "" {
 		dirPath = p.cfg.TempDir
@@ -67,6 +51,16 @@ func (p *Par2CmdExecutor) checkExistingPar2Files(ctx context.Context, sourceFile
 		dirPath = filepath.Dir(sourceFile.Path)
 	}
 
+	return checkExistingPar2FilesInPath(ctx, sourceFile, dirPath)
+}
+
+// checkExistingPar2FilesInDir checks if PAR2 files already exist in a specific directory.
+func (p *NativeExecutor) checkExistingPar2FilesInDir(ctx context.Context, sourceFile fileinfo.FileInfo, dirPath string) ([]string, bool) {
+	return checkExistingPar2FilesInPath(ctx, sourceFile, dirPath)
+}
+
+// checkExistingPar2FilesInPath is the shared implementation for checking existing PAR2 files.
+func checkExistingPar2FilesInPath(ctx context.Context, sourceFile fileinfo.FileInfo, dirPath string) ([]string, bool) {
 	baseName := filepath.Base(sourceFile.Path)
 	par2FileName := baseName + ".par2"
 	mainPar2Path := filepath.Join(dirPath, par2FileName)
@@ -92,7 +86,6 @@ func (p *Par2CmdExecutor) checkExistingPar2Files(ctx context.Context, sourceFile
 			continue
 		}
 		name := entry.Name()
-		// Match patterns like .vol0+1.par2, .vol1+1.par2, etc.
 		if strings.HasPrefix(name, baseName) && strings.Contains(name, ".vol") && strings.HasSuffix(name, ".par2") {
 			existingPaths = append(existingPaths, filepath.Join(dirPath, name))
 		}
@@ -104,53 +97,11 @@ func (p *Par2CmdExecutor) checkExistingPar2Files(ctx context.Context, sourceFile
 	return existingPaths, true
 }
 
-// checkExistingPar2FilesInDir checks if PAR2 files already exist in a specific directory
-func (p *Par2CmdExecutor) checkExistingPar2FilesInDir(ctx context.Context, sourceFile fileinfo.FileInfo, dirPath string) ([]string, bool) {
-	baseName := filepath.Base(sourceFile.Path)
-	par2FileName := baseName + ".par2"
-	mainPar2Path := filepath.Join(dirPath, par2FileName)
+// Create creates PAR2 parity files for the given input files.
+func (p *NativeExecutor) Create(ctx context.Context, files []fileinfo.FileInfo) ([]string, error) {
+	slog.InfoContext(ctx, "Starting par2 creation process", "executor", "NativeExecutor")
 
-	// Check if main PAR2 file exists
-	if _, err := os.Stat(mainPar2Path); os.IsNotExist(err) {
-		return nil, false
-	}
-
-	// Collect all existing PAR2 files (main + volume files)
-	var existingPaths []string
-	existingPaths = append(existingPaths, mainPar2Path)
-
-	// Find all volume files
-	entries, err := os.ReadDir(dirPath)
-	if err != nil {
-		slog.WarnContext(ctx, "Failed to read directory for existing par2 volumes", "error", err)
-		return nil, false
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		// Match patterns like .vol0+1.par2, .vol1+1.par2, etc.
-		if strings.HasPrefix(name, baseName) && strings.Contains(name, ".vol") && strings.HasSuffix(name, ".par2") {
-			existingPaths = append(existingPaths, filepath.Join(dirPath, name))
-		}
-	}
-
-	slog.InfoContext(ctx, "Found existing PAR2 files in output directory, skipping generation",
-		"sourceFile", sourceFile.Path, "par2Files", len(existingPaths))
-
-	return existingPaths, true
-}
-
-// Repair executes the par2 command to repair files in the target folder.
-func (p *Par2CmdExecutor) Create(ctx context.Context, files []fileinfo.FileInfo) ([]string, error) {
-	slog.InfoContext(ctx, "Starting par2 creation process", "executor", "Par2CmdExecutor")
-
-	var (
-		createdPar2Paths []string
-		parameters       []string
-	)
+	var createdPar2Paths []string
 	for _, file := range files {
 		if filepath.Ext(file.Path) == ".par2" {
 			continue
@@ -162,395 +113,231 @@ func (p *Par2CmdExecutor) Create(ctx context.Context, files []fileinfo.FileInfo)
 			continue
 		}
 
-		parBlockSize := calculateParBlockSize(file.Size, p.articleSize)
-		par2FileName := filepath.Base(file.Path) + ".par2"
-
-		// Use temp directory from config if set, otherwise use file's directory
+		// Determine output directory
 		var dirPath string
 		if p.cfg.TempDir != "" {
 			dirPath = p.cfg.TempDir
-			// Ensure temp directory exists
 			if err := os.MkdirAll(dirPath, 0755); err != nil {
 				slog.ErrorContext(ctx, "Failed to create temp directory", "path", dirPath, "error", err)
-				dirPath = filepath.Dir(file.Path) // fallback to original behavior
+				dirPath = filepath.Dir(file.Path)
 			}
 		} else {
 			dirPath = filepath.Dir(file.Path)
 		}
-		par2Path := filepath.Join(dirPath, par2FileName)
 
-		// set parameters
-		switch p.parExeType {
-		case par2:
-			parameters = append(parameters, "create", "-l")
-			parameters = append(parameters, fmt.Sprintf("-s%v", parBlockSize))
-			parameters = append(parameters, fmt.Sprintf("-r%v", p.cfg.Redundancy))
-			parameters = append(parameters, fmt.Sprintf("%v", par2Path))
-			parameters = append(parameters, p.cfg.ExtraPar2Options...)
-			parameters = append(parameters, file.Path)
-		case parpar:
-			parameters = append(parameters, fmt.Sprintf("-p%vB", p.cfg.VolumeSize))
-			parameters = append(parameters, fmt.Sprintf("-s%vB", parBlockSize))
-			parameters = append(parameters, fmt.Sprintf("-r%v", p.cfg.Redundancy))
-			parameters = append(parameters, fmt.Sprintf("-o%v", par2Path))
-			parameters = append(parameters, "--overwrite")
-			parameters = append(parameters, fmt.Sprintf("--slice-size-multiple=%vB", parBlockSize))
-			parameters = append(parameters, fmt.Sprintf("--max-input-slices=%v", p.cfg.MaxInputSlices))
-			parameters = append(parameters, p.cfg.ExtraPar2Options...)
-			parameters = append(parameters, file.Path)
-		default:
-			return nil, fmt.Errorf("unknown par executable: %s", p.cfg.Par2Path)
-		}
-
-		// Use the package-level variable instead of calling exec.CommandContext directly
-		dir, err := os.Getwd()
+		paths, err := p.createPar2ForFile(ctx, file, dirPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get current working directory: %w", err)
+			return nil, err
 		}
-
-		slog.DebugContext(ctx, fmt.Sprintf("Par command: %s in dir %s with parameters %v", p.cfg.Par2Path, dir, parameters))
-
-		cmd := commandFunc(ctx, p.cfg.Par2Path, parameters...)
-		cmd.Dir = dir
-		slog.DebugContext(ctx, fmt.Sprintf("Par command: %s in dir %s", cmd.String(), cmd.Dir))
-
-		var cmdReader io.ReadCloser
-
-		switch p.parExeType {
-		case par2:
-			if cmdReader, err = cmd.StdoutPipe(); err != nil {
-				return nil, fmt.Errorf("failed to get stdout pipe for par2: %w", err)
-			}
-		case parpar:
-			if cmdReader, err = cmd.StderrPipe(); err != nil {
-				return nil, fmt.Errorf("failed to get stderr pipe for parpar: %w", err)
-			}
-		}
-		defer func() { _ = cmdReader.Close() }() // Ensure pipe is closed to prevent resource leak on Windows
-
-		scanner := bufio.NewScanner(cmdReader)
-		scanner.Split(scanLines)
-
-		wg := sync.WaitGroup{}
-
-		// Initialize progress tracking
-		progressID := uuid.New()
-		progressName := fmt.Sprintf("PAR2: %s", filepath.Base(file.Path))
-		pg := p.jobProgress.AddProgress(progressID, progressName, progress.ProgressTypePar2Generation, 100)
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			for scanner.Scan() {
-				output := strings.Trim(scanner.Text(), " \r\n")
-				if output != "" && !strings.Contains(output, "%") {
-					slog.DebugContext(ctx, fmt.Sprintf("PAR2 STDOUT: %v", output))
-				}
-
-				exp := regexp.MustCompile(`(\d+)\.?\d*%`)
-				if output != "" && exp.MatchString(output) {
-					percentStr := exp.FindStringSubmatch(output)
-					if len(percentStr) > 1 {
-						percentInt, err := strconv.Atoi(percentStr[1])
-						if err == nil {
-							if pg.GetCurrent() > int64(percentInt) {
-								p.jobProgress.FinishProgress(progressID)
-								progressName := fmt.Sprintf("PAR2 verification: %s", filepath.Base(file.Path))
-								pg = p.jobProgress.AddProgress(progressID, progressName, progress.ProgressTypePar2Generation, 100)
-							}
-
-							pg.UpdateProgress(int64(percentInt) - pg.GetCurrent())
-						}
-					}
-				}
-			}
-
-		}()
-
-		if err = cmd.Run(); err != nil {
-			if ctx.Err() == context.Canceled {
-				slog.InfoContext(ctx, "Par2 creation cancelled", "path", file.Path)
-				return nil, ctx.Err()
-			}
-
-			return nil, fmt.Errorf("failed to run par2 command '%s': %w", cmd.String(), err)
-		}
-
-		wg.Wait()
-
-		// Check if PAR2 creation was successful
-		if _, err := os.Stat(par2Path); os.IsNotExist(err) {
-			return nil, fmt.Errorf("par2 file was not created: %s", par2Path)
-		}
-
-		createdPar2Paths = append(createdPar2Paths, par2Path)
-		p.jobProgress.FinishProgress(progressID)
-
-		slog.InfoContext(ctx, "Par2 creation completed successfully")
-
-		// After successful creation, collect all par2 volume files
-		baseName := filepath.Base(file.Path)
-
-		// Find all volume files
-		entries, err := os.ReadDir(dirPath)
-		if err != nil {
-			slog.WarnContext(ctx, "Failed to read directory to find par2 volumes", "error", err)
-			continue
-		}
-
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			name := entry.Name()
-			// Match patterns like .vol0+1.par2, .vol1+1.par2, etc.
-			if strings.HasPrefix(name, baseName) && strings.Contains(name, ".vol") && strings.HasSuffix(name, ".par2") {
-				createdPar2Paths = append(createdPar2Paths, filepath.Join(dirPath, name))
-			}
-		}
+		createdPar2Paths = append(createdPar2Paths, paths...)
 	}
 
 	return createdPar2Paths, nil
 }
 
-// CreateInDirectory creates PAR2 files with optional output directory specification
-// If outputDir is empty, it uses the default behavior (TempDir or source directory)
-func (p *Par2CmdExecutor) CreateInDirectory(ctx context.Context, files []fileinfo.FileInfo, outputDir string) ([]string, error) {
-	slog.InfoContext(ctx, "Starting par2 creation process", "executor", "Par2CmdExecutor", "outputDir", outputDir)
+// CreateInDirectory creates PAR2 files with optional output directory specification.
+func (p *NativeExecutor) CreateInDirectory(ctx context.Context, files []fileinfo.FileInfo, outputDir string) ([]string, error) {
+	slog.InfoContext(ctx, "Starting par2 creation process", "executor", "NativeExecutor", "outputDir", outputDir)
 
-	var (
-		createdPar2Paths []string
-		parameters       []string
-	)
+	var createdPar2Paths []string
 	for _, file := range files {
 		if filepath.Ext(file.Path) == ".par2" {
 			continue
 		}
 
-		parBlockSize := calculateParBlockSize(file.Size, p.articleSize)
-		par2FileName := filepath.Base(file.Path) + ".par2"
-
 		// Determine output directory based on parameters and configuration
 		var dirPath string
 		if outputDir != "" {
-			// Use provided output directory
 			dirPath = outputDir
-			// Ensure output directory exists
 			if err := os.MkdirAll(dirPath, 0755); err != nil {
 				slog.ErrorContext(ctx, "Failed to create output directory", "path", dirPath, "error", err)
-				dirPath = filepath.Dir(file.Path) // fallback to original behavior
+				dirPath = filepath.Dir(file.Path)
 			} else {
-				// Check if PAR2 files already exist in the output directory
 				if existingPaths, exists := p.checkExistingPar2FilesInDir(ctx, file, dirPath); exists {
 					createdPar2Paths = append(createdPar2Paths, existingPaths...)
 					continue
 				}
 			}
 		} else if p.cfg.TempDir != "" {
-			// Use temp directory from config if set
 			dirPath = p.cfg.TempDir
 			if err := os.MkdirAll(dirPath, 0755); err != nil {
 				slog.ErrorContext(ctx, "Failed to create temp directory", "path", dirPath, "error", err)
-				dirPath = filepath.Dir(file.Path) // fallback to original behavior
+				dirPath = filepath.Dir(file.Path)
 			} else {
-				// Check if PAR2 files already exist
 				if existingPaths, exists := p.checkExistingPar2Files(ctx, file); exists {
 					createdPar2Paths = append(createdPar2Paths, existingPaths...)
 					continue
 				}
 			}
 		} else {
-			// Use file's directory (default behavior)
 			dirPath = filepath.Dir(file.Path)
-			// Check if PAR2 files already exist
 			if existingPaths, exists := p.checkExistingPar2Files(ctx, file); exists {
 				createdPar2Paths = append(createdPar2Paths, existingPaths...)
 				continue
 			}
 		}
 
-		par2Path := filepath.Join(dirPath, par2FileName)
-
-		// set parameters
-		switch p.parExeType {
-		case par2:
-			parameters = append(parameters, "create", "-l")
-			parameters = append(parameters, fmt.Sprintf("-s%v", parBlockSize))
-			parameters = append(parameters, fmt.Sprintf("-r%v", p.cfg.Redundancy))
-			parameters = append(parameters, fmt.Sprintf("%v", par2Path))
-			parameters = append(parameters, p.cfg.ExtraPar2Options...)
-			parameters = append(parameters, file.Path)
-		case parpar:
-			parameters = append(parameters, fmt.Sprintf("-p%vB", p.cfg.VolumeSize))
-			parameters = append(parameters, fmt.Sprintf("-s%vB", parBlockSize))
-			parameters = append(parameters, fmt.Sprintf("-r%v", p.cfg.Redundancy))
-			parameters = append(parameters, fmt.Sprintf("-o%v", par2Path))
-			parameters = append(parameters, "--overwrite")
-			parameters = append(parameters, fmt.Sprintf("--slice-size-multiple=%vB", parBlockSize))
-			parameters = append(parameters, fmt.Sprintf("--max-input-slices=%v", p.cfg.MaxInputSlices))
-			parameters = append(parameters, p.cfg.ExtraPar2Options...)
-			parameters = append(parameters, file.Path)
-		default:
-			return nil, fmt.Errorf("unknown par executable: %s", p.cfg.Par2Path)
-		}
-
-		// Use the package-level variable instead of calling exec.CommandContext directly
-		dir, err := os.Getwd()
+		paths, err := p.createPar2ForFile(ctx, file, dirPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get current working directory: %w", err)
+			return nil, err
 		}
-
-		slog.DebugContext(ctx, fmt.Sprintf("Par command: %s in dir %s with parameters %v", p.cfg.Par2Path, dir, parameters))
-
-		cmd := commandFunc(ctx, p.cfg.Par2Path, parameters...)
-		cmd.Dir = dir
-		slog.DebugContext(ctx, fmt.Sprintf("Par command: %s in dir %s", cmd.String(), cmd.Dir))
-
-		var cmdReader io.ReadCloser
-
-		switch p.parExeType {
-		case par2:
-			if cmdReader, err = cmd.StdoutPipe(); err != nil {
-				return nil, fmt.Errorf("failed to get stdout pipe for par2: %w", err)
-			}
-		case parpar:
-			if cmdReader, err = cmd.StderrPipe(); err != nil {
-				return nil, fmt.Errorf("failed to get stderr pipe for parpar: %w", err)
-			}
-		}
-		defer func() { _ = cmdReader.Close() }() // Ensure pipe is closed to prevent resource leak on Windows
-
-		scanner := bufio.NewScanner(cmdReader)
-		scanner.Split(scanLines)
-
-		wg := sync.WaitGroup{}
-
-		// Initialize progress tracking
-		progressID := uuid.New()
-		progressName := fmt.Sprintf("PAR2: %s", filepath.Base(file.Path))
-		pg := p.jobProgress.AddProgress(progressID, progressName, progress.ProgressTypePar2Generation, 100)
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			for scanner.Scan() {
-				output := strings.Trim(scanner.Text(), " \r\n")
-				if output != "" && !strings.Contains(output, "%") {
-					slog.DebugContext(ctx, fmt.Sprintf("PAR2 STDOUT: %v", output))
-				}
-
-				exp := regexp.MustCompile(`(\d+)\.?\d*%`)
-				if output != "" && exp.MatchString(output) {
-					percentStr := exp.FindStringSubmatch(output)
-					if len(percentStr) > 1 {
-						percentInt, err := strconv.Atoi(percentStr[1])
-						if err == nil {
-							if pg.GetCurrent() > int64(percentInt) {
-								p.jobProgress.FinishProgress(progressID)
-								progressName := fmt.Sprintf("PAR2 verification: %s", filepath.Base(file.Path))
-								pg = p.jobProgress.AddProgress(progressID, progressName, progress.ProgressTypePar2Generation, 100)
-							}
-
-							pg.UpdateProgress(int64(percentInt) - pg.GetCurrent())
-						}
-					}
-				}
-			}
-
-		}()
-
-		if err = cmd.Run(); err != nil {
-			if ctx.Err() == context.Canceled {
-				slog.InfoContext(ctx, "Par2 creation cancelled", "path", file.Path)
-				return nil, ctx.Err()
-			}
-
-			return nil, fmt.Errorf("failed to run par2 command '%s': %w", cmd.String(), err)
-		}
-
-		wg.Wait()
-
-		// Check if PAR2 creation was successful
-		if _, err := os.Stat(par2Path); os.IsNotExist(err) {
-			return nil, fmt.Errorf("par2 file was not created: %s", par2Path)
-		}
-
-		createdPar2Paths = append(createdPar2Paths, par2Path)
-		p.jobProgress.FinishProgress(progressID)
-
-		slog.InfoContext(ctx, "Par2 creation completed successfully")
-
-		// After successful creation, collect all par2 volume files
-		baseName := filepath.Base(file.Path)
-
-		// Find all volume files
-		entries, err := os.ReadDir(dirPath)
-		if err != nil {
-			slog.WarnContext(ctx, "Failed to read directory to find par2 volumes", "error", err)
-			continue
-		}
-
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			name := entry.Name()
-			// Match patterns like .vol0+1.par2, .vol1+1.par2, etc.
-			if strings.HasPrefix(name, baseName) && strings.Contains(name, ".vol") && strings.HasSuffix(name, ".par2") {
-				createdPar2Paths = append(createdPar2Paths, filepath.Join(dirPath, name))
-			}
-		}
+		createdPar2Paths = append(createdPar2Paths, paths...)
 	}
 
 	return createdPar2Paths, nil
 }
 
+// createPar2ForFile creates PAR2 files for a single input file in the given directory.
+func (p *NativeExecutor) createPar2ForFile(ctx context.Context, file fileinfo.FileInfo, dirPath string) ([]string, error) {
+	parBlockSize := calculateParBlockSize(file.Size, p.articleSize)
+	par2FileName := filepath.Base(file.Path) + ".par2"
+	par2Path := filepath.Join(dirPath, par2FileName)
+
+	// Parse redundancy to determine number of recovery blocks
+	redundancyPct := parseRedundancyPercentage(p.cfg.Redundancy, file.Size, parBlockSize)
+	numInputSlices := int(math.Ceil(float64(file.Size) / float64(parBlockSize)))
+	if numInputSlices == 0 {
+		numInputSlices = 1
+	}
+	numRecovery := int(math.Ceil(float64(numInputSlices) * redundancyPct / 100.0))
+	if numRecovery < 1 {
+		numRecovery = 1
+	}
+
+	slog.DebugContext(ctx, "PAR2 creation parameters",
+		"file", file.Path,
+		"blockSize", parBlockSize,
+		"inputSlices", numInputSlices,
+		"recoveryBlocks", numRecovery,
+		"redundancy", redundancyPct)
+
+	// Initialize progress tracking
+	progressID := uuid.New()
+	progressName := fmt.Sprintf("PAR2: %s", filepath.Base(file.Path))
+	var pg progress.Progress
+	if p.jobProgress != nil {
+		pg = p.jobProgress.AddProgress(progressID, progressName, progress.ProgressTypePar2Generation, 100)
+	}
+
+	opts := par2go.Options{
+		SliceSize:   int(parBlockSize),
+		NumRecovery: numRecovery,
+		Creator:     "Postie",
+		OnProgress: func(phase string, pct float64) {
+			if pg == nil {
+				return
+			}
+			// Map phases to progress: hashing=0-20%, encoding=20-95%, writing=95-100%
+			var overallPct float64
+			switch phase {
+			case "hashing":
+				overallPct = pct * 20
+			case "encoding":
+				overallPct = 20 + pct*75
+			case "writing":
+				overallPct = 95 + pct*5
+			}
+			delta := int64(overallPct) - pg.GetCurrent()
+			if delta > 0 {
+				pg.UpdateProgress(delta)
+			}
+		},
+	}
+
+	err := par2go.Create(ctx, par2Path, []string{file.Path}, opts)
+	if err != nil {
+		if ctx.Err() == context.Canceled {
+			slog.InfoContext(ctx, "Par2 creation cancelled", "path", file.Path)
+			return nil, ctx.Err()
+		}
+		return nil, fmt.Errorf("failed to create par2 for %s: %w", file.Path, err)
+	}
+
+	if p.jobProgress != nil {
+		p.jobProgress.FinishProgress(progressID)
+	}
+
+	slog.InfoContext(ctx, "Par2 creation completed successfully", "file", file.Path)
+
+	// Collect all created PAR2 files (main + volumes)
+	var createdPaths []string
+	createdPaths = append(createdPaths, par2Path)
+
+	baseName := filepath.Base(file.Path)
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to read directory to find par2 volumes", "error", err)
+		return createdPaths, nil
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasPrefix(name, baseName) && strings.Contains(name, ".vol") && strings.HasSuffix(name, ".par2") {
+			createdPaths = append(createdPaths, filepath.Join(dirPath, name))
+		}
+	}
+
+	return createdPaths, nil
+}
+
+// parseRedundancyPercentage parses the redundancy config string into a percentage.
+// Supports formats: "10", "10%", "1n*1.2" (ParPar formula).
+func parseRedundancyPercentage(redundancy string, fileSize uint64, blockSize uint64) float64 {
+	redundancy = strings.TrimSpace(redundancy)
+
+	// Try ParPar formula: "Xn*Y" where X is multiplier and Y is factor
+	if strings.Contains(redundancy, "n") {
+		// Parse "1n*1.2" style formulas
+		// This means: ceil(inputSlices * factor) recovery blocks
+		// Convert to percentage
+		parts := strings.SplitN(redundancy, "*", 2)
+		if len(parts) == 2 {
+			factor, err := strconv.ParseFloat(parts[1], 64)
+			if err == nil {
+				// Convert to percentage: factor * 100 gives us the percentage
+				// "1n*1.2" means 120% recovery blocks relative to input
+				nParts := strings.SplitN(parts[0], "n", 2)
+				multiplier := 1.0
+				if nParts[0] != "" {
+					if m, err := strconv.ParseFloat(nParts[0], 64); err == nil {
+						multiplier = m
+					}
+				}
+				return multiplier * factor * 100
+			}
+		}
+	}
+
+	// Try percentage: "10%" or "10"
+	cleaned := strings.TrimSuffix(redundancy, "%")
+	if pct, err := strconv.ParseFloat(cleaned, 64); err == nil {
+		return pct
+	}
+
+	// Default: 10%
+	slog.Warn("Could not parse redundancy, defaulting to 10%", "redundancy", redundancy)
+	return 10.0
+}
+
+// IsPar2File returns true if the given path matches a PAR2 file pattern.
 func IsPar2File(path string) bool {
 	return parregexp.MatchString(path)
 }
 
-// scanLines is a helper for bufio.Scanner to split lines correctly
-func scanLines(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	if atEOF && len(data) == 0 {
-		return 0, nil, nil
-	}
-
-	if i := bytes.IndexAny(data, "\r\n"); i >= 0 {
-		if data[i] == '\n' {
-			// We have a line terminated by single newline.
-			return i + 1, data[0:i], nil
-		}
-
-		advance = i + 1
-		if len(data) > i+1 && data[i+1] == '\n' {
-			advance += 1
-		}
-
-		return advance, data[0:i], nil
-	}
-
-	// If we're at EOF, we have a final, non-terminated line. Return it.
-	if atEOF {
-		return len(data), data, nil
-	}
-
-	// Request more data.
-	return 0, nil, nil
-}
-
+// calculateParBlockSize calculates the appropriate PAR2 block size for the given file.
 func calculateParBlockSize(fileSize uint64, articleSize uint64) uint64 {
 	maxParBlocks := uint64(32768)
 
 	if fileSize/articleSize < maxParBlocks {
 		return articleSize
-	} else {
-		minParBlockSize := (fileSize / maxParBlocks) + 1
-		multiplier := minParBlockSize / articleSize
-		if minParBlockSize%articleSize != 0 {
-			multiplier++
-		}
-		return multiplier * articleSize
 	}
+	minParBlockSize := (fileSize / maxParBlocks) + 1
+	multiplier := minParBlockSize / articleSize
+	if minParBlockSize%articleSize != 0 {
+		multiplier++
+	}
+	return multiplier * articleSize
 }

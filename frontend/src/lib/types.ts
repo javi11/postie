@@ -1,8 +1,3 @@
-export interface Par2DownloadStatus {
-	status: "downloading" | "completed" | "error";
-	message: string;
-}
-
 export interface ProgressStatus {
 	currentFile: string;
 	totalFiles: number;

@@ -7,7 +7,6 @@ import ToastContainer from "$lib/components/ToastContainer.svelte";
 import { t } from "$lib/i18n";
 import { appStatus } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
-import type { Par2DownloadStatus } from "$lib/types";
 import { ChartPie, FileText, Settings, Activity, Palette, Globe } from "lucide-svelte";
 import { availableThemes, currentTheme, type ThemeValue } from "$lib/stores/theme";
 import { availableLocales, locale, setStoredLocale } from "$lib/i18n";
@@ -34,18 +33,6 @@ onMount(async () => {
 	// Listen for config updates
 	await apiClient.on("config-updated", async () => {
 		await loadAppStatus();
-	});
-
-	// Listen for par2 download events
-	await apiClient.on("par2-download-status", (data) => {
-		const d = data as Par2DownloadStatus;
-		if (d.status === "downloading") {
-			toastStore.info($t("common.common.loading"), d.message);
-		} else if (d.status === "completed") {
-			toastStore.success($t("common.common.success"), d.message);
-		} else if (d.status === "error") {
-			toastStore.error($t("common.common.error"), d.message);
-		}
 	});
 
 	// Listen for menu navigation events (desktop only)

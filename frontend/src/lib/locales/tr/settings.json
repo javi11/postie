@@ -170,8 +170,6 @@
             "title": "PAR2 Kurtarma Dosyaları",
             "enable": "PAR2 oluşturmayı etkinleştir",
             "enable_description": "Hata düzeltme ve onarım için kurtarma dosyaları oluştur",
-            "par2_path": "PAR2 Yürütülebilir Yolu",
-            "par2_path_description": "PAR2 yürütülebilir dosyası veya parpar yolu",
             "temp_dir": "Geçici Dizin",
             "temp_dir_description": "İşleme sırasında PAR2 dosyalarının geçici olarak oluşturulduğu dizin (varsayılan olarak sistem geçici dizinini kullanır)",
             "temp_dir_placeholder": "Sistem geçici dizini için boş bırakın",
@@ -179,32 +177,16 @@
             "maintain_par2_files_description": "Başarılı yüklemeden sonra PAR2 dosyalarını kalıcı olarak sakla (arşiv bütünlüğü ve gelecekteki onarımlar için yararlıdır)",
             "redundancy": "Yedeklilik",
             "redundancy_description": "Kurtarma verisi yüzdesi",
-            "volume_size": "Bölüm Boyutu",
-            "volume_size_description": "Her bir PAR2 bölüm dosyasının boyutu",
-            "max_input_slices": "Maksimum Giriş Dilimleri",
-            "max_input_slices_description": "İşleme için maksimum giriş dilimi sayısı",
-            "extra_options": {
-                "title": "Ek PAR2 Seçenekleri",
-                "description": "PAR2 yürütülebilir dosyası için ek komut satırı argümanları",
-                "add_option": "Seçenek Ekle",
-                "remove": "Kaldır",
-                "placeholder": "--option=value",
-                "no_options": "Ek seçenek yapılandırılmadı. Gerekirse özel PAR2 argümanları ekleyin."
-            },
             "info": {
                 "title": "PAR2 Kurtarma Bilgisi",
                 "features": {
                     "par2_files_allow_recovery_of_damaged_or_missing_files": "PAR2 dosyaları hasarlı veya eksik dosyaların kurtarılmasını sağlar",
                     "redundancy_percentage_determines_how_much_data_can_be_recovered": "Yedeklilik yüzdesi ne kadar verinin kurtarılabileceğini belirler",
-                    "higher_redundancy_better_recovery_but_larger_par2_files": "Daha yüksek yedeklilik = daha iyi kurtarma ancak daha büyük PAR2 dosyaları",
-                    "volume_size_controls_how_par2_data_is_split_across_files": "Bölüm boyutu PAR2 verilerinin dosyalar arasında nasıl bölüneceğini kontrol eder",
-                    "extra_options_allow_fine_tuning_of_par2_generation": "Ek seçenekler PAR2 üretiminin ince ayarını sağlar"
+                    "higher_redundancy_better_recovery_but_larger_par2_files": "Daha yüksek yedeklilik = daha iyi kurtarma ancak daha büyük PAR2 dosyaları"
                 }
             },
             "status": {
-                "redundancy": "Yedeklilik",
-                "volume_size": "Bölüm Boyutu",
-                "max_slices": "Maksimum Dilim"
+                "redundancy": "Yedeklilik"
             },
             "save_button": "PAR2 Ayarlarını Kaydet",
             "saving": "Kaydediliyor...",
