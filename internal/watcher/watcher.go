@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/javi11/postie/internal/config"
@@ -228,6 +229,7 @@ func (w *Watcher) scanDirectoryGroupByFolder(ctx context.Context) error {
 	// Map to collect files by their parent directory
 	filesByFolder := make(map[string][]string)
 	sizeByFolder := make(map[string]int64)
+	var mapMutex sync.Mutex
 
 	// Walk the directory tree and collect files by folder
 	err := pwalkdir.Walk(w.watchFolder, func(path string, dir fs.DirEntry, err error) error {
@@ -267,9 +269,11 @@ func (w *Watcher) scanDirectoryGroupByFolder(ctx context.Context) error {
 		folderPath := filepath.Dir(path)
 
 		// Add file to the folder's file list
+		mapMutex.Lock()
 		filesByFolder[folderPath] = append(filesByFolder[folderPath], path)
 		sizeByFolder[folderPath] += info.Size()
 
+		mapMutex.Unlock()
 		return nil
 	})
 
@@ -415,7 +419,7 @@ func (w *Watcher) calculateDirectorySize(ctx context.Context) (int64, error) {
 
 		// Only count files that meet basic criteria (not ignore patterns and min file size)
 		if w.shouldCountFile(path, info) {
-			totalSize += info.Size()
+			atomic.AddInt64(&totalSize, info.Size())
 		}
 
 		return nil
