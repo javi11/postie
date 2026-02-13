@@ -9,7 +9,7 @@ interface Props {
 	config: configType.ConfigData;
 }
 
-const { config }: Props = $props();
+let { config = $bindable() }: Props = $props();
 
 // Reactive local state
 let maxConcurrentUploads = $state(config.queue?.max_concurrent_uploads || 3);

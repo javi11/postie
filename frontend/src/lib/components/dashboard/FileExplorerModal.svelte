@@ -159,12 +159,48 @@ function handleBackdropKeydown(event: KeyboardEvent) {
   }
 }
 
+let modalRef: HTMLDivElement | undefined = $state();
+let previouslyFocused: HTMLElement | null = null;
+
 // Load initial data when modal opens
 $effect(() => {
   if (isOpen) {
     loadInitialData();
+    // Store previously focused element and focus the modal
+    previouslyFocused = document.activeElement as HTMLElement;
+    // Use tick to wait for DOM
+    requestAnimationFrame(() => {
+      const firstFocusable = modalRef?.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      firstFocusable?.focus();
+    });
+  } else if (previouslyFocused) {
+    // Restore focus when modal closes
+    previouslyFocused.focus();
+    previouslyFocused = null;
   }
 });
+
+function handleFocusTrap(event: KeyboardEvent) {
+  if (event.key !== "Tab" || !modalRef) return;
+
+  const focusableElements = modalRef.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  );
+  if (focusableElements.length === 0) return;
+
+  const first = focusableElements[0];
+  const last = focusableElements[focusableElements.length - 1];
+
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
 
 onMount(() => {
   document.addEventListener("keydown", handleKeydown);
@@ -191,8 +227,11 @@ onMount(() => {
     aria-modal="true"
     aria-labelledby="file-explorer-title"
   >
-    <div 
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      bind:this={modalRef}
       class="bg-base-100 rounded-lg shadow-2xl border border-base-300 w-full max-w-6xl h-[80vh] flex flex-col pointer-events-auto"
+      onkeydown={handleFocusTrap}
     >
       <!-- Header -->
       <div class="flex items-center justify-between p-4 border-b border-base-300">

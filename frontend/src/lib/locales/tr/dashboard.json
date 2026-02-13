@@ -1,6 +1,8 @@
 {
     "dashboard": {
         "title": "Panel",
+        "drag_drop_title": "Dosyaları buraya bırakın",
+        "drag_drop_description": "Dosyaları kuyruğa eklemek için bırakın",
         "header": {
             "title": "Yükleme Paneli",
             "description": "Dosya yüklemelerinizi yönetin ve ilerlemeyi izleyin",
@@ -21,6 +23,7 @@
             "progress": "İlerleme",
             "no_items": "Kuyrukta öğe yok",
             "no_items_description": "Dosyaları görmek için yükleyin",
+            "empty_hint": "Başlamak için dosyaları buraya sürükleyin veya yukarıdaki Dosya Ekle'ye tıklayın",
             "file": "Dosya",
             "size": "Boyut",
             "status": "Durum",
@@ -46,6 +49,8 @@
             "entries": "kayıt",
             "previous": "Önceki",
             "next": "Sonraki",
+            "retry_all_failed": "Başarısızları Tekrarla",
+            "bulk_retry_success": "{count} öğe başarıyla yeniden denendi",
             "status_types": {
                 "pending": "bekliyor",
                 "complete": "tamamlandı",

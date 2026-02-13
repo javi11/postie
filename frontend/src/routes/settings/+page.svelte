@@ -22,13 +22,15 @@ import { backend, config as configType } from "$lib/wailsjs/go/models";
 import { AlertCircle, CheckCircle, RefreshCw, Settings } from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
 
-let configData: configType.ConfigData | null = null;
-let localConfig: configType.ConfigData | null = null;
-let needsConfiguration = false;
-let criticalConfigError = false;
-let criticalConfigErrorMessage = "";
-let loading = false;
-let loadError = false;
+let configData: configType.ConfigData | null = $state(null);
+let localConfig: configType.ConfigData | null = $state(null);
+let needsConfiguration = $state(false);
+let criticalConfigError = $state(false);
+let criticalConfigErrorMessage = $state("");
+let loading = $state(false);
+let loadError = $state(false);
+let isDirty = $state(false);
+let savedConfigSnapshot = "";
 
 onMount(() => {
 	loadConfig();
@@ -63,6 +65,8 @@ async function loadConfig() {
 		) {
 			localConfig.servers = [new configType.ServerConfig()];
 		}
+		savedConfigSnapshot = JSON.stringify(localConfig);
+		isDirty = false;
 	} catch (error) {
 		console.error("Failed to load config:", error);
 		loadError = true;
@@ -196,6 +200,8 @@ async function handleSaveConfig() {
 		configData = configToSave;
 		// Update localConfig to the saved config to maintain reactivity
 		localConfig = JSON.parse(JSON.stringify(configToSave));
+		savedConfigSnapshot = JSON.stringify(localConfig);
+		isDirty = false;
 
 		// Update app status
 		const status = await apiClient.getAppStatus();
@@ -219,14 +225,27 @@ async function handleSaveConfig() {
 	}
 }
 
+function checkDirty() {
+	if (!localConfig || !savedConfigSnapshot) return;
+	isDirty = JSON.stringify(localConfig) !== savedConfigSnapshot;
+}
+
+function handleBeforeUnload(event: BeforeUnloadEvent) {
+	if (isDirty) {
+		event.preventDefault();
+	}
+}
+
 onDestroy(() => {
 	// Clean up when the component is destroyed
 	settingsSaveFunction.set(null);
 });
 </script>
 
+<svelte:window onbeforeunload={handleBeforeUnload} />
+
 <svelte:head>
-  <title>{$t('settings.title')} - Postie</title>
+  <title>{isDirty ? '● ' : ''}{$t('settings.title')} - Postie</title>
   <meta name="description" content="Configure your upload settings" />
 </svelte:head>
 
@@ -241,6 +260,12 @@ onDestroy(() => {
             {$t('settings.title')}
           </h1>
           <ConfigStatusBadge />
+          {#if isDirty}
+            <div class="badge badge-warning gap-1">
+              <span class="w-2 h-2 rounded-full bg-warning-content animate-pulse"></span>
+              {$t('settings.header.unsaved_changes')}
+            </div>
+          {/if}
           {#if criticalConfigError}
             <div class="flex items-center gap-2 px-3 py-1 bg-red-100 dark:bg-red-900/30 rounded-full">
               <AlertCircle class="w-4 h-4 text-red-600 dark:text-red-400" />
@@ -322,24 +347,25 @@ onDestroy(() => {
       <!-- Pending Config Notification -->
       <PendingConfigNotification />
       
-      <div class="bg-base-100 rounded-lg shadow-sm border border-base-300">
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="bg-base-100 rounded-lg shadow-sm border border-base-300" oninput={checkDirty} onchange={checkDirty}>
         <div role="tablist" class="tabs tabs-bordered">
           <input type="radio" name="settings_tabs" role="tab" class="tab" aria-label="Core Configuration" checked />
           <div role="tabpanel" class="tab-content p-6">
             <div class="space-y-6">
-              <GeneralSection config={localConfig} />
-              <ServerSection config={localConfig} />
+              <GeneralSection bind:config={localConfig} />
+              <ServerSection bind:config={localConfig} />
             </div>
           </div>
 
           <input type="radio" name="settings_tabs" role="tab" class="tab" aria-label="Upload Settings" />
           <div role="tabpanel" class="tab-content p-6">
             <div class="space-y-6">
-              <PostingSection config={localConfig} />
-              <PostCheckSection config={localConfig} />
+              <PostingSection bind:config={localConfig} />
+              <PostCheckSection bind:config={localConfig} />
               {#if $advancedMode}
-                <QueueSection config={localConfig} />
-                <ConnectionPoolSection config={localConfig} />
+                <QueueSection bind:config={localConfig} />
+                <ConnectionPoolSection bind:config={localConfig} />
               {/if}
             </div>
           </div>
@@ -347,17 +373,17 @@ onDestroy(() => {
           <input type="radio" name="settings_tabs" role="tab" class="tab" aria-label="File Processing" />
           <div role="tabpanel" class="tab-content p-6">
             <div class="space-y-6">
-              <FileNamingSection config={localConfig} />
-              <Par2Section config={localConfig} />
-              <NzbCompressionSection config={localConfig} />
+              <FileNamingSection bind:config={localConfig} />
+              <Par2Section bind:config={localConfig} />
+              <NzbCompressionSection bind:config={localConfig} />
             </div>
           </div>
 
           <input type="radio" name="settings_tabs" role="tab" class="tab" aria-label="Automation" />
           <div role="tabpanel" class="tab-content p-6">
             <div class="space-y-6">
-              <WatcherSection config={localConfig} />
-              <PostUploadScriptSection config={localConfig} />
+              <WatcherSection bind:config={localConfig} />
+              <PostUploadScriptSection bind:config={localConfig} />
             </div>
           </div>
         </div>

@@ -227,7 +227,14 @@ async function handleFolderUpload() {
             </div>
             
             <!-- Overall Progress Bar -->
-            <div class="w-full bg-base-300 rounded-full h-2 mb-2">
+            <div
+              class="w-full bg-base-300 rounded-full h-2 mb-2"
+              role="progressbar"
+              aria-valuenow={Math.round($uploadStore.totalProgress)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Upload progress"
+            >
               <div
                 class="bg-primary h-2 rounded-full transition-all duration-300"
                 style="width: {$uploadStore.totalProgress}%"

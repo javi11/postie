@@ -15,6 +15,7 @@
             "save_configuration": "Yapılandırmayı Kaydet",
             "advanced_mode": "Gelişmiş Mod",
             "advanced_mode_description": "İnce ayar için gelişmiş yapılandırma seçeneklerini göster",
+            "unsaved_changes": "Kaydedilmemiş değişiklikler",
             "status": {
                 "configuration_error": "Yapılandırma Hatası",
                 "configuration_required": "Yapılandırma Gerekli",

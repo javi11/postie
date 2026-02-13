@@ -25,20 +25,40 @@ async function fetchProgressData() {
   }
 }
 
-// Setup periodic progress updates
-onMount(() => {
-  // Initial fetch
-  fetchProgressData();
-  
-  // Update every 500ms for real-time progress
+function startPolling() {
+  if (progressUpdateInterval) return;
   progressUpdateInterval = setInterval(fetchProgressData, 500);
-});
+}
 
-onDestroy(() => {
+function stopPolling() {
   if (progressUpdateInterval) {
     clearInterval(progressUpdateInterval);
     progressUpdateInterval = null;
   }
+}
+
+function handleVisibilityChange() {
+  if (document.hidden) {
+    stopPolling();
+  } else {
+    fetchProgressData();
+    startPolling();
+  }
+}
+
+// Setup periodic progress updates
+onMount(() => {
+  // Initial fetch
+  fetchProgressData();
+
+  // Update every 500ms for real-time progress (pauses when tab inactive)
+  startPolling();
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+});
+
+onDestroy(() => {
+  stopPolling();
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
 
 // Function to get icon for progress type
@@ -59,11 +79,11 @@ function getProgressIcon(type: string) {
 function getProgressColor(type: string) {
   switch (type) {
     case "uploading":
-      return "text-blue-500 bg-blue-500/10";
+      return "text-info bg-info/10";
     case "par2_generation":
-      return "text-green-500 bg-green-500/10";
+      return "text-success bg-success/10";
     case "checking":
-      return "text-yellow-500 bg-yellow-500/10";
+      return "text-warning bg-warning/10";
     default:
       return "text-primary bg-primary/10";
   }
@@ -122,7 +142,7 @@ function cancelUpload(jobID: string) {
 <div class="space-y-6">
   <!-- Header -->
   <div class="flex items-center gap-3 mb-6">
-    <div class="p-2 rounded-lg bg-gradient-to-br from-green-500 to-blue-600">
+    <div class="p-2 rounded-lg bg-gradient-to-br from-success to-info">
       <ChartPie class="w-6 h-6 text-white" />
     </div>
     <div>
@@ -193,16 +213,16 @@ function cancelUpload(jobID: string) {
                           </p>
                           <!-- Status indicator based on IsStarted and IsPaused -->
                           <div class="flex items-center gap-1">
-                            <div class="w-2 h-2 rounded-full {progressState?.IsPaused 
-                              ? 'bg-orange-500 animate-pulse' 
-                              : progressState?.IsStarted 
-                              ? 'bg-green-500 animate-pulse' 
-                              : 'bg-yellow-500'}"></div>
-                            <span class="text-xs font-medium {progressState?.IsPaused 
-                              ? 'text-orange-600' 
-                              : progressState?.IsStarted 
-                              ? 'text-green-600' 
-                              : 'text-yellow-600'}">
+                            <div class="w-2 h-2 rounded-full {progressState?.IsPaused
+                              ? 'bg-warning animate-pulse'
+                              : progressState?.IsStarted
+                              ? 'bg-success animate-pulse'
+                              : 'bg-warning'}"></div>
+                            <span class="text-xs font-medium {progressState?.IsPaused
+                              ? 'text-warning'
+                              : progressState?.IsStarted
+                              ? 'text-success'
+                              : 'text-warning'}">
                               {progressState?.IsPaused ? $t("dashboard.progress.task_status.paused") : progressState?.IsStarted ? $t("dashboard.progress.task_status.in_progress") : $t("dashboard.progress.task_status.pending")}
                             </span>
                           </div>
@@ -213,15 +233,22 @@ function cancelUpload(jobID: string) {
                       </div>
                     </div>
                     <div class="text-right">
-                      <span class="text-sm font-semibold {progressState?.IsPaused ? 'text-orange-600 bg-orange-500/10' : 'text-primary bg-primary/10'} px-2 py-1 rounded-md">
+                      <span class="text-sm font-semibold {progressState?.IsPaused ? 'text-warning bg-warning/10' : 'text-primary bg-primary/10'} px-2 py-1 rounded-md">
                         {Math.round(progressState?.CurrentPercent * 100 || 0)}%
                       </span>
                     </div>
                   </div>
                   
-                  <div class="w-full bg-base-300 rounded-full h-2 mb-3">
-                    <div 
-                      class="{progressState?.IsPaused ? 'bg-orange-500' : 'bg-primary'} h-2 rounded-full transition-all duration-300"
+                  <div
+                    class="w-full bg-base-300 rounded-full h-2 mb-3"
+                    role="progressbar"
+                    aria-valuenow={Math.round(progressState?.CurrentPercent * 100 || 0)}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={progressState?.Description || progressState?.Type}
+                  >
+                    <div
+                      class="{progressState?.IsPaused ? 'bg-warning' : 'bg-primary'} h-2 rounded-full transition-all duration-300"
                       style="width: {progressState?.CurrentPercent * 100 || 0}%"
                     ></div>
                   </div>

@@ -5,7 +5,8 @@
 			"settings": "Ayarlar",
 			"metrics": "Metrikler",
 			"logs": "Günlükler",
-			"language": "Dil"
+			"language": "Dil",
+			"theme": "Tema"
 		},
 		"actions": {
 			"save": "Kaydet",

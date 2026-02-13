@@ -50,12 +50,13 @@ function dismissToast(id: string) {
 </script>
 
 <!-- Toast Container positioned at bottom-right -->
-<div class="toast toast-bottom toast-end z-50">
+<div class="toast toast-bottom toast-end z-50" aria-live="polite" aria-relevant="additions removals">
   {#each toasts as toast (toast.id)}
 	<div
 	  transition:slide={{ duration: 300 }}
 	  class="alert {getToastClass(toast.type)} shadow-lg"
 	  role="alert"
+	  aria-atomic="true"
 	>
 	  <svelte:component this={getToastIcon(toast.type)} class="h-5 w-5" />
 	  <div class="flex-1">

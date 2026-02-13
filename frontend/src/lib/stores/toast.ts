@@ -10,23 +10,50 @@ export interface ToastMessage {
 	duration?: number;
 }
 
+const MAX_VISIBLE_TOASTS = 5;
+
+const DEFAULT_DURATIONS: Record<ToastType, number> = {
+	success: 5000,
+	info: 5000,
+	warning: 10000,
+	error: 0, // persistent — user must dismiss
+};
+
 function createToastStore() {
 	const { subscribe, set, update } = writable<ToastMessage[]>([]);
 
 	const addToast = (toast: Omit<ToastMessage, "id">) => {
 		const id = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+		const duration = toast.duration ?? DEFAULT_DURATIONS[toast.type];
 		const newToast: ToastMessage = {
 			id,
 			...toast,
-			duration: 8000,
+			duration,
 		};
 
-		update((toasts) => [...toasts, newToast]);
-		// Auto-remove after duration
-		if (newToast.duration && newToast.duration > 0) {
+		update((toasts) => {
+			const updated = [...toasts, newToast];
+			// Cap visible toasts — remove oldest non-error toasts first
+			if (updated.length > MAX_VISIBLE_TOASTS) {
+				const excess = updated.length - MAX_VISIBLE_TOASTS;
+				let removed = 0;
+				return updated.filter((t) => {
+					if (removed >= excess) return true;
+					if (t.type !== "error") {
+						removed++;
+						return false;
+					}
+					return true;
+				});
+			}
+			return updated;
+		});
+
+		// Auto-remove after duration (0 = persistent)
+		if (duration > 0) {
 			setTimeout(() => {
 				update((toasts) => toasts.filter((t) => t.id !== id));
-			}, newToast.duration);
+			}, duration);
 		}
 
 		return id;

@@ -23,6 +23,27 @@ let queueStats: backend.QueueStats = {
 let intervalId: ReturnType<typeof setInterval> | undefined;
 let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
+function startPolling() {
+	if (intervalId) return;
+	intervalId = setInterval(loadQueueStats, 10000);
+}
+
+function stopPolling() {
+	if (intervalId) {
+		clearInterval(intervalId);
+		intervalId = undefined;
+	}
+}
+
+function handleVisibilityChange() {
+	if (document.hidden) {
+		stopPolling();
+	} else {
+		loadQueueStats();
+		startPolling();
+	}
+}
+
 onMount(async () => {
 	// Listen for queue updates with debouncing to prevent double-fetches
 	await apiClient.on("queue-updated", () => {
@@ -30,10 +51,9 @@ onMount(async () => {
 		debounceTimer = setTimeout(loadQueueStats, 100);
 	});
 
-  // Set up polling to refresh stats every 10 seconds
-	intervalId = setInterval(() => {
-		loadQueueStats();
-	}, 10000);
+	// Set up polling (pauses when tab inactive)
+	startPolling();
+	document.addEventListener("visibilitychange", handleVisibilityChange);
 
 	// Load initial stats
 	loadQueueStats();
@@ -43,9 +63,8 @@ onDestroy(async () => {
 	// Clean up event listener and timers
 	await apiClient.off("queue-updated");
 	clearTimeout(debounceTimer);
-	if (intervalId) {
-		clearInterval(intervalId);
-	}
+	stopPolling();
+	document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
 
 async function loadQueueStats() {
@@ -60,7 +79,7 @@ async function loadQueueStats() {
 <div class="space-y-6">
   <!-- Header -->
   <div class="flex items-center gap-3 mb-6">
-    <div class="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600">
+    <div class="p-2 rounded-lg bg-gradient-to-br from-info to-secondary">
       <ChartPie class="w-6 h-6 text-white" />
     </div>
     <div>

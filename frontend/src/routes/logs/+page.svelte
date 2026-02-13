@@ -379,7 +379,7 @@ $: if (autoScroll && logContainer) {
 					{/if}
 					
 					{#each combinedLogs as log, i (i)}
-						<div class="flex items-start gap-2">
+						<div class="flex items-start gap-2 py-0.5 border-b border-base-content/5">
 							<span class="w-48 flex-shrink-0 text-base-content/50">
 								{log.timestamp.toLocaleTimeString()}
 							</span>
@@ -388,16 +388,16 @@ $: if (autoScroll && logContainer) {
 							>
 								[{log.level}]
 							</span>
-							<span class="min-w-0 flex-1 whitespace-pre-wrap">
-								{log.message}
+							<span class="min-w-0 flex-1">
+								<span class="whitespace-pre-wrap">{log.message}</span>
 								{#if log.attributes && Object.keys(log.attributes).length > 0}
-									<span class="ml-2 inline-flex flex-wrap gap-1">
+									<div class="flex flex-wrap gap-1 mt-0.5">
 										{#each Object.entries(log.attributes) as [key, value]}
 											<span class="badge badge-ghost badge-xs text-base-content/60">
 												{key}={formatAttributeValue(value)}
 											</span>
 										{/each}
-									</span>
+									</div>
 								{/if}
 							</span>
 						</div>

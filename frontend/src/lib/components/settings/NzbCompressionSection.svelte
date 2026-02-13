@@ -9,7 +9,7 @@ interface Props {
 	config: configType.ConfigData;
 }
 
-const { config }: Props = $props();
+let { config = $bindable() }: Props = $props();
 
 // Ensure nzb_compression exists with defaults
 if (!config.nzb_compression) {

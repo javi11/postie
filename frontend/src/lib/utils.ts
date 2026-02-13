@@ -91,6 +91,39 @@ export function getStatusColor(
 }
 
 /**
+ * Get daisyUI badge class for queue item status.
+ * Returns full class string to avoid Tailwind purge issues with dynamic interpolation.
+ */
+export function getStatusBadgeClass(status: string): string {
+	switch (status) {
+		case "pending":
+			return "badge-warning";
+		case "complete":
+			return "badge-success";
+		case "error":
+			return "badge-error";
+		default:
+			return "badge-ghost";
+	}
+}
+
+/**
+ * Get daisyUI text color class for queue item status icons.
+ */
+export function getStatusIconClass(status: string): string {
+	switch (status) {
+		case "pending":
+			return "text-warning";
+		case "complete":
+			return "text-success";
+		case "error":
+			return "text-error";
+		default:
+			return "text-base-content/50";
+	}
+}
+
+/**
  * Parse duration string to nanoseconds for configuration
  */
 export function parseDuration(durationStr: string): number {

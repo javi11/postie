@@ -1,6 +1,8 @@
 {
 	"dashboard": {
 		"title": "Panel de Control",
+		"drag_drop_title": "Suelta los archivos aquí",
+		"drag_drop_description": "Suelta para agregar archivos a la cola",
 		"header": {
 			"title": "Panel de Subidas",
 			"description": "Gestiona tus cargas de archivos y monitorea el progreso",
@@ -20,6 +22,7 @@
 			"progress": "Progreso",
 			"no_items": "No hay elementos en la cola",
 			"no_items_description": "Suba archivos para verlos aquí",
+			"empty_hint": "Arrastra archivos aquí o haz clic en Agregar Archivos para comenzar",
 			"file": "Archivo",
 			"size": "Tamaño",
 			"status": "Estado",
@@ -47,6 +50,8 @@
 			"entries": "entradas",
 			"previous": "Anterior",
 			"next": "Siguiente",
+			"retry_all_failed": "Reintentar Fallidos",
+			"bulk_retry_success": "Se reintentaron {count} elementos exitosamente",
 			"status_types": {
 				"pending": "pendiente",
 				"complete": "completo",

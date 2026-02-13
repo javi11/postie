@@ -16,7 +16,7 @@ interface ComponentProps {
 }
 
 // Props
-const { config }: ComponentProps = $props();
+let { config = $bindable() }: ComponentProps = $props();
 
 // State
 let saving = $state(false);

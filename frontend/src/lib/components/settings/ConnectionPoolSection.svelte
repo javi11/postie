@@ -10,7 +10,7 @@ interface Props {
 	config: configType.ConfigData;
 }
 
-const { config }: Props = $props();
+let { config = $bindable() }: Props = $props();
 
 // Ensure connection_pool exists with defaults
 if (!config.connection_pool) {

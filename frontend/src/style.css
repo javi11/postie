@@ -24,6 +24,14 @@
 		scroll-behavior: smooth;
 	}
 
+	/* Smooth theme transitions */
+	html.theme-transition,
+	html.theme-transition *,
+	html.theme-transition *::before,
+	html.theme-transition *::after {
+		transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease !important;
+	}
+
 	/* Custom scrollbar for webkit browsers */
 	::-webkit-scrollbar {
 		width: 8px;
