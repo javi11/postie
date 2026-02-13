@@ -782,20 +782,20 @@ func (q *Queue) getErroredItemsPaginated(offset, limit int) ([]QueueItem, error)
 func (q *Queue) getPendingItemsPaginated(orderBy string, offset, limit int) ([]QueueItem, error) {
 	// Map column names for goqite table (which uses JSON body)
 	var sortColumn string
-	switch {
-	case orderBy == "created_at DESC" || orderBy == "created_at ASC":
+	switch orderBy {
+	case "created_at DESC", "created_at ASC":
 		sortColumn = orderBy
-	case orderBy == "size DESC":
+	case "size DESC":
 		sortColumn = "CAST(json_extract(body, '$.size') AS INTEGER) DESC"
-	case orderBy == "size ASC":
+	case "size ASC":
 		sortColumn = "CAST(json_extract(body, '$.size') AS INTEGER) ASC"
-	case orderBy == "priority DESC":
+	case "priority DESC":
 		sortColumn = "CAST(json_extract(body, '$.priority') AS INTEGER) DESC"
-	case orderBy == "priority ASC":
+	case "priority ASC":
 		sortColumn = "CAST(json_extract(body, '$.priority') AS INTEGER) ASC"
-	case orderBy == "file_name DESC":
+	case "file_name DESC":
 		sortColumn = "json_extract(body, '$.path') DESC"
-	case orderBy == "file_name ASC":
+	case "file_name ASC":
 		sortColumn = "json_extract(body, '$.path') ASC"
 	default:
 		sortColumn = "created DESC"

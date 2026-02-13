@@ -89,17 +89,17 @@ func (a *App) wrapSaveConfigError(err error) error {
 
 	// Permission errors
 	if os.IsPermission(err) || strings.Contains(errStr, "permission denied") {
-		return fmt.Errorf("Permission denied: cannot write configuration to '%s'. Please check directory permissions", a.configPath)
+		return fmt.Errorf("permission denied: cannot write configuration to '%s'. Please check directory permissions", a.configPath)
 	}
 
 	// Directory doesn't exist
 	if os.IsNotExist(err) {
-		return fmt.Errorf("Configuration directory does not exist: '%s'", filepath.Dir(a.configPath))
+		return fmt.Errorf("configuration directory does not exist: '%s'", filepath.Dir(a.configPath))
 	}
 
 	// Disk full
 	if strings.Contains(errStr, "no space left") {
-		return fmt.Errorf("Not enough disk space to save configuration")
+		return fmt.Errorf("not enough disk space to save configuration")
 	}
 
 	// Server validation errors - pass through as-is (already descriptive)
@@ -108,7 +108,7 @@ func (a *App) wrapSaveConfigError(err error) error {
 	}
 
 	// Generic fallback with path context
-	return fmt.Errorf("Failed to save configuration to '%s': %v", a.configPath, err)
+	return fmt.Errorf("failed to save configuration to '%s': %v", a.configPath, err)
 }
 
 // processDirectoryRecursively processes a directory and returns collected files grouped by folder

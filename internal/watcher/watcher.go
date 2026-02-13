@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/javi11/postie/internal/config"
@@ -67,6 +68,16 @@ func New(
 		watchFolder:   watchFolder,
 		fileSizeCache: make(map[string]fileCacheEntry),
 	}
+}
+
+// isSymlink checks if the given path is a symbolic link using Lstat.
+// Returns true if the path is a symlink, false otherwise.
+func isSymlink(path string) (bool, error) {
+	fileInfo, err := os.Lstat(path) // Lstat doesn't follow symlinks
+	if err != nil {
+		return false, err
+	}
+	return fileInfo.Mode()&os.ModeSymlink != 0, nil
 }
 
 func (w *Watcher) Start(ctx context.Context) error {
@@ -154,6 +165,19 @@ func (w *Watcher) scanDirectory(ctx context.Context) error {
 			return nil
 		}
 
+		// Check if the path is a symlink and skip if not following symlinks
+		if !w.cfg.FollowSymlinks {
+			isSymlinkFile, err := isSymlink(path)
+			if err != nil {
+				slog.DebugContext(ctx, "Error checking if path is symlink, skipping", "path", path, "error", err)
+				return nil
+			}
+			if isSymlinkFile {
+				slog.DebugContext(ctx, "Skipping symlink", "path", path)
+				return nil
+			}
+		}
+
 		info, err := dir.Info()
 		if err != nil {
 			return err
@@ -205,6 +229,7 @@ func (w *Watcher) scanDirectoryGroupByFolder(ctx context.Context) error {
 	// Map to collect files by their parent directory
 	filesByFolder := make(map[string][]string)
 	sizeByFolder := make(map[string]int64)
+	var mapMutex sync.Mutex
 
 	// Walk the directory tree and collect files by folder
 	err := pwalkdir.Walk(w.watchFolder, func(path string, dir fs.DirEntry, err error) error {
@@ -215,6 +240,19 @@ func (w *Watcher) scanDirectoryGroupByFolder(ctx context.Context) error {
 		// Skip directories
 		if dir.IsDir() {
 			return nil
+		}
+
+		// Check if the path is a symlink and skip if not following symlinks
+		if !w.cfg.FollowSymlinks {
+			isSymlinkFile, err := isSymlink(path)
+			if err != nil {
+				slog.DebugContext(ctx, "Error checking if path is symlink, skipping", "path", path, "error", err)
+				return nil
+			}
+			if isSymlinkFile {
+				slog.DebugContext(ctx, "Skipping symlink", "path", path)
+				return nil
+			}
 		}
 
 		info, err := dir.Info()
@@ -231,9 +269,11 @@ func (w *Watcher) scanDirectoryGroupByFolder(ctx context.Context) error {
 		folderPath := filepath.Dir(path)
 
 		// Add file to the folder's file list
+		mapMutex.Lock()
 		filesByFolder[folderPath] = append(filesByFolder[folderPath], path)
 		sizeByFolder[folderPath] += info.Size()
 
+		mapMutex.Unlock()
 		return nil
 	})
 
@@ -359,6 +399,19 @@ func (w *Watcher) calculateDirectorySize(ctx context.Context) (int64, error) {
 			return nil
 		}
 
+		// Check if the path is a symlink and skip if not following symlinks
+		if !w.cfg.FollowSymlinks {
+			isSymlinkFile, err := isSymlink(path)
+			if err != nil {
+				slog.DebugContext(ctx, "Error checking if path is symlink, skipping", "path", path, "error", err)
+				return nil
+			}
+			if isSymlinkFile {
+				slog.DebugContext(ctx, "Skipping symlink in size calculation", "path", path)
+				return nil
+			}
+		}
+
 		info, err := dir.Info()
 		if err != nil {
 			return err
@@ -366,7 +419,7 @@ func (w *Watcher) calculateDirectorySize(ctx context.Context) (int64, error) {
 
 		// Only count files that meet basic criteria (not ignore patterns and min file size)
 		if w.shouldCountFile(path, info) {
-			totalSize += info.Size()
+			atomic.AddInt64(&totalSize, info.Size())
 		}
 
 		return nil

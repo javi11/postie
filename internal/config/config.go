@@ -5,10 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -271,6 +269,10 @@ type WatcherConfig struct {
 	DeleteOriginalFile bool           `yaml:"delete_original_file" json:"delete_original_file"`
 	// If true, creates one NZB per folder instead of one NZB per file in watch mode. Default value is `false`.
 	SingleNzbPerFolder bool `yaml:"single_nzb_per_folder" json:"single_nzb_per_folder"`
+	// FollowSymlinks controls whether symbolic links are followed during directory scanning.
+	// If false (default), symlinks are skipped to avoid double-counting files and including
+	// files outside the watch directory. Set to true to process symlinks as regular files.
+	FollowSymlinks bool `yaml:"follow_symlinks" json:"follow_symlinks"`
 }
 
 type ScheduleConfig struct {
@@ -625,37 +627,6 @@ func (c *ConfigData) GetCheckOnlyServers() []ServerConfig {
 	return servers
 }
 
-// validateProxyURL validates SOCKS5 proxy URL format
-// Accepts: socks5://hostname:port or hostname:port (assumes socks5://)
-func validateProxyURL(proxyURL string) error {
-	if proxyURL == "" {
-		return nil // Empty is valid (no proxy)
-	}
-
-	// Add socks5:// prefix if missing
-	if !strings.HasPrefix(proxyURL, "socks5://") {
-		proxyURL = "socks5://" + proxyURL
-	}
-
-	// Parse as URL
-	parsedURL, err := url.Parse(proxyURL)
-	if err != nil {
-		return fmt.Errorf("invalid URL format: %w", err)
-	}
-
-	// Validate scheme
-	if parsedURL.Scheme != "socks5" {
-		return fmt.Errorf("only socks5:// scheme is supported, got: %s", parsedURL.Scheme)
-	}
-
-	// Validate host is present
-	if parsedURL.Host == "" {
-		return fmt.Errorf("proxy URL must include hostname and port")
-	}
-
-	return nil
-}
-
 // serverConfigToProviderConfig converts a ServerConfig to nntppool.UsenetProviderConfig
 func serverConfigToProviderConfig(s ServerConfig) nntppool.UsenetProviderConfig {
 	maxConnections := s.MaxConnections
@@ -940,6 +911,7 @@ func GetDefaultConfig() ConfigData {
 			CheckInterval:      Duration("5m"),
 			DeleteOriginalFile: false, // Default to keeping original files for safety
 			SingleNzbPerFolder: false, // Default to false for backward compatibility
+			FollowSymlinks:     false, // Default to skipping symlinks to avoid double-counting and external files
 		},
 		NzbCompression: NzbCompressionConfig{
 			Enabled: disabled,
@@ -972,7 +944,7 @@ func GetDefaultConfig() ConfigData {
 func SaveConfig(configData *ConfigData, path string) error {
 	data, err := yaml.Marshal(configData)
 	if err != nil {
-		return fmt.Errorf("Invalid configuration format: %v", err)
+		return fmt.Errorf("invalid configuration format: %v", err)
 	}
 
 	if err := os.WriteFile(path, data, 0644); err != nil {

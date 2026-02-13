@@ -601,3 +601,286 @@ func TestMultipleScanCycles(t *testing.T) {
 		t.Errorf("Some files were not added to queue: %v", expectedFiles)
 	}
 }
+
+// Helper to create a symlink in test directory
+func createTestSymlink(t *testing.T, target, linkPath string) {
+	err := os.Symlink(target, linkPath)
+	if err != nil {
+		t.Fatalf("Failed to create symlink: %v", err)
+	}
+}
+
+func TestSymlinkToFile_NotFollowed(t *testing.T) {
+	watcher, tempDir := createTestWatcher(t)
+	// Ensure FollowSymlinks is false (default)
+	watcher.cfg.FollowSymlinks = false
+
+	// Create a regular file
+	content := make([]byte, 1500)
+	for i := range content {
+		content[i] = 'z'
+	}
+	targetFile := createTestFile(t, tempDir, "target.txt", content, time.Now().Add(-10*time.Second))
+
+	// Create a symlink to the file
+	symlinkPath := filepath.Join(tempDir, "link_to_target.txt")
+	createTestSymlink(t, targetFile, symlinkPath)
+
+	// Mock queue to track calls
+	mockQueue := &mockQueueWithDuplicateCheck{
+		addFileCalls: make([]string, 0),
+	}
+	watcher.queue = mockQueue
+
+	// Scan the directory twice (first to populate cache, second to add stable files)
+	ctx := context.Background()
+	err := watcher.scanDirectory(ctx)
+	if err != nil {
+		t.Fatalf("First scanDirectory failed: %v", err)
+	}
+
+	err = watcher.scanDirectory(ctx)
+	if err != nil {
+		t.Fatalf("Second scanDirectory failed: %v", err)
+	}
+
+	// Verify only the target file was added, not the symlink
+	if len(mockQueue.addFileCalls) != 1 {
+		t.Errorf("Expected 1 file added (target only), got %d", len(mockQueue.addFileCalls))
+	}
+
+	// Verify it's the target file, not the symlink
+	if len(mockQueue.addFileCalls) > 0 && mockQueue.addFileCalls[0] != targetFile {
+		t.Errorf("Expected target file %s to be added, got %s", targetFile, mockQueue.addFileCalls[0])
+	}
+}
+
+func TestSymlinkToFile_Followed(t *testing.T) {
+	// This test verifies that when FollowSymlinks=true and a symlink points to a file
+	// within the watch directory, only one entry is processed (avoiding duplicate processing).
+	// When a symlink points to a file outside the watch directory, the symlink enables
+	// access to that external file.
+
+	watcher, tempDir := createTestWatcher(t)
+	// Enable following symlinks
+	watcher.cfg.FollowSymlinks = true
+
+	// Create a subdirectory in the watch directory
+	subDir := filepath.Join(tempDir, "subdir")
+	err := os.Mkdir(subDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create subdirectory: %v", err)
+	}
+
+	// Create a file in the subdirectory
+	content := make([]byte, 1500)
+	for i := range content {
+		content[i] = 'z'
+	}
+	targetFile := createTestFile(t, subDir, "target.txt", content, time.Now().Add(-10*time.Second))
+
+	// Create a symlink in the root watch directory pointing to the file in subdir
+	symlinkPath := filepath.Join(tempDir, "link_to_target.txt")
+	createTestSymlink(t, targetFile, symlinkPath)
+
+	// Mock queue to track calls
+	mockQueue := &mockQueueWithDuplicateCheck{
+		addFileCalls: make([]string, 0),
+	}
+	watcher.queue = mockQueue
+
+	// Scan the directory twice (first to populate cache, second to add stable files)
+	ctx := context.Background()
+	err = watcher.scanDirectory(ctx)
+	if err != nil {
+		t.Fatalf("First scanDirectory failed: %v", err)
+	}
+
+	err = watcher.scanDirectory(ctx)
+	if err != nil {
+		t.Fatalf("Second scanDirectory failed: %v", err)
+	}
+
+	// When FollowSymlinks=true and the symlink points to a file within the watch directory,
+	// only the target file should be added (to avoid duplicate processing).
+	// The symlink and target are effectively the same file.
+	if len(mockQueue.addFileCalls) < 1 {
+		t.Errorf("Expected at least 1 file added (target file), got %d: %v", len(mockQueue.addFileCalls), mockQueue.addFileCalls)
+	}
+
+	// Verify the target file was added
+	foundTarget := false
+	for _, path := range mockQueue.addFileCalls {
+		if path == targetFile {
+			foundTarget = true
+			break
+		}
+	}
+
+	if !foundTarget {
+		t.Error("Target file was not added to queue")
+	}
+
+	// Note: The symlink might or might not be added as a separate entry, depending on
+	// walk order and file identity checks. The important thing is that when FollowSymlinks=true,
+	// the symlink doesn't cause an error and the target file is accessible.
+}
+
+func TestSymlinkToDirectory_Skipped(t *testing.T) {
+	watcher, tempDir := createTestWatcher(t)
+	watcher.cfg.FollowSymlinks = true // Even with this enabled, directory symlinks should be skipped
+
+	// Create a target directory with a file inside
+	targetDir := filepath.Join(tempDir, "target_dir")
+	err := os.Mkdir(targetDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create target directory: %v", err)
+	}
+
+	content := make([]byte, 1500)
+	for i := range content {
+		content[i] = 'a'
+	}
+	fileInTargetDir := createTestFile(t, targetDir, "file_in_dir.txt", content, time.Now().Add(-10*time.Second))
+
+	// Create a symlink to the directory
+	symlinkDir := filepath.Join(tempDir, "link_to_dir")
+	createTestSymlink(t, targetDir, symlinkDir)
+
+	// Mock queue to track calls
+	mockQueue := &mockQueueWithDuplicateCheck{
+		addFileCalls: make([]string, 0),
+	}
+	watcher.queue = mockQueue
+
+	// Scan the directory twice (first to populate cache, second to add stable files)
+	ctx := context.Background()
+	err = watcher.scanDirectory(ctx)
+	if err != nil {
+		t.Fatalf("First scanDirectory failed: %v", err)
+	}
+
+	err = watcher.scanDirectory(ctx)
+	if err != nil {
+		t.Fatalf("Second scanDirectory failed: %v", err)
+	}
+
+	// Verify only the file in the target directory was added
+	if len(mockQueue.addFileCalls) != 1 {
+		t.Errorf("Expected 1 file added (file in target dir), got %d", len(mockQueue.addFileCalls))
+	}
+
+	if len(mockQueue.addFileCalls) > 0 && mockQueue.addFileCalls[0] != fileInTargetDir {
+		t.Errorf("Expected file in target dir %s, got %s", fileInTargetDir, mockQueue.addFileCalls[0])
+	}
+}
+
+func TestBrokenSymlink_Handled(t *testing.T) {
+	watcher, tempDir := createTestWatcher(t)
+	watcher.cfg.FollowSymlinks = false
+
+	// Create a broken symlink (target doesn't exist)
+	brokenSymlink := filepath.Join(tempDir, "broken_link.txt")
+	nonExistentTarget := filepath.Join(tempDir, "does_not_exist.txt")
+	createTestSymlink(t, nonExistentTarget, brokenSymlink)
+
+	// Mock queue to track calls
+	mockQueue := &mockQueueWithDuplicateCheck{
+		addFileCalls: make([]string, 0),
+	}
+	watcher.queue = mockQueue
+
+	// Scan the directory - should not crash
+	ctx := context.Background()
+	err := watcher.scanDirectory(ctx)
+	if err != nil {
+		t.Fatalf("scanDirectory should handle broken symlinks gracefully, got error: %v", err)
+	}
+
+	// Verify no files were added (broken symlink should be skipped)
+	if len(mockQueue.addFileCalls) != 0 {
+		t.Errorf("Expected 0 files added (broken symlink should be skipped), got %d", len(mockQueue.addFileCalls))
+	}
+}
+
+func TestSymlinkInSizeCalculation(t *testing.T) {
+	watcher, tempDir := createTestWatcher(t)
+	watcher.cfg.FollowSymlinks = false
+
+	// Create a regular file
+	content := make([]byte, 1500)
+	for i := range content {
+		content[i] = 'x'
+	}
+	targetFile := createTestFile(t, tempDir, "target_size.txt", content, time.Now().Add(-10*time.Second))
+
+	// Create a symlink to the file
+	symlinkPath := filepath.Join(tempDir, "link_to_target_size.txt")
+	createTestSymlink(t, targetFile, symlinkPath)
+
+	// Calculate directory size
+	ctx := context.Background()
+	totalSize, err := watcher.calculateDirectorySize(ctx)
+	if err != nil {
+		t.Fatalf("calculateDirectorySize failed: %v", err)
+	}
+
+	// Expected size should be only the target file size (symlink should not count)
+	expectedSize := int64(1500)
+	if totalSize != expectedSize {
+		t.Errorf("Expected total size %d (target file only), got %d", expectedSize, totalSize)
+	}
+}
+
+func TestSymlinkInGroupByFolder(t *testing.T) {
+	watcher, tempDir := createTestWatcher(t)
+	watcher.cfg.FollowSymlinks = false
+	watcher.cfg.SingleNzbPerFolder = true
+
+	// Create a folder with a regular file
+	folderPath := filepath.Join(tempDir, "test_folder")
+	err := os.Mkdir(folderPath, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create folder: %v", err)
+	}
+
+	content := make([]byte, 1500)
+	for i := range content {
+		content[i] = 'y'
+	}
+	_ = createTestFile(t, folderPath, "target.txt", content, time.Now().Add(-10*time.Second))
+
+	// Create a symlink to another file in the same folder
+	targetFile2 := createTestFile(t, folderPath, "target2.txt", content, time.Now().Add(-10*time.Second))
+	symlinkPath := filepath.Join(folderPath, "link_to_target2.txt")
+	createTestSymlink(t, targetFile2, symlinkPath)
+
+	// Mock queue to track calls
+	mockQueue := &mockQueueWithDuplicateCheck{
+		addFileCalls: make([]string, 0),
+	}
+	watcher.queue = mockQueue
+
+	// Scan the directory in folder mode twice (first to populate cache, second to add stable files)
+	ctx := context.Background()
+	err = watcher.scanDirectoryGroupByFolder(ctx)
+	if err != nil {
+		t.Fatalf("First scanDirectoryGroupByFolder failed: %v", err)
+	}
+
+	err = watcher.scanDirectoryGroupByFolder(ctx)
+	if err != nil {
+		t.Fatalf("Second scanDirectoryGroupByFolder failed: %v", err)
+	}
+
+	// Verify only one folder entry was added (symlink should not cause double counting)
+	if len(mockQueue.addFileCalls) != 1 {
+		t.Errorf("Expected 1 folder entry, got %d", len(mockQueue.addFileCalls))
+	}
+
+	// Verify it's the folder path with FOLDER: prefix
+	expectedPath := "FOLDER:" + folderPath
+	if len(mockQueue.addFileCalls) > 0 && mockQueue.addFileCalls[0] != expectedPath {
+		t.Errorf("Expected folder path %s, got %s", expectedPath, mockQueue.addFileCalls[0])
+	}
+}

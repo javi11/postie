@@ -316,7 +316,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 
 						if _, err := post.file.ReadAt(body, art.Offset); err != nil {
 							// Return buffer to pool on error
-							bodyBufferPool.Put(poolBuf[:cap(poolBuf)])
+							bodyBufferPool.Put(poolBuf[:cap(poolBuf)]) //nolint:staticcheck // SA6002: slices have pointer semantics, no wrapper needed
 							slog.ErrorContext(ctx, "Error pre-reading article", "error", err, "offset", art.Offset)
 							return
 						}
@@ -325,7 +325,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 						case readAheadChan <- articleWithBody{article: art, body: body, poolBuf: poolBuf}:
 						case <-ctx.Done():
 							// Return buffer to pool if context cancelled
-							bodyBufferPool.Put(poolBuf[:cap(poolBuf)])
+							bodyBufferPool.Put(poolBuf[:cap(poolBuf)]) //nolint:staticcheck // SA6002: slices have pointer semantics, no wrapper needed
 							return
 						}
 					}
@@ -351,7 +351,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 					// Return buffer to pool when done (even on error)
 					defer func() {
 						if poolBuf != nil {
-							bodyBufferPool.Put(poolBuf[:cap(poolBuf)])
+							bodyBufferPool.Put(poolBuf[:cap(poolBuf)]) //nolint:staticcheck // SA6002: slices have pointer semantics, no wrapper needed
 						}
 					}()
 

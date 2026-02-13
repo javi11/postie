@@ -1,9 +1,20 @@
 package processor
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 )
+
+// isSymlink checks if the given path is a symbolic link using Lstat.
+// Returns true if the path is a symlink, false otherwise.
+func isSymlink(path string) (bool, error) {
+	fileInfo, err := os.Lstat(path)
+	if err != nil {
+		return false, err
+	}
+	return fileInfo.Mode()&os.ModeSymlink != 0, nil
+}
 
 // isWithinPath checks if a file path is within a given directory path
 func isWithinPath(filePath, dirPath string) bool {

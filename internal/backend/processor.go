@@ -78,6 +78,7 @@ func (a *App) initializeProcessor() error {
 		DeleteOriginalFile:        watcherCfg.DeleteOriginalFile,
 		MaintainOriginalExtension: a.config.GetMaintainOriginalExtension(),
 		WatchFolder:               watcherCfg.WatchDirectory,
+		FollowSymlinks:            watcherCfg.FollowSymlinks,
 		CanProcessNextItem:        a.canProcessNextItem,
 		OnJobError: func(fileName, errorMessage string) {
 			// Emit job-error event to notify UI about permanent failure
