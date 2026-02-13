@@ -207,7 +207,17 @@
             "save_button": "Gönderim Kontrolü Ayarlarını Kaydet",
             "saving": "Kaydediliyor...",
             "saved_success": "Gönderim kontrolü ayarları kaydedildi",
-            "saved_success_description": "Gönderim kontrolü yapılandırmanız başarıyla kaydedildi!"
+            "saved_success_description": "Gönderim kontrolü yapılandırmanız başarıyla kaydedildi!",
+            "deferred_title": "Ertelenmiş Doğrulama",
+            "deferred_info": "Makaleler anlık yeniden gönderimden sonra doğrulanamadığında, yayılma gecikmelerini hesaba katmak için daha sonra yeniden kontrol edilmek üzere kuyruğa alınır. Bu, geçici ağ sorunları veya sunucu yayılma gecikmeleri nedeniyle oluşan hatalı başarısızlıkları önler.",
+            "deferred_check_delay": "İlk Kontrol Gecikmesi",
+            "deferred_check_delay_description": "Ertelenmiş doğrulamanın ilk yeniden kontrolünden önceki bekleme süresi",
+            "deferred_max_retries": "Maksimum Yeniden Deneme",
+            "deferred_max_retries_description": "Başarısız olarak işaretlemeden önce maksimum yeniden deneme sayısı",
+            "deferred_max_backoff": "Maksimum Geri Çekilme",
+            "deferred_max_backoff_description": "Yeniden denemeler arasındaki maksimum bekleme süresi (üstel geri çekilme)",
+            "deferred_check_interval": "Kontrol Aralığı",
+            "deferred_check_interval_description": "Arka plan çalışanının bekleyen kontrolleri yoklama sıklığı"
         },
         "posting": {
             "title": "Gönderim Yapılandırması",

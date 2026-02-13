@@ -1533,3 +1533,140 @@ func (q *Queue) GetItemsForScriptRetry(ctx context.Context, limit int) ([]Comple
 
 	return items, rows.Err()
 }
+
+// PendingArticleCheck represents an article that needs deferred verification
+type PendingArticleCheck struct {
+	ID              int64
+	CompletedItemID string
+	MessageID       string
+	Groups          string // JSON-encoded array of group names
+	Status          string // pending, verified, failed
+	RetryCount      int
+	NextRetryAt     time.Time
+	FirstFailureAt  time.Time
+	LastCheckedAt   *time.Time
+	CreatedAt       time.Time
+}
+
+// AddPendingArticleChecks inserts pending article checks for a completed item
+func (q *Queue) AddPendingArticleChecks(ctx context.Context, completedItemID string, articles []PendingArticleCheck) error {
+	tx, err := q.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO pending_article_checks (completed_item_id, message_id, groups, status, next_retry_at)
+		VALUES (?, ?, ?, 'pending', ?)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, article := range articles {
+		nextRetry := article.NextRetryAt.Format("2006-01-02T15:04:05.000Z")
+		_, err := stmt.ExecContext(ctx, completedItemID, article.MessageID, article.Groups, nextRetry)
+		if err != nil {
+			return fmt.Errorf("failed to insert pending article check: %w", err)
+		}
+	}
+
+	return tx.Commit()
+}
+
+// GetArticlesForCheck retrieves pending articles that are ready for checking
+func (q *Queue) GetArticlesForCheck(ctx context.Context, limit int) ([]PendingArticleCheck, error) {
+	now := time.Now().Format("2006-01-02T15:04:05.000Z")
+
+	rows, err := q.db.QueryContext(ctx, `
+		SELECT id, completed_item_id, message_id, groups, status, retry_count,
+			   next_retry_at, first_failure_at, last_checked_at, created_at
+		FROM pending_article_checks
+		WHERE status = 'pending' AND next_retry_at <= ?
+		ORDER BY next_retry_at ASC
+		LIMIT ?
+	`, now, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query pending article checks: %w", err)
+	}
+	defer rows.Close()
+
+	var items []PendingArticleCheck
+	for rows.Next() {
+		var item PendingArticleCheck
+		var nextRetryStr, firstFailureStr, createdStr string
+		var lastCheckedStr sql.NullString
+
+		err := rows.Scan(
+			&item.ID, &item.CompletedItemID, &item.MessageID, &item.Groups,
+			&item.Status, &item.RetryCount,
+			&nextRetryStr, &firstFailureStr, &lastCheckedStr, &createdStr,
+		)
+		if err != nil {
+			continue
+		}
+
+		item.NextRetryAt, _ = time.Parse("2006-01-02T15:04:05.000Z", nextRetryStr)
+		item.FirstFailureAt, _ = time.Parse("2006-01-02T15:04:05.000Z", firstFailureStr)
+		item.CreatedAt, _ = time.Parse("2006-01-02T15:04:05.000Z", createdStr)
+		if lastCheckedStr.Valid {
+			t, _ := time.Parse("2006-01-02T15:04:05.000Z", lastCheckedStr.String)
+			item.LastCheckedAt = &t
+		}
+
+		items = append(items, item)
+	}
+
+	return items, rows.Err()
+}
+
+// MarkArticleVerified marks a pending article check as verified
+func (q *Queue) MarkArticleVerified(ctx context.Context, id int64) error {
+	now := time.Now().Format("2006-01-02T15:04:05.000Z")
+	_, err := q.db.ExecContext(ctx, `
+		UPDATE pending_article_checks SET status = 'verified', last_checked_at = ? WHERE id = ?
+	`, now, id)
+	return err
+}
+
+// MarkArticleCheckFailed marks a pending article check as permanently failed
+func (q *Queue) MarkArticleCheckFailed(ctx context.Context, id int64) error {
+	now := time.Now().Format("2006-01-02T15:04:05.000Z")
+	_, err := q.db.ExecContext(ctx, `
+		UPDATE pending_article_checks SET status = 'failed', last_checked_at = ? WHERE id = ?
+	`, now, id)
+	return err
+}
+
+// UpdateArticleCheckRetry updates a pending article check for the next retry
+func (q *Queue) UpdateArticleCheckRetry(ctx context.Context, id int64, retryCount int, nextRetryAt time.Time) error {
+	now := time.Now().Format("2006-01-02T15:04:05.000Z")
+	nextRetry := nextRetryAt.Format("2006-01-02T15:04:05.000Z")
+	_, err := q.db.ExecContext(ctx, `
+		UPDATE pending_article_checks SET retry_count = ?, next_retry_at = ?, last_checked_at = ? WHERE id = ?
+	`, retryCount, nextRetry, now, id)
+	return err
+}
+
+// UpdateCompletedItemVerificationStatus updates the verification status of a completed item
+func (q *Queue) UpdateCompletedItemVerificationStatus(ctx context.Context, completedItemID string, status string) error {
+	_, err := q.db.ExecContext(ctx, `
+		UPDATE completed_items SET verification_status = ? WHERE id = ?
+	`, status, completedItemID)
+	return err
+}
+
+// GetPendingCheckCountForItem returns the total, pending, and failed count of article checks for a completed item
+func (q *Queue) GetPendingCheckCountForItem(ctx context.Context, completedItemID string) (total int, pending int, failed int, err error) {
+	err = q.db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*) as total,
+			SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+			SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
+		FROM pending_article_checks
+		WHERE completed_item_id = ?
+	`, completedItemID).Scan(&total, &pending, &failed)
+	return
+}

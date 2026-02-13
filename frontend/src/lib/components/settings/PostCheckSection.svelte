@@ -13,6 +13,25 @@ const presets = [
 	{ label: "1m", value: 1, unit: "m" },
 ];
 
+const deferredDelayPresets = [
+	{ label: "2m", value: 2, unit: "m" },
+	{ label: "5m", value: 5, unit: "m" },
+	{ label: "10m", value: 10, unit: "m" },
+	{ label: "30m", value: 30, unit: "m" },
+];
+
+const deferredBackoffPresets = [
+	{ label: "30m", value: 30, unit: "m" },
+	{ label: "1h", value: 1, unit: "h" },
+	{ label: "2h", value: 2, unit: "h" },
+];
+
+const deferredIntervalPresets = [
+	{ label: "1m", value: 1, unit: "m" },
+	{ label: "2m", value: 2, unit: "m" },
+	{ label: "5m", value: 5, unit: "m" },
+];
+
 interface Props {
 	config: configType.ConfigData;
 }
@@ -23,13 +42,19 @@ let { config = $bindable() }: Props = $props();
 let enabled = $state(config.post_check?.enabled ?? true);
 let delay = $state(config.post_check?.delay || "10s");
 let maxReposts = $state(config.post_check?.max_reposts || 1);
+let deferredCheckDelay = $state(config.post_check?.deferred_check_delay || "5m");
+let deferredMaxRetries = $state(config.post_check?.deferred_max_retries || 5);
+let deferredMaxBackoff = $state(config.post_check?.deferred_max_backoff || "1h");
+let deferredCheckInterval = $state(config.post_check?.deferred_check_interval || "2m");
 let saving = $state(false);
 
 // Derived state
 let canSave = $derived(
-	delay.trim() && 
-	maxReposts >= 0 && 
-	maxReposts <= 10 && 
+	delay.trim() &&
+	maxReposts >= 0 &&
+	maxReposts <= 10 &&
+	deferredMaxRetries >= 1 &&
+	deferredMaxRetries <= 20 &&
 	!saving
 );
 
@@ -39,6 +64,10 @@ if (!config.post_check) {
 		enabled: true,
 		delay: "10s",
 		max_reposts: 1,
+		deferred_check_delay: "5m",
+		deferred_max_retries: 5,
+		deferred_max_backoff: "1h",
+		deferred_check_interval: "2m",
 	};
 }
 
@@ -55,6 +84,22 @@ $effect(() => {
 	config.post_check.max_reposts = maxReposts;
 });
 
+$effect(() => {
+	config.post_check.deferred_check_delay = deferredCheckDelay;
+});
+
+$effect(() => {
+	config.post_check.deferred_max_retries = deferredMaxRetries;
+});
+
+$effect(() => {
+	config.post_check.deferred_max_backoff = deferredMaxBackoff;
+});
+
+$effect(() => {
+	config.post_check.deferred_check_interval = deferredCheckInterval;
+});
+
 async function savePostCheckSettings() {
 	try {
 		saving = true;
@@ -66,7 +111,7 @@ async function savePostCheckSettings() {
 		if (!delay.trim()) {
 			throw new Error("Delay is required");
 		}
-		
+
 		if (maxReposts < 0 || maxReposts > 10) {
 			throw new Error("Max reposts must be between 0 and 10");
 		}
@@ -76,6 +121,10 @@ async function savePostCheckSettings() {
 			enabled: enabled,
 			delay: delay.trim(),
 			max_reposts: maxReposts,
+			deferred_check_delay: deferredCheckDelay.trim(),
+			deferred_max_retries: deferredMaxRetries,
+			deferred_max_backoff: deferredMaxBackoff.trim(),
+			deferred_check_interval: deferredCheckInterval.trim(),
 		};
 
 		await apiClient.saveConfig(currentConfig);
@@ -141,6 +190,75 @@ async function savePostCheckSettings() {
               {$t('settings.post_check.max_reposts_description')}
             </span>
           </div>
+        </div>
+      </div>
+
+      <!-- Deferred Check Section -->
+      <div class="divider text-sm text-base-content/50">{$t('settings.post_check.deferred_title')}</div>
+
+      <div class="alert alert-info">
+        <span class="text-sm">
+          {$t('settings.post_check.deferred_info')}
+        </span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <DurationInput
+            id="deferred-check-delay"
+            bind:value={deferredCheckDelay}
+            label={$t('settings.post_check.deferred_check_delay')}
+            description={$t('settings.post_check.deferred_check_delay_description')}
+            placeholder="5m"
+            minValue={1}
+            maxValue={60}
+            presets={deferredDelayPresets}
+          />
+        </div>
+
+        <div class="form-control">
+          <label class="label" for="deferred-max-retries">
+            <span class="label-text">{$t('settings.post_check.deferred_max_retries')}</span>
+          </label>
+          <input
+            id="deferred-max-retries"
+            type="number"
+            class="input input-bordered"
+            bind:value={deferredMaxRetries}
+            min="1"
+            max="20"
+          />
+          <div class="label">
+            <span class="label-text-alt">
+              {$t('settings.post_check.deferred_max_retries_description')}
+            </span>
+          </div>
+        </div>
+
+        <div>
+          <DurationInput
+            id="deferred-max-backoff"
+            bind:value={deferredMaxBackoff}
+            label={$t('settings.post_check.deferred_max_backoff')}
+            description={$t('settings.post_check.deferred_max_backoff_description')}
+            placeholder="1h"
+            minValue={1}
+            maxValue={24}
+            presets={deferredBackoffPresets}
+          />
+        </div>
+
+        <div>
+          <DurationInput
+            id="deferred-check-interval"
+            bind:value={deferredCheckInterval}
+            label={$t('settings.post_check.deferred_check_interval')}
+            description={$t('settings.post_check.deferred_check_interval_description')}
+            placeholder="2m"
+            minValue={1}
+            maxValue={30}
+            presets={deferredIntervalPresets}
+          />
         </div>
       </div>
     {/if}

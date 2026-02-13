@@ -11,9 +11,12 @@ import (
 	"sync"
 	"time"
 
+	"encoding/json"
+
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/pausable"
 	"github.com/javi11/postie/internal/pool"
+	"github.com/javi11/postie/internal/poster"
 	"github.com/javi11/postie/internal/progress"
 	"github.com/javi11/postie/internal/queue"
 	"github.com/javi11/postie/pkg/fileinfo"
@@ -234,6 +237,56 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 
 	// Process the file and get both NZB path and postie instance
 	actualNzbPath, jobPostie, err := p.processFile(ctx, msg, job)
+
+	// Check for DeferredCheckError first - this is a non-fatal error
+	var deferredErr *poster.DeferredCheckError
+	if err != nil && errors.As(err, &deferredErr) {
+		// Non-fatal: articles were posted and NZB was generated, but some articles
+		// couldn't be verified immediately. Store them for deferred checking.
+		slog.InfoContext(ctx, "Some articles deferred for later verification",
+			"path", job.Path,
+			"deferred_articles", len(deferredErr.FailedArticles),
+			"total_articles", deferredErr.TotalArticles,
+			"nzb_path", actualNzbPath)
+
+		// Mark file as completed (NZB was generated successfully)
+		if completeErr := p.queue.CompleteFile(ctx, msg.ID, actualNzbPath, job); completeErr != nil {
+			slog.ErrorContext(ctx, "Error marking file as completed", "error", completeErr, "path", job.Path)
+			return completeErr
+		}
+
+		// Store deferred articles in the database for the background worker
+		completedItemID := string(msg.ID)
+		deferredDelay := p.config.GetPostCheckConfig().DeferredCheckDelay.ToDuration()
+		nextRetryAt := time.Now().Add(deferredDelay)
+
+		var pendingChecks []queue.PendingArticleCheck
+		for _, art := range deferredErr.FailedArticles {
+			groupsJSON, _ := json.Marshal(art.Groups)
+			pendingChecks = append(pendingChecks, queue.PendingArticleCheck{
+				MessageID:   art.MessageID,
+				Groups:      string(groupsJSON),
+				NextRetryAt: nextRetryAt,
+			})
+		}
+
+		if addErr := p.queue.AddPendingArticleChecks(ctx, completedItemID, pendingChecks); addErr != nil {
+			slog.ErrorContext(ctx, "Failed to store deferred article checks", "error", addErr)
+		} else {
+			// Update the completed item verification status
+			if statusErr := p.queue.UpdateCompletedItemVerificationStatus(ctx, completedItemID, "pending_verification"); statusErr != nil {
+				slog.ErrorContext(ctx, "Failed to update verification status", "error", statusErr)
+			}
+		}
+
+		// Execute post upload script if configured (NZB is valid)
+		if scriptErr := jobPostie.ExecutePostUploadScript(ctx, actualNzbPath, completedItemID); scriptErr != nil {
+			slog.ErrorContext(ctx, "Post upload script execution failed", "error", scriptErr, "nzbPath", actualNzbPath)
+		}
+
+		return nil
+	}
+
 	if err != nil {
 		// Unreserve the path since processing failed before reaching runningJobs
 		p.unreservePath(job.Path)

@@ -222,6 +222,15 @@ type PostCheck struct {
 	RetryDelay Duration `yaml:"delay" json:"delay"`
 	// The maximum number of re-posts if article check fails. Default value is `1`.
 	MaxRePost uint `yaml:"max_reposts" json:"max_reposts"`
+	// Initial delay before first deferred recheck. Default value is `5m`.
+	// Auto-enabled when PostCheck.Enabled is true.
+	DeferredCheckDelay Duration `yaml:"deferred_check_delay" json:"deferred_check_delay"`
+	// Maximum number of deferred check retry attempts. Default value is `5`.
+	DeferredMaxRetries int `yaml:"deferred_max_retries" json:"deferred_max_retries"`
+	// Maximum backoff cap for deferred checks. Default value is `1h`.
+	DeferredMaxBackoff Duration `yaml:"deferred_max_backoff" json:"deferred_max_backoff"`
+	// Worker poll interval for deferred checks. Default value is `2m`.
+	DeferredCheckInterval Duration `yaml:"deferred_check_interval" json:"deferred_check_interval"`
 }
 
 // NewsgroupConfig represents a single newsgroup configuration
@@ -443,6 +452,20 @@ func Load(path string) (*ConfigData, error) {
 
 	if cfg.PostCheck.Enabled == nil {
 		cfg.PostCheck.Enabled = &enabled
+	}
+
+	// Set defaults for deferred post check fields
+	if cfg.PostCheck.DeferredCheckDelay == "" {
+		cfg.PostCheck.DeferredCheckDelay = Duration("5m")
+	}
+	if cfg.PostCheck.DeferredMaxRetries == 0 {
+		cfg.PostCheck.DeferredMaxRetries = 5
+	}
+	if cfg.PostCheck.DeferredMaxBackoff == "" {
+		cfg.PostCheck.DeferredMaxBackoff = Duration("1h")
+	}
+	if cfg.PostCheck.DeferredCheckInterval == "" {
+		cfg.PostCheck.DeferredCheckInterval = Duration("2m")
 	}
 
 	if cfg.Par2.Redundancy == "" {
@@ -815,9 +838,13 @@ func GetDefaultConfig() ConfigData {
 			GroupPolicy:           GroupPolicyEachFile,
 		},
 		PostCheck: PostCheck{
-			Enabled:    &enabled,
-			RetryDelay: Duration("10s"),
-			MaxRePost:  1,
+			Enabled:               &enabled,
+			RetryDelay:            Duration("10s"),
+			MaxRePost:             1,
+			DeferredCheckDelay:    Duration("5m"),
+			DeferredMaxRetries:    5,
+			DeferredMaxBackoff:    Duration("1h"),
+			DeferredCheckInterval: Duration("2m"),
 		},
 		Par2: Par2Config{
 			Enabled:           &enabled,

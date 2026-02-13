@@ -79,6 +79,24 @@ type Post struct {
 	progress progress.Progress
 }
 
+// FailedArticleInfo contains information about an article that failed verification
+// and should be deferred for later checking.
+type FailedArticleInfo struct {
+	MessageID string
+	Groups    []string
+}
+
+// DeferredCheckError is a non-fatal error indicating some articles need deferred verification.
+// The upload itself succeeded, but article verification (STAT check) failed after all immediate retries.
+type DeferredCheckError struct {
+	FailedArticles []FailedArticleInfo
+	TotalArticles  int
+}
+
+func (e *DeferredCheckError) Error() string {
+	return fmt.Sprintf("%d/%d articles deferred for later verification", len(e.FailedArticles), e.TotalArticles)
+}
+
 // articleWithBody holds an article with its pre-read body data for read-ahead buffering
 type articleWithBody struct {
 	article  *article.Article
@@ -251,20 +269,53 @@ func (p *poster) PostWithRelativePaths(
 		close(done)
 	}()
 
+	// Collect any deferred check error that arrives after posting completes
+	var deferredErr *DeferredCheckError
+
 	select {
 	case <-ctx.Done():
 		cancel() // Cancel the context to stop all operations
 		return ctx.Err()
 	case err := <-errChan:
-		cancel() // Cancel the context to stop all operations
-		return err
-	case <-done:
-		if failedPosts > 0 {
-			return fmt.Errorf("failed to post %d files", failedPosts)
+		// Check if this is a non-fatal DeferredCheckError
+		if errors.As(err, &deferredErr) {
+			// Don't cancel - this is non-fatal, wait for completion
+		} else {
+			cancel() // Cancel the context to stop all operations
+			return err
 		}
-
-		return nil
+	case <-done:
+		// All posts completed normally
 	}
+
+	// If we got a deferred error, wait for done signal too
+	if deferredErr != nil {
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	// Check for any additional error that may have arrived
+	select {
+	case err := <-errChan:
+		if !errors.As(err, &deferredErr) {
+			return err
+		}
+	default:
+	}
+
+	if failedPosts > 0 {
+		return fmt.Errorf("failed to post %d files", failedPosts)
+	}
+
+	// Return deferred error if present (non-fatal - caller should handle)
+	if deferredErr != nil {
+		return deferredErr
+	}
+
+	return nil
 }
 
 // postLoop processes posts from the queue
@@ -445,6 +496,13 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 		numOfConnections += pr.MaxConnections
 	}
 
+	// Collect articles that exhaust immediate retries for deferred checking
+	var allDeferredArticles []FailedArticleInfo
+	var deferredMu sync.Mutex
+	totalArticlesProcessed := 0
+
+	deferredEnabled := p.checkCfg.DeferredCheckDelay.ToDuration() > 0
+
 	for post := range checkQueue {
 		select {
 		case <-ctx.Done():
@@ -464,6 +522,8 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 			articleErrors := 0
 			var failedArticles []*article.Article
 			var mu sync.Mutex
+
+			totalArticlesProcessed += len(post.Articles)
 
 			post.progress = p.jobProgress.AddProgress(uuid.New(), fmt.Sprintf("%s (check)", filepath.Base(post.FilePath)), progress.ProgressTypeChecking, post.filesize)
 
@@ -565,7 +625,44 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 					}
 				}
 
-				// Increment failed posts counter if we've exceeded max retries
+				// Max retries exhausted - check if deferred checking is enabled
+				if deferredEnabled {
+					// Collect failed articles for deferred verification instead of failing
+					deferredMu.Lock()
+					for _, art := range failedArticles {
+						allDeferredArticles = append(allDeferredArticles, FailedArticleInfo{
+							MessageID: art.MessageID,
+							Groups:    art.Groups,
+						})
+					}
+					deferredMu.Unlock()
+
+					slog.InfoContext(ctx,
+						"Articles deferred for later verification",
+						"file", post.FilePath,
+						"deferred_count", len(failedArticles),
+						"retries_exhausted", p.checkCfg.MaxRePost,
+					)
+
+					// Mark as verified (optimistically) - deferred check will update later
+					post.mu.Lock()
+					post.Status = PostStatusVerified
+					post.mu.Unlock()
+
+					postsInFlight.Done()
+					p.jobProgress.FinishProgress(post.progress.GetID())
+
+					if post.file != nil {
+						if err := post.file.Close(); err != nil {
+							slog.WarnContext(ctx, "Error closing file handle", "error", err, "file", post.FilePath)
+						}
+					}
+
+					post.wg.Done()
+					continue
+				}
+
+				// Deferred checking not enabled - fail as before
 				post.mu.Lock()
 				post.Status = PostStatusFailed
 				post.Error = fmt.Errorf("failed to verify articles after %d retries", p.checkCfg.MaxRePost)
@@ -616,6 +713,18 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 			}
 
 			post.wg.Done()
+		}
+	}
+
+	// After processing all posts, if there are deferred articles, send a DeferredCheckError
+	// This is a non-fatal error that signals the caller to store these for later verification
+	if len(allDeferredArticles) > 0 {
+		slog.InfoContext(ctx, "Sending deferred check error",
+			"deferred_articles", len(allDeferredArticles),
+			"total_articles", totalArticlesProcessed)
+		errChan <- &DeferredCheckError{
+			FailedArticles: allDeferredArticles,
+			TotalArticles:  totalArticlesProcessed,
 		}
 	}
 }

@@ -176,23 +176,29 @@ func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir st
 	// Start posting (one NZB per file - traditional mode)
 	startTime := time.Now()
 	var lastNzbPath string
+	var lastDeferredErr *poster.DeferredCheckError
 
 	for _, f := range files {
 		slog.InfoContext(ctx, "Posting file", "file", f.Path)
 
+		var nzbPath string
+		var err error
 		if *p.postingCfg.WaitForPar2 {
-			nzbPath, err := p.post(ctx, f, rootDir, outputDir)
-			if err != nil {
-				return "", err
-			}
-			lastNzbPath = nzbPath
+			nzbPath, err = p.post(ctx, f, rootDir, outputDir)
 		} else {
-			nzbPath, err := p.postInParallel(ctx, f, rootDir, outputDir)
-			if err != nil {
+			nzbPath, err = p.postInParallel(ctx, f, rootDir, outputDir)
+		}
+
+		if err != nil {
+			var de *poster.DeferredCheckError
+			if errors.As(err, &de) {
+				// Non-fatal - NZB was generated, collect deferred articles
+				lastDeferredErr = de
+			} else {
 				return "", err
 			}
-			lastNzbPath = nzbPath
 		}
+		lastNzbPath = nzbPath
 	}
 
 	// Print final statistics
@@ -205,6 +211,10 @@ func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir st
 	slog.InfoContext(ctx, "Total bytes", "count", stats.BytesPosted)
 	slog.InfoContext(ctx, "Errors", "count", stats.ArticleErrors)
 
+	// Return deferred check error if present (non-fatal, NZBs were generated)
+	if lastDeferredErr != nil {
+		return lastNzbPath, lastDeferredErr
+	}
 	return lastNzbPath, nil
 }
 
@@ -274,8 +284,16 @@ func (p *Postie) postInParallel(
 		return nil
 	})
 
+	var deferredErr *poster.DeferredCheckError
+
 	errg.Go(func() error {
 		if err := p.poster.Post(ctx, []string{f.Path}, rootDir, nzbGen); err != nil {
+			// Check if this is a non-fatal deferred check error
+			var de *poster.DeferredCheckError
+			if errors.As(err, &de) {
+				deferredErr = de
+				return nil // Non-fatal, continue to NZB generation
+			}
 			if !errors.Is(err, context.Canceled) {
 				slog.ErrorContext(ctx, fmt.Sprintf("Error during upload: %s", f.Path), "error", err)
 			}
@@ -303,6 +321,11 @@ func (p *Postie) postInParallel(
 
 	// Mark posting as successful so PAR2 files get cleaned up
 	postingSucceeded = true
+
+	// Return deferred check error if present (non-fatal, NZB was generated)
+	if deferredErr != nil {
+		return finalPath, deferredErr
+	}
 	return finalPath, nil
 }
 
@@ -364,12 +387,17 @@ func (p *Postie) post(
 		filesPath = append(filesPath, createdPar2Paths...)
 	}
 
+	var deferredErr *poster.DeferredCheckError
 	if err := p.poster.Post(ctx, filesPath, rootDir, nzbGen); err != nil {
-		if !errors.Is(err, context.Canceled) {
-			slog.ErrorContext(ctx, fmt.Sprintf("Error during upload: %s", filesPath), "error", err)
+		// Check if this is a non-fatal deferred check error
+		if errors.As(err, &deferredErr) {
+			slog.InfoContext(ctx, "Some articles deferred for later verification", "file", f.Path, "deferred", len(deferredErr.FailedArticles))
+		} else {
+			if !errors.Is(err, context.Canceled) {
+				slog.ErrorContext(ctx, fmt.Sprintf("Error during upload: %s", filesPath), "error", err)
+			}
+			return "", err
 		}
-
-		return "", err
 	}
 
 	// Generate single NZB file for all files
@@ -385,6 +413,11 @@ func (p *Postie) post(
 
 	// Mark posting as successful so PAR2 files get cleaned up
 	postingSucceeded = true
+
+	// Return deferred check error if present (non-fatal, NZB was generated)
+	if deferredErr != nil {
+		return finalPath, deferredErr
+	}
 	return finalPath, nil
 }
 
@@ -470,15 +503,36 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 			}
 		}
 
+		var deferredErr *poster.DeferredCheckError
 		// Post all files (including PAR2) together with relative paths for subjects
 		if err := p.poster.PostWithRelativePaths(ctx, allFilePaths, rootDir, nzbGen, relativePaths); err != nil {
-			if !errors.Is(err, context.Canceled) {
-				slog.ErrorContext(ctx, "Error during folder upload", "folder", folderName, "error", err)
+			if errors.As(err, &deferredErr) {
+				slog.InfoContext(ctx, "Some articles deferred for later verification", "folder", folderName, "deferred", len(deferredErr.FailedArticles))
+			} else {
+				if !errors.Is(err, context.Canceled) {
+					slog.ErrorContext(ctx, "Error during folder upload", "folder", folderName, "error", err)
+				}
+				return "", err
 			}
-			return "", err
 		}
-	} else {
-		// Post files and PAR2 in parallel
+
+		// Generate NZB and return with deferred error if present
+		nzbPath := filepath.Join(outputDir, folderName)
+		finalPath, nzbErr := nzbGen.Generate(nzbPath)
+		if nzbErr != nil {
+			return "", fmt.Errorf("error generating NZB file for folder: %w", nzbErr)
+		}
+		postingSucceeded = true
+
+		if deferredErr != nil {
+			return finalPath, deferredErr
+		}
+		return finalPath, nil
+	}
+
+	// Post files and PAR2 in parallel
+	var deferredErr *poster.DeferredCheckError
+	{
 		errg := errgroup.Group{}
 
 		// Create PAR2 files in parallel
@@ -518,6 +572,12 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 		// Post main files with relative paths for subjects
 		errg.Go(func() error {
 			if err := p.poster.PostWithRelativePaths(ctx, allFilePaths, rootDir, nzbGen, relativePaths); err != nil {
+				// Check if this is a non-fatal deferred check error
+				var de *poster.DeferredCheckError
+				if errors.As(err, &de) {
+					deferredErr = de
+					return nil // Non-fatal, continue to NZB generation
+				}
 				if !errors.Is(err, context.Canceled) {
 					slog.ErrorContext(ctx, "Error during folder upload", "folder", folderName, "error", err)
 				}
@@ -552,6 +612,10 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 	slog.InfoContext(ctx, "Total bytes", "count", stats.BytesPosted)
 	slog.InfoContext(ctx, "Errors", "count", stats.ArticleErrors)
 
+	// Return deferred check error if present (non-fatal, NZB was generated)
+	if deferredErr != nil {
+		return finalPath, deferredErr
+	}
 	return finalPath, nil
 }
 
