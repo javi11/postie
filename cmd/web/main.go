@@ -309,7 +309,7 @@ func (ws *WebServer) getStaticFileHandler() http.Handler {
 
 		// Try to open the exact file
 		if f, err := fs.Open(path); err == nil {
-			f.Close()
+			_ = f.Close()
 			fileServer.ServeHTTP(w, r)
 			return
 		}
@@ -319,7 +319,7 @@ func (ws *WebServer) getStaticFileHandler() http.Handler {
 		if ext == "" {
 			htmlPath := path + ".html"
 			if f, err := fs.Open(htmlPath); err == nil {
-				f.Close()
+				_ = f.Close()
 				// Serve the prerendered .html file
 				r.URL.Path = htmlPath
 				fileServer.ServeHTTP(w, r)
@@ -708,7 +708,7 @@ func (ws *WebServer) handleUploadFolder(w http.ResponseWriter, r *http.Request) 
 
 		// Ensure parent directories exist
 		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
-			file.Close()
+			_ = file.Close()
 			http.Error(w, "Failed to create directory structure", http.StatusInternalServerError)
 			return
 		}
@@ -716,21 +716,21 @@ func (ws *WebServer) handleUploadFolder(w http.ResponseWriter, r *http.Request) 
 		// Create destination file
 		destFile, err := os.Create(destPath)
 		if err != nil {
-			file.Close()
+			_ = file.Close()
 			http.Error(w, "Failed to create file", http.StatusInternalServerError)
 			return
 		}
 
 		// Copy file content
 		if _, err := io.Copy(destFile, file); err != nil {
-			file.Close()
-			destFile.Close()
+			_ = file.Close()
+			_ = destFile.Close()
 			http.Error(w, "Failed to save file", http.StatusInternalServerError)
 			return
 		}
 
-		file.Close()
-		destFile.Close()
+		_ = file.Close()
+		_ = destFile.Close()
 
 		// Emit progress for file saving
 		progress := float64(i+1) / float64(len(files)) * 50 // 50% for saving files
