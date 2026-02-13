@@ -38,6 +38,7 @@ type Processor struct {
 	deleteOriginalFile        bool
 	maintainOriginalExtension bool
 	watchFolder               string // Path to the watch folder for maintaining folder structure
+	followSymlinks            bool   // Control whether to follow symlinks when collecting folder files
 	// Reserved paths - tracks jobs claimed from queue but not yet in runningJobs
 	// This prevents race conditions where watcher could re-add files during the gap
 	reservedPaths map[string]time.Time
@@ -69,6 +70,7 @@ type ProcessorOptions struct {
 	DeleteOriginalFile        bool
 	MaintainOriginalExtension bool
 	WatchFolder               string
+	FollowSymlinks            bool                            // Control whether to follow symlinks when collecting folder files
 	CanProcessNextItem        func() bool                     // Callback to check if processor can start new items
 	OnJobError                func(fileName, errorMessage string) // Callback when job fails permanently
 }
@@ -107,6 +109,7 @@ func New(opts ProcessorOptions) *Processor {
 		deleteOriginalFile:        opts.DeleteOriginalFile,
 		maintainOriginalExtension: opts.MaintainOriginalExtension,
 		watchFolder:               opts.WatchFolder,
+		followSymlinks:            opts.FollowSymlinks,
 		providerCheckCtx:          providerCtx,
 		providerCheckCancel:       providerCancel,
 		canProcessNextItem:        opts.CanProcessNextItem,
@@ -812,6 +815,19 @@ func (p *Processor) collectFilesInFolder(folderPath string) ([]fileinfo.FileInfo
 		// Skip directories
 		if info.IsDir() {
 			return nil
+		}
+
+		// Check if the path is a symlink and skip if not following symlinks
+		if !p.followSymlinks {
+			isSymlinkFile, err := isSymlink(path)
+			if err != nil {
+				// Log error but continue processing other files
+				return nil
+			}
+			if isSymlinkFile {
+				// Skip symlinks
+				return nil
+			}
 		}
 
 		// Calculate relative path from parent directory (includes folder name)

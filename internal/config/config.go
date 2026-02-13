@@ -271,6 +271,10 @@ type WatcherConfig struct {
 	DeleteOriginalFile bool           `yaml:"delete_original_file" json:"delete_original_file"`
 	// If true, creates one NZB per folder instead of one NZB per file in watch mode. Default value is `false`.
 	SingleNzbPerFolder bool `yaml:"single_nzb_per_folder" json:"single_nzb_per_folder"`
+	// FollowSymlinks controls whether symbolic links are followed during directory scanning.
+	// If false (default), symlinks are skipped to avoid double-counting files and including
+	// files outside the watch directory. Set to true to process symlinks as regular files.
+	FollowSymlinks bool `yaml:"follow_symlinks" json:"follow_symlinks"`
 }
 
 type ScheduleConfig struct {
@@ -940,6 +944,7 @@ func GetDefaultConfig() ConfigData {
 			CheckInterval:      Duration("5m"),
 			DeleteOriginalFile: false, // Default to keeping original files for safety
 			SingleNzbPerFolder: false, // Default to false for backward compatibility
+			FollowSymlinks:     false, // Default to skipping symlinks to avoid double-counting and external files
 		},
 		NzbCompression: NzbCompressionConfig{
 			Enabled: disabled,

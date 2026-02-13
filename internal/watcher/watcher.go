@@ -69,6 +69,16 @@ func New(
 	}
 }
 
+// isSymlink checks if the given path is a symbolic link using Lstat.
+// Returns true if the path is a symlink, false otherwise.
+func isSymlink(path string) (bool, error) {
+	fileInfo, err := os.Lstat(path) // Lstat doesn't follow symlinks
+	if err != nil {
+		return false, err
+	}
+	return fileInfo.Mode()&os.ModeSymlink != 0, nil
+}
+
 func (w *Watcher) Start(ctx context.Context) error {
 	slog.InfoContext(ctx, fmt.Sprintf("Starting directory watching %s with interval %v", w.watchFolder, w.cfg.CheckInterval))
 
@@ -154,6 +164,19 @@ func (w *Watcher) scanDirectory(ctx context.Context) error {
 			return nil
 		}
 
+		// Check if the path is a symlink and skip if not following symlinks
+		if !w.cfg.FollowSymlinks {
+			isSymlinkFile, err := isSymlink(path)
+			if err != nil {
+				slog.DebugContext(ctx, "Error checking if path is symlink, skipping", "path", path, "error", err)
+				return nil
+			}
+			if isSymlinkFile {
+				slog.DebugContext(ctx, "Skipping symlink", "path", path)
+				return nil
+			}
+		}
+
 		info, err := dir.Info()
 		if err != nil {
 			return err
@@ -215,6 +238,19 @@ func (w *Watcher) scanDirectoryGroupByFolder(ctx context.Context) error {
 		// Skip directories
 		if dir.IsDir() {
 			return nil
+		}
+
+		// Check if the path is a symlink and skip if not following symlinks
+		if !w.cfg.FollowSymlinks {
+			isSymlinkFile, err := isSymlink(path)
+			if err != nil {
+				slog.DebugContext(ctx, "Error checking if path is symlink, skipping", "path", path, "error", err)
+				return nil
+			}
+			if isSymlinkFile {
+				slog.DebugContext(ctx, "Skipping symlink", "path", path)
+				return nil
+			}
 		}
 
 		info, err := dir.Info()
@@ -357,6 +393,19 @@ func (w *Watcher) calculateDirectorySize(ctx context.Context) (int64, error) {
 		// Skip directories
 		if dir.IsDir() {
 			return nil
+		}
+
+		// Check if the path is a symlink and skip if not following symlinks
+		if !w.cfg.FollowSymlinks {
+			isSymlinkFile, err := isSymlink(path)
+			if err != nil {
+				slog.DebugContext(ctx, "Error checking if path is symlink, skipping", "path", path, "error", err)
+				return nil
+			}
+			if isSymlinkFile {
+				slog.DebugContext(ctx, "Skipping symlink in size calculation", "path", path)
+				return nil
+			}
 		}
 
 		info, err := dir.Info()
