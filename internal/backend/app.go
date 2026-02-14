@@ -119,6 +119,7 @@ type App struct {
 	firstStart           bool
 	pendingConfig        *config.ConfigData
 	pendingConfigMux     sync.RWMutex
+	postCheckWorker      *processor.PostCheckRetryWorker
 }
 
 // getCrashLogPath returns the path for crash logs
@@ -373,6 +374,9 @@ func (a *App) Startup(ctx context.Context) {
 		slog.Error(fmt.Sprintf("Failed to initialize processor: %v", err))
 	}
 
+	// Initialize post check retry worker if post check is enabled
+	a.initializePostCheckWorker()
+
 	// Initialize watcher if enabled and configuration is valid
 	if err := a.initializeWatcher(); err != nil {
 		slog.Error(fmt.Sprintf("Failed to initialize watcher: %v", err))
@@ -385,6 +389,13 @@ func (a *App) Shutdown() {
 	defer a.recoverPanic("Shutdown")
 
 	slog.Info("Application shutdown initiated")
+
+	// Stop post check retry worker if running
+	if a.postCheckWorker != nil {
+		slog.Info("Stopping post check retry worker")
+		a.postCheckWorker.Stop()
+		a.postCheckWorker = nil
+	}
 
 	// Stop watcher if running
 	if a.watcher != nil {

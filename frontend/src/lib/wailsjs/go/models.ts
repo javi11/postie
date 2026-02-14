@@ -490,6 +490,10 @@ export namespace config {
 	    enabled?: boolean;
 	    delay: string;
 	    max_reposts: number;
+	    deferred_check_delay: string;
+	    deferred_max_retries: number;
+	    deferred_max_backoff: string;
+	    deferred_check_interval: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new PostCheck(source);
@@ -500,6 +504,10 @@ export namespace config {
 	        this.enabled = source["enabled"];
 	        this.delay = source["delay"];
 	        this.max_reposts = source["max_reposts"];
+	        this.deferred_check_delay = source["deferred_check_delay"];
+	        this.deferred_max_retries = source["deferred_max_retries"];
+	        this.deferred_max_backoff = source["deferred_max_backoff"];
+	        this.deferred_check_interval = source["deferred_check_interval"];
 	    }
 	}
 	export class CustomHeader {

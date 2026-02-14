@@ -105,6 +105,35 @@ func (a *App) initializeProcessor() error {
 	return nil
 }
 
+// initializePostCheckWorker starts the background worker for deferred article verification
+func (a *App) initializePostCheckWorker() {
+	// Stop existing worker if running
+	if a.postCheckWorker != nil {
+		a.postCheckWorker.Stop()
+		a.postCheckWorker = nil
+	}
+
+	if a.config == nil || a.queue == nil || a.poolManager == nil {
+		return
+	}
+
+	postCheckCfg := a.config.GetPostCheckConfig()
+	if postCheckCfg.Enabled == nil || !*postCheckCfg.Enabled {
+		slog.Info("Post check disabled, skipping deferred check worker initialization")
+		return
+	}
+
+	checkPool := a.poolManager.GetCheckPool()
+	if checkPool == nil {
+		slog.Warn("No check pool available, skipping deferred check worker initialization")
+		return
+	}
+
+	a.postCheckWorker = processor.NewPostCheckRetryWorker(a.ctx, a.queue, checkPool, postCheckCfg)
+	a.postCheckWorker.Start()
+	slog.Info("Post check retry worker initialized")
+}
+
 // CancelJob cancels a running job via processor
 func (a *App) CancelJob(id string) error {
 	defer a.recoverPanic("CancelJob")

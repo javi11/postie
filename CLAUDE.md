@@ -4,6 +4,14 @@
 
 DON'T USE NPM use BUN instead.
 
+## Config Change Rules
+
+When adding or modifying configuration fields in the Go backend (`internal/config/config.go`), you MUST also update the frontend:
+- **Wails bindings**: Run `wails generate module` or rebuild to regenerate `frontend/src/lib/wailsjs/go/models`
+- **Settings UI**: Update the relevant settings section components in `frontend/src/lib/components/settings/` to expose the new config fields
+- **Translations**: Add i18n keys for any new user-facing labels/descriptions in `frontend/src/lib/translations/`
+- **Types**: If custom frontend types reference config, update `frontend/src/lib/types.ts`
+
 ## Project Overview
 
 This is a desktop application built with:
