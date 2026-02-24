@@ -12,7 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/javi11/nntppool/v2"
+	"crypto/tls"
+
+	"github.com/javi11/nntppool/v4"
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/database"
 	"github.com/javi11/postie/internal/pool"
@@ -72,28 +74,25 @@ type ProcessorStatus struct {
 
 // NntpPoolMetrics represents NNTP connection pool metrics
 type NntpPoolMetrics struct {
-	Timestamp               string                `json:"timestamp"`
-	ActiveConnections       int                   `json:"activeConnections"`
-	TotalBytesUploaded      int64                 `json:"totalBytesUploaded"`
-	TotalBytesDownloaded    int64                 `json:"totalBytesDownloaded"`
-	TotalArticlesPosted     int64                 `json:"totalArticlesPosted"`
-	TotalArticlesDownloaded int64                 `json:"totalArticlesDownloaded"`
-	TotalErrors             int64                 `json:"totalErrors"`
-	ProviderErrors          map[string]int64      `json:"providerErrors"`
-	Providers               []NntpProviderMetrics `json:"providers"`
+	Timestamp         string                `json:"timestamp"`
+	ActiveConnections int                   `json:"activeConnections"`
+	TotalErrors       int64                 `json:"totalErrors"`
+	AvgSpeed          float64               `json:"avgSpeed"`
+	Elapsed           string                `json:"elapsed"`
+	ProviderErrors    map[string]int64      `json:"providerErrors"`
+	Providers         []NntpProviderMetrics `json:"providers"`
 }
 
 // NntpProviderMetrics represents metrics for individual NNTP providers
 type NntpProviderMetrics struct {
-	Host                    string `json:"host"`
-	State                   string `json:"state"`
-	ActiveConnections       int    `json:"activeConnections"`
-	MaxConnections          int    `json:"maxConnections"`
-	TotalBytesUploaded      int64  `json:"totalBytesUploaded"`
-	TotalBytesDownloaded    int64  `json:"totalBytesDownloaded"`
-	TotalArticlesPosted     int64  `json:"totalArticlesPosted"`
-	TotalArticlesDownloaded int64  `json:"totalArticlesDownloaded"`
-	TotalErrors             int64  `json:"totalErrors"`
+	Host              string  `json:"host"`
+	ActiveConnections int     `json:"activeConnections"`
+	MaxConnections    int     `json:"maxConnections"`
+	TotalErrors       int64   `json:"totalErrors"`
+	AvgSpeed          float64 `json:"avgSpeed"`
+	Missing           int64   `json:"missing"`
+	PingRTT           string  `json:"pingRTT"`
+	Inflight          int     `json:"inflight"`
 }
 
 // App struct for the Wails application
@@ -115,7 +114,7 @@ type App struct {
 	loggingError         string // Error message if file logging setup failed
 	actualLogPath        string // The actual log path being used (may differ from appPaths.Log if fallback was used)
 	isWebMode            bool
-	webEventEmitter      func(eventType string, data interface{})
+	webEventEmitter      func(eventType string, data any)
 	firstStart           bool
 	pendingConfig        *config.ConfigData
 	pendingConfigMux     sync.RWMutex
@@ -312,7 +311,7 @@ func (a *App) SetWebMode(isWeb bool) {
 }
 
 // SetWebEventEmitter sets the event emitter function for web mode
-func (a *App) SetWebEventEmitter(emitter func(eventType string, data interface{})) {
+func (a *App) SetWebEventEmitter(emitter func(eventType string, data any)) {
 	a.webEventEmitter = emitter
 }
 
@@ -472,14 +471,14 @@ func (a *App) GetAppStatus() AppStatus {
 }
 
 // GetLoggingStatus returns information about logging configuration
-func (a *App) GetLoggingStatus() map[string]interface{} {
+func (a *App) GetLoggingStatus() map[string]any {
 	// Determine the actual log path being used
 	logPath := a.actualLogPath
 	if logPath == "" {
 		logPath = a.appPaths.Log
 	}
 
-	status := map[string]interface{}{
+	status := map[string]any{
 		"configuredLogPath": a.appPaths.Log,            // The originally configured path
 		"actualLogPath":     logPath,                   // The actual path being used (may be fallback)
 		"usingFallback":     logPath != a.appPaths.Log, // True if using a fallback path
@@ -642,10 +641,7 @@ func (a *App) GetLogsPaginated(limit, offset int) (string, error) {
 		}
 
 		const maxLogSize = 1024 * 1024
-		start := stat.Size() - maxLogSize
-		if start < 0 {
-			start = 0
-		}
+		start := max(stat.Size()-maxLogSize, 0)
 
 		buffer := make([]byte, stat.Size()-start)
 		_, err = file.ReadAt(buffer, start)
@@ -908,7 +904,7 @@ func (a *App) ValidateNNTPServer(serverData ServerData) ValidationResult {
 	return a.TestProviderConnectivity(serverData)
 }
 
-// TestProviderConnectivity tests an individual provider's connectivity using the new nntppool method
+// TestProviderConnectivity tests an individual provider's connectivity using the nntppool v4 method
 func (a *App) TestProviderConnectivity(serverData ServerData) ValidationResult {
 	defer a.recoverPanic("TestProviderConnectivity")
 
@@ -926,32 +922,32 @@ func (a *App) TestProviderConnectivity(serverData ServerData) ValidationResult {
 		}
 	}
 
-	// Convert to nntppool provider config
-	providerConfig := nntppool.UsenetProviderConfig{
-		Host:                           serverData.Host,
-		Port:                           serverData.Port,
-		Username:                       serverData.Username,
-		Password:                       serverData.Password,
-		TLS:                            serverData.SSL,
-		MaxConnections:                 1, // Use single connection for testing
-		MaxConnectionIdleTimeInSeconds: 300,
-		MaxConnectionTTLInSeconds:      3600,
-		InsecureSSL:                    false,
+	// Convert to nntppool v4 Provider
+	addr := fmt.Sprintf("%s:%d", serverData.Host, serverData.Port)
+	provider := nntppool.Provider{
+		Host:        addr,
+		Auth:        nntppool.Auth{Username: serverData.Username, Password: serverData.Password},
+		Connections: 1, // Use single connection for testing
 	}
 
-	// Use the new TestProviderConnectivity method from nntppool
-	// Note: The exact parameters may need adjustment based on the actual nntppool API
-	ctx := context.Background()
-	err := nntppool.TestProviderConnectivity(ctx, providerConfig, nil, nil)
-	if err != nil {
-		slog.Warn("Provider connectivity test failed", "host", serverData.Host, "port", serverData.Port, "error", err)
-		return ValidationResult{
-			Valid: false,
-			Error: fmt.Sprintf("Connection test failed: %v", err),
+	if serverData.SSL {
+		provider.TLSConfig = &tls.Config{
+			ServerName: serverData.Host,
 		}
 	}
 
-	slog.Info("Provider connectivity test successful", "host", serverData.Host, "port", serverData.Port)
+	// Use TestProvider from nntppool v4
+	ctx := context.Background()
+	result := nntppool.TestProvider(ctx, provider)
+	if result.Err != nil {
+		slog.Warn("Provider connectivity test failed", "host", serverData.Host, "port", serverData.Port, "error", result.Err)
+		return ValidationResult{
+			Valid: false,
+			Error: fmt.Sprintf("Connection test failed: %v", result.Err),
+		}
+	}
+
+	slog.Info("Provider connectivity test successful", "host", serverData.Host, "port", serverData.Port, "rtt", result.RTT)
 	return ValidationResult{
 		Valid: true,
 		Error: "",
@@ -1039,15 +1035,13 @@ func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 
 	// Default empty metrics if no pool available
 	emptyMetrics := NntpPoolMetrics{
-		Timestamp:               time.Now().Format(time.RFC3339),
-		ActiveConnections:       0,
-		TotalBytesUploaded:      0,
-		TotalBytesDownloaded:    0,
-		TotalArticlesPosted:     0,
-		TotalArticlesDownloaded: 0,
-		TotalErrors:             0,
-		ProviderErrors:          make(map[string]int64),
-		Providers:               []NntpProviderMetrics{},
+		Timestamp:         time.Now().Format(time.RFC3339),
+		ActiveConnections: 0,
+		TotalErrors:       0,
+		AvgSpeed:          0,
+		Elapsed:           "",
+		ProviderErrors:    make(map[string]int64),
+		Providers:         []NntpProviderMetrics{},
 	}
 
 	// Get metrics from the connection pool manager
@@ -1056,44 +1050,58 @@ func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 		return emptyMetrics, nil
 	}
 
-	// Get metrics from the pool manager
-	snapshot, err := a.poolManager.GetMetrics()
+	// Get metrics from the pool manager (v4 returns ClientStats)
+	stats, err := a.poolManager.GetMetrics()
 	if err != nil {
 		slog.Error("Failed to get metrics from pool manager", "error", err)
 		return emptyMetrics, fmt.Errorf("failed to get pool metrics: %w", err)
 	}
 
-	// Sum active connections from all providers
+	// Sum active connections and errors from all providers
 	activeConnections := 0
-	for _, provider := range snapshot.ProviderMetrics {
+	var totalErrors int64
+	providerErrors := make(map[string]int64)
+	for _, provider := range stats.Providers {
 		activeConnections += provider.ActiveConnections
+		totalErrors += provider.Errors
+		providerErrors[provider.Name] = provider.Errors
 	}
 
-	// Convert pool metrics to our metrics structure
+	// Convert v4 ClientStats to our metrics structure
 	metrics := NntpPoolMetrics{
-		Timestamp:               snapshot.Timestamp.Format(time.RFC3339),
-		ActiveConnections:       activeConnections,
-		TotalBytesUploaded:      snapshot.BytesUploaded,
-		TotalBytesDownloaded:    snapshot.BytesDownloaded,
-		TotalArticlesPosted:     snapshot.ArticlesPosted,
-		TotalArticlesDownloaded: snapshot.ArticlesDownloaded,
-		TotalErrors:             snapshot.TotalErrors,
-		ProviderErrors:          snapshot.ProviderErrors,
+		Timestamp:         time.Now().Format(time.RFC3339),
+		ActiveConnections: activeConnections,
+		TotalErrors:       totalErrors,
+		AvgSpeed:          stats.AvgSpeed,
+		Elapsed:           stats.Elapsed.String(),
+		ProviderErrors:    providerErrors,
 	}
 
-	// Convert provider metrics from map to array
-	providers := make([]NntpProviderMetrics, 0, len(snapshot.ProviderMetrics))
-	for _, provider := range snapshot.ProviderMetrics {
+	// Build a map from provider address to inflight config for quick lookup
+	inflightByAddr := make(map[string]int)
+	if a.config != nil {
+		for _, srv := range a.config.Servers {
+			addr := fmt.Sprintf("%s:%d", srv.Host, srv.Port)
+			inflight := srv.Inflight
+			if inflight <= 0 {
+				inflight = 10
+			}
+			inflightByAddr[addr] = inflight
+		}
+	}
+
+	// Convert provider metrics from v4 ProviderStats
+	providers := make([]NntpProviderMetrics, 0, len(stats.Providers))
+	for _, provider := range stats.Providers {
 		providers = append(providers, NntpProviderMetrics{
-			Host:                    provider.Host,
-			State:                   provider.State,
-			ActiveConnections:       provider.ActiveConnections,
-			MaxConnections:          provider.MaxConnections,
-			TotalBytesUploaded:      provider.BytesUploaded,
-			TotalBytesDownloaded:    provider.BytesDownloaded,
-			TotalArticlesPosted:     provider.ArticlesPosted,
-			TotalArticlesDownloaded: provider.ArticlesDownloaded,
-			TotalErrors:             provider.TotalErrors,
+			Host:              provider.Name,
+			ActiveConnections: provider.ActiveConnections,
+			MaxConnections:    provider.MaxConnections,
+			TotalErrors:       provider.Errors,
+			AvgSpeed:          provider.AvgSpeed,
+			Missing:           provider.Missing,
+			PingRTT:           provider.Ping.RTT.String(),
+			Inflight:          inflightByAddr[provider.Name],
 		})
 	}
 	metrics.Providers = providers

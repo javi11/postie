@@ -199,10 +199,7 @@ func (p *NativeExecutor) createPar2ForFile(ctx context.Context, file fileinfo.Fi
 	if numInputSlices == 0 {
 		numInputSlices = 1
 	}
-	numRecovery := int(math.Ceil(float64(numInputSlices) * redundancyPct / 100.0))
-	if numRecovery < 1 {
-		numRecovery = 1
-	}
+	numRecovery := max(int(math.Ceil(float64(numInputSlices)*redundancyPct/100.0)), 1)
 
 	slog.DebugContext(ctx, "PAR2 creation parameters",
 		"file", file.Path,

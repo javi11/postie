@@ -11,11 +11,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/javi11/nntppool/v2"
+	"github.com/javi11/nntppool/v4"
 	"github.com/javi11/postie/internal/article"
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/mocks"
 	"github.com/javi11/postie/internal/pausable"
+	"github.com/javi11/postie/internal/pool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -27,10 +28,7 @@ func TestNew(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
-		}).AnyTimes()
+		mockPool := createMockNNTPClient(ctrl)
 		mockPoolManager := createMockPoolManager(ctrl, mockPool)
 
 		mockConfig := mocks.NewMockConfig(ctrl)
@@ -66,10 +64,7 @@ func TestNew(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
-		}).AnyTimes()
+		mockPool := createMockNNTPClient(ctrl)
 		mockPoolManager := createMockPoolManager(ctrl, mockPool)
 
 		mockConfig := mocks.NewMockConfig(ctrl)
@@ -116,11 +111,11 @@ func TestPost(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+			Providers: []nntppool.ProviderStats{{MaxConnections: 10}},
 		}).AnyTimes()
-		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		mockPool.EXPECT().PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&nntppool.PostResult{}, nil).AnyTimes()
 
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 		nzbGen.EXPECT().AddArticle(gomock.Any()).Return().AnyTimes()
@@ -185,11 +180,11 @@ func TestPost(t *testing.T) {
 		mockProgress.EXPECT().Finish().AnyTimes()
 		mockProgress.EXPECT().GetID().Return(uuid.New()).AnyTimes()
 
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+			Providers: []nntppool.ProviderStats{{MaxConnections: 10}},
 		}).AnyTimes()
-		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		mockPool.EXPECT().PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&nntppool.PostResult{}, nil).AnyTimes()
 
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 		nzbGen.EXPECT().AddArticle(gomock.Any()).Return().AnyTimes()
@@ -229,11 +224,11 @@ func TestPost(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+			Providers: []nntppool.ProviderStats{{MaxConnections: 10}},
 		}).AnyTimes()
-		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(errors.New("posting failed")).AnyTimes()
+		mockPool.EXPECT().PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("posting failed")).AnyTimes()
 
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 		nzbGen.EXPECT().AddArticle(gomock.Any()).Return().AnyTimes()
@@ -283,12 +278,12 @@ func TestPost(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+			Providers: []nntppool.ProviderStats{{MaxConnections: 10}},
 		}).AnyTimes()
-		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-		mockPool.EXPECT().Stat(gomock.Any(), gomock.Any(), gomock.Any()).Return(200, nil).AnyTimes()
+		mockPool.EXPECT().PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&nntppool.PostResult{}, nil).AnyTimes()
+		mockPool.EXPECT().Stat(gomock.Any(), gomock.Any()).Return(&nntppool.StatResult{}, nil).AnyTimes()
 
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 		nzbGen.EXPECT().AddArticle(gomock.Any()).Return().AnyTimes()
@@ -337,12 +332,12 @@ func TestPost(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+			Providers: []nntppool.ProviderStats{{MaxConnections: 10}},
 		}).AnyTimes()
-		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-		mockPool.EXPECT().Stat(gomock.Any(), gomock.Any(), gomock.Any()).Return(0, errors.New("article not found")).AnyTimes()
+		mockPool.EXPECT().PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&nntppool.PostResult{}, nil).AnyTimes()
+		mockPool.EXPECT().Stat(gomock.Any(), gomock.Any()).Return(nil, errors.New("article not found")).AnyTimes()
 
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 		nzbGen.EXPECT().AddArticle(gomock.Any()).Return().AnyTimes()
@@ -391,9 +386,9 @@ func TestPost(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+			Providers: []nntppool.ProviderStats{{MaxConnections: 10}},
 		}).AnyTimes()
 
 		// Test checkArticle method directly
@@ -410,7 +405,7 @@ func TestPost(t *testing.T) {
 		}
 
 		// First call fails (article not found)
-		mockPool.EXPECT().Stat(ctx, "test@example.com", []string{"alt.test"}).Return(0, errors.New("article not found")).Times(1)
+		mockPool.EXPECT().Stat(ctx, "test@example.com").Return(nil, errors.New("article not found")).Times(1)
 
 		err := p.checkArticle(ctx, art)
 		assert.Error(t, err)
@@ -418,7 +413,7 @@ func TestPost(t *testing.T) {
 		assert.Equal(t, int64(0), p.stats.ArticlesChecked) // Should not increment on failure
 
 		// Second call succeeds (article found after retry)
-		mockPool.EXPECT().Stat(ctx, "test@example.com", []string{"alt.test"}).Return(200, nil).Times(1)
+		mockPool.EXPECT().Stat(ctx, "test@example.com").Return(&nntppool.StatResult{}, nil).Times(1)
 
 		err = p.checkArticle(ctx, art)
 		assert.NoError(t, err)
@@ -432,9 +427,9 @@ func TestPost(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+			Providers: []nntppool.ProviderStats{{MaxConnections: 10}},
 		}).AnyTimes()
 
 		p := &poster{
@@ -450,8 +445,8 @@ func TestPost(t *testing.T) {
 		}
 
 		// Simulate multiple failed attempts
-		for i := 0; i < 3; i++ {
-			mockPool.EXPECT().Stat(ctx, "test@example.com", []string{"alt.test"}).Return(0, errors.New("article not found")).Times(1)
+		for range 3 {
+			mockPool.EXPECT().Stat(ctx, "test@example.com").Return(nil, errors.New("article not found")).Times(1)
 
 			err := p.checkArticle(ctx, art)
 			assert.Error(t, err)
@@ -483,17 +478,17 @@ func TestPost(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+			Providers: []nntppool.ProviderStats{{MaxConnections: 10}},
 		}).AnyTimes()
 
 		// Post should succeed
-		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(nil)
+		mockPool.EXPECT().PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&nntppool.PostResult{}, nil)
 		// Check should fail first time
-		mockPool.EXPECT().Stat(gomock.Any(), gomock.Any(), gomock.Any()).Return(0, errors.New("not found"))
+		mockPool.EXPECT().Stat(gomock.Any(), gomock.Any()).Return(nil, errors.New("not found"))
 		// Check should succeed second time
-		mockPool.EXPECT().Stat(gomock.Any(), gomock.Any(), gomock.Any()).Return(200, nil)
+		mockPool.EXPECT().Stat(gomock.Any(), gomock.Any()).Return(&nntppool.StatResult{}, nil)
 
 		p := &poster{
 			pool:        mockPool,
@@ -541,9 +536,9 @@ func TestPost(t *testing.T) {
 		defer ctrl.Finish()
 
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+			Providers: []nntppool.ProviderStats{{MaxConnections: 10}},
 		}).AnyTimes()
 
 		p := &poster{
@@ -607,11 +602,11 @@ func TestPostArticle(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+			Providers: []nntppool.ProviderStats{{MaxConnections: 10}},
 		}).AnyTimes()
-		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(nil)
+		mockPool.EXPECT().PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&nntppool.PostResult{}, nil)
 
 		p := &poster{
 			pool:        mockPool,
@@ -658,9 +653,9 @@ func TestPostArticle(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+			Providers: []nntppool.ProviderStats{{MaxConnections: 10}},
 		}).AnyTimes()
 
 		p := &poster{
@@ -701,11 +696,11 @@ func TestPostArticle(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+			Providers: []nntppool.ProviderStats{{MaxConnections: 10}},
 		}).AnyTimes()
-		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(errors.New("post failed"))
+		mockPool.EXPECT().PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("post failed"))
 
 		p := &poster{
 			pool:        mockPool,
@@ -742,11 +737,11 @@ func TestCheckArticle(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+			Providers: []nntppool.ProviderStats{{MaxConnections: 10}},
 		}).AnyTimes()
-		mockPool.EXPECT().Stat(ctx, "test@example.com", []string{"alt.test"}).Return(200, nil)
+		mockPool.EXPECT().Stat(ctx, "test@example.com").Return(&nntppool.StatResult{}, nil)
 
 		p := &poster{
 			pool:      mockPool,
@@ -771,11 +766,11 @@ func TestCheckArticle(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+			Providers: []nntppool.ProviderStats{{MaxConnections: 10}},
 		}).AnyTimes()
-		mockPool.EXPECT().Stat(ctx, "test@example.com", []string{"alt.test"}).Return(0, errors.New("not found"))
+		mockPool.EXPECT().Stat(ctx, "test@example.com").Return(nil, errors.New("not found"))
 
 		p := &poster{
 			pool:      mockPool,
@@ -896,7 +891,7 @@ func TestPost_ConcurrentAccess(t *testing.T) {
 
 	// Simulate concurrent access to the post
 	wg.Add(numGoroutines)
-	for i := 0; i < numGoroutines; i++ {
+	for range numGoroutines {
 		go func() {
 			defer wg.Done()
 			post.mu.Lock()
@@ -925,10 +920,10 @@ func TestStats_ConcurrentAccess(t *testing.T) {
 
 	// Simulate concurrent updates to stats
 	wg.Add(numGoroutines)
-	for i := 0; i < numGoroutines; i++ {
+	for range numGoroutines {
 		go func() {
 			defer wg.Done()
-			for j := 0; j < numOperations; j++ {
+			for range numOperations {
 				stats.mu.Lock()
 				stats.ArticlesPosted++
 				stats.BytesPosted += 1024
@@ -955,7 +950,7 @@ func TestPosterInterface(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
+	mockPool := createMockNNTPClient(ctrl)
 	mockPoolManager := createMockPoolManager(ctrl, mockPool)
 	mockConfig := mocks.NewMockConfig(ctrl)
 	mockConfig.EXPECT().GetPostingConfig().Return(createTestConfig())
@@ -991,12 +986,12 @@ func TestPostIntegration(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+			Providers: []nntppool.ProviderStats{{MaxConnections: 10}},
 		}).AnyTimes()
-		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-		mockPool.EXPECT().Stat(gomock.Any(), gomock.Any(), gomock.Any()).Return(200, nil).AnyTimes()
+		mockPool.EXPECT().PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&nntppool.PostResult{}, nil).AnyTimes()
+		mockPool.EXPECT().Stat(gomock.Any(), gomock.Any()).Return(&nntppool.StatResult{}, nil).AnyTimes()
 
 		// Mock NZB generator
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
@@ -1059,11 +1054,11 @@ func TestPostLoop_Basic(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+			Providers: []nntppool.ProviderStats{{MaxConnections: 10}},
 		}).AnyTimes()
-		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		mockPool.EXPECT().PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&nntppool.PostResult{}, nil).Times(1)
 
 		// Mock the job progress
 		mockJobProgress := mocks.NewMockJobProgress(ctrl)
@@ -1124,11 +1119,11 @@ func TestPostLoop_Basic(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+			Providers: []nntppool.ProviderStats{{MaxConnections: 10}},
 		}).AnyTimes()
-		mockPool.EXPECT().Post(gomock.Any(), gomock.Any()).Return(errors.New("posting failed"))
+		mockPool.EXPECT().PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("posting failed"))
 
 		// Mock the job progress
 		mockJobProgress := mocks.NewMockJobProgress(ctrl)
@@ -1182,11 +1177,11 @@ func TestCheckLoop_Basic(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+			Providers: []nntppool.ProviderStats{{MaxConnections: 10}},
 		}).AnyTimes()
-		mockPool.EXPECT().Stat(ctx, "test@example.com", []string{"alt.test"}).Return(200, nil)
+		mockPool.EXPECT().Stat(ctx, "test@example.com").Return(&nntppool.StatResult{}, nil)
 
 		p := &poster{
 			pool:      mockPool,
@@ -1210,11 +1205,11 @@ func TestCheckLoop_Basic(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockPool := nntppool.NewMockUsenetConnectionPool(ctrl)
-		mockPool.EXPECT().GetProvidersInfo().Return([]nntppool.ProviderInfo{
-			{MaxConnections: 10},
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+			Providers: []nntppool.ProviderStats{{MaxConnections: 10}},
 		}).AnyTimes()
-		mockPool.EXPECT().Stat(ctx, "test@example.com", []string{"alt.test"}).Return(0, errors.New("article not found"))
+		mockPool.EXPECT().Stat(ctx, "test@example.com").Return(nil, errors.New("article not found"))
 
 		p := &poster{
 			pool:      mockPool,
@@ -1278,10 +1273,19 @@ func createTestFile(t *testing.T, content string) string {
 	return tmpFile.Name()
 }
 
+// createMockNNTPClient creates a mock NNTPClient with default Stats expectations
+func createMockNNTPClient(ctrl *gomock.Controller) *mocks.MockNNTPClient {
+	mockPool := mocks.NewMockNNTPClient(ctrl)
+	mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+		Providers: []nntppool.ProviderStats{{MaxConnections: 10}},
+	}).AnyTimes()
+	return mockPool
+}
+
 // createMockPoolManager creates a mock pool manager for testing using the generated mock
-func createMockPoolManager(ctrl *gomock.Controller, pool nntppool.UsenetConnectionPool) *mocks.MockPoolManager {
+func createMockPoolManager(ctrl *gomock.Controller, nntpClient pool.NNTPClient) *mocks.MockPoolManager {
 	mockPoolManager := mocks.NewMockPoolManager(ctrl)
-	mockPoolManager.EXPECT().GetPool().Return(pool).AnyTimes()
-	mockPoolManager.EXPECT().GetCheckPool().Return(pool).AnyTimes()
+	mockPoolManager.EXPECT().GetPool().Return(nntpClient).AnyTimes()
+	mockPoolManager.EXPECT().GetCheckPool().Return(nntpClient).AnyTimes()
 	return mockPoolManager
 }

@@ -246,7 +246,7 @@ func (a *App) RemoveFromQueue(id string) error {
 }
 
 // DebugQueueItem returns debug information about a queue item
-func (a *App) DebugQueueItem(id string) (map[string]interface{}, error) {
+func (a *App) DebugQueueItem(id string) (map[string]any, error) {
 	if a.queue == nil {
 		return nil, fmt.Errorf("queue not initialized")
 	}
@@ -411,7 +411,7 @@ func (a *App) SetQueueItemPriority(id string, priority int) error {
 // Database migration methods exposed through the App
 
 // GetMigrationStatus returns the current migration status
-func (a *App) GetMigrationStatus() (map[string]interface{}, error) {
+func (a *App) GetMigrationStatus() (map[string]any, error) {
 	if a.database == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -422,7 +422,7 @@ func (a *App) GetMigrationStatus() (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"currentVersion": status.CurrentVersion,
 	}, nil
 }

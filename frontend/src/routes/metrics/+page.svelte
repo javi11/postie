@@ -3,7 +3,7 @@ import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import { onMount, onDestroy } from "svelte";
-import { Activity, Upload, Server, AlertCircle, AlertTriangle } from "lucide-svelte";
+import { Activity, Upload, Server, AlertCircle, AlertTriangle, Gauge } from "lucide-svelte";
 import type { backend } from "$lib/wailsjs/go/models";
 
 let metrics = $state<backend.NntpPoolMetrics | null>(null);
@@ -63,26 +63,13 @@ function formatBytes(bytes: number): string {
 	return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
-function formatNumber(num: number): string {
-	return num.toLocaleString();
+function formatSpeed(bytesPerSec: number): string {
+	if (bytesPerSec === 0) return "0 B/s";
+	return formatBytes(bytesPerSec) + "/s";
 }
 
-function getProviderStatusColor(state: string): string {
-	switch (state.toLowerCase()) {
-		case "healthy":
-		case "active":
-		case "connected":
-			return "badge-success";
-		case "connecting":
-		case "idle":
-			return "badge-warning";
-		case "error":
-		case "failed":
-		case "disconnected":
-			return "badge-error";
-		default:
-			return "badge-neutral";
-	}
+function formatNumber(num: number): string {
+	return num.toLocaleString();
 }
 </script>
 
@@ -135,22 +122,22 @@ function getProviderStatusColor(state: string): string {
 				<div class="stat-value text-primary">{metrics.activeConnections}</div>
 			</div>
 
-			<!-- Articles Posted -->
+			<!-- Average Speed -->
 			<div class="stat bg-base-100 rounded-lg shadow-sm">
 				<div class="stat-figure text-success">
-					<Upload class="w-8 h-8" />
+					<Gauge class="w-8 h-8" />
 				</div>
-				<div class="stat-title">{$t('metrics.articles_posted')}</div>
-				<div class="stat-value text-success">{formatNumber(metrics.totalArticlesPosted)}</div>
+				<div class="stat-title">{$t('metrics.avg_speed')}</div>
+				<div class="stat-value text-success text-2xl">{formatSpeed(metrics.avgSpeed)}</div>
 			</div>
 
-			<!-- Total Data Uploaded -->
+			<!-- Elapsed -->
 			<div class="stat bg-base-100 rounded-lg shadow-sm">
 				<div class="stat-figure text-info">
-					<Upload class="w-8 h-8" />
+					<Activity class="w-8 h-8" />
 				</div>
-				<div class="stat-title">{$t('metrics.total_data_posted')}</div>
-				<div class="stat-value text-info">{formatBytes(metrics.totalBytesUploaded)}</div>
+				<div class="stat-title">{$t('metrics.elapsed')}</div>
+				<div class="stat-value text-info text-2xl">{metrics.elapsed || "—"}</div>
 			</div>
 
 			<!-- Total Errors -->
@@ -176,10 +163,10 @@ function getProviderStatusColor(state: string): string {
 						<thead>
 							<tr>
 								<th>{$t('metrics.server_host')}</th>
-								<th>{$t('metrics.status')}</th>
 								<th>{$t('metrics.connections')}</th>
-								<th>{$t('metrics.data_uploaded')}</th>
-								<th>{$t('metrics.articles_posted')}</th>
+								<th>{$t('metrics.avg_speed')}</th>
+								<th>{$t('metrics.missing')}</th>
+								<th>{$t('metrics.ping_rtt')}</th>
 								<th>{$t('metrics.errors')}</th>
 							</tr>
 						</thead>
@@ -190,23 +177,23 @@ function getProviderStatusColor(state: string): string {
 										<div class="font-semibold">{provider.host}</div>
 									</td>
 									<td>
-										<div class="badge {getProviderStatusColor(provider.state)} badge-sm">
-											{provider.state}
-										</div>
-									</td>
-									<td>
 										<div class="text-sm">
 											{provider.activeConnections}/{provider.maxConnections}
 										</div>
 									</td>
 									<td>
 										<div class="text-sm text-success">
-											{formatBytes(provider.totalBytesUploaded)}
+											{formatSpeed(provider.avgSpeed)}
 										</div>
 									</td>
 									<td>
 										<div class="text-sm">
-											{formatNumber(provider.totalArticlesPosted)}
+											{formatNumber(provider.missing)}
+										</div>
+									</td>
+									<td>
+										<div class="text-sm">
+											{provider.pingRTT || "—"}
 										</div>
 									</td>
 									<td>

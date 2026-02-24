@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -288,13 +289,7 @@ func TestCreate(t *testing.T) {
 		}
 
 		// Verify it's in the returned list
-		found := false
-		for _, f := range createdFiles {
-			if f == expectedPar2File {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(createdFiles, expectedPar2File)
 		if !found {
 			t.Fatalf("Main PAR2 file not in returned list: %v", createdFiles)
 		}
@@ -675,13 +670,7 @@ func TestCreateInDirectory(t *testing.T) {
 				t.Fatalf("Expected PAR2 file %s was not created", expectedFile)
 			}
 
-			found := false
-			for _, createdFile := range createdFiles {
-				if createdFile == expectedFile {
-					found = true
-					break
-				}
-			}
+			found := slices.Contains(createdFiles, expectedFile)
 			if !found {
 				t.Fatalf("Expected PAR2 file %s not found in created files list", expectedFile)
 			}

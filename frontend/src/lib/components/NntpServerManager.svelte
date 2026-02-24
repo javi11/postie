@@ -48,6 +48,7 @@
   function addServer(): void {
     const newServer = new configType.ServerConfig({
       max_connections: 10,
+      inflight: 10,
       max_connection_idle_time_in_seconds: 300,
       max_connection_ttl_in_seconds: 3600,
       insecure_ssl: false,
@@ -589,6 +590,29 @@
                   oninput={() => onServerFieldChange(index)}
                 />
               </div>
+
+              {#if variant === "settings" && showAdvancedFields}
+                <div>
+                  <label for="inflight-{index}" class="label">
+                    <span class="label-text">
+                      {$t("settings.server.inflight")}
+                    </span>
+                  </label>
+                  <input
+                    id="inflight-{index}"
+                    class="input input-bordered w-full"
+                    type="number"
+                    bind:value={localServers[index].inflight}
+                    min="0"
+                    max="100"
+                    placeholder="0"
+                    oninput={() => onServerFieldChange(index)}
+                  />
+                  <p class="text-sm text-base-content/70 mt-1">
+                    {$t("settings.server.inflight_description")}
+                  </p>
+                </div>
+              {/if}
 
               {#if variant === "settings" && showAdvancedFields}
                 <div>

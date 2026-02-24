@@ -381,6 +381,8 @@
 			"password": "Contraseña",
 			"password_placeholder": "su-contraseña",
 			"max_connections": "Máx. Conexiones",
+			"inflight": "Peticiones en Vuelo",
+			"inflight_description": "Número de peticiones concurrentes por conexión (por defecto: 10).",
 			"connection_idle_timeout": "Tiempo de Espera de Conexión Inactiva",
 			"connection_idle_timeout_description": "Cuánto tiempo pueden permanecer inactivas las conexiones",
 			"connection_ttl": "TTL de Conexión",

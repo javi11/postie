@@ -12,7 +12,7 @@ package mocks
 import (
 	reflect "reflect"
 
-	nntppool "github.com/javi11/nntppool/v2"
+	pool "github.com/javi11/postie/internal/pool"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -41,10 +41,10 @@ func (m *MockPoolManager) EXPECT() *MockPoolManagerMockRecorder {
 }
 
 // GetCheckPool mocks base method.
-func (m *MockPoolManager) GetCheckPool() nntppool.UsenetConnectionPool {
+func (m *MockPoolManager) GetCheckPool() pool.NNTPClient {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetCheckPool")
-	ret0, _ := ret[0].(nntppool.UsenetConnectionPool)
+	ret0, _ := ret[0].(pool.NNTPClient)
 	return ret0
 }
 
@@ -55,10 +55,10 @@ func (mr *MockPoolManagerMockRecorder) GetCheckPool() *gomock.Call {
 }
 
 // GetPool mocks base method.
-func (m *MockPoolManager) GetPool() nntppool.UsenetConnectionPool {
+func (m *MockPoolManager) GetPool() pool.NNTPClient {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPool")
-	ret0, _ := ret[0].(nntppool.UsenetConnectionPool)
+	ret0, _ := ret[0].(pool.NNTPClient)
 	return ret0
 }
 

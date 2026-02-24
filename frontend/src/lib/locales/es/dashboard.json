@@ -163,21 +163,19 @@
 			"error": "Error al cargar el estado del proveedor",
 			"anonymous": "Anónimo",
 			"connections": "Conexiones",
-			"success_rate": "Tasa de Éxito",
-			"uploaded": "Subido",
-			"articles": "Artículos",
-			"idle_connections": "Inactivas",
+			"avg_speed": "Velocidad Media",
+			"missing": "Faltantes",
+			"errors": "Errores",
+			"elapsed": "Tiempo activo",
 			"pool_summary": "Resumen del Pool",
 			"active_connections": "conexiones activas",
-			"total_uploaded": "Total Subido",
+			"total_errors": "Errores Totales",
 			"no_providers": "No hay proveedores configurados",
+			"inflight": "En vuelo",
 			"status": {
 				"connected": "Conectado",
-				"connecting": "Conectando",
-				"reconnecting": "Reconectando",
-				"failed": "Falló",
-				"disconnected": "Desconectado",
-				"unknown": "Desconocido"
+				"idle": "Inactivo",
+				"failed": "Falló"
 			}
 		},
 		"watcher": {
