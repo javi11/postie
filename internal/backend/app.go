@@ -34,6 +34,7 @@ type ServerData struct {
 	Password       string `json:"password"`
 	SSL            bool   `json:"ssl"`
 	MaxConnections int    `json:"maxConnections"`
+	Role           string `json:"role"` // "upload" | "verify" | "" (defaults to upload)
 }
 
 // SetupWizardData represents the complete setup wizard data from the frontend
@@ -836,6 +837,18 @@ func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 		return fmt.Errorf("output directory must be specified")
 	}
 
+	// Validate at least one upload server exists
+	uploadCount := 0
+	for _, s := range wizardData.Servers {
+		if s.Role != string(config.ServerRoleVerify) {
+			uploadCount++
+		}
+	}
+	if uploadCount == 0 {
+		slog.Error("Setup wizard failed: no upload servers provided")
+		return fmt.Errorf("at least one upload server is required")
+	}
+
 	// Validate all servers have required fields
 	for i, serverData := range wizardData.Servers {
 		if serverData.Host == "" {
@@ -862,6 +875,10 @@ func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 	cfg.Servers = make([]config.ServerConfig, len(wizardData.Servers))
 	for i, serverData := range wizardData.Servers {
 		enabled := true
+		role := config.ServerRoleUpload
+		if serverData.Role == string(config.ServerRoleVerify) {
+			role = config.ServerRoleVerify
+		}
 		server := config.ServerConfig{
 			Host:           serverData.Host,
 			Port:           serverData.Port,
@@ -870,9 +887,10 @@ func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 			SSL:            serverData.SSL,
 			MaxConnections: serverData.MaxConnections,
 			Enabled:        &enabled,
+			Role:           role,
 		}
 		cfg.Servers[i] = server
-		slog.Debug("Configured server", "index", i, "host", serverData.Host, "port", serverData.Port, "ssl", serverData.SSL)
+		slog.Debug("Configured server", "index", i, "host", serverData.Host, "port", serverData.Port, "ssl", serverData.SSL, "role", role)
 	}
 
 	// Set output directory

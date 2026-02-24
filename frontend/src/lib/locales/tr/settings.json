@@ -366,17 +366,31 @@
             },
             "validation": {
                 "cannot_disable_last": "Son aktif sağlayıcı devre dışı bırakılamaz. En az bir sağlayıcı etkin kalmalıdır.",
-                "cannot_set_all_check_only": "Tüm sağlayıcılar yalnızca kontrol amaçlı olarak ayarlanamaz. En az bir sağlayıcı gönderim için uygun olmalıdır."
+                "cannot_set_all_verify": "Tüm sağlayıcılar yalnızca doğrulama olarak ayarlanamaz. En az bir yükleme sunucusu kalmalıdır.",
+                "upload_host_conflict": "Tüm yükleme sunucuları aynı sağlayıcıyı kullanmalıdır. Eş zamanlı yükleme için birden fazla sağlayıcı kullanmak Usenet'te spam olarak kabul edilir."
             },
-            "check_only": "Yalnızca Kontrol",
-            "check_only_description": "Bu sağlayıcıyı yalnızca yüklenen makaleleri doğrulamak için kullanın, gönderim için değil",
-            "check_only_enabled_description": "Bu sağlayıcı yalnızca makaleleri doğrulayacak, göndermeyecek",
-            "check_only_badge": "Yalnızca Doğrula",
+            "role": "Sunucu Rolü",
+            "role_upload": "Yükleme",
+            "role_upload_description": "Bu sağlayıcı aracılığıyla Usenet'e makale yayınla",
+            "role_verify": "Yalnızca Doğrulama",
+            "role_verify_description": "Yalnızca yüklenen makaleleri doğrulamak için kullanın (STAT kontrolleri), yayınlamak için değil",
+            "role_verify_badge": "Yalnızca Doğrula",
             "validation_errors": {
                 "host_required": "Sunucu {number}: Ana Bilgisayar gerekli",
                 "port_invalid": "Sunucu {number}: Geçerli port numarası gerekli (1-65535)"
             },
             "tip": "<strong>İpucu:</strong> Daha iyi yedeklilik ve yükleme hızları için birden fazla sunucu yapılandırın. Uygulama, yüklemeleri yapılandırılmış tüm sunuculara otomatik olarak dağıtacaktır.",
+            "upload_pool_title": "Yükleme Havuzu",
+            "upload_pool_description": "Yükleme bant genişliğini artırmak için aynı sağlayıcıdan birden fazla hesap ekleyin",
+            "upload_pool_provider_label": "Sağlayıcı",
+            "upload_pool_provider_description": "Ana bilgisayar ve port tüm yükleme hesapları arasında paylaşılır",
+            "verify_pool_title": "Doğrulama Havuzu",
+            "verify_pool_optional": "İsteğe Bağlı",
+            "verify_pool_description": "Makalelerin Usenet ağına yayıldığını doğrulamak için diğer sağlayıcıların sunucularını kullanın",
+            "verify_pool_empty_notice": "Doğrulama sunucusu yapılandırılmadı — makale doğrulaması için yükleme havuzu kullanılacak",
+            "add_account": "Hesap Ekle",
+            "add_verify_server": "Doğrulama Sunucusu Ekle",
+            "account_number": "Hesap {number}",
             "proxy": {
                 "section_title": "Proxy Ayarları",
                 "enable_proxy": "SOCKS5 Proxy Kullan",

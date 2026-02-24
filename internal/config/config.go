@@ -18,7 +18,17 @@ import (
 const (
 	defaultRedundancy = "1n*1.2" //https://github.com/animetosho/ParPar/blob/6feee4dd94bb18480f0bf08cd9d17ffc7e671b69/help-full.txt#L75
 	// CurrentConfigVersion represents the current configuration version
-	CurrentConfigVersion = 1
+	CurrentConfigVersion = 2
+)
+
+// ServerRole defines how a server is used in the pool.
+type ServerRole string
+
+const (
+	// ServerRoleUpload indicates the server is used for posting articles.
+	ServerRoleUpload ServerRole = "upload"
+	// ServerRoleVerify indicates the server is used only for article verification (STAT checks).
+	ServerRoleVerify ServerRole = "verify"
 )
 
 // Duration wraps time.Duration to provide custom JSON and YAML marshalling
@@ -185,19 +195,21 @@ type Par2Config struct {
 
 // ServerConfig represents a Usenet server configuration
 type ServerConfig struct {
-	Host                           string `yaml:"host" json:"host"`
-	Port                           int    `yaml:"port" json:"port"`
-	Username                       string `yaml:"username" json:"username"`
-	Password                       string `yaml:"password" json:"password"`
-	SSL                            bool   `yaml:"ssl" json:"ssl"`
-	MaxConnections                 int    `yaml:"max_connections" json:"max_connections"`
-	MaxConnectionIdleTimeInSeconds int    `yaml:"max_connection_idle_time_in_seconds" json:"max_connection_idle_time_in_seconds"`
-	MaxConnectionTTLInSeconds      int    `yaml:"max_connection_ttl_in_seconds" json:"max_connection_ttl_in_seconds"`
-	InsecureSSL                    bool   `yaml:"insecure_ssl" json:"insecure_ssl"`
-	Enabled                        *bool  `yaml:"enabled" json:"enabled"`
-	// CheckOnly when true, this server will only be used for article verification (STAT command)
-	// and not for posting articles. Useful for cheap/slow providers that have good retention.
-	CheckOnly *bool `yaml:"check_only" json:"check_only"`
+	Host                           string     `yaml:"host" json:"host"`
+	Port                           int        `yaml:"port" json:"port"`
+	Username                       string     `yaml:"username" json:"username"`
+	Password                       string     `yaml:"password" json:"password"`
+	SSL                            bool       `yaml:"ssl" json:"ssl"`
+	MaxConnections                 int        `yaml:"max_connections" json:"max_connections"`
+	MaxConnectionIdleTimeInSeconds int        `yaml:"max_connection_idle_time_in_seconds" json:"max_connection_idle_time_in_seconds"`
+	MaxConnectionTTLInSeconds      int        `yaml:"max_connection_ttl_in_seconds" json:"max_connection_ttl_in_seconds"`
+	InsecureSSL                    bool       `yaml:"insecure_ssl" json:"insecure_ssl"`
+	Enabled                        *bool      `yaml:"enabled" json:"enabled"`
+	// Role defines how this server is used: "upload" for posting, "verify" for STAT checks only.
+	// All upload-role servers must share the same provider host.
+	Role ServerRole `yaml:"role" json:"role"`
+	// CheckOnly is deprecated: use Role instead. Retained for backward-compatible YAML parsing (v1 configs).
+	CheckOnly *bool `yaml:"check_only,omitempty" json:"check_only,omitempty"`
 	// Inflight sets the number of concurrent requests per connection. 0 defaults to 1 in nntppool v4.
 	Inflight int `yaml:"inflight" json:"inflight"`
 	// SOCKS5 Proxy URL (optional, format: socks5://username:password@hostname:port)
@@ -362,6 +374,11 @@ func IsConfigVersionOutdated(configVersion int) bool {
 	return configVersion < CurrentConfigVersion
 }
 
+// IsConfigVersionTooNew checks if the config version is newer than the current version
+func IsConfigVersionTooNew(configVersion int) bool {
+	return configVersion > CurrentConfigVersion
+}
+
 // Load loads configuration from a file
 func Load(path string) (*ConfigData, error) {
 	enabled := true
@@ -376,19 +393,27 @@ func Load(path string) (*ConfigData, error) {
 		return nil, fmt.Errorf("error parsing config file: %w", err)
 	}
 
-	// Check if config version is outdated
-	if IsConfigVersionOutdated(cfg.Version) {
-		slog.Info("Config version is outdated, removing config file",
-			"currentVersion", cfg.Version,
-			"requiredVersion", CurrentConfigVersion,
+	// Reject configs from future versions that this binary cannot understand
+	if IsConfigVersionTooNew(cfg.Version) {
+		return nil, fmt.Errorf("config version %d is newer than supported version %d; please upgrade the application", cfg.Version, CurrentConfigVersion)
+	}
+
+	// Migrate v1 CheckOnly → v2 Role
+	if cfg.Version <= 1 {
+		slog.Info("Migrating config from v1 to v2 (CheckOnly → Role)",
 			"configPath", path)
-
-		// Remove the outdated config file
-		if err := os.Remove(path); err != nil {
-			slog.Warn("Failed to remove outdated config file", "error", err)
+		for i := range cfg.Servers {
+			s := &cfg.Servers[i]
+			if s.Role == "" {
+				if s.CheckOnly != nil && *s.CheckOnly {
+					s.Role = ServerRoleVerify
+				} else {
+					s.Role = ServerRoleUpload
+				}
+			}
+			s.CheckOnly = nil // clear deprecated field
 		}
-
-		return nil, fmt.Errorf("config version %d is outdated (current version: %d), config file removed", cfg.Version, CurrentConfigVersion)
+		cfg.Version = CurrentConfigVersion
 	}
 
 	// Set default values
@@ -524,10 +549,13 @@ func Load(path string) (*ConfigData, error) {
 		cfg.MaintainOriginalExtension = &enabled
 	}
 
-	// Set default enabled state for servers
+	// Set default enabled state and role for servers
 	for i := range cfg.Servers {
 		if cfg.Servers[i].Enabled == nil {
 			cfg.Servers[i].Enabled = &enabled
+		}
+		if cfg.Servers[i].Role == "" {
+			cfg.Servers[i].Role = ServerRoleUpload
 		}
 	}
 
@@ -552,6 +580,20 @@ func (c *ConfigData) validate() error {
 
 		if s.MaxConnections <= 0 {
 			return fmt.Errorf("server %d: max_connections must be positive", i)
+		}
+	}
+
+	// Validate upload servers: at least one required, all must share the same host
+	uploadServers := c.GetUploadServers()
+	if len(uploadServers) == 0 {
+		return fmt.Errorf("at least one upload server is required")
+	}
+	uploadHost := uploadServers[0].Host
+	for i, s := range uploadServers[1:] {
+		if s.Host != uploadHost {
+			return fmt.Errorf("upload server %d uses host %q but server 1 uses %q: "+
+				"all upload servers must use the same provider host "+
+				"(add multiple accounts on the same provider, not different providers)", i+2, s.Host, uploadHost)
 		}
 	}
 
@@ -600,30 +642,38 @@ func (c *ConfigData) validate() error {
 	return nil
 }
 
-// GetPostingServers returns enabled servers that are NOT check-only (used for posting)
-func (c *ConfigData) GetPostingServers() []ServerConfig {
+// GetUploadServers returns enabled servers with the upload role (used for posting articles).
+func (c *ConfigData) GetUploadServers() []ServerConfig {
 	var servers []ServerConfig
 	for _, s := range c.Servers {
 		isEnabled := s.Enabled == nil || *s.Enabled
-		isCheckOnly := s.CheckOnly != nil && *s.CheckOnly
-		if isEnabled && !isCheckOnly {
+		if isEnabled && s.Role != ServerRoleVerify {
 			servers = append(servers, s)
 		}
 	}
 	return servers
 }
 
-// GetCheckOnlyServers returns enabled servers that are check-only (used only for article verification)
-func (c *ConfigData) GetCheckOnlyServers() []ServerConfig {
+// GetVerifyServers returns enabled servers with the verify role (used only for STAT checks).
+func (c *ConfigData) GetVerifyServers() []ServerConfig {
 	var servers []ServerConfig
 	for _, s := range c.Servers {
 		isEnabled := s.Enabled == nil || *s.Enabled
-		isCheckOnly := s.CheckOnly != nil && *s.CheckOnly
-		if isEnabled && isCheckOnly {
+		if isEnabled && s.Role == ServerRoleVerify {
 			servers = append(servers, s)
 		}
 	}
 	return servers
+}
+
+// GetPostingServers is a backward-compatible alias for GetUploadServers.
+func (c *ConfigData) GetPostingServers() []ServerConfig {
+	return c.GetUploadServers()
+}
+
+// GetCheckOnlyServers is a backward-compatible alias for GetVerifyServers.
+func (c *ConfigData) GetCheckOnlyServers() []ServerConfig {
+	return c.GetVerifyServers()
 }
 
 // ServerConfigToProvider converts a ServerConfig to nntppool.Provider
@@ -725,39 +775,49 @@ func (c *ConfigData) GetNNTPPool() (*nntppool.Client, error) {
 	return client, nil
 }
 
-// GetPostingPool returns the NNTP client for posting (excludes check-only servers)
-func (c *ConfigData) GetPostingPool() (*nntppool.Client, error) {
-	postingServers := c.GetPostingServers()
-	if len(postingServers) == 0 {
-		return nil, fmt.Errorf("no posting servers configured (all servers are check-only)")
+// GetUploadPool returns the NNTP client for posting articles (upload-role servers only).
+func (c *ConfigData) GetUploadPool() (*nntppool.Client, error) {
+	uploadServers := c.GetUploadServers()
+	if len(uploadServers) == 0 {
+		return nil, fmt.Errorf("no upload servers configured")
 	}
 
-	providers := getProviders(postingServers)
+	providers := getProviders(uploadServers)
 
 	client, err := nntppool.NewClient(context.Background(), providers, nntppool.WithDispatchStrategy(nntppool.DispatchRoundRobin))
 	if err != nil {
-		return nil, fmt.Errorf("error creating posting client: %w", err)
+		return nil, fmt.Errorf("error creating upload pool: %w", err)
 	}
 
 	return client, nil
 }
 
-// GetCheckPool returns the NNTP client for article verification
-// Uses check-only servers if available, otherwise falls back to posting servers
-func (c *ConfigData) GetCheckPool() (*nntppool.Client, error) {
-	checkOnlyServers := c.GetCheckOnlyServers()
+// GetVerifyPool returns the NNTP client for article verification.
+// Uses verify-role servers if available, otherwise falls back to upload servers.
+func (c *ConfigData) GetVerifyPool() (*nntppool.Client, error) {
+	verifyServers := c.GetVerifyServers()
 
-	if len(checkOnlyServers) > 0 {
-		providers := getProviders(checkOnlyServers)
+	if len(verifyServers) > 0 {
+		providers := getProviders(verifyServers)
 		client, err := nntppool.NewClient(context.Background(), providers)
 		if err != nil {
-			return nil, fmt.Errorf("error creating check client: %w", err)
+			return nil, fmt.Errorf("error creating verify pool: %w", err)
 		}
 		return client, nil
 	}
 
-	// Fall back to posting servers for checking
-	return c.GetPostingPool()
+	// Fall back to upload servers for verification
+	return c.GetUploadPool()
+}
+
+// GetPostingPool is a backward-compatible alias for GetUploadPool.
+func (c *ConfigData) GetPostingPool() (*nntppool.Client, error) {
+	return c.GetUploadPool()
+}
+
+// GetCheckPool is a backward-compatible alias for GetVerifyPool.
+func (c *ConfigData) GetCheckPool() (*nntppool.Client, error) {
+	return c.GetVerifyPool()
 }
 
 func (c *ConfigData) GetPar2Config(_ context.Context) (*Par2Config, error) {

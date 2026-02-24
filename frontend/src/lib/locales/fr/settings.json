@@ -405,17 +405,31 @@
 			},
 			"validation": {
 				"cannot_disable_last": "Impossible de désactiver le dernier fournisseur actif. Au moins un fournisseur doit rester activé.",
-				"cannot_set_all_check_only": "Impossible de configurer tous les fournisseurs en vérification uniquement. Au moins un fournisseur doit être disponible pour la publication."
+				"cannot_set_all_verify": "Impossible de configurer tous les fournisseurs en vérification uniquement. Au moins un serveur d'envoi doit rester.",
+				"upload_host_conflict": "Tous les serveurs d'envoi doivent utiliser le même fournisseur. Utiliser plusieurs fournisseurs pour l'envoi simultané est considéré comme du spam sur Usenet."
 			},
-			"check_only": "Vérification Uniquement",
-			"check_only_description": "Utiliser ce fournisseur uniquement pour vérifier les articles téléchargés, pas pour publier",
-			"check_only_enabled_description": "Ce fournisseur vérifiera uniquement les articles, il ne les publiera pas",
-			"check_only_badge": "Vérif. Seule",
+			"role": "Rôle du Serveur",
+			"role_upload": "Envoi",
+			"role_upload_description": "Publier des articles sur Usenet via ce fournisseur",
+			"role_verify": "Vérification Seule",
+			"role_verify_description": "Utiliser uniquement pour vérifier les articles téléchargés (vérifications STAT), pas pour publier",
+			"role_verify_badge": "Vérif. Seule",
 			"validation_errors": {
 				"host_required": "Serveur {number} : L'hôte est requis",
 				"port_invalid": "Serveur {number} : Un numéro de port valide est requis (1-65535)"
 			},
 			"tip": "<strong>Astuce :</strong> Configurez plusieurs serveurs pour une meilleure redondance et des vitesses de téléchargement. L'application distribuera automatiquement les téléchargements entre tous les serveurs configurés.",
+			"upload_pool_title": "Pool d'Envoi",
+			"upload_pool_description": "Ajoutez plusieurs comptes du même fournisseur pour maximiser la bande passante d'envoi",
+			"upload_pool_provider_label": "Fournisseur",
+			"upload_pool_provider_description": "L'hôte et le port sont partagés entre tous les comptes d'envoi",
+			"verify_pool_title": "Pool de Vérification",
+			"verify_pool_optional": "Optionnel",
+			"verify_pool_description": "Utilisez des serveurs d'autres fournisseurs pour confirmer la propagation des articles sur le réseau Usenet",
+			"verify_pool_empty_notice": "Aucun serveur de vérification configuré — le pool d'envoi sera utilisé pour la vérification des articles",
+			"add_account": "Ajouter un Compte",
+			"add_verify_server": "Ajouter un Serveur de Vérification",
+			"account_number": "Compte {number}",
 			"proxy": {
 				"section_title": "Paramètres du Proxy",
 				"enable_proxy": "Utiliser un Proxy SOCKS5",

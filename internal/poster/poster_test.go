@@ -137,7 +137,7 @@ func TestPost(t *testing.T) {
 		p := &poster{
 			cfg:         createTestConfig(),
 			checkCfg:    checkCfg,
-			pool:        mockPool,
+			uploadPool:  mockPool,
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mockJobProgress,
@@ -197,7 +197,7 @@ func TestPost(t *testing.T) {
 		p := &poster{
 			cfg:         createTestConfig(),
 			checkCfg:    checkCfg,
-			pool:        mockPool,
+			uploadPool:  mockPool,
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mockJobProgress,
@@ -250,7 +250,7 @@ func TestPost(t *testing.T) {
 		p := &poster{
 			cfg:         createTestConfig(),
 			checkCfg:    checkCfg,
-			pool:        mockPool,
+			uploadPool:  mockPool,
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mockJobProgress,
@@ -304,8 +304,8 @@ func TestPost(t *testing.T) {
 		p := &poster{
 			cfg:         createTestConfig(),
 			checkCfg:    checkCfg,
-			pool:        mockPool,
-			checkPool:   mockPool, // Use same pool for checking
+			uploadPool:  mockPool,
+			verifyPool:  mockPool, // Use same pool for checking
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mockJobProgress,
@@ -359,8 +359,8 @@ func TestPost(t *testing.T) {
 		p := &poster{
 			cfg:         createTestConfig(),
 			checkCfg:    checkCfg,
-			pool:        mockPool,
-			checkPool:   mockPool, // Use same pool for checking
+			uploadPool:  mockPool,
+			verifyPool:  mockPool, // Use same pool for checking
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mockJobProgress,
@@ -393,8 +393,8 @@ func TestPost(t *testing.T) {
 
 		// Test checkArticle method directly
 		p := &poster{
-			pool:      mockPool,
-			checkPool: mockPool, // Use same pool for checking
+			uploadPool:  mockPool,
+			verifyPool:  mockPool, // Use same pool for checking
 			stats:     &Stats{StartTime: time.Now()},
 		}
 		defer p.Close()
@@ -433,8 +433,8 @@ func TestPost(t *testing.T) {
 		}).AnyTimes()
 
 		p := &poster{
-			pool:      mockPool,
-			checkPool: mockPool, // Use same pool for checking
+			uploadPool:  mockPool,
+			verifyPool:  mockPool, // Use same pool for checking
 			stats:     &Stats{StartTime: time.Now()},
 		}
 		defer p.Close()
@@ -491,8 +491,8 @@ func TestPost(t *testing.T) {
 		mockPool.EXPECT().Stat(gomock.Any(), gomock.Any()).Return(&nntppool.StatResult{}, nil)
 
 		p := &poster{
-			pool:        mockPool,
-			checkPool:   mockPool, // Use same pool for checking
+			uploadPool:  mockPool,
+			verifyPool:  mockPool, // Use same pool for checking
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mocks.NewMockJobProgress(ctrl),
@@ -544,8 +544,8 @@ func TestPost(t *testing.T) {
 		p := &poster{
 			cfg:         createTestConfig(),
 			checkCfg:    createTestPostCheckConfig(),
-			pool:        mockPool,
-			checkPool:   mockPool, // Use same pool for checking
+			uploadPool:  mockPool,
+			verifyPool:  mockPool, // Use same pool for checking
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mocks.NewMockJobProgress(ctrl),
@@ -609,7 +609,7 @@ func TestPostArticle(t *testing.T) {
 		mockPool.EXPECT().PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&nntppool.PostResult{}, nil)
 
 		p := &poster{
-			pool:        mockPool,
+			uploadPool:  mockPool,
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mocks.NewMockJobProgress(ctrl),
@@ -659,7 +659,7 @@ func TestPostArticle(t *testing.T) {
 		}).AnyTimes()
 
 		p := &poster{
-			pool:        mockPool,
+			uploadPool:  mockPool,
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mocks.NewMockJobProgress(ctrl),
@@ -703,7 +703,7 @@ func TestPostArticle(t *testing.T) {
 		mockPool.EXPECT().PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("post failed"))
 
 		p := &poster{
-			pool:        mockPool,
+			uploadPool:  mockPool,
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mocks.NewMockJobProgress(ctrl),
@@ -744,8 +744,8 @@ func TestCheckArticle(t *testing.T) {
 		mockPool.EXPECT().Stat(ctx, "test@example.com").Return(&nntppool.StatResult{}, nil)
 
 		p := &poster{
-			pool:      mockPool,
-			checkPool: mockPool, // Use same pool for checking
+			uploadPool:  mockPool,
+			verifyPool:  mockPool, // Use same pool for checking
 			stats:     &Stats{StartTime: time.Now()},
 		}
 
@@ -773,8 +773,8 @@ func TestCheckArticle(t *testing.T) {
 		mockPool.EXPECT().Stat(ctx, "test@example.com").Return(nil, errors.New("not found"))
 
 		p := &poster{
-			pool:      mockPool,
-			checkPool: mockPool, // Use same pool for checking
+			uploadPool:  mockPool,
+			verifyPool:  mockPool, // Use same pool for checking
 			stats:     &Stats{StartTime: time.Now()},
 		}
 
@@ -1017,8 +1017,8 @@ func TestPostIntegration(t *testing.T) {
 		p := &poster{
 			cfg:         cfg,
 			checkCfg:    checkCfg,
-			pool:        mockPool,
-			checkPool:   mockPool, // Use same pool for checking
+			uploadPool:  mockPool,
+			verifyPool:  mockPool, // Use same pool for checking
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mockJobProgress,
@@ -1072,7 +1072,7 @@ func TestPostLoop_Basic(t *testing.T) {
 		p := &poster{
 			cfg:         createTestConfig(),
 			checkCfg:    createTestPostCheckConfig(),
-			pool:        mockPool,
+			uploadPool:  mockPool,
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mockJobProgress,
@@ -1135,7 +1135,7 @@ func TestPostLoop_Basic(t *testing.T) {
 		mockProgress.EXPECT().GetID().Return(uuid.New()).AnyTimes()
 
 		p := &poster{
-			pool:        mockPool,
+			uploadPool:  mockPool,
 			stats:       &Stats{StartTime: time.Now()},
 			throttle:    NewThrottle(1024*1024, time.Second),
 			jobProgress: mockJobProgress,
@@ -1184,8 +1184,8 @@ func TestCheckLoop_Basic(t *testing.T) {
 		mockPool.EXPECT().Stat(ctx, "test@example.com").Return(&nntppool.StatResult{}, nil)
 
 		p := &poster{
-			pool:      mockPool,
-			checkPool: mockPool, // Use same pool for checking
+			uploadPool:  mockPool,
+			verifyPool:  mockPool, // Use same pool for checking
 			stats:     &Stats{StartTime: time.Now()},
 		}
 
@@ -1212,8 +1212,8 @@ func TestCheckLoop_Basic(t *testing.T) {
 		mockPool.EXPECT().Stat(ctx, "test@example.com").Return(nil, errors.New("article not found"))
 
 		p := &poster{
-			pool:      mockPool,
-			checkPool: mockPool, // Use same pool for checking
+			uploadPool:  mockPool,
+			verifyPool:  mockPool, // Use same pool for checking
 			stats:     &Stats{StartTime: time.Now()},
 		}
 
@@ -1285,7 +1285,7 @@ func createMockNNTPClient(ctrl *gomock.Controller) *mocks.MockNNTPClient {
 // createMockPoolManager creates a mock pool manager for testing using the generated mock
 func createMockPoolManager(ctrl *gomock.Controller, nntpClient pool.NNTPClient) *mocks.MockPoolManager {
 	mockPoolManager := mocks.NewMockPoolManager(ctrl)
-	mockPoolManager.EXPECT().GetPool().Return(nntpClient).AnyTimes()
-	mockPoolManager.EXPECT().GetCheckPool().Return(nntpClient).AnyTimes()
+	mockPoolManager.EXPECT().GetUploadPool().Return(nntpClient).AnyTimes()
+	mockPoolManager.EXPECT().GetVerifyPool().Return(nntpClient).AnyTimes()
 	return mockPoolManager
 }
