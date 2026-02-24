@@ -120,8 +120,8 @@ type Stats struct {
 type poster struct {
 	cfg         config.PostingConfig
 	checkCfg    config.PostCheck
-	pool        pool.NNTPClient // Pool for posting articles
-	checkPool   pool.NNTPClient // Pool for article verification (may be same as pool)
+	uploadPool  pool.NNTPClient // Pool for posting articles
+	verifyPool  pool.NNTPClient // Pool for article verification (may be same as uploadPool)
 	stats       *Stats
 	throttle    *Throttle
 	jobProgress progress.JobProgress
@@ -135,17 +135,16 @@ func New(ctx context.Context, cfg config.Config, poolManager pool.PoolManager, j
 		return nil, fmt.Errorf("pool manager cannot be nil")
 	}
 
-	// Get the posting pool from the manager
-	nntpPool := poolManager.GetPool()
-	if nntpPool == nil {
+	// Get the upload pool from the manager
+	uploadPool := poolManager.GetUploadPool()
+	if uploadPool == nil {
 		return nil, fmt.Errorf("connection pool is not available")
 	}
 
-	// Get the check pool (may be same as posting pool if no check-only servers configured)
-	checkPool := poolManager.GetCheckPool()
-	if checkPool == nil {
-		// Fall back to posting pool if check pool is not available
-		checkPool = nntpPool
+	// Get the verify pool (may be same as upload pool if no verify-role servers configured)
+	verifyPool := poolManager.GetVerifyPool()
+	if verifyPool == nil {
+		verifyPool = uploadPool
 	}
 
 	stats := &Stats{
@@ -156,8 +155,8 @@ func New(ctx context.Context, cfg config.Config, poolManager pool.PoolManager, j
 	p := &poster{
 		cfg:         cfg.GetPostingConfig(),
 		checkCfg:    postCheckCfg,
-		pool:        nntpPool,
-		checkPool:   checkPool,
+		uploadPool:  uploadPool,
+		verifyPool:  verifyPool,
 		stats:       stats,
 		jobProgress: jobProgress,
 	}
@@ -327,7 +326,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 
 	numOfConnections := 0
 
-	for _, pr := range p.pool.Stats().Providers {
+	for _, pr := range p.uploadPool.Stats().Providers {
 		numOfConnections += pr.MaxConnections
 	}
 
@@ -493,8 +492,8 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue chan *Post, errChan chan<- error, nzbGen nzb.NZBGenerator, postsInFlight *sync.WaitGroup) {
 	numOfConnections := 0
 
-	// Use check pool's providers for connection count
-	for _, pr := range p.checkPool.Stats().Providers {
+	// Use verify pool's providers for connection count
+	for _, pr := range p.verifyPool.Stats().Providers {
 		numOfConnections += pr.MaxConnections
 	}
 
@@ -1007,7 +1006,7 @@ func (p *poster) postArticleWithBody(ctx context.Context, art *article.Article, 
 	postCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
-	if _, err := p.pool.PostYenc(postCtx, headers, bytes.NewReader(body), meta); err != nil {
+	if _, err := p.uploadPool.PostYenc(postCtx, headers, bytes.NewReader(body), meta); err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return context.Canceled
 		}
@@ -1036,9 +1035,9 @@ func (p *poster) checkArticle(ctx context.Context, art *article.Article) error {
 		return err
 	}
 
-	// Use the dedicated check pool for article verification
+	// Use the dedicated verify pool for article verification
 	// v4 Stat only takes messageID (no groups parameter)
-	_, err := p.checkPool.Stat(ctx, art.MessageID)
+	_, err := p.verifyPool.Stat(ctx, art.MessageID)
 	if err != nil {
 		return fmt.Errorf("article not found: %w", err)
 	}

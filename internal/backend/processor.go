@@ -123,9 +123,9 @@ func (a *App) initializePostCheckWorker() {
 		return
 	}
 
-	checkPool := a.poolManager.GetCheckPool()
+	checkPool := a.poolManager.GetVerifyPool()
 	if checkPool == nil {
-		slog.Warn("No check pool available, skipping deferred check worker initialization")
+		slog.Warn("No verify pool available, skipping deferred check worker initialization")
 		return
 	}
 

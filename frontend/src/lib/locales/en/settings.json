@@ -368,17 +368,31 @@
 			},
 			"validation": {
 				"cannot_disable_last": "Cannot disable the last active provider. At least one provider must remain enabled.",
-				"cannot_set_all_check_only": "Cannot set all providers to check-only. At least one provider must be available for posting."
+				"cannot_set_all_verify": "Cannot set all providers to verify-only. At least one upload server must remain.",
+				"upload_host_conflict": "All upload servers must use the same provider host. Using multiple providers for upload simultaneously is considered spam in Usenet."
 			},
-			"check_only": "Check Only",
-			"check_only_description": "Use this provider only for verifying uploaded articles, not for posting",
-			"check_only_enabled_description": "This provider will only verify articles, not post them",
-			"check_only_badge": "Verify Only",
+			"role": "Server Role",
+			"role_upload": "Upload",
+			"role_upload_description": "Post articles to Usenet via this provider",
+			"role_verify": "Verify Only",
+			"role_verify_description": "Use only for verifying uploaded articles (STAT checks), not for posting",
+			"role_verify_badge": "Verify Only",
 			"validation_errors": {
 				"host_required": "Server {number}: Host is required",
 				"port_invalid": "Server {number}: Valid port number is required (1-65535)"
 			},
-			"tip": "<strong>Tip:</strong> Configure multiple servers for better redundancy and upload speeds. The application will automatically distribute uploads across all configured servers.",
+			"tip": "<strong>Tip:</strong> Add multiple accounts from the <strong>same provider</strong> to maximize upload bandwidth. Use \"Verify Only\" servers from other providers to confirm articles have propagated across the Usenet backbone.",
+			"upload_pool_title": "Upload Pool",
+			"upload_pool_description": "Add multiple accounts from the same provider to maximize upload bandwidth",
+			"upload_pool_provider_label": "Provider",
+			"upload_pool_provider_description": "Host and port are shared across all upload accounts",
+			"verify_pool_title": "Verify Pool",
+			"verify_pool_optional": "Optional",
+			"verify_pool_description": "Use servers from other providers to confirm articles have propagated across the Usenet backbone",
+			"verify_pool_empty_notice": "No verify servers configured — the upload pool will be used for article verification",
+			"add_account": "Add Account",
+			"add_verify_server": "Add Verify Server",
+			"account_number": "Account {number}",
 			"proxy": {
 				"section_title": "Proxy Settings",
 				"enable_proxy": "Use SOCKS5 Proxy",

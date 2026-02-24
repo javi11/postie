@@ -12,23 +12,25 @@ import (
 // PoolManager defines the interface for connection pool management.
 // This interface is implemented by Manager and can be mocked for testing.
 type PoolManager interface {
-	GetPool() NNTPClient
-	GetCheckPool() NNTPClient
+	GetUploadPool() NNTPClient
+	GetVerifyPool() NNTPClient
+	GetPool() NNTPClient      // Deprecated: use GetUploadPool
+	GetCheckPool() NNTPClient // Deprecated: use GetVerifyPool
 }
 
 // Manager manages NNTP connection pools throughout the application lifecycle,
 // enabling proper metrics accumulation. Use dependency injection to pass this around.
-// Supports separate pools for posting and article verification (check-only providers).
+// Supports separate pools for posting (upload) and article verification (verify).
 type Manager struct {
-	pool      NNTPClient // Main pool for posting
-	checkPool NNTPClient // Pool for article verification (check-only servers)
-	config    *config.ConfigData
-	mu        sync.RWMutex
-	closed    bool
+	uploadPool NNTPClient // Pool for posting (upload-role servers)
+	verifyPool NNTPClient // Pool for article verification (verify-role servers, or fallback to upload)
+	config     *config.ConfigData
+	mu         sync.RWMutex
+	closed     bool
 }
 
 // New creates a new connection pool manager with the given configuration.
-// Creates separate pools for posting (excluding check-only) and checking (check-only or fallback).
+// Creates separate pools for upload and verification.
 func New(cfg *config.ConfigData) (*Manager, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("configuration cannot be nil")
@@ -36,59 +38,72 @@ func New(cfg *config.ConfigData) (*Manager, error) {
 
 	slog.Info("Creating NNTP connection pool manager")
 
-	// Create the posting pool (excludes check-only servers)
-	postingPool, err := cfg.GetPostingPool()
+	// Create the upload pool
+	uploadPool, err := cfg.GetUploadPool()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create posting pool: %w", err)
+		return nil, fmt.Errorf("failed to create upload pool: %w", err)
 	}
 
-	// Create the check pool (check-only servers, or falls back to posting servers)
-	checkPool, err := cfg.GetCheckPool()
+	// Create the verify pool (verify-role servers, or falls back to upload servers)
+	verifyPool, err := cfg.GetVerifyPool()
 	if err != nil {
-		// If check pool fails, we can still use posting pool for checks
-		slog.Warn("Failed to create dedicated check pool, will use posting pool for article verification", "error", err)
-		checkPool = postingPool
+		// If verify pool fails, fall back to upload pool
+		slog.Warn("Failed to create dedicated verify pool, will use upload pool for article verification", "error", err)
+		verifyPool = uploadPool
 	}
 
 	// Log pool configuration
-	checkOnlyServers := cfg.GetCheckOnlyServers()
-	postingServers := cfg.GetPostingServers()
+	uploadServers := cfg.GetUploadServers()
+	verifyServers := cfg.GetVerifyServers()
+	uploadHost := ""
+	if len(uploadServers) > 0 {
+		uploadHost = uploadServers[0].Host
+	}
 	slog.Info("NNTP connection pools configured",
-		"posting_servers", len(postingServers),
-		"check_only_servers", len(checkOnlyServers),
-		"using_dedicated_check_pool", len(checkOnlyServers) > 0)
+		"upload_servers", len(uploadServers),
+		"verify_servers", len(verifyServers),
+		"upload_host", uploadHost,
+		"using_dedicated_verify_pool", len(verifyServers) > 0)
 
 	manager := &Manager{
-		pool:      postingPool,
-		checkPool: checkPool,
-		config:    cfg,
-		closed:    false,
+		uploadPool: uploadPool,
+		verifyPool: verifyPool,
+		config:     cfg,
+		closed:     false,
 	}
 
 	slog.Info("NNTP connection pool manager created successfully")
 	return manager, nil
 }
 
-// GetPool returns the posting NNTP connection pool (excludes check-only servers).
-// This is the method that replaces direct calls to cfg.GetNNTPPool().
-func (m *Manager) GetPool() NNTPClient {
+// GetUploadPool returns the NNTP connection pool for posting articles.
+func (m *Manager) GetUploadPool() NNTPClient {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	return m.pool
+	return m.uploadPool
 }
 
-// GetCheckPool returns the NNTP connection pool for article verification.
-// Returns check-only servers if configured, otherwise falls back to posting pool.
-func (m *Manager) GetCheckPool() NNTPClient {
+// GetVerifyPool returns the NNTP connection pool for article verification.
+// Returns verify-role servers if configured, otherwise falls back to upload pool.
+func (m *Manager) GetVerifyPool() NNTPClient {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if m.checkPool != nil {
-		return m.checkPool
+	if m.verifyPool != nil {
+		return m.verifyPool
 	}
-	// Fallback to main pool if no dedicated check pool
-	return m.pool
+	return m.uploadPool
+}
+
+// GetPool is a deprecated alias for GetUploadPool.
+func (m *Manager) GetPool() NNTPClient {
+	return m.GetUploadPool()
+}
+
+// GetCheckPool is a deprecated alias for GetVerifyPool.
+func (m *Manager) GetCheckPool() NNTPClient {
+	return m.GetVerifyPool()
 }
 
 // providerKey returns a unique key for a server config (used to match providers across config changes).
@@ -113,7 +128,7 @@ func (m *Manager) UpdateConfig(newCfg *config.ConfigData) error {
 	slog.Info("Updating NNTP connection pools with new configuration")
 
 	// If pools don't exist yet, create them from scratch
-	if m.pool == nil {
+	if m.uploadPool == nil {
 		m.mu.Unlock()
 		// Temporarily unlock since New doesn't need the lock and we reassign below
 		mgr, err := New(newCfg)
@@ -121,54 +136,54 @@ func (m *Manager) UpdateConfig(newCfg *config.ConfigData) error {
 		if err != nil {
 			return fmt.Errorf("failed to create pools: %w", err)
 		}
-		m.pool = mgr.pool
-		m.checkPool = mgr.checkPool
+		m.uploadPool = mgr.uploadPool
+		m.verifyPool = mgr.verifyPool
 		m.config = newCfg
 		return nil
 	}
 
-	// Diff posting providers
-	oldPostingServers := m.config.GetPostingServers()
-	newPostingServers := newCfg.GetPostingServers()
-	m.diffProviders(m.pool, oldPostingServers, newPostingServers, "posting")
+	// Diff upload providers
+	oldUploadServers := m.config.GetUploadServers()
+	newUploadServers := newCfg.GetUploadServers()
+	m.diffProviders(m.uploadPool, oldUploadServers, newUploadServers, "upload")
 
-	// Diff check-only providers
-	oldCheckServers := m.config.GetCheckOnlyServers()
-	newCheckServers := newCfg.GetCheckOnlyServers()
+	// Diff verify providers
+	oldVerifyServers := m.config.GetVerifyServers()
+	newVerifyServers := newCfg.GetVerifyServers()
 
-	// Handle check pool transitions
-	hasOldCheckOnly := len(oldCheckServers) > 0
-	hasNewCheckOnly := len(newCheckServers) > 0
+	// Handle verify pool transitions
+	hasOldVerify := len(oldVerifyServers) > 0
+	hasNewVerify := len(newVerifyServers) > 0
 
 	switch {
-	case hasNewCheckOnly && hasOldCheckOnly && m.checkPool != m.pool:
-		// Both old and new have dedicated check pools — diff the check pool
-		m.diffProviders(m.checkPool, oldCheckServers, newCheckServers, "check")
-	case hasNewCheckOnly && !hasOldCheckOnly:
-		// New config introduces check-only servers — create dedicated check pool
-		checkPool, err := newCfg.GetCheckPool()
+	case hasNewVerify && hasOldVerify && m.verifyPool != m.uploadPool:
+		// Both old and new have dedicated verify pools — diff the verify pool
+		m.diffProviders(m.verifyPool, oldVerifyServers, newVerifyServers, "verify")
+	case hasNewVerify && !hasOldVerify:
+		// New config introduces verify servers — create dedicated verify pool
+		verifyPool, err := newCfg.GetVerifyPool()
 		if err != nil {
-			slog.Warn("Failed to create dedicated check pool, will use posting pool", "error", err)
-			m.checkPool = m.pool
+			slog.Warn("Failed to create dedicated verify pool, will use upload pool", "error", err)
+			m.verifyPool = m.uploadPool
 		} else {
-			m.checkPool = checkPool
+			m.verifyPool = verifyPool
 		}
-	case !hasNewCheckOnly && hasOldCheckOnly:
-		// Check-only servers removed — close dedicated check pool, fall back to posting pool
-		if m.checkPool != nil && m.checkPool != m.pool {
-			_ = m.checkPool.Close()
+	case !hasNewVerify && hasOldVerify:
+		// Verify servers removed — close dedicated verify pool, fall back to upload pool
+		if m.verifyPool != nil && m.verifyPool != m.uploadPool {
+			_ = m.verifyPool.Close()
 		}
-		m.checkPool = m.pool
+		m.verifyPool = m.uploadPool
 	default:
-		// No check-only servers in either config — checkPool stays as posting pool alias
-		m.checkPool = m.pool
+		// No verify servers in either config — verifyPool stays as upload pool alias
+		m.verifyPool = m.uploadPool
 	}
 
 	m.config = newCfg
 
 	slog.Info("NNTP connection pools updated successfully",
-		"posting_servers", len(newPostingServers),
-		"check_only_servers", len(newCheckServers))
+		"upload_servers", len(newUploadServers),
+		"verify_servers", len(newVerifyServers))
 
 	return nil
 }
@@ -245,9 +260,7 @@ func serverConfigChanged(a, b config.ServerConfig) bool {
 	if aEnabled != bEnabled {
 		return true
 	}
-	aCheckOnly := a.CheckOnly != nil && *a.CheckOnly
-	bCheckOnly := b.CheckOnly != nil && *b.CheckOnly
-	if aCheckOnly != bCheckOnly {
+	if a.Role != b.Role {
 		return true
 	}
 	return false
@@ -262,11 +275,11 @@ func (m *Manager) GetMetrics() (nntppool.ClientStats, error) {
 		return nntppool.ClientStats{}, fmt.Errorf("connection pool manager has been closed")
 	}
 
-	if m.pool == nil {
+	if m.uploadPool == nil {
 		return nntppool.ClientStats{}, fmt.Errorf("connection pool is not available")
 	}
 
-	return m.pool.Stats(), nil
+	return m.uploadPool.Stats(), nil
 }
 
 // Close gracefully shuts down the connection pool manager.
@@ -281,15 +294,15 @@ func (m *Manager) Close() error {
 
 	slog.Info("Closing NNTP connection pool manager")
 
-	// Close check pool first if it's different from the main pool
-	if m.checkPool != nil && m.checkPool != m.pool {
-		_ = m.checkPool.Close()
-		m.checkPool = nil
+	// Close verify pool first if it's different from the upload pool
+	if m.verifyPool != nil && m.verifyPool != m.uploadPool {
+		_ = m.verifyPool.Close()
+		m.verifyPool = nil
 	}
 
-	if m.pool != nil {
-		_ = m.pool.Close()
-		m.pool = nil
+	if m.uploadPool != nil {
+		_ = m.uploadPool.Close()
+		m.uploadPool = nil
 	}
 
 	m.closed = true

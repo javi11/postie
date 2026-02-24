@@ -2,8 +2,8 @@
   import apiClient from "$lib/api/client";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast";
-  import { backend, config as configType } from "$lib/wailsjs/go/models";
-  import { Check, CirclePlus, Loader2, Trash2, Server } from "lucide-svelte";
+  import { config as configType } from "$lib/wailsjs/go/models";
+  import { Check, CirclePlus, Loader2, Trash2, Server, Info } from "lucide-svelte";
 
   interface ValidationState {
     status: "pending" | "validating" | "valid" | "invalid" | "incomplete";
@@ -16,6 +16,7 @@
     onvalidationchange?: (data: { hasValidServers: boolean }) => void;
     showAdvancedFields?: boolean;
     variant?: "setup" | "settings";
+    restrictedRole?: "upload" | "verify";
   }
 
   let {
@@ -24,6 +25,7 @@
     onvalidationchange,
     showAdvancedFields = false,
     variant = "setup",
+    restrictedRole,
   }: Props = $props();
 
   // Track validation state for each server
@@ -32,10 +34,21 @@
   // Local reactive state for server properties
   let localServers = $state<configType.ServerConfig[]>([]);
 
+  // Shared host/port/ssl for upload mode
+  let sharedHost = $state("");
+  let sharedPort = $state(119);
+  let sharedSSL = $state(false);
+
   // Initialize local state from props only once
   $effect(() => {
     if (localServers.length === 0 && servers.length > 0) {
       localServers = servers.map((server) => ({ ...server }));
+      // Initialize shared host state when in upload mode
+      if (restrictedRole === "upload") {
+        sharedHost = servers[0].host || "";
+        sharedPort = servers[0].port || 119;
+        sharedSSL = servers[0].ssl ?? false;
+      }
     }
   });
 
@@ -43,6 +56,17 @@
   function updateServers(): void {
     servers = localServers.map((server) => ({ ...server }));
     onupdate?.(servers);
+  }
+
+  // Sync shared host/port/ssl to all upload servers
+  function onSharedHostChange(): void {
+    localServers = localServers.map((s) => ({
+      ...s,
+      host: sharedHost,
+      port: sharedPort,
+      ssl: sharedSSL,
+    }));
+    updateServers();
   }
 
   function addServer(): void {
@@ -53,6 +77,16 @@
       max_connection_ttl_in_seconds: 3600,
       insecure_ssl: false,
     });
+
+    if (restrictedRole) {
+      newServer.role = restrictedRole;
+    }
+
+    if (restrictedRole === "upload") {
+      newServer.host = sharedHost;
+      newServer.port = sharedPort;
+      newServer.ssl = sharedSSL;
+    }
 
     localServers = [...localServers, newServer];
     const newIndex = localServers.length - 1;
@@ -66,6 +100,12 @@
   }
 
   function removeServer(index: number): void {
+    // Prevent removing the last upload server
+    if (restrictedRole === "upload" && localServers.length <= 1) {
+      toastStore.error($t("settings.server.validation.cannot_disable_last"));
+      return;
+    }
+
     localServers = localServers.filter((_, i) => i !== index);
 
     // Rebuild validation states with new indices
@@ -110,24 +150,24 @@
     onServerFieldChange(index);
   }
 
-  function onServerCheckOnlyChange(index: number, checkOnly: boolean): void {
-    // If trying to enable check_only, verify at least one posting server will remain
-    if (checkOnly) {
-      const postingServersCount = localServers.filter((s, i) => {
+  function onServerRoleChange(index: number, role: string): void {
+    // If switching to verify, ensure at least one upload server will remain
+    if (role === "verify") {
+      const uploadServersCount = localServers.filter((s, i) => {
         const isEnabled = s.enabled !== false;
-        const willBeCheckOnly = i === index ? true : (s.check_only === true);
-        return isEnabled && !willBeCheckOnly;
+        const effectiveRole = i === index ? "verify" : (s.role || "upload");
+        return isEnabled && effectiveRole !== "verify";
       }).length;
 
-      if (postingServersCount < 1) {
-        toastStore.error($t("settings.server.validation.cannot_set_all_check_only"));
+      if (uploadServersCount < 1) {
+        toastStore.error($t("settings.server.validation.cannot_set_all_verify"));
         // Revert the change
-        localServers[index].check_only = false;
+        localServers[index].role = "upload";
         return;
       }
     }
 
-    localServers[index].check_only = checkOnly;
+    localServers[index].role = role;
     onServerFieldChange(index);
   }
 
@@ -174,7 +214,7 @@
       toastStore.error($t("settings.server.bulk_operations.cannot_disable_all"));
       return;
     }
-    
+
     localServers.forEach((server, index) => {
       if (server.enabled !== false) {
         localServers[index].enabled = false;
@@ -187,7 +227,6 @@
   let enabledServersCount = $derived(localServers.filter(s => s.enabled !== false).length);
   let totalServersCount = $derived(localServers.length);
   let hasDisabledServers = $derived(localServers.some(s => s.enabled === false));
-  let allServersDisabled = $derived(enabledServersCount === 0);
 
   async function validateServer(index: number): Promise<void> {
     const server = localServers[index];
@@ -195,8 +234,11 @@
       return;
     }
 
-    // Basic validation first
-    if (!server.host || !server.port) {
+    // Basic validation first — for upload mode, use shared host
+    const host = restrictedRole === "upload" ? sharedHost : server.host;
+    const port = restrictedRole === "upload" ? sharedPort : server.port;
+
+    if (!host || !port) {
       validationStates = {
         ...validationStates,
         [index]: { status: "incomplete", error: "Host and port are required" },
@@ -212,11 +254,11 @@
 
     try {
       const result = await apiClient.validateNNTPServer({
-        host: server.host,
-        port: server.port,
+        host,
+        port,
         username: server.username || "",
         password: server.password || "",
-        ssl: server.ssl || false,
+        ssl: restrictedRole === "upload" ? sharedSSL : (server.ssl || false),
         maxConnections: server.max_connections || 10,
       });
 
@@ -230,7 +272,6 @@
         return;
       }
 
-      console.log("Setting server", index, "as invalid:", result.error);
       validationStates = {
         ...validationStates,
         [index]: { status: "invalid", error: result.error },
@@ -277,8 +318,8 @@
     </div>
   {/if}
 
-  <!-- Status and Bulk Operations -->
-  {#if localServers.length > 0 && variant === "settings"}
+  <!-- Status and Bulk Operations (settings variant, no restrictedRole) -->
+  {#if localServers.length > 0 && variant === "settings" && !restrictedRole}
     <div class="flex items-center justify-between p-4 bg-base-200 rounded-lg mb-4">
       <div class="flex items-center gap-4">
         <div class="stat">
@@ -291,10 +332,10 @@
           </div>
         </div>
       </div>
-      
+
       <div class="flex gap-2">
         {#if hasDisabledServers}
-          <button 
+          <button
             class="btn btn-sm btn-success"
             onclick={enableAllServers}
           >
@@ -302,7 +343,7 @@
           </button>
         {/if}
         {#if enabledServersCount > 1}
-          <button 
+          <button
             class="btn btn-sm btn-warning"
             onclick={disableAllServers}
           >
@@ -313,19 +354,101 @@
     </div>
   {/if}
 
-  {#if localServers.length === 0}
-    <div
-      class="text-center py-8 border-2 border-dashed border-base-300 rounded-lg"
-    >
-      <Server class="w-12 h-12 text-base-content/40 mx-auto mb-4" />
-      <p class="text-base-content/70 mb-4">
-        {$t("settings.server.no_servers_description")}
-      </p>
-      <button type="button" class="btn btn-outline" onclick={addServer}>
-        <CirclePlus class="w-4 h-4" />
-        {$t("settings.server.add_first_server")}
-      </button>
+  <!-- Shared Provider Section (upload mode) -->
+  {#if restrictedRole === "upload"}
+    <div class="p-4 bg-base-200 rounded-lg border border-base-300">
+      <div class="mb-3">
+        <p class="font-medium text-sm text-base-content">
+          {$t("settings.server.upload_pool_provider_label")}
+        </p>
+        <p class="text-xs text-base-content/60 mt-0.5">
+          {$t("settings.server.upload_pool_provider_description")}
+        </p>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="md:col-span-2">
+          <label for="shared-host" class="label">
+            <span class="label-text">{$t("settings.server.host")} *</span>
+          </label>
+          <input
+            id="shared-host"
+            class="input input-bordered w-full"
+            bind:value={sharedHost}
+            placeholder="news.example.com"
+            oninput={onSharedHostChange}
+            onchange={onSharedHostChange}
+          />
+        </div>
+        <div>
+          <label for="shared-port" class="label">
+            <span class="label-text">{$t("settings.server.port")} *</span>
+          </label>
+          <input
+            id="shared-port"
+            class="input input-bordered w-full"
+            type="number"
+            bind:value={sharedPort}
+            min="1"
+            max="65535"
+            oninput={onSharedHostChange}
+            onchange={onSharedHostChange}
+          />
+        </div>
+        <div class="flex items-center gap-3 md:col-span-3">
+          <input
+            id="shared-ssl"
+            type="checkbox"
+            class="checkbox"
+            bind:checked={sharedSSL}
+            onchange={onSharedHostChange}
+          />
+          <label for="shared-ssl" class="label-text cursor-pointer">
+            {$t("settings.server.use_ssl_tls")}
+          </label>
+          {#if variant === "settings" && showAdvancedFields}
+            <input
+              id="shared-insecure-ssl"
+              type="checkbox"
+              class="checkbox ml-4"
+              bind:checked={localServers[0]!.insecure_ssl}
+              onchange={() => { localServers = localServers.map(s => ({ ...s, insecure_ssl: localServers[0]!.insecure_ssl })); updateServers(); }}
+            />
+            <label for="shared-insecure-ssl" class="label-text cursor-pointer">
+              {$t("settings.server.allow_insecure_ssl")}
+            </label>
+          {/if}
+        </div>
+      </div>
     </div>
+  {/if}
+
+  {#if localServers.length === 0}
+    {#if restrictedRole === "verify"}
+      <!-- Empty verify pool notice -->
+      <div class="flex items-start gap-3 p-4 bg-base-200 rounded-lg border border-base-300">
+        <Info class="w-5 h-5 text-info mt-0.5 shrink-0" />
+        <p class="text-sm text-base-content/70">
+          {$t("settings.server.verify_pool_empty_notice")}
+        </p>
+      </div>
+      <button type="button" class="btn btn-outline w-full" onclick={addServer}>
+        <CirclePlus class="w-4 h-4 mr-2" />
+        {$t("settings.server.add_verify_server")}
+      </button>
+    {:else}
+      <div
+        class="text-center py-8 border-2 border-dashed border-base-300 rounded-lg"
+      >
+        <Server class="w-12 h-12 text-base-content/40 mx-auto mb-4" />
+        <p class="text-base-content/70 mb-4">
+          {$t("settings.server.no_servers_description")}
+        </p>
+        <button type="button" class="btn btn-outline" onclick={addServer}>
+          <CirclePlus class="w-4 h-4" />
+          {$t("settings.server.add_first_server")}
+        </button>
+      </div>
+    {/if}
   {:else}
     <div class="space-y-4">
       {#each localServers as server, index}
@@ -336,9 +459,15 @@
             <div class="flex justify-between items-start mb-4">
               <div class="flex items-center gap-2">
                 <h4 class="font-medium text-base-content">
-                  {$t("settings.server.server_number", {
-                    values: { number: index + 1 },
-                  })}
+                  {#if restrictedRole === "upload"}
+                    {$t("settings.server.account_number", {
+                      values: { number: index + 1 },
+                    })}
+                  {:else}
+                    {$t("settings.server.server_number", {
+                      values: { number: index + 1 },
+                    })}
+                  {/if}
                 </h4>
                 {#if !isEnabled}
                   <div class="badge badge-warning">
@@ -374,7 +503,7 @@
                     {$t("settings.server.test_connection")}
                   </button>
                 {/if}
-                {#if localServers.length > 1}
+                {#if restrictedRole === "upload" ? localServers.length > 1 : localServers.length > 0}
                   <button
                     class="btn btn-error btn-outline btn-sm"
                     onclick={() => removeServer(index)}
@@ -420,130 +549,108 @@
                 </div>
               {/if}
 
-              <!-- Check Only toggle - shown in both setup and settings -->
-              {#if variant === "settings"}
-                {@const isCheckOnly = localServers[index].check_only === true}
+              <!-- Server Role selector — only shown in legacy/setup mode (no restrictedRole) -->
+              {#if !restrictedRole}
                 <div class="md:col-span-2">
-                  <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg {isCheckOnly ? 'border border-info' : ''}">
-                    <input
-                      id="server-check-only-{index}"
-                      type="checkbox"
-                      class="checkbox checkbox-info"
-                      checked={isCheckOnly}
-                      onchange={(e) => onServerCheckOnlyChange(index, (e.target as HTMLInputElement).checked)}
-                    />
-                    <label
-                      for="server-check-only-{index}"
-                      class="label-text cursor-pointer flex-1"
-                    >
-                      <span class="font-medium">{$t("settings.server.check_only")}</span>
-                      <p class="text-sm opacity-70">
-                        {isCheckOnly
-                          ? $t("settings.server.check_only_enabled_description")
-                          : $t("settings.server.check_only_description")
+                  <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg {(localServers[index].role || 'upload') === 'verify' ? 'border border-info' : ''}">
+                    <div class="flex-1">
+                      <label for="server-role-{index}" class="font-medium text-sm">
+                        {$t("settings.server.role")}
+                      </label>
+                      <p class="text-sm opacity-70 mt-1">
+                        {(localServers[index].role || 'upload') === 'verify'
+                          ? $t("settings.server.role_verify_description")
+                          : $t("settings.server.role_upload_description")
                         }
                       </p>
-                    </label>
-                    {#if isCheckOnly}
-                      <div class="badge badge-info badge-sm">
-                        {$t("settings.server.check_only_badge")}
-                      </div>
-                    {/if}
-                  </div>
-                </div>
-              {:else if variant === "setup"}
-                {@const isCheckOnly = localServers[index].check_only === true}
-                <div class="md:col-span-2">
-                  <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg {isCheckOnly ? 'border border-info' : ''}">
-                    <input
-                      id="server-check-only-{index}"
-                      type="checkbox"
-                      class="checkbox checkbox-info"
-                      checked={isCheckOnly}
-                      onchange={(e) => onServerCheckOnlyChange(index, (e.target as HTMLInputElement).checked)}
-                    />
-                    <label
-                      for="server-check-only-{index}"
-                      class="label-text cursor-pointer flex-1"
-                    >
-                      <span class="font-medium">{$t("settings.server.check_only")}</span>
-                      <p class="text-sm opacity-70">
-                        {$t("settings.server.check_only_description")}
-                      </p>
-                    </label>
-                    {#if isCheckOnly}
-                      <div class="badge badge-info badge-sm">
-                        {$t("settings.server.check_only_badge")}
-                      </div>
-                    {/if}
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <select
+                        id="server-role-{index}"
+                        class="select select-bordered select-sm"
+                        value={localServers[index].role || "upload"}
+                        onchange={(e) => onServerRoleChange(index, (e.target as HTMLSelectElement).value)}
+                      >
+                        <option value="upload">{$t("settings.server.role_upload")}</option>
+                        <option value="verify">{$t("settings.server.role_verify")}</option>
+                      </select>
+                      {#if (localServers[index].role || 'upload') === 'verify'}
+                        <div class="badge badge-info badge-sm">
+                          {$t("settings.server.role_verify_badge")}
+                        </div>
+                      {/if}
+                    </div>
                   </div>
                 </div>
               {/if}
 
-              <div>
-                <label for="host-{index}" class="label">
-                  <span class="label-text">
-                    {$t("settings.server.host")} *
-                  </span>
-                </label>
-                <input
-                  id="host-{index}"
-                  class="input input-bordered w-full"
-                  bind:value={localServers[index].host}
-                  placeholder="news.example.com"
-                  required
-                  oninput={() => onServerFieldChange(index)}
-                />
-              </div>
-
-              <div>
-                <label for="port-{index}" class="label">
-                  <span class="label-text">
-                    {$t("settings.server.port")} *
-                  </span>
-                </label>
-                <input
-                  id="port-{index}"
-                  class="input input-bordered w-full"
-                  type="number"
-                  bind:value={localServers[index].port}
-                  min="1"
-                  max="65535"
-                  required
-                  oninput={() => onServerFieldChange(index)}
-                />
-              </div>
-
-              <div class="flex items-center space-x-4 pt-2">
-                <div class="flex items-center">
-                  <input
-                    type="checkbox"
-                    class="checkbox mr-2"
-                    bind:checked={localServers[index].ssl}
-                    onchange={() => onServerFieldChange(index)}
-                  />
-                  <label for="ssl-{index}" class="label-text cursor-pointer">
-                    {$t("settings.server.use_ssl_tls")}
+              <!-- Host / Port / SSL — hidden in upload mode (shared at top) -->
+              {#if restrictedRole !== "upload"}
+                <div>
+                  <label for="host-{index}" class="label">
+                    <span class="label-text">
+                      {$t("settings.server.host")} *
+                    </span>
                   </label>
+                  <input
+                    id="host-{index}"
+                    class="input input-bordered w-full"
+                    bind:value={localServers[index].host}
+                    placeholder="news.example.com"
+                    required
+                    oninput={() => onServerFieldChange(index)}
+                  />
                 </div>
 
-                {#if variant === "settings" && showAdvancedFields}
+                <div>
+                  <label for="port-{index}" class="label">
+                    <span class="label-text">
+                      {$t("settings.server.port")} *
+                    </span>
+                  </label>
+                  <input
+                    id="port-{index}"
+                    class="input input-bordered w-full"
+                    type="number"
+                    bind:value={localServers[index].port}
+                    min="1"
+                    max="65535"
+                    required
+                    oninput={() => onServerFieldChange(index)}
+                  />
+                </div>
+
+                <div class="flex items-center space-x-4 pt-2">
                   <div class="flex items-center">
                     <input
                       type="checkbox"
                       class="checkbox mr-2"
-                      bind:checked={localServers[index].insecure_ssl}
+                      bind:checked={localServers[index].ssl}
                       onchange={() => onServerFieldChange(index)}
                     />
-                    <label
-                      for="insecure-ssl-{index}"
-                      class="label-text cursor-pointer"
-                    >
-                      {$t("settings.server.allow_insecure_ssl")}
+                    <label for="ssl-{index}" class="label-text cursor-pointer">
+                      {$t("settings.server.use_ssl_tls")}
                     </label>
                   </div>
-                {/if}
-              </div>
+
+                  {#if variant === "settings" && showAdvancedFields}
+                    <div class="flex items-center">
+                      <input
+                        type="checkbox"
+                        class="checkbox mr-2"
+                        bind:checked={localServers[index].insecure_ssl}
+                        onchange={() => onServerFieldChange(index)}
+                      />
+                      <label
+                        for="insecure-ssl-{index}"
+                        class="label-text cursor-pointer"
+                      >
+                        {$t("settings.server.allow_insecure_ssl")}
+                      </label>
+                    </div>
+                  {/if}
+                </div>
+              {/if}
 
               <div>
                 <label for="username-{index}" class="label">
@@ -689,7 +796,13 @@
 
     <button class="btn btn-outline w-full" onclick={addServer}>
       <CirclePlus class="w-4 h-4 mr-2" />
-      {$t("settings.server.add_server")}
+      {#if restrictedRole === "upload"}
+        {$t("settings.server.add_account")}
+      {:else if restrictedRole === "verify"}
+        {$t("settings.server.add_verify_server")}
+      {:else}
+        {$t("settings.server.add_server")}
+      {/if}
     </button>
   {/if}
 </div>

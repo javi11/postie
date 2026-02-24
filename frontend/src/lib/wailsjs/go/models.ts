@@ -264,6 +264,7 @@ export namespace backend {
 	    password: string;
 	    ssl: boolean;
 	    maxConnections: number;
+	    role: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ServerData(source);
@@ -277,6 +278,7 @@ export namespace backend {
 	        this.password = source["password"];
 	        this.ssl = source["ssl"];
 	        this.maxConnections = source["maxConnections"];
+	        this.role = source["role"] ?? "";
 	    }
 	}
 	export class SetupWizardData {
@@ -641,6 +643,7 @@ export namespace config {
 	    max_connection_ttl_in_seconds: number;
 	    insecure_ssl: boolean;
 	    enabled?: boolean;
+	    role: string;
 	    check_only?: boolean;
 	    inflight: number;
 	    proxy_url?: string;
@@ -661,6 +664,7 @@ export namespace config {
 	        this.max_connection_ttl_in_seconds = source["max_connection_ttl_in_seconds"];
 	        this.insecure_ssl = source["insecure_ssl"];
 	        this.enabled = source["enabled"];
+	        this.role = source["role"] || "upload";
 	        this.check_only = source["check_only"];
 	        this.inflight = source["inflight"];
 	        this.proxy_url = source["proxy_url"];
