@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	nntppool "github.com/javi11/nntppool/v2"
+	nntppool "github.com/javi11/nntppool/v4"
 	config "github.com/javi11/postie/internal/config"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -71,10 +71,10 @@ func (mr *MockConfigMockRecorder) GetMaintainOriginalExtension() *gomock.Call {
 }
 
 // GetNNTPPool mocks base method.
-func (m *MockConfig) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
+func (m *MockConfig) GetNNTPPool() (*nntppool.Client, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetNNTPPool")
-	ret0, _ := ret[0].(nntppool.UsenetConnectionPool)
+	ret0, _ := ret[0].(*nntppool.Client)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

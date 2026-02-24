@@ -27,60 +27,33 @@ async function fetchProviderStatus() {
 }
 
 function getProviderStatusIcon(provider: backend.NntpProviderMetrics) {
-	switch (provider.state?.toLowerCase()) {
-		case "connected":
-		case "active":
-			return CheckCircle;
-		case "connecting":
-		case "reconnecting":
-			return Clock;
-		case "failed":
-		case "error":
-			return AlertCircle;
-		case "disconnected":
-		case "offline":
-		default:
-			return WifiOff;
+	if (provider.activeConnections > 0) {
+		return CheckCircle;
 	}
+	if (provider.totalErrors > 0) {
+		return AlertCircle;
+	}
+	return Clock;
 }
 
 function getProviderStatusClass(provider: backend.NntpProviderMetrics) {
-	switch (provider.state?.toLowerCase()) {
-		case "connected":
-		case "active":
-			return "text-success";
-		case "connecting":
-		case "reconnecting":
-			return "text-warning";
-		case "failed":
-		case "error":
-			return "text-error";
-		case "disconnected":
-		case "offline":
-		default:
-			return "text-base-content/50";
+	if (provider.activeConnections > 0) {
+		return "text-success";
 	}
+	if (provider.totalErrors > 0 && provider.activeConnections === 0) {
+		return "text-error";
+	}
+	return "text-base-content/50";
 }
 
 function getProviderStatusText(provider: backend.NntpProviderMetrics) {
-	const state = provider.state?.toLowerCase() || "unknown";
-	switch (state) {
-		case "connected":
-		case "active":
-			return $t("dashboard.provider.status.connected");
-		case "connecting":
-			return $t("dashboard.provider.status.connecting");
-		case "reconnecting":
-			return $t("dashboard.provider.status.reconnecting");
-		case "failed":
-		case "error":
-			return $t("dashboard.provider.status.failed");
-		case "disconnected":
-		case "offline":
-			return $t("dashboard.provider.status.disconnected");
-		default:
-			return $t("dashboard.provider.status.unknown");
+	if (provider.activeConnections > 0) {
+		return $t("dashboard.provider.status.connected");
 	}
+	if (provider.totalErrors > 0 && provider.activeConnections === 0) {
+		return $t("dashboard.provider.status.failed");
+	}
+	return $t("dashboard.provider.status.idle");
 }
 
 function formatBytes(bytes: number): string {
@@ -89,6 +62,11 @@ function formatBytes(bytes: number): string {
 	const sizes = ["B", "KB", "MB", "GB", "TB"];
 	const i = Math.floor(Math.log(bytes) / Math.log(k));
 	return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+}
+
+function formatSpeed(bytesPerSec: number): string {
+	if (bytesPerSec === 0) return "0 B/s";
+	return formatBytes(bytesPerSec) + "/s";
 }
 
 function startPolling() {
@@ -166,22 +144,24 @@ onDestroy(() => {
 							</div>
 						</div>
 
-						{#if provider.state?.toLowerCase() === "connected" || provider.state?.toLowerCase() === "active"}
-							<div class="grid grid-cols-3 gap-4 text-sm">
-								<div>
-									<span class="text-base-content/70">{$t("dashboard.provider.uploaded")}:</span>
-									<span class="font-medium ml-1">{formatBytes(provider.totalBytesUploaded)}</span>
-								</div>
-								<div>
-									<span class="text-base-content/70">{$t("dashboard.provider.articles_posted")}:</span>
-									<span class="font-medium ml-1">{provider.totalArticlesPosted.toLocaleString()}</span>
-								</div>
-								<div>
-									<span class="text-base-content/70">{$t("dashboard.provider.errors")}:</span>
-									<span class="font-medium ml-1 {provider.totalErrors > 0 ? 'text-error' : ''}">{provider.totalErrors.toLocaleString()}</span>
-								</div>
+						<div class="grid grid-cols-4 gap-4 text-sm">
+							<div>
+								<span class="text-base-content/70">{$t("dashboard.provider.avg_speed")}:</span>
+								<span class="font-medium ml-1">{formatSpeed(provider.avgSpeed)}</span>
 							</div>
-						{/if}
+							<div>
+								<span class="text-base-content/70">{$t("dashboard.provider.inflight")}:</span>
+								<span class="font-medium ml-1">{provider.inflight || 10}</span>
+							</div>
+							<div>
+								<span class="text-base-content/70">{$t("dashboard.provider.missing")}:</span>
+								<span class="font-medium ml-1">{provider.missing.toLocaleString()}</span>
+							</div>
+							<div>
+								<span class="text-base-content/70">{$t("dashboard.provider.errors")}:</span>
+								<span class="font-medium ml-1 {provider.totalErrors > 0 ? 'text-error' : ''}">{provider.totalErrors.toLocaleString()}</span>
+							</div>
+						</div>
 					</div>
 				{/each}
 			</div>
@@ -189,12 +169,12 @@ onDestroy(() => {
 			<!-- Pool Summary -->
 			<div class="mt-4 p-3 bg-base-200 rounded-lg">
 				<div class="flex justify-between items-center text-sm">
-					<span class="text-base-content/70">{$t("dashboard.provider.total_uploaded")}:</span>
-					<span class="font-medium">{formatBytes(poolMetrics.totalBytesUploaded)}</span>
+					<span class="text-base-content/70">{$t("dashboard.provider.avg_speed")}:</span>
+					<span class="font-medium">{formatSpeed(poolMetrics.avgSpeed)}</span>
 				</div>
 				<div class="flex justify-between items-center text-sm mt-1">
-					<span class="text-base-content/70">{$t("dashboard.provider.total_articles")}:</span>
-					<span class="font-medium">{poolMetrics.totalArticlesPosted.toLocaleString()}</span>
+					<span class="text-base-content/70">{$t("dashboard.provider.elapsed")}:</span>
+					<span class="font-medium">{poolMetrics.elapsed || "—"}</span>
 				</div>
 				<div class="flex justify-between items-center text-sm mt-1">
 					<span class="text-base-content/70">{$t("dashboard.provider.total_errors")}:</span>

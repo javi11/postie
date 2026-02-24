@@ -218,7 +218,7 @@ func main() {
 			app.Shutdown()
 		},
 		LogLevelProduction: logger.DEBUG,
-		Bind: []interface{}{
+		Bind: []any{
 			app,
 		},
 		Mac: &mac.Options{

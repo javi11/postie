@@ -36,7 +36,8 @@ let managedServers = $derived(servers.map(server => ({
 	ssl: server.ssl,
 	max_connection_idle_time_in_seconds: 300,
 	max_connection_ttl_in_seconds: 3600,
-	insecure_ssl: false, // Default to false, can be overridden in UI
+	insecure_ssl: false,
+	inflight: 10,
 })));
 </script>
 

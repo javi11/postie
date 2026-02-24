@@ -91,7 +91,7 @@ func TestThrottleDisabled(t *testing.T) {
 	assert.Less(t, elapsed.Milliseconds(), int64(50), "Disabled throttle should not cause any delay")
 
 	// Test multiple rapid calls
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		start = time.Now()
 		throttle.Wait(10000)
 		elapsed = time.Since(start)

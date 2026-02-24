@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/javi11/nntppool/v2"
 	"github.com/javi11/postie/internal/config"
+	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/queue"
 )
 
@@ -18,7 +18,7 @@ import (
 // exponential backoff.
 type PostCheckRetryWorker struct {
 	queue         *queue.Queue
-	checkPool     nntppool.UsenetConnectionPool
+	checkPool     pool.NNTPClient
 	cfg           config.PostCheck
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -32,7 +32,7 @@ type PostCheckRetryWorker struct {
 func NewPostCheckRetryWorker(
 	ctx context.Context,
 	q *queue.Queue,
-	checkPool nntppool.UsenetConnectionPool,
+	checkPool pool.NNTPClient,
 	cfg config.PostCheck,
 ) *PostCheckRetryWorker {
 	workerCtx, cancel := context.WithCancel(ctx)
@@ -195,7 +195,8 @@ func (w *PostCheckRetryWorker) processRetries() {
 
 // checkArticle verifies if an article exists on the server via STAT command
 func (w *PostCheckRetryWorker) checkArticle(ctx context.Context, messageID string, groups []string) bool {
-	_, err := w.checkPool.Stat(ctx, messageID, groups)
+	// v4 Stat only takes messageID (no groups parameter)
+	_, err := w.checkPool.Stat(ctx, messageID)
 	return err == nil
 }
 

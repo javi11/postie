@@ -137,7 +137,7 @@ func safeRemoveFile(ctx context.Context, filePath string) {
 	maxRetries := 3
 	baseDelay := 100 * time.Millisecond
 
-	for i := 0; i < maxRetries; i++ {
+	for i := range maxRetries {
 		if err := os.Remove(filePath); err == nil {
 			return // Success
 		}

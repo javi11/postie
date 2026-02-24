@@ -49,7 +49,7 @@ func (pc *Context) Err() error {
 }
 
 // Value returns the parent context's value
-func (pc *Context) Value(key interface{}) interface{} {
+func (pc *Context) Value(key any) any {
 	return pc.parent.Value(key)
 }
 

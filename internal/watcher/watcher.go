@@ -552,7 +552,7 @@ func (w *Watcher) ClearQueue() error {
 }
 
 // GetQueueStats returns statistics about the queue via queue
-func (w *Watcher) GetQueueStats() (map[string]interface{}, error) {
+func (w *Watcher) GetQueueStats() (map[string]any, error) {
 	return w.queue.GetQueueStats()
 }
 

@@ -2,13 +2,16 @@ package config
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"time"
 
-	"github.com/javi11/nntppool/v2"
+	"github.com/javi11/nntppool/v4"
+	"golang.org/x/net/proxy"
 	"gopkg.in/yaml.v3"
 )
 
@@ -50,7 +53,7 @@ func (d *Duration) UnmarshalJSON(data []byte) error {
 }
 
 // MarshalYAML implements yaml.Marshaler interface
-func (d Duration) MarshalYAML() (interface{}, error) {
+func (d Duration) MarshalYAML() (any, error) {
 	return string(d), nil
 }
 
@@ -138,7 +141,7 @@ const (
 )
 
 type Config interface {
-	GetNNTPPool() (nntppool.UsenetConnectionPool, error)
+	GetNNTPPool() (*nntppool.Client, error)
 	GetPostingConfig() PostingConfig
 	GetPostCheckConfig() PostCheck
 	GetPar2Config(ctx context.Context) (*Par2Config, error)
@@ -195,6 +198,8 @@ type ServerConfig struct {
 	// CheckOnly when true, this server will only be used for article verification (STAT command)
 	// and not for posting articles. Useful for cheap/slow providers that have good retention.
 	CheckOnly *bool `yaml:"check_only" json:"check_only"`
+	// Inflight sets the number of concurrent requests per connection. 0 defaults to 1 in nntppool v4.
+	Inflight int `yaml:"inflight" json:"inflight"`
 	// SOCKS5 Proxy URL (optional, format: socks5://username:password@hostname:port)
 	ProxyURL string `yaml:"proxy_url,omitempty" json:"proxy_url,omitempty"`
 }
@@ -621,41 +626,88 @@ func (c *ConfigData) GetCheckOnlyServers() []ServerConfig {
 	return servers
 }
 
-// serverConfigToProviderConfig converts a ServerConfig to nntppool.UsenetProviderConfig
-func serverConfigToProviderConfig(s ServerConfig) nntppool.UsenetProviderConfig {
+// ServerConfigToProvider converts a ServerConfig to nntppool.Provider
+func ServerConfigToProvider(s ServerConfig) nntppool.Provider {
 	maxConnections := s.MaxConnections
 	if maxConnections <= 0 {
 		maxConnections = 10 // default value if not specified
 	}
 
-	maxIdleTime := s.MaxConnectionIdleTimeInSeconds
-	if maxIdleTime <= 0 {
-		maxIdleTime = 300
+	idleTimeout := time.Duration(s.MaxConnectionIdleTimeInSeconds) * time.Second
+	if idleTimeout <= 0 {
+		idleTimeout = 300 * time.Second
 	}
 
-	maxTTL := s.MaxConnectionTTLInSeconds
-	if maxTTL <= 0 {
-		maxTTL = 3600
+	keepAlive := time.Duration(s.MaxConnectionTTLInSeconds) * time.Second
+	if keepAlive <= 0 {
+		keepAlive = 3600 * time.Second
 	}
 
-	return nntppool.UsenetProviderConfig{
-		Host:                           s.Host,
-		Port:                           s.Port,
-		Username:                       s.Username,
-		Password:                       s.Password,
-		TLS:                            s.SSL,
-		MaxConnections:                 maxConnections,
-		MaxConnectionIdleTimeInSeconds: maxIdleTime,
-		MaxConnectionTTLInSeconds:      maxTTL,
-		InsecureSSL:                    s.InsecureSSL,
-		ProxyURL:                       s.ProxyURL,
+	addr := fmt.Sprintf("%s:%d", s.Host, s.Port)
+
+	inflight := s.Inflight
+	if inflight <= 0 {
+		inflight = 10
 	}
+
+	provider := nntppool.Provider{
+		Host:        addr,
+		Auth:        nntppool.Auth{Username: s.Username, Password: s.Password},
+		Connections: maxConnections,
+		Inflight:    inflight,
+		IdleTimeout: idleTimeout,
+		KeepAlive:   keepAlive,
+	}
+
+	if s.SSL {
+		provider.TLSConfig = &tls.Config{
+			InsecureSkipVerify: s.InsecureSSL, //nolint:gosec // user-configurable option
+			ServerName:         s.Host,
+		}
+	}
+
+	// Support SOCKS5 proxy via custom connection factory
+	if s.ProxyURL != "" {
+		proxyURL := s.ProxyURL
+		useTLS := s.SSL
+		tlsCfg := provider.TLSConfig
+		provider.Factory = func(ctx context.Context) (net.Conn, error) {
+			dialer, err := proxy.SOCKS5("tcp", proxyURL, nil, proxy.Direct)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create SOCKS5 dialer: %w", err)
+			}
+			conn, err := dialer.Dial("tcp", addr)
+			if err != nil {
+				return nil, fmt.Errorf("failed to connect via proxy: %w", err)
+			}
+			if useTLS && tlsCfg != nil {
+				tlsConn := tls.Client(conn, tlsCfg)
+				if err := tlsConn.HandshakeContext(ctx); err != nil {
+					_ = conn.Close()
+					return nil, fmt.Errorf("TLS handshake via proxy failed: %w", err)
+				}
+				return tlsConn, nil
+			}
+			return conn, nil
+		}
+		// Clear TLSConfig since the factory handles TLS
+		provider.TLSConfig = nil
+	}
+
+	return provider
 }
 
-// GetNNTPPoolConfig returns the nntppool configuration without creating the actual pool
-// This returns ALL enabled servers (for backwards compatibility)
-func (c *ConfigData) GetNNTPPoolConfig() (nntppool.Config, error) {
-	// Filter enabled servers (all enabled, regardless of check_only)
+// getProviders converts server configs to nntppool providers
+func getProviders(servers []ServerConfig) []nntppool.Provider {
+	providers := make([]nntppool.Provider, len(servers))
+	for i, s := range servers {
+		providers[i] = ServerConfigToProvider(s)
+	}
+	return providers
+}
+
+// GetNNTPPool returns the NNTP client (all enabled servers)
+func (c *ConfigData) GetNNTPPool() (*nntppool.Client, error) {
 	var enabledServers []ServerConfig
 	for _, s := range c.Servers {
 		if s.Enabled == nil || *s.Enabled {
@@ -663,111 +715,49 @@ func (c *ConfigData) GetNNTPPoolConfig() (nntppool.Config, error) {
 		}
 	}
 
-	providers := make([]nntppool.UsenetProviderConfig, len(enabledServers))
-	for i, s := range enabledServers {
-		providers[i] = serverConfigToProviderConfig(s)
+	providers := getProviders(enabledServers)
+
+	client, err := nntppool.NewClient(context.Background(), providers)
+	if err != nil {
+		return nil, fmt.Errorf("error creating NNTP client: %w", err)
 	}
 
-	return c.buildPoolConfig(providers), nil
+	return client, nil
 }
 
-// GetPostingPoolConfig returns pool configuration for posting servers only (excluding check-only)
-func (c *ConfigData) GetPostingPoolConfig() (nntppool.Config, error) {
+// GetPostingPool returns the NNTP client for posting (excludes check-only servers)
+func (c *ConfigData) GetPostingPool() (*nntppool.Client, error) {
 	postingServers := c.GetPostingServers()
 	if len(postingServers) == 0 {
-		return nntppool.Config{}, fmt.Errorf("no posting servers configured (all servers are check-only)")
+		return nil, fmt.Errorf("no posting servers configured (all servers are check-only)")
 	}
 
-	providers := make([]nntppool.UsenetProviderConfig, len(postingServers))
-	for i, s := range postingServers {
-		providers[i] = serverConfigToProviderConfig(s)
+	providers := getProviders(postingServers)
+
+	client, err := nntppool.NewClient(context.Background(), providers, nntppool.WithDispatchStrategy(nntppool.DispatchRoundRobin))
+	if err != nil {
+		return nil, fmt.Errorf("error creating posting client: %w", err)
 	}
 
-	return c.buildPoolConfig(providers), nil
+	return client, nil
 }
 
-// GetCheckPoolConfig returns pool configuration for article verification
-// If there are check-only servers, use those; otherwise fall back to posting servers
-func (c *ConfigData) GetCheckPoolConfig() (nntppool.Config, error) {
+// GetCheckPool returns the NNTP client for article verification
+// Uses check-only servers if available, otherwise falls back to posting servers
+func (c *ConfigData) GetCheckPool() (*nntppool.Client, error) {
 	checkOnlyServers := c.GetCheckOnlyServers()
 
-	// If we have dedicated check-only servers, use them
 	if len(checkOnlyServers) > 0 {
-		providers := make([]nntppool.UsenetProviderConfig, len(checkOnlyServers))
-		for i, s := range checkOnlyServers {
-			providers[i] = serverConfigToProviderConfig(s)
+		providers := getProviders(checkOnlyServers)
+		client, err := nntppool.NewClient(context.Background(), providers)
+		if err != nil {
+			return nil, fmt.Errorf("error creating check client: %w", err)
 		}
-		return c.buildPoolConfig(providers), nil
+		return client, nil
 	}
 
 	// Fall back to posting servers for checking
-	return c.GetPostingPoolConfig()
-}
-
-// buildPoolConfig creates a pool config with common settings
-func (c *ConfigData) buildPoolConfig(providers []nntppool.UsenetProviderConfig) nntppool.Config {
-	if c.ConnectionPool.HealthCheckInterval == "" {
-		c.ConnectionPool.HealthCheckInterval = Duration("1m")
-	}
-
-	if c.ConnectionPool.MinConnections <= 0 {
-		c.ConnectionPool.MinConnections = 0
-	}
-
-	return nntppool.Config{
-		Providers:           providers,
-		HealthCheckInterval: c.ConnectionPool.HealthCheckInterval.ToDuration(),
-		MinConnections:      c.ConnectionPool.MinConnections,
-		MaxRetries:          uint(c.Posting.MaxRetries),
-		DelayType:           nntppool.DelayTypeExponential,
-		RetryDelay:          c.Posting.RetryDelay.ToDuration(),
-	}
-}
-
-// GetNNTPPool returns the NNTP connection pool (all enabled servers)
-func (c *ConfigData) GetNNTPPool() (nntppool.UsenetConnectionPool, error) {
-	config, err := c.GetNNTPPoolConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	pool, err := nntppool.NewConnectionPool(config)
-	if err != nil {
-		return nil, fmt.Errorf("error creating connection pool: %w", err)
-	}
-
-	return pool, nil
-}
-
-// GetPostingPool returns the NNTP connection pool for posting (excludes check-only servers)
-func (c *ConfigData) GetPostingPool() (nntppool.UsenetConnectionPool, error) {
-	config, err := c.GetPostingPoolConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	pool, err := nntppool.NewConnectionPool(config)
-	if err != nil {
-		return nil, fmt.Errorf("error creating posting pool: %w", err)
-	}
-
-	return pool, nil
-}
-
-// GetCheckPool returns the NNTP connection pool for article verification
-// Uses check-only servers if available, otherwise falls back to posting servers
-func (c *ConfigData) GetCheckPool() (nntppool.UsenetConnectionPool, error) {
-	config, err := c.GetCheckPoolConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	pool, err := nntppool.NewConnectionPool(config)
-	if err != nil {
-		return nil, fmt.Errorf("error creating check pool: %w", err)
-	}
-
-	return pool, nil
+	return c.GetPostingPool()
 }
 
 func (c *ConfigData) GetPar2Config(_ context.Context) (*Par2Config, error) {

@@ -3,6 +3,7 @@ package progress
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math"
 	"os"
 	"sort"
@@ -36,7 +37,7 @@ type ProgressState struct {
 }
 
 // EventEmitter is a function type for emitting events to the frontend
-type EventEmitter func(eventType string, data interface{})
+type EventEmitter func(eventType string, data any)
 
 type JobProgress interface {
 	AddProgress(id uuid.UUID, name string, pType ProgressType, total int64) Progress
@@ -164,9 +165,7 @@ func (pm *jobProgress) GetAllProgress() map[uuid.UUID]Progress {
 	defer pm.mu.RUnlock()
 
 	result := make(map[uuid.UUID]Progress)
-	for k, v := range pm.activeProgress {
-		result[k] = v
-	}
+	maps.Copy(result, pm.activeProgress)
 	return result
 }
 

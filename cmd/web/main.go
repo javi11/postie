@@ -78,8 +78,8 @@ type WebSocketHub struct {
 
 // WebSocketMessage represents a message sent over WebSocket
 type WebSocketMessage struct {
-	Type string      `json:"type"`
-	Data interface{} `json:"data"`
+	Type string `json:"type"`
+	Data any    `json:"data"`
 }
 
 // NewWebSocketHub creates a new WebSocket hub
@@ -127,7 +127,7 @@ func (h *WebSocketHub) Run() {
 }
 
 // EmitEvent sends an event to all connected clients
-func (h *WebSocketHub) EmitEvent(eventType string, data interface{}) {
+func (h *WebSocketHub) EmitEvent(eventType string, data any) {
 	message := WebSocketMessage{
 		Type: eventType,
 		Data: data,
@@ -179,7 +179,7 @@ func (c *WebSocketClient) writePump() {
 }
 
 // WebEventEmitter is a function that emits events for web mode
-type WebEventEmitter func(eventType string, data interface{})
+type WebEventEmitter func(eventType string, data any)
 
 type WebServer struct {
 	app          *backend.App
@@ -200,7 +200,7 @@ func NewWebServer() *WebServer {
 	}
 
 	// Create event emitter function
-	ws.eventEmitter = func(eventType string, data interface{}) {
+	ws.eventEmitter = func(eventType string, data any) {
 		ws.wsHub.EmitEvent(eventType, data)
 	}
 
@@ -572,7 +572,7 @@ func (ws *WebServer) handleUpload(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Processing %d uploaded files", len(files))
 
 	// Emit initial upload progress
-	ws.wsHub.EmitEvent("upload-progress", map[string]interface{}{
+	ws.wsHub.EmitEvent("upload-progress", map[string]any{
 		"stage":     "saving",
 		"progress":  0,
 		"fileCount": len(files),
@@ -618,7 +618,7 @@ func (ws *WebServer) handleUpload(w http.ResponseWriter, r *http.Request) {
 
 		// Emit progress for file saving
 		progress := float64(i+1) / float64(len(files)) * 50 // 50% for saving files
-		ws.wsHub.EmitEvent("upload-progress", map[string]interface{}{
+		ws.wsHub.EmitEvent("upload-progress", map[string]any{
 			"stage":       "saving",
 			"progress":    progress,
 			"currentFile": fileHeader.Filename,
@@ -627,7 +627,7 @@ func (ws *WebServer) handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Emit progress for processing stage
-	ws.wsHub.EmitEvent("upload-progress", map[string]interface{}{
+	ws.wsHub.EmitEvent("upload-progress", map[string]any{
 		"stage":     "processing",
 		"progress":  75,
 		"fileCount": len(files),
@@ -640,7 +640,7 @@ func (ws *WebServer) handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Emit completion
-	ws.wsHub.EmitEvent("upload-complete", map[string]interface{}{
+	ws.wsHub.EmitEvent("upload-complete", map[string]any{
 		"fileCount": len(files),
 		"message":   "Files successfully processed and added to queue",
 	})
@@ -679,7 +679,7 @@ func (ws *WebServer) handleUploadFolder(w http.ResponseWriter, r *http.Request) 
 	log.Printf("Processing folder upload: %s with %d files", folderName, len(files))
 
 	// Emit initial upload progress
-	ws.wsHub.EmitEvent("upload-progress", map[string]interface{}{
+	ws.wsHub.EmitEvent("upload-progress", map[string]any{
 		"stage":      "saving",
 		"progress":   0,
 		"fileCount":  len(files),
@@ -734,7 +734,7 @@ func (ws *WebServer) handleUploadFolder(w http.ResponseWriter, r *http.Request) 
 
 		// Emit progress for file saving
 		progress := float64(i+1) / float64(len(files)) * 50 // 50% for saving files
-		ws.wsHub.EmitEvent("upload-progress", map[string]interface{}{
+		ws.wsHub.EmitEvent("upload-progress", map[string]any{
 			"stage":       "saving",
 			"progress":    progress,
 			"currentFile": fileHeader.Filename,
@@ -744,7 +744,7 @@ func (ws *WebServer) handleUploadFolder(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Emit progress for processing stage
-	ws.wsHub.EmitEvent("upload-progress", map[string]interface{}{
+	ws.wsHub.EmitEvent("upload-progress", map[string]any{
 		"stage":      "processing",
 		"progress":   75,
 		"fileCount":  len(files),
@@ -760,7 +760,7 @@ func (ws *WebServer) handleUploadFolder(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Emit completion
-	ws.wsHub.EmitEvent("upload-complete", map[string]interface{}{
+	ws.wsHub.EmitEvent("upload-complete", map[string]any{
 		"fileCount":  len(files),
 		"folderName": folderName,
 		"message":    "Folder successfully processed and added to queue as single NZB",
@@ -991,7 +991,7 @@ func (ws *WebServer) handleSetupComplete(w http.ResponseWriter, r *http.Request)
 	log.Printf("Setup wizard completed successfully")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"success":   true,
 		"message":   "Setup completed successfully",
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
@@ -1078,7 +1078,7 @@ func (ws *WebServer) handleBrowseFilesystem(w http.ResponseWriter, r *http.Reque
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"path":  targetPath,
 		"items": items,
 	})
@@ -1130,7 +1130,7 @@ func (ws *WebServer) handleImportFiles(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Importing %d files from remote filesystem", len(requestBody.FilePaths))
 
 	// Emit initial import progress
-	ws.wsHub.EmitEvent("import-progress", map[string]interface{}{
+	ws.wsHub.EmitEvent("import-progress", map[string]any{
 		"stage":     "validating",
 		"progress":  0,
 		"fileCount": len(requestBody.FilePaths),
@@ -1163,7 +1163,7 @@ func (ws *WebServer) handleImportFiles(w http.ResponseWriter, r *http.Request) {
 
 		// Emit validation progress
 		progress := float64(i+1) / float64(len(requestBody.FilePaths)) * 50 // 50% for validation
-		ws.wsHub.EmitEvent("import-progress", map[string]interface{}{
+		ws.wsHub.EmitEvent("import-progress", map[string]any{
 			"stage":       "validating",
 			"progress":    progress,
 			"currentFile": filepath.Base(filePath),
@@ -1178,7 +1178,7 @@ func (ws *WebServer) handleImportFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Emit processing stage
-	ws.wsHub.EmitEvent("import-progress", map[string]interface{}{
+	ws.wsHub.EmitEvent("import-progress", map[string]any{
 		"stage":     "processing",
 		"progress":  75,
 		"fileCount": len(validFiles),
@@ -1192,13 +1192,13 @@ func (ws *WebServer) handleImportFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Emit completion
-	ws.wsHub.EmitEvent("import-complete", map[string]interface{}{
+	ws.wsHub.EmitEvent("import-complete", map[string]any{
 		"fileCount": len(validFiles),
 		"message":   fmt.Sprintf("Successfully imported %d files from remote filesystem", len(validFiles)),
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"success":       true,
 		"importedCount": len(validFiles),
 		"message":       fmt.Sprintf("Successfully imported %d files", len(validFiles)),

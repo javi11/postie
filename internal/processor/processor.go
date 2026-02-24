@@ -73,8 +73,8 @@ type ProcessorOptions struct {
 	DeleteOriginalFile        bool
 	MaintainOriginalExtension bool
 	WatchFolder               string
-	FollowSymlinks            bool                            // Control whether to follow symlinks when collecting folder files
-	CanProcessNextItem        func() bool                     // Callback to check if processor can start new items
+	FollowSymlinks            bool                                // Control whether to follow symlinks when collecting folder files
+	CanProcessNextItem        func() bool                         // Callback to check if processor can start new items
 	OnJobError                func(fileName, errorMessage string) // Callback when job fails permanently
 }
 type RunningJobDetails struct {
@@ -575,8 +575,8 @@ func (p *Processor) IsPathBeingProcessed(path string) bool {
 			return true
 		}
 		// Check if path is a file within a reserved folder
-		if strings.HasPrefix(reservedPath, "FOLDER:") {
-			folderPath := strings.TrimPrefix(reservedPath, "FOLDER:")
+		if after, ok := strings.CutPrefix(reservedPath, "FOLDER:"); ok {
+			folderPath := after
 			if isWithinPath(path, folderPath) {
 				p.reservedMux.RUnlock()
 				return true
@@ -594,8 +594,8 @@ func (p *Processor) IsPathBeingProcessed(path string) bool {
 			return true
 		}
 		// Check if path is a file within a folder being processed
-		if strings.HasPrefix(jobDetails.Path, "FOLDER:") {
-			folderPath := strings.TrimPrefix(jobDetails.Path, "FOLDER:")
+		if after, ok := strings.CutPrefix(jobDetails.Path, "FOLDER:"); ok {
+			folderPath := after
 			if isWithinPath(path, folderPath) {
 				return true
 			}
@@ -802,13 +802,13 @@ func (p *Processor) checkAndHandleProviderAvailability() {
 		return
 	}
 
-	// Count connected/active providers from map
+	// Count connected/active providers
 	activeProviders := 0
-	totalProviders := len(metrics.ProviderMetrics)
+	totalProviders := len(metrics.Providers)
 
-	for _, provider := range metrics.ProviderMetrics {
-		// Consider a provider active if it's in "active" state (string comparison for v2)
-		if provider.State == "active" {
+	for _, provider := range metrics.Providers {
+		// Consider a provider active if it has active connections or no errors
+		if provider.ActiveConnections > 0 || provider.Errors == 0 {
 			activeProviders++
 		}
 	}

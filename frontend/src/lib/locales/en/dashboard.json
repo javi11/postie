@@ -161,21 +161,19 @@
 			"error": "Error loading provider status",
 			"anonymous": "Anonymous",
 			"connections": "Connections",
-			"success_rate": "Success Rate",
-			"uploaded": "Uploaded",
-			"articles": "Articles",
-			"idle_connections": "Idle",
+			"avg_speed": "Avg Speed",
+			"missing": "Missing",
+			"errors": "Errors",
+			"elapsed": "Uptime",
 			"pool_summary": "Pool Summary",
 			"active_connections": "active connections",
-			"total_uploaded": "Total Uploaded",
+			"total_errors": "Total Errors",
 			"no_providers": "No providers configured",
+			"inflight": "Inflight",
 			"status": {
 				"connected": "Connected",
-				"connecting": "Connecting",
-				"reconnecting": "Reconnecting",
-				"failed": "Failed",
-				"disconnected": "Disconnected",
-				"unknown": "Unknown"
+				"idle": "Idle",
+				"failed": "Failed"
 			}
 		},
 		"watcher": {

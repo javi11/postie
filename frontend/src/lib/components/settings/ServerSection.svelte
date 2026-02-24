@@ -32,6 +32,8 @@ let managedServers = $derived(config.servers.map(server => ({
 	max_connection_idle_time_in_seconds: server.max_connection_idle_time_in_seconds || 300,
 	max_connection_ttl_in_seconds: server.max_connection_ttl_in_seconds || 3600,
 	check_only: server.check_only ?? false,
+	inflight: server.inflight || 10,
+	proxy_url: server.proxy_url || "",
 })));
 
 function handleServerUpdate(updatedServers: any[]) {
@@ -44,11 +46,13 @@ function handleServerUpdate(updatedServers: any[]) {
 		serverConfig.username = server.username || "";
 		serverConfig.password = server.password || "";
 		serverConfig.max_connections = server.max_connections || 10;
+		serverConfig.inflight = server.inflight || 10;
 		serverConfig.ssl = server.ssl ?? false;
 		serverConfig.insecure_ssl = server.insecure_ssl ?? false;
 		serverConfig.max_connection_idle_time_in_seconds = server.max_connection_idle_time_in_seconds || 300;
 		serverConfig.max_connection_ttl_in_seconds = server.max_connection_ttl_in_seconds || 3600;
 		serverConfig.check_only = server.check_only ?? false;
+		serverConfig.proxy_url = server.proxy_url || "";
 		return serverConfig;
 	});
 }

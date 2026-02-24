@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
+	"maps"
 	"math/big"
 	mrand "math/rand"
 	"strings"
@@ -16,7 +17,7 @@ import (
 
 // encoderBufferPool provides reusable buffers for article encoding to reduce GC pressure
 var encoderBufferPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		// Pre-allocate 900KB (slightly larger than typical article size)
 		return bytes.NewBuffer(make([]byte, 0, 900*1024))
 	},
@@ -86,9 +87,7 @@ func (a *Article) Encode(body []byte) (io.Reader, func(), error) {
 	headers := make(map[string]string)
 
 	if a.CustomHeaders != nil {
-		for k, v := range a.CustomHeaders {
-			headers[k] = v
-		}
+		maps.Copy(headers, a.CustomHeaders)
 	}
 
 	headers["Subject"] = a.Subject
@@ -101,9 +100,9 @@ func (a *Article) Encode(body []byte) (io.Reader, func(), error) {
 		headers["X-Nxg"] = a.XNxgHeader
 	}
 
-	header := ""
+	var header strings.Builder
 	for k, v := range headers {
-		header += fmt.Sprintf("%s: %s\r\n", k, v)
+		header.WriteString(fmt.Sprintf("%s: %s\r\n", k, v))
 	}
 
 	// Get buffer from pool and reset it
@@ -115,7 +114,7 @@ func (a *Article) Encode(body []byte) (io.Reader, func(), error) {
 		encoderBufferPool.Put(buff)
 	}
 
-	buff.WriteString(header + "\r\n")
+	buff.WriteString(header.String() + "\r\n")
 
 	encoder, err := rapidyenc.NewEncoder(buff, rapidyenc.Meta{
 		FileName:   a.FileName,

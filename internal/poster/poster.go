@@ -1,6 +1,7 @@
 package poster
 
 import (
+	"bytes"
 	"context"
 	"crypto/md5"
 	"errors"
@@ -14,7 +15,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/javi11/nntppool/v2"
+	"github.com/javi11/nntppool/v4"
 	"github.com/javi11/nxg"
 	"github.com/javi11/postie/internal/article"
 	"github.com/javi11/postie/internal/config"
@@ -23,6 +24,7 @@ import (
 	"github.com/javi11/postie/internal/pausable"
 	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/progress"
+	"github.com/mnightingale/rapidyenc"
 	concpool "github.com/sourcegraph/conc/pool"
 )
 
@@ -33,7 +35,7 @@ var (
 
 // bodyBufferPool provides reusable buffers for article body read-ahead to reduce GC pressure
 var bodyBufferPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		// Pre-allocate 768KB (slightly larger than default article size of 750KB)
 		return make([]byte, 768*1024)
 	},
@@ -99,9 +101,9 @@ func (e *DeferredCheckError) Error() string {
 
 // articleWithBody holds an article with its pre-read body data for read-ahead buffering
 type articleWithBody struct {
-	article  *article.Article
-	body     []byte
-	poolBuf  []byte // original pooled buffer (may be larger than body)
+	article *article.Article
+	body    []byte
+	poolBuf []byte // original pooled buffer (may be larger than body)
 }
 
 // Stats tracks posting statistics
@@ -118,8 +120,8 @@ type Stats struct {
 type poster struct {
 	cfg         config.PostingConfig
 	checkCfg    config.PostCheck
-	pool        nntppool.UsenetConnectionPool // Pool for posting articles
-	checkPool   nntppool.UsenetConnectionPool // Pool for article verification (may be same as pool)
+	pool        pool.NNTPClient // Pool for posting articles
+	checkPool   pool.NNTPClient // Pool for article verification (may be same as pool)
 	stats       *Stats
 	throttle    *Throttle
 	jobProgress progress.JobProgress
@@ -325,7 +327,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 
 	numOfConnections := 0
 
-	for _, pr := range p.pool.GetProvidersInfo() {
+	for _, pr := range p.pool.Stats().Providers {
 		numOfConnections += pr.MaxConnections
 	}
 
@@ -492,7 +494,7 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 	numOfConnections := 0
 
 	// Use check pool's providers for connection count
-	for _, pr := range p.checkPool.GetProvidersInfo() {
+	for _, pr := range p.checkPool.Stats().Providers {
 		numOfConnections += pr.MaxConnections
 	}
 
@@ -788,7 +790,7 @@ func (p *poster) addPost(ctx context.Context, filePath string, displayName strin
 
 	// Create articles for each segment
 	articles := make([]*article.Article, 0, numSegments)
-	for i := 0; i < numSegments; i++ {
+	for i := range numSegments {
 		offset := int64(i) * int64(segmentSize)
 		size := int64(segmentSize)
 		if offset+size > fileInfo.Size() {
@@ -961,24 +963,51 @@ func (p *poster) postArticle(ctx context.Context, article *article.Article, file
 }
 
 // postArticleWithBody posts an article with pre-read body data
-func (p *poster) postArticleWithBody(ctx context.Context, article *article.Article, body []byte) error {
+func (p *poster) postArticleWithBody(ctx context.Context, art *article.Article, body []byte) error {
 	// Check if we should pause before posting
 	if err := pausable.CheckPause(ctx); err != nil {
 		return err
 	}
 
-	// Create article (with buffer pooling)
-	buff, cleanup, err := article.Encode(body)
-	if err != nil {
-		return fmt.Errorf("error encoding article: %w", err)
+	// Build PostHeaders for nntppool v4
+	headers := nntppool.PostHeaders{
+		From:       art.From,
+		Subject:    art.Subject,
+		Newsgroups: art.Groups,
+		MessageID:  fmt.Sprintf("<%s>", art.MessageID),
+		Extra:      make(map[string][]string),
 	}
-	defer cleanup() // Return buffer to pool when done
+
+	// Add Date header
+	headers.Extra["Date"] = []string{art.Date.UTC().Format(time.RFC1123)}
+
+	// Add custom headers
+	if art.CustomHeaders != nil {
+		for k, v := range art.CustomHeaders {
+			headers.Extra[k] = []string{v}
+		}
+	}
+
+	// Add X-Nxg header if present
+	if art.XNxgHeader != "" {
+		headers.Extra["X-Nxg"] = []string{art.XNxgHeader}
+	}
+
+	// Build yEnc metadata
+	meta := rapidyenc.Meta{
+		FileName:   art.FileName,
+		FileSize:   art.FileSize,
+		PartNumber: int64(art.PartNumber),
+		TotalParts: int64(art.TotalParts),
+		Offset:     int64(art.Offset),
+		PartSize:   int64(art.Size),
+	}
 
 	// Post article with timeout to prevent indefinite TLS hangs
 	postCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
-	if err := p.pool.Post(postCtx, buff); err != nil {
+	if _, err := p.pool.PostYenc(postCtx, headers, bytes.NewReader(body), meta); err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return context.Canceled
 		}
@@ -988,13 +1017,13 @@ func (p *poster) postArticleWithBody(ctx context.Context, article *article.Artic
 
 	// Apply throttling after posting
 	if p.throttle != nil {
-		p.throttle.Wait(int64(article.Size))
+		p.throttle.Wait(int64(art.Size))
 	}
 
 	// Update stats
 	p.stats.mu.Lock()
 	p.stats.ArticlesPosted++
-	p.stats.BytesPosted += int64(article.Size)
+	p.stats.BytesPosted += int64(art.Size)
 	p.stats.mu.Unlock()
 
 	return nil
@@ -1008,7 +1037,8 @@ func (p *poster) checkArticle(ctx context.Context, art *article.Article) error {
 	}
 
 	// Use the dedicated check pool for article verification
-	_, err := p.checkPool.Stat(ctx, art.MessageID, art.Groups)
+	// v4 Stat only takes messageID (no groups parameter)
+	_, err := p.checkPool.Stat(ctx, art.MessageID)
 	if err != nil {
 		return fmt.Errorf("article not found: %w", err)
 	}

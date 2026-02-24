@@ -42,7 +42,7 @@ type QueueInterface interface {
 	GetQueueItems(params PaginationParams) (*PaginatedResult, error)
 	RemoveFromQueue(id string) error
 	ClearQueue() error
-	GetQueueStats() (map[string]interface{}, error)
+	GetQueueStats() (map[string]any, error)
 	SetQueueItemPriorityWithReorder(ctx context.Context, id string, newPriority int) error
 	IsPathInQueue(path string) (bool, error)
 }
@@ -68,7 +68,7 @@ type QueueItem struct {
 	CompletedAt  *time.Time `json:"completedAt"`
 	NzbPath      *string    `json:"nzbPath"`
 	// Script execution tracking fields
-	ScriptStatus      *string    `json:"scriptStatus"`      // null, completed, pending_retry, failed_permanent
+	ScriptStatus      *string    `json:"scriptStatus"` // null, completed, pending_retry, failed_permanent
 	ScriptRetryCount  int        `json:"scriptRetryCount"`
 	ScriptLastError   *string    `json:"scriptLastError"`
 	ScriptNextRetryAt *time.Time `json:"scriptNextRetryAt"`
@@ -1122,8 +1122,8 @@ func (q *Queue) ClearCompletedItems() error {
 }
 
 // GetQueueStats returns statistics about the queue including completed and errored items
-func (q *Queue) GetQueueStats() (map[string]interface{}, error) {
-	stats := make(map[string]interface{})
+func (q *Queue) GetQueueStats() (map[string]any, error) {
+	stats := make(map[string]any)
 
 	// Get total pending count (all items in queue are pending)
 	var pending int
@@ -1229,7 +1229,7 @@ func (q *Queue) GetCompletedItemNzbPath(id string) (string, error) {
 }
 
 // DebugQueueItem returns debug information about a specific queue item
-func (q *Queue) DebugQueueItem(id string) (map[string]interface{}, error) {
+func (q *Queue) DebugQueueItem(id string) (map[string]any, error) {
 	var received int
 	var timeout, created, updated string
 	var body []byte
@@ -1252,7 +1252,7 @@ func (q *Queue) DebugQueueItem(id string) (map[string]interface{}, error) {
 	now := time.Now()
 
 	// Check processor status
-	debug := map[string]interface{}{
+	debug := map[string]any{
 		"id":                id,
 		"received":          received,
 		"timeout":           timeout,

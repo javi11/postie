@@ -116,7 +116,7 @@ func (a *App) SaveConfig(configData *config.ConfigData) error {
 		}
 
 		// Emit pending config event to frontend
-		pendingStatus := map[string]interface{}{
+		pendingStatus := map[string]any{
 			"hasPendingConfig": true,
 			"message":          "Configuration changes will be applied when current uploads finish",
 		}
@@ -271,8 +271,8 @@ func (a *App) validateServerConnections(configData *config.ConfigData) error {
 		return nil
 	}
 
-	slog.Info("Starting server connection validation", 
-		"validServers", validServers, 
+	slog.Info("Starting server connection validation",
+		"validServers", validServers,
 		"totalServers", len(configData.Servers))
 
 	// Create a context with timeout for validation
@@ -288,7 +288,7 @@ func (a *App) validateServerConnections(configData *config.ConfigData) error {
 			continue // Skip invalid servers
 		}
 
-		slog.Debug("Validating individual server", 
+		slog.Debug("Validating individual server",
 			"index", i,
 			"host", server.Host,
 			"port", server.Port,
@@ -299,12 +299,12 @@ func (a *App) validateServerConnections(configData *config.ConfigData) error {
 			serverDesc := fmt.Sprintf("%s:%d", server.Host, server.Port)
 			failedServers = append(failedServers, serverDesc)
 			lastError = err
-			slog.Error("Server validation failed", 
+			slog.Error("Server validation failed",
 				"server", serverDesc,
 				"index", i+1,
 				"error", err)
 		} else {
-			slog.Info("Server validated successfully", 
+			slog.Info("Server validated successfully",
 				"server", fmt.Sprintf("%s:%d", server.Host, server.Port),
 				"index", i+1)
 		}
@@ -312,18 +312,18 @@ func (a *App) validateServerConnections(configData *config.ConfigData) error {
 
 	// If any servers failed, return detailed error
 	if len(failedServers) > 0 {
-		errorMsg := fmt.Sprintf("Failed to connect to %d server(s): %s", 
-			len(failedServers), 
+		errorMsg := fmt.Sprintf("Failed to connect to %d server(s): %s",
+			len(failedServers),
 			strings.Join(failedServers, ", "))
-		
+
 		if lastError != nil {
 			errorMsg = fmt.Sprintf("%s. Last error: %v", errorMsg, lastError)
 		}
-		
-		slog.Error("Server connection validation completed with failures", 
+
+		slog.Error("Server connection validation completed with failures",
 			"failedCount", len(failedServers),
 			"successCount", validServers-len(failedServers))
-		
+
 		return fmt.Errorf("%s", errorMsg)
 	}
 
@@ -354,7 +354,7 @@ func (a *App) validateIndividualServer(ctx context.Context, server *config.Serve
 				errorChan <- fmt.Errorf("validation panic: %v", r)
 			}
 		}()
-		
+
 		result := a.TestProviderConnectivity(serverData)
 		resultChan <- result
 	}()
@@ -520,13 +520,13 @@ func (a *App) HasPendingConfigChanges() bool {
 }
 
 // GetPendingConfigStatus returns the status of pending config changes
-func (a *App) GetPendingConfigStatus() map[string]interface{} {
+func (a *App) GetPendingConfigStatus() map[string]any {
 	defer a.recoverPanic("GetPendingConfigStatus")
 
 	a.pendingConfigMux.RLock()
 	defer a.pendingConfigMux.RUnlock()
 
-	status := map[string]interface{}{
+	status := map[string]any{
 		"hasPendingConfig": a.pendingConfig != nil,
 		"canApplyNow":      !a.IsUploading(),
 	}
@@ -584,7 +584,7 @@ func (a *App) DiscardPendingConfig() error {
 	a.pendingConfig = nil
 
 	// Emit event to frontend
-	status := map[string]interface{}{
+	status := map[string]any{
 		"hasPendingConfig": false,
 		"message":          "Pending configuration changes have been discarded",
 	}

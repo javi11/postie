@@ -59,10 +59,7 @@ func readLogLines(file *os.File, limit, offset int) (string, error) {
 		return "", nil // No lines to return
 	}
 
-	startIndex := endIndex - limit
-	if startIndex < 0 {
-		startIndex = 0
-	}
+	startIndex := max(endIndex-limit, 0)
 
 	// Ensure we don't go out of bounds
 	if startIndex >= totalLines {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -33,11 +34,9 @@ func (m *mockQueueWithDuplicateCheck) AddFile(ctx context.Context, path string, 
 	defer m.mu.Unlock()
 
 	// Simulate duplicate checking - if file already in calls, ignore
-	for _, existingPath := range m.addFileCalls {
-		if existingPath == path {
-			// Simulate queue.AddFile behavior - log and return nil for duplicates
-			return nil
-		}
+	if slices.Contains(m.addFileCalls, path) {
+		// Simulate queue.AddFile behavior - log and return nil for duplicates
+		return nil
 	}
 
 	// Add file to our mock queue
@@ -57,8 +56,8 @@ func (m *mockQueueWithDuplicateCheck) ClearQueue() error {
 	return nil
 }
 
-func (m *mockQueueWithDuplicateCheck) GetQueueStats() (map[string]interface{}, error) {
-	return map[string]interface{}{}, nil
+func (m *mockQueueWithDuplicateCheck) GetQueueStats() (map[string]any, error) {
+	return map[string]any{}, nil
 }
 
 func (m *mockQueueWithDuplicateCheck) SetQueueItemPriorityWithReorder(ctx context.Context, id string, newPriority int) error {
@@ -95,10 +94,8 @@ func (m *mockQueueWithDuplicateCheck) EnsureMigrationCompatibility() error {
 
 func (m *mockQueueWithDuplicateCheck) IsPathInQueue(path string) (bool, error) {
 	// Check if this path has already been added to our mock queue
-	for _, addedPath := range m.addFileCalls {
-		if addedPath == path {
-			return true, nil
-		}
+	if slices.Contains(m.addFileCalls, path) {
+		return true, nil
 	}
 	return false, nil
 }
@@ -557,7 +554,7 @@ func TestMultipleScanCycles(t *testing.T) {
 	}
 
 	// Simulate multiple scan cycles
-	for cycle := 0; cycle < 3; cycle++ {
+	for cycle := range 3 {
 		t.Logf("Scan cycle %d", cycle+1)
 
 		for _, filename := range files {
@@ -709,13 +706,7 @@ func TestSymlinkToFile_Followed(t *testing.T) {
 	}
 
 	// Verify the target file was added
-	foundTarget := false
-	for _, path := range mockQueue.addFileCalls {
-		if path == targetFile {
-			foundTarget = true
-			break
-		}
-	}
+	foundTarget := slices.Contains(mockQueue.addFileCalls, targetFile)
 
 	if !foundTarget {
 		t.Error("Target file was not added to queue")

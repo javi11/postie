@@ -345,6 +345,8 @@
 			"password": "Password",
 			"password_placeholder": "your-password",
 			"max_connections": "Max Connections",
+			"inflight": "Inflight Requests",
+			"inflight_description": "Number of concurrent requests per connection (default: 10).",
 			"connection_idle_timeout": "Connection Idle Timeout",
 			"connection_idle_timeout_description": "How long connections can remain idle",
 			"connection_ttl": "Connection TTL",

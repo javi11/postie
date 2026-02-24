@@ -36,56 +36,50 @@ export namespace backend {
 	}
 	export class NntpProviderMetrics {
 	    host: string;
-	    state: string;
 	    activeConnections: number;
 	    maxConnections: number;
-	    totalBytesUploaded: number;
-	    totalBytesDownloaded: number;
-	    totalArticlesPosted: number;
-	    totalArticlesDownloaded: number;
 	    totalErrors: number;
-	
+	    avgSpeed: number;
+	    missing: number;
+	    pingRTT: string;
+	    inflight: number;
+
 	    static createFrom(source: any = {}) {
 	        return new NntpProviderMetrics(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.host = source["host"];
-	        this.state = source["state"];
 	        this.activeConnections = source["activeConnections"];
 	        this.maxConnections = source["maxConnections"];
-	        this.totalBytesUploaded = source["totalBytesUploaded"];
-	        this.totalBytesDownloaded = source["totalBytesDownloaded"];
-	        this.totalArticlesPosted = source["totalArticlesPosted"];
-	        this.totalArticlesDownloaded = source["totalArticlesDownloaded"];
 	        this.totalErrors = source["totalErrors"];
+	        this.avgSpeed = source["avgSpeed"];
+	        this.missing = source["missing"];
+	        this.pingRTT = source["pingRTT"];
+	        this.inflight = source["inflight"];
 	    }
 	}
 	export class NntpPoolMetrics {
 	    timestamp: string;
 	    activeConnections: number;
-	    totalBytesUploaded: number;
-	    totalBytesDownloaded: number;
-	    totalArticlesPosted: number;
-	    totalArticlesDownloaded: number;
 	    totalErrors: number;
+	    avgSpeed: number;
+	    elapsed: string;
 	    providerErrors: Record<string, number>;
 	    providers: NntpProviderMetrics[];
-	
+
 	    static createFrom(source: any = {}) {
 	        return new NntpPoolMetrics(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.timestamp = source["timestamp"];
 	        this.activeConnections = source["activeConnections"];
-	        this.totalBytesUploaded = source["totalBytesUploaded"];
-	        this.totalBytesDownloaded = source["totalBytesDownloaded"];
-	        this.totalArticlesPosted = source["totalArticlesPosted"];
-	        this.totalArticlesDownloaded = source["totalArticlesDownloaded"];
 	        this.totalErrors = source["totalErrors"];
+	        this.avgSpeed = source["avgSpeed"];
+	        this.elapsed = source["elapsed"];
 	        this.providerErrors = source["providerErrors"];
 	        this.providers = this.convertValues(source["providers"], NntpProviderMetrics);
 	    }
@@ -648,12 +642,13 @@ export namespace config {
 	    insecure_ssl: boolean;
 	    enabled?: boolean;
 	    check_only?: boolean;
+	    inflight: number;
 	    proxy_url?: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new ServerConfig(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.host = source["host"];
@@ -667,6 +662,7 @@ export namespace config {
 	        this.insecure_ssl = source["insecure_ssl"];
 	        this.enabled = source["enabled"];
 	        this.check_only = source["check_only"];
+	        this.inflight = source["inflight"];
 	        this.proxy_url = source["proxy_url"];
 	    }
 	}
