@@ -192,6 +192,13 @@ func (a *App) applyConfigChanges(configData *config.ConfigData) error {
 		return err
 	}
 
+	// Initialize queue if not yet created (e.g. after setup wizard on first start)
+	if a.queue == nil {
+		if err := a.initializeQueue(); err != nil {
+			slog.Error("Failed to initialize queue after config change", "error", err)
+		}
+	}
+
 	if err := a.initializeProcessor(); err != nil {
 		slog.Error("Failed to re-initialize processor after config change", "error", err)
 	}

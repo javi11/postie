@@ -340,9 +340,11 @@ func (a *App) Startup(ctx context.Context) {
 			slog.Error("Failed to create default config", "error", err)
 		} else {
 			slog.Info("Default config created successfully", "path", a.configPath)
-			// Try to load the default config after creating it
+			// Try to load the default config after creating it.
+			// On first start this is expected to fail validation (no servers yet),
+			// so log at Debug rather than Error.
 			if err := a.loadConfig(); err != nil {
-				slog.Error("Failed to load default config", "error", err)
+				slog.Debug("Default config validation pending (expected on first start)", "error", err)
 			} else {
 				slog.Info("Default config loaded successfully")
 			}
@@ -363,23 +365,27 @@ func (a *App) Startup(ctx context.Context) {
 		}
 	}
 
-	// Initialize queue (always available)
-	if err := a.initializeQueue(); err != nil {
-		slog.Error(fmt.Sprintf("Failed to initialize queue: %v", err))
-	}
+	if a.firstStart {
+		slog.Info("Skipping component initialization: setup wizard required")
+	} else {
+		// Initialize queue (always available)
+		if err := a.initializeQueue(); err != nil {
+			slog.Error(fmt.Sprintf("Failed to initialize queue: %v", err))
+		}
 
-	// Initialize processor if configuration is valid
-	if err := a.initializeProcessor(); err != nil {
-		a.criticalErrorMessage = err.Error()
-		slog.Error(fmt.Sprintf("Failed to initialize processor: %v", err))
-	}
+		// Initialize processor if configuration is valid
+		if err := a.initializeProcessor(); err != nil {
+			a.criticalErrorMessage = err.Error()
+			slog.Error(fmt.Sprintf("Failed to initialize processor: %v", err))
+		}
 
-	// Initialize post check retry worker if post check is enabled
-	a.initializePostCheckWorker()
+		// Initialize post check retry worker if post check is enabled
+		a.initializePostCheckWorker()
 
-	// Initialize watcher if enabled and configuration is valid
-	if err := a.initializeWatcher(); err != nil {
-		slog.Error(fmt.Sprintf("Failed to initialize watcher: %v", err))
+		// Initialize watcher if enabled and configuration is valid
+		if err := a.initializeWatcher(); err != nil {
+			slog.Error(fmt.Sprintf("Failed to initialize watcher: %v", err))
+		}
 	}
 
 }
