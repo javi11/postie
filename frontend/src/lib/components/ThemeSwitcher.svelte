@@ -1,6 +1,6 @@
 <script lang="ts">
 import { t } from "$lib/i18n";
-import { availableThemes, currentTheme, groupedThemes, SYSTEM_THEME } from "$lib/stores/theme";
+import { currentTheme, groupedThemes, SYSTEM_THEME, type ThemeValue } from "$lib/stores/theme";
 import { Check, Monitor } from "lucide-svelte";
 
 // Track the stored preference (which may be "system") separately from the applied theme
@@ -8,7 +8,7 @@ let storedPreference = $state(
 	typeof localStorage !== "undefined" ? (localStorage.getItem("theme") ?? SYSTEM_THEME) : SYSTEM_THEME,
 );
 
-function selectTheme(value: string) {
+function selectTheme(value: ThemeValue) {
 	currentTheme.setTheme(value);
 	storedPreference = value;
 }
@@ -57,7 +57,7 @@ const darkThemes = $derived(groupedThemes["Dark"] ?? []);
 				>
 					<!-- Color swatches -->
 					<div class="flex gap-0.5 h-5">
-						{#each theme.colors as color}
+						{#each theme.value as color}
 							<span
 								class="flex-1 rounded-sm"
 								style="background-color: {color};"
@@ -94,7 +94,7 @@ const darkThemes = $derived(groupedThemes["Dark"] ?? []);
 				>
 					<!-- Color swatches -->
 					<div class="flex gap-0.5 h-5">
-						{#each theme.colors as color}
+						{#each theme.value as color}
 							<span
 								class="flex-1 rounded-sm"
 								style="background-color: {color};"

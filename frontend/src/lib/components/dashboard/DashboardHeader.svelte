@@ -190,7 +190,7 @@ async function handleFolderUpload() {
     <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
       <div class="space-y-2">
         <div class="flex items-center gap-3">
-          <h1 class="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+          <h1 class="text-3xl font-bold">
             {$t("dashboard.header.title")}
           </h1>
           <span class="text-sm text-base-content/50">

@@ -10,6 +10,13 @@ import { toastStore } from "$lib/stores/toast";
 import { ChartPie, FileText, Settings, Activity, Globe } from "lucide-svelte";
 import { availableLocales, locale, setStoredLocale } from "$lib/i18n";
 import { onMount, onDestroy } from "svelte";
+import type { Snippet } from "svelte";
+
+interface Props {
+	children: Snippet;
+}
+
+let { children }: Props = $props();
 import "../style.css";
 
 let needsConfiguration = $state(false);
@@ -259,11 +266,11 @@ function handler(error: unknown, _reset: () => void) {
 
 			<!-- Page Content -->
 			<main class="container mx-auto px-4 py-8 max-w-7xl animate-fade-in">
-				<slot />
+				{@render children()}
 			</main>
 		{:else}
 			<!-- Setup page takes full screen -->
-			<slot />
+			{@render children()}
 		{/if}
 	</svelte:boundary>
 

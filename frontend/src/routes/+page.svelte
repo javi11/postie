@@ -58,7 +58,7 @@ onMount(() => {
 	apiClient.on("job-error", (data) => {
 		const { fileName, error } = data as { fileName: string; error: string };
 		console.log("Job failed permanently:", fileName, error);
-		toastStore.error($t("dashboard.job_failed", { fileName }), error);
+		toastStore.error($t("dashboard.job_failed", { values: { fileName } }), error);
 	});
 
 	// Listen for job status events - the ProgressSection component now fetches progress directly
