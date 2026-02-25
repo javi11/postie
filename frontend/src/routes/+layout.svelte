@@ -7,10 +7,16 @@ import ToastContainer from "$lib/components/ToastContainer.svelte";
 import { t } from "$lib/i18n";
 import { appStatus } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
-import { ChartPie, FileText, Settings, Activity, Palette, Globe } from "lucide-svelte";
-import { availableThemes, currentTheme, type ThemeValue } from "$lib/stores/theme";
+import { ChartPie, FileText, Settings, Activity, Globe } from "lucide-svelte";
 import { availableLocales, locale, setStoredLocale } from "$lib/i18n";
 import { onMount, onDestroy } from "svelte";
+import type { Snippet } from "svelte";
+
+interface Props {
+	children: Snippet;
+}
+
+let { children }: Props = $props();
 import "../style.css";
 
 let needsConfiguration = $state(false);
@@ -230,26 +236,6 @@ function handler(error: unknown, _reset: () => void) {
 						<div class="w-2.5 h-2.5 rounded-full {connectionStatus === 'connected' ? 'bg-success' : connectionStatus === 'reconnecting' ? 'bg-warning animate-pulse' : 'bg-error animate-pulse'}"></div>
 					</div>
 
-					<!-- Quick Theme Switcher -->
-					<div class="dropdown dropdown-end">
-						<div tabindex="0" role="button" class="btn btn-ghost btn-xs sm:btn-sm" title={$t("common.nav.theme")}>
-							<Palette class="w-4 h-4" />
-						</div>
-						<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-						<ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box z-50 w-40 p-2 shadow-lg">
-							{#each availableThemes as theme}
-								<li>
-									<button
-										class:active={$currentTheme === theme.value}
-										onclick={() => currentTheme.setTheme(theme.value)}
-									>
-										{theme.name}
-									</button>
-								</li>
-							{/each}
-						</ul>
-					</div>
-
 					<!-- Quick Language Switcher -->
 					<div class="dropdown dropdown-end">
 						<div tabindex="0" role="button" class="btn btn-ghost btn-xs sm:btn-sm" title={$t("common.nav.language")}>
@@ -280,11 +266,11 @@ function handler(error: unknown, _reset: () => void) {
 
 			<!-- Page Content -->
 			<main class="container mx-auto px-4 py-8 max-w-7xl animate-fade-in">
-				<slot />
+				{@render children()}
 			</main>
 		{:else}
 			<!-- Setup page takes full screen -->
-			<slot />
+			{@render children()}
 		{/if}
 	</svelte:boundary>
 

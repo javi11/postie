@@ -18,6 +18,11 @@ if (config && !config.post_upload_script) {
 		enabled: false,
 		command: "",
 		timeout: "30s",
+		max_retries: 0,
+		retry_delay: "5s",
+		max_backoff: "5m",
+		max_retry_duration: "1h",
+		retry_check_interval: "30s",
 	};
 }
 

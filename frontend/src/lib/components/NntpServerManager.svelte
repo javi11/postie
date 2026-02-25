@@ -260,6 +260,7 @@
         password: server.password || "",
         ssl: restrictedRole === "upload" ? sharedSSL : (server.ssl || false),
         maxConnections: server.max_connections || 10,
+        role: server.role || "upload",
       });
 
       if (result.valid) {
