@@ -3,13 +3,35 @@
 	/* biome-ignore lint/correctness/noUnknownProperty: wrong error */
 	themes:
 		cupcake --default,
-		dim --prefersdark,
-		cupcake,
+		dracula --prefersdark,
+		light,
 		bumblebee,
 		emerald,
 		corporate,
-		dim,
-		dracula;
+		retro,
+		garden,
+		lofi,
+		pastel,
+		fantasy,
+		wireframe,
+		cmyk,
+		autumn,
+		lemonade,
+		winter,
+		nord,
+		caramellatte,
+		forest,
+		dark,
+		dracula,
+		synthwave,
+		halloween,
+		luxury,
+		night,
+		coffee,
+		business,
+		sunset,
+		abyss,
+		dim;
 }
 @plugin "@tailwindcss/typography";
 
