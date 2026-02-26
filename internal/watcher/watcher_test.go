@@ -112,6 +112,7 @@ func createTestWatcher(t *testing.T) (*Watcher, string) {
 		CheckInterval:      config.Duration("1s"),
 		DeleteOriginalFile: false,
 		IgnorePatterns:     []string{},
+		MinFileAge:         config.Duration("2s"),
 	}
 
 	mockQueue := &mockQueueWithDuplicateCheck{
@@ -198,53 +199,64 @@ func TestIsFileStable_ModificationTime(t *testing.T) {
 	}
 }
 
-func TestCanOpenFileExclusively(t *testing.T) {
-	watcher, tempDir := createTestWatcher(t)
+func TestIsFileStable_MinFileAge(t *testing.T) {
+	tempDir := t.TempDir()
 
-	t.Run("can open normal file exclusively", func(t *testing.T) {
-		content := []byte("test content")
-		filePath := createTestFile(t, tempDir, "normal_file.txt", content, time.Time{})
+	tests := []struct {
+		name           string
+		minFileAge     string
+		modTime        time.Time
+		expectedStable bool
+	}{
+		{
+			name:           "file younger than MinFileAge should not be stable",
+			minFileAge:     "5m",
+			modTime:        time.Now().Add(-1 * time.Minute),
+			expectedStable: false,
+		},
+		{
+			name:           "file older than MinFileAge should be stable",
+			minFileAge:     "2s",
+			modTime:        time.Now().Add(-10 * time.Second),
+			expectedStable: true,
+		},
+	}
 
-		canOpen := watcher.canOpenFileExclusively(filePath)
-		if !canOpen {
-			t.Error("Should be able to open normal file exclusively")
-		}
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := config.WatcherConfig{
+				Enabled:        true,
+				WatchDirectory: tempDir,
+				SizeThreshold:  100,
+				MinFileSize:    10,
+				CheckInterval:  config.Duration("1s"),
+				IgnorePatterns: []string{},
+				MinFileAge:     config.Duration(tt.minFileAge),
+			}
 
-	t.Run("cannot open file being written to", func(t *testing.T) {
-		filePath := filepath.Join(tempDir, "writing_file.txt")
+			mockQueue := &mockQueueWithDuplicateCheck{addFileCalls: make([]string, 0)}
+			mockProc := &mockProcessor{processingPaths: make(map[string]bool)}
+			w := New(cfg, mockQueue, mockProc, tempDir)
 
-		// Open file for writing to simulate file being written
-		file, err := os.Create(filePath)
-		if err != nil {
-			t.Fatalf("Failed to create file: %v", err)
-		}
+			content := []byte("test content")
+			filePath := createTestFile(t, tempDir, tt.name+".txt", content, tt.modTime)
 
-		defer func() {
-			_ = file.Close()
-		}()
+			info, err := os.Stat(filePath)
+			if err != nil {
+				t.Fatalf("Failed to stat file: %v", err)
+			}
 
-		// Write some content to make it realistic
-		_, err = file.WriteString("content being written")
-		if err != nil {
-			t.Fatalf("Failed to write to file: %v", err)
-		}
+			// First call populates size cache
+			w.isFileStable(filePath, info)
+			// Second call tests the actual stability logic
+			result := w.isFileStable(filePath, info)
 
-		// Test exclusive access - this should work on most systems
-		// Note: This test might be platform-dependent
-		canOpen := watcher.canOpenFileExclusively(filePath)
-		// On some systems, multiple readers are allowed, so we just check it doesn't panic
-		_ = canOpen // We mainly test that the function doesn't crash
-	})
-
-	t.Run("cannot open non-existent file", func(t *testing.T) {
-		nonExistentPath := filepath.Join(tempDir, "does_not_exist.txt")
-
-		canOpen := watcher.canOpenFileExclusively(nonExistentPath)
-		if canOpen {
-			t.Error("Should not be able to open non-existent file")
-		}
-	})
+			if result != tt.expectedStable {
+				t.Errorf("Expected stability %v, got %v for MinFileAge=%s, modTime=%v ago",
+					tt.expectedStable, result, tt.minFileAge, time.Since(tt.modTime).Round(time.Millisecond))
+			}
+		})
+	}
 }
 
 func TestIsFileSizeStable(t *testing.T) {

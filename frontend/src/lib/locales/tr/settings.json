@@ -145,6 +145,8 @@
             "watch_directory_description": "Otomatik yükleme için yeni dosyaların izleneceği dizin. İşlenen dosyalar genel çıktı dizinine taşınacaktır.",
             "check_interval": "Kontrol Aralığı",
             "check_interval_description": "Yeni dosyaların ne sıklıkla taranacağı",
+            "min_file_age": "Minimum Dosya Yaşı",
+            "min_file_age_description": "Bir dosyanın yüklenmeye uygun sayılması için son değişiklikten bu yana geçmesi gereken minimum süre. Hâlâ yazılmakta olan dosyaların (ör. yavaş kopyalar, torrentler) yüklenmesini önler.",
             "size_threshold": "Boyut Eşiği",
             "size_threshold_description": "Toplu işlemden önceki minimum birikmiş boyut",
             "min_file_size": "Min Dosya Boyutu",

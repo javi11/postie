@@ -452,36 +452,20 @@ func (w *Watcher) shouldCountFile(path string, info os.FileInfo) bool {
 
 // isFileStable checks if a file is stable (not being written to) using multiple methods
 func (w *Watcher) isFileStable(path string, info os.FileInfo) bool {
-	// Method 1: Check if file modification time is older than 2 seconds
-	// This is the most reliable method for detecting actively written files
-	if time.Since(info.ModTime()) < 2*time.Second {
+	// Method 1: Check if file modification time is older than MinFileAge
+	minAge := w.cfg.MinFileAge.ToDuration()
+	if minAge == 0 {
+		minAge = 60 * time.Second // fallback if not configured
+	}
+	if time.Since(info.ModTime()) < minAge {
 		return false
 	}
 
-	// Method 2: Try to open the file exclusively to check if it's being used
-	// This detects files that are open for writing by other processes
-	if !w.canOpenFileExclusively(path) {
-		return false
-	}
-
-	// Method 3: Check file size stability by comparing current size with cached size
+	// Method 2: Check file size stability by comparing current size with cached size
 	// This detects files that are still growing
 	if !w.isFileSizeStable(path, info.Size()) {
 		return false
 	}
-
-	return true
-}
-
-// canOpenFileExclusively attempts to open the file in exclusive mode to detect if it's in use
-func (w *Watcher) canOpenFileExclusively(path string) bool {
-	file, err := os.OpenFile(path, os.O_RDONLY, 0)
-	if err != nil {
-		// If we can't open the file, assume it's being used
-		return false
-	}
-
-	_ = file.Close()
 
 	return true
 }

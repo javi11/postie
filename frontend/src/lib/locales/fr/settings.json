@@ -140,6 +140,8 @@
 			"watch_directory_description": "Répertoire où les nouveaux fichiers seront surveillés pour le téléchargement automatique. Les fichiers traités seront déplacés vers le répertoire de sortie global.",
 			"check_interval": "Intervalle de Vérification",
 			"check_interval_description": "Fréquence de recherche de nouveaux fichiers",
+			"min_file_age": "Âge Minimum du Fichier",
+			"min_file_age_description": "Durée minimale depuis la dernière modification avant qu'un fichier soit éligible à l'envoi. Évite d'envoyer des fichiers encore en cours d'écriture (ex. copies lentes, torrents).",
 			"size_threshold": "Seuil de Taille",
 			"size_threshold_description": "Taille accumulée minimale avant le traitement par lot",
 			"min_file_size": "Taille Minimale de Fichier",

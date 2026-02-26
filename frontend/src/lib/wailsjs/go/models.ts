@@ -427,11 +427,12 @@ export namespace config {
 	    delete_original_file: boolean;
 	    single_nzb_per_folder: boolean;
 	    follow_symlinks: boolean;
-	
+	    min_file_age: string;
+
 	    static createFrom(source: any = {}) {
 	        return new WatcherConfig(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.enabled = source["enabled"];
@@ -444,6 +445,7 @@ export namespace config {
 	        this.delete_original_file = source["delete_original_file"];
 	        this.single_nzb_per_folder = source["single_nzb_per_folder"];
 	        this.follow_symlinks = source["follow_symlinks"];
+	        this.min_file_age = source["min_file_age"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
