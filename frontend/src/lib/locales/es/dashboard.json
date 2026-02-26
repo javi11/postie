@@ -192,7 +192,10 @@
 			"next_run_soon": "Pronto",
 			"next_run_minutes": "en {count} {count, plural, =1 {minuto} other {minutos}}",
 			"next_run_hours": "en {count} {count, plural, =1 {hora} other {horas}}",
-			"next_run_days": "en {count} {count, plural, =1 {día} other {días}}"
+			"next_run_days": "en {count} {count, plural, =1 {día} other {días}}",
+			"scan_now": "Escanear ahora",
+			"scan_triggered": "Escaneo iniciado",
+			"scan_triggered_description": "Se ha iniciado el escaneo del directorio"
 		}
 	}
 }

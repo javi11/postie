@@ -126,6 +126,8 @@ export function Startup(arg1:context.Context):Promise<void>;
 
 export function TestProviderConnectivity(arg1:backend.ServerData):Promise<backend.ValidationResult>;
 
+export function TriggerScan():Promise<void>;
+
 export function UploadFiles():Promise<void>;
 
 export function UploadFolder(arg1:string):Promise<void>;

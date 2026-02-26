@@ -295,6 +295,22 @@ export class UnifiedClient {
 		throw new Error("No client available");
 	}
 
+	async triggerScan(): Promise<void> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			return client.App.TriggerScan();
+		}
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.triggerScan();
+		}
+
+		throw new Error("No client available");
+	}
+
 	async getRunningJobDetails(): Promise<processor.RunningJobDetails[]> {
 		await this.initialize();
 

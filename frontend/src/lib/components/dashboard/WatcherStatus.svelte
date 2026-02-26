@@ -1,13 +1,15 @@
 <script lang="ts">
 import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
+import { toastStore } from "$lib/stores/toast";
 import { onMount, onDestroy } from "svelte";
-import { Eye, Clock, FolderOpen, Calendar, AlertCircle } from "lucide-svelte";
+import { Eye, Clock, FolderOpen, Calendar, AlertCircle, RefreshCw } from "lucide-svelte";
 import { watcher } from "$lib/wailsjs/go/models";
 
 let watcherStatus = $state<watcher.WatcherStatusInfo>(new watcher.WatcherStatusInfo());
 let loading = $state(true);
 let error = $state<string>("");
+let scanning = $state(false);
 let statusCheckInterval: NodeJS.Timeout | null = null;
 
 // Format next run time for display
@@ -59,6 +61,22 @@ async function checkWatcherStatus() {
   }
 }
 
+async function handleScanNow() {
+  try {
+    scanning = true;
+    await apiClient.triggerScan();
+    toastStore.success(
+      $t("dashboard.watcher.scan_triggered"),
+      $t("dashboard.watcher.scan_triggered_description")
+    );
+  } catch (err) {
+    console.error("Failed to trigger scan:", err);
+    toastStore.error("Error", String(err));
+  } finally {
+    scanning = false;
+  }
+}
+
 // Setup periodic status checks
 onMount(async () => {
   await checkWatcherStatus();
@@ -83,19 +101,32 @@ onDestroy(() => {
         <h3 class="text-lg font-semibold text-base-content">
           {$t("dashboard.watcher.title")}
         </h3>
-        
+
         <!-- Status indicator -->
         {#if loading}
           <div class="loading loading-spinner loading-xs"></div>
         {:else if error}
           <AlertCircle class="w-4 h-4 text-error"/>
         {:else if watcherStatus.initialized}
-          <div class="w-2 h-2 bg-success rounded-full animate-pulse" 
+          <div class="w-2 h-2 bg-success rounded-full animate-pulse"
                title={$t("dashboard.watcher.status_active")}></div>
         {:else}
-          <div class="w-2 h-2 bg-warning rounded-full" 
+          <div class="w-2 h-2 bg-warning rounded-full"
                title={$t("dashboard.watcher.status_inactive")}></div>
         {/if}
+
+        <div class="ml-auto">
+          <button
+            type="button"
+            class="btn btn-xs btn-outline"
+            onclick={handleScanNow}
+            disabled={scanning || !watcherStatus.initialized}
+            title={$t("dashboard.watcher.scan_now")}
+          >
+            <RefreshCw class="w-3 h-3 {scanning ? 'animate-spin' : ''}" />
+            {$t("dashboard.watcher.scan_now")}
+          </button>
+        </div>
       </div>
 
       {#if error}

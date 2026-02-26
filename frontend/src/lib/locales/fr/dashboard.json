@@ -193,7 +193,10 @@
 			"next_run_soon": "Bientôt",
 			"next_run_minutes": "dans {count} {count, plural, =1 {minute} other {minutes}}",
 			"next_run_hours": "dans {count} {count, plural, =1 {heure} other {heures}}",
-			"next_run_days": "dans {count} {count, plural, =1 {jour} other {jours}}"
+			"next_run_days": "dans {count} {count, plural, =1 {jour} other {jours}}",
+			"scan_now": "Scanner maintenant",
+			"scan_triggered": "Scan déclenché",
+			"scan_triggered_description": "Le scan du répertoire a été lancé"
 		}
 	}
 }

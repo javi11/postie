@@ -278,6 +278,7 @@ func (ws *WebServer) setupRoutes() {
 	api.HandleFunc("/filesystem/browse", ws.handleBrowseFilesystem).Methods("GET")
 	api.HandleFunc("/filesystem/import", ws.handleImportFiles).Methods("POST")
 	api.HandleFunc("/watcher/status", ws.handleGetWatcherStatus).Methods("GET")
+	api.HandleFunc("/watcher/scan", ws.handleTriggerScan).Methods("POST")
 
 	// Serve static files (catch-all)
 	ws.router.PathPrefix("/").Handler(ws.getStaticFileHandler())
@@ -354,6 +355,12 @@ func (ws *WebServer) handleGetWatcherStatus(w http.ResponseWriter, r *http.Reque
 	status := ws.app.GetWatcherStatus()
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(status)
+}
+
+func (ws *WebServer) handleTriggerScan(w http.ResponseWriter, r *http.Request) {
+	ws.app.TriggerScan()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 func (ws *WebServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
