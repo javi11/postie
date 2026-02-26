@@ -515,6 +515,19 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 				errChan <- err
 				return
 			}
+
+			// Wait for articles to propagate to the verify server before checking.
+			// Without this delay, STAT checks run immediately after posting and fail
+			// because the server hasn't received/indexed the articles yet.
+			if delay := p.checkCfg.RetryDelay.ToDuration(); delay > 0 {
+				select {
+				case <-ctx.Done():
+					errChan <- ctx.Err()
+					return
+				case <-time.After(delay):
+				}
+			}
+
 			// Create a pool with error handling - use all available CPU cores
 			// Note: We intentionally don't use WithCancelOnError() to prevent cascading failures
 			// when a single article check fails. Other checks should continue.
