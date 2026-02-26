@@ -57,7 +57,7 @@ const darkThemes = $derived(groupedThemes["Dark"] ?? []);
 				>
 					<!-- Color swatches -->
 					<div class="flex gap-0.5 h-5">
-						{#each theme.value as color}
+						{#each theme.colors as color}
 							<span
 								class="flex-1 rounded-sm"
 								style="background-color: {color};"
@@ -94,7 +94,7 @@ const darkThemes = $derived(groupedThemes["Dark"] ?? []);
 				>
 					<!-- Color swatches -->
 					<div class="flex gap-0.5 h-5">
-						{#each theme.value as color}
+						{#each theme.colors as color}
 							<span
 								class="flex-1 rounded-sm"
 								style="background-color: {color};"
