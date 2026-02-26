@@ -25,6 +25,7 @@ let { config = $bindable() }: Props = $props();
 let watchDirectory = $state("");
 let enabled = $state(config.watcher?.enabled ?? false);
 let checkInterval = $state(config.watcher?.check_interval || "5m");
+let minFileAge = $state(config.watcher?.min_file_age || "60s");
 let sizeThreshold = $state(config.watcher?.size_threshold || 104857600); // 100MB
 let minFileSize = $state(config.watcher?.min_file_size || 1048576); // 1MB
 let deleteOriginalFile = $state(config.watcher?.delete_original_file ?? false);
@@ -39,6 +40,13 @@ let initialized = $state(false);
 const checkIntervalPresets = [
   { label: "30s", value: 30, unit: "s" },
   { label: "2m", value: 2, unit: "m" },
+  { label: "5m", value: 5, unit: "m" },
+  { label: "10m", value: 10, unit: "m" },
+];
+
+const minFileAgePresets = [
+  { label: "30s", value: 30, unit: "s" },
+  { label: "1m", value: 1, unit: "m" },
   { label: "5m", value: 5, unit: "m" },
   { label: "10m", value: 10, unit: "m" },
 ];
@@ -73,6 +81,7 @@ $effect(() => {
 		config.watcher.watch_directory = watchDirectory;
 		config.watcher.enabled = enabled;
 		config.watcher.check_interval = checkInterval;
+		config.watcher.min_file_age = minFileAge;
 		config.watcher.size_threshold = sizeThreshold;
 		config.watcher.min_file_size = minFileSize;
 		config.watcher.delete_original_file = deleteOriginalFile;
@@ -111,6 +120,7 @@ $effect(() => {
 			// Initialize all local state from config
 			enabled = config.watcher?.enabled ?? false;
 			checkInterval = config.watcher?.check_interval || "5m";
+		minFileAge = config.watcher?.min_file_age || "60s";
 			sizeThreshold = config.watcher?.size_threshold || 104857600;
 			minFileSize = config.watcher?.min_file_size || 1048576;
 			deleteOriginalFile = config.watcher?.delete_original_file ?? false;
@@ -183,6 +193,7 @@ async function saveWatcherSettings() {
     currentConfig.watcher.size_threshold = config.watcher.size_threshold ?? currentConfig.watcher.size_threshold;
     currentConfig.watcher.min_file_size = config.watcher.min_file_size ?? currentConfig.watcher.min_file_size;
     currentConfig.watcher.check_interval = config.watcher.check_interval || currentConfig.watcher.check_interval;
+    currentConfig.watcher.min_file_age = config.watcher.min_file_age || currentConfig.watcher.min_file_age;
     currentConfig.watcher.delete_original_file = config.watcher.delete_original_file ?? currentConfig.watcher.delete_original_file;
     currentConfig.watcher.single_nzb_per_folder = config.watcher.single_nzb_per_folder ?? currentConfig.watcher.single_nzb_per_folder;
     
@@ -294,6 +305,14 @@ async function saveWatcherSettings() {
               description={$t('settings.watcher.check_interval_description')}
               presets={checkIntervalPresets}
               id="check-interval"
+            />
+
+            <DurationInput
+              bind:value={minFileAge}
+              label={$t('settings.watcher.min_file_age')}
+              description={$t('settings.watcher.min_file_age_description')}
+              presets={minFileAgePresets}
+              id="min-file-age"
             />
 
             <SizeInput

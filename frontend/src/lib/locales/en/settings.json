@@ -145,6 +145,8 @@
 			"watch_directory_description": "Directory where new files will be monitored for automatic upload. Processed files will be moved to the global output directory.",
 			"check_interval": "Check Interval",
 			"check_interval_description": "How often to scan for new files",
+			"min_file_age": "Min File Age",
+			"min_file_age_description": "Minimum time since last modification before a file is eligible for upload. Prevents uploading files still being written (e.g. slow copies, torrents).",
 			"size_threshold": "Size Threshold",
 			"size_threshold_description": "Minimum accumulated size before batch processing",
 			"min_file_size": "Min File Size",

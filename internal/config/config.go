@@ -288,6 +288,10 @@ type WatcherConfig struct {
 	// If false (default), symlinks are skipped to avoid double-counting files and including
 	// files outside the watch directory. Set to true to process symlinks as regular files.
 	FollowSymlinks bool `yaml:"follow_symlinks" json:"follow_symlinks"`
+	// MinFileAge is the minimum time since last modification before a file is eligible for upload.
+	// This prevents uploading files that are still being written to (e.g. slow copies, torrents).
+	// Default: 60s
+	MinFileAge Duration `yaml:"min_file_age" json:"min_file_age"`
 }
 
 type ScheduleConfig struct {
@@ -913,9 +917,10 @@ func GetDefaultConfig() ConfigData {
 			IgnorePatterns:     []string{"*.tmp", "*.part", "*.!ut"},
 			MinFileSize:        1048576, // 1MB
 			CheckInterval:      Duration("5m"),
-			DeleteOriginalFile: false, // Default to keeping original files for safety
-			SingleNzbPerFolder: false, // Default to false for backward compatibility
-			FollowSymlinks:     false, // Default to skipping symlinks to avoid double-counting and external files
+			DeleteOriginalFile: false,    // Default to keeping original files for safety
+			SingleNzbPerFolder: false,    // Default to false for backward compatibility
+			FollowSymlinks:     false,    // Default to skipping symlinks to avoid double-counting and external files
+			MinFileAge:         Duration("60s"), // Default to 60s to ensure files are stable before uploading
 		},
 		NzbCompression: NzbCompressionConfig{
 			Enabled: disabled,
