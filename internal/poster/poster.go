@@ -584,6 +584,33 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 
 				// If we haven't exceeded max retries, add only failed articles back to queue
 				if post.Retries < int(p.checkCfg.MaxRePost) {
+					// Refresh article headers before re-posting.
+					// The MessageID is intentionally preserved: the NZB generator keys entries
+					// by (filename, messageID), so regenerating the ID would append a duplicate
+					// segment rather than replacing the existing one, corrupting the NZB.
+					// Re-using the same MessageID is safe because:
+					//   - If the first post was never accepted, the server will accept it again.
+					//   - If it was accepted but propagation is slow, the deferred-check path
+					//     handles that case and we should not be re-posting at all.
+					// The header validation below guards against 441 "Missing required fields"
+					// errors that can occur when other headers are missing or empty.
+					for _, art := range failedArticles {
+						// Ensure required NNTP headers are non-empty
+						if art.From == "" {
+							if defaultFrom := p.cfg.PostHeaders.DefaultFrom; defaultFrom != "" {
+								art.From = defaultFrom
+							} else if from, err := article.GenerateFrom(); err == nil {
+								art.From = from
+							}
+						}
+						if art.Subject == "" {
+							art.Subject = article.GenerateRandomSubject()
+						}
+						if len(art.Groups) == 0 {
+							slog.WarnContext(ctx, "Retried article has no newsgroups", "messageID", art.MessageID)
+						}
+					}
+
 					// Create a new post with only the failed articles
 					failedPost := &Post{
 						FilePath: post.FilePath,
