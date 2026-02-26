@@ -572,14 +572,16 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 				// If we haven't exceeded max retries, add only failed articles back to queue
 				if post.Retries < int(p.checkCfg.MaxRePost) {
 					// Refresh article headers before re-posting.
-					// A fresh MessageID avoids server-side duplicate detection on the retry,
-					// and the header validation guards against 441 "Missing required fields"
-					// errors that can occur when headers are missing or empty.
+					// The MessageID is intentionally preserved: the NZB generator keys entries
+					// by (filename, messageID), so regenerating the ID would append a duplicate
+					// segment rather than replacing the existing one, corrupting the NZB.
+					// Re-using the same MessageID is safe because:
+					//   - If the first post was never accepted, the server will accept it again.
+					//   - If it was accepted but propagation is slow, the deferred-check path
+					//     handles that case and we should not be re-posting at all.
+					// The header validation below guards against 441 "Missing required fields"
+					// errors that can occur when other headers are missing or empty.
 					for _, art := range failedArticles {
-						// Generate a new MessageID for the retry
-						if newMsgID, err := article.GenerateMessageID(); err == nil {
-							art.MessageID = newMsgID
-						}
 						// Ensure required NNTP headers are non-empty
 						if art.From == "" {
 							if defaultFrom := p.cfg.PostHeaders.DefaultFrom; defaultFrom != "" {
