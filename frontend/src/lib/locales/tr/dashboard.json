@@ -195,7 +195,9 @@
             "next_run_days": "{count} {count, plural, =1 {gün} other {gün}} içinde",
             "scan_now": "Şimdi tara",
             "scan_triggered": "Tarama başlatıldı",
-            "scan_triggered_description": "Dizin taraması başlatıldı"
+            "scan_triggered_description": "Dizin taraması başlatıldı",
+            "watcher_number": "İzleyici #{n}",
+            "no_watchers": "İzleme dizini yapılandırılmadı"
         }
     }
 }

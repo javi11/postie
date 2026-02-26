@@ -204,8 +204,8 @@ func (a *App) applyConfigChanges(configData *config.ConfigData) error {
 	}
 
 	// Always check watcher configuration
-	if err := a.initializeWatcher(); err != nil {
-		slog.Error("Failed to re-initialize watcher after config change", "error", err)
+	if err := a.initializeWatchers(); err != nil {
+		slog.Error("Failed to re-initialize watchers after config change", "error", err)
 	}
 
 	// Update or create the connection pool manager

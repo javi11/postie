@@ -24,6 +24,7 @@ type WatcherScheduleInfo struct {
 
 // WatcherStatusInfo represents the watcher status information
 type WatcherStatusInfo struct {
+	Name             string               `json:"name"`
 	Enabled          bool                 `json:"enabled"`
 	Initialized      bool                 `json:"initialized"`
 	WatchDirectory   string               `json:"watch_directory"`
@@ -622,6 +623,7 @@ func (w *Watcher) getNextScheduledRun(now time.Time) time.Time {
 // GetWatcherStatus returns comprehensive watcher status information
 func (w *Watcher) GetWatcherStatus() WatcherStatusInfo {
 	status := WatcherStatusInfo{
+		Name:             w.cfg.Name,
 		Enabled:          w.cfg.Enabled,
 		Initialized:      true, // If this method is called, the watcher is initialized
 		WatchDirectory:   w.watchFolder,

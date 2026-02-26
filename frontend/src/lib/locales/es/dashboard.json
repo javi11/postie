@@ -195,7 +195,9 @@
 			"next_run_days": "en {count} {count, plural, =1 {día} other {días}}",
 			"scan_now": "Escanear ahora",
 			"scan_triggered": "Escaneo iniciado",
-			"scan_triggered_description": "Se ha iniciado el escaneo del directorio"
+			"scan_triggered_description": "Se ha iniciado el escaneo del directorio",
+			"watcher_number": "Monitor #{n}",
+			"no_watchers": "No hay directorios de vigilancia configurados"
 		}
 	}
 }

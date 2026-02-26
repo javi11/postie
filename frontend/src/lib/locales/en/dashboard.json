@@ -193,7 +193,9 @@
 			"next_run_days": "in {count} {count, plural, =1 {day} other {days}}",
 			"scan_now": "Scan Now",
 			"scan_triggered": "Scan Triggered",
-			"scan_triggered_description": "Directory scan has been started"
+			"scan_triggered_description": "Directory scan has been started",
+			"watcher_number": "Watcher #{n}",
+			"no_watchers": "No watch directories configured"
 		}
 	}
 }

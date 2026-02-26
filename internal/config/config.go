@@ -156,6 +156,7 @@ type Config interface {
 	GetPostCheckConfig() PostCheck
 	GetPar2Config(ctx context.Context) (*Par2Config, error)
 	GetWatcherConfig() WatcherConfig
+	GetWatcherConfigs() []WatcherConfig
 	GetNzbCompressionConfig() NzbCompressionConfig
 	GetDatabaseConfig() DatabaseConfig
 	GetQueueConfig() QueueConfig
@@ -177,7 +178,9 @@ type ConfigData struct {
 	// Check uploaded article configuration. used to check if an article was successfully uploaded and propagated.
 	PostCheck                 PostCheck              `yaml:"post_check" json:"post_check"`
 	Par2                      Par2Config             `yaml:"par2" json:"par2"`
-	Watcher                   WatcherConfig          `yaml:"watcher" json:"watcher"`
+	// Watcher is deprecated: use Watchers instead. Retained for backward-compatible YAML parsing.
+	Watcher        WatcherConfig  `yaml:"watcher,omitempty" json:"watcher,omitempty"`
+	Watchers       []WatcherConfig `yaml:"watchers" json:"watchers"`
 	NzbCompression            NzbCompressionConfig   `yaml:"nzb_compression" json:"nzb_compression"`
 	Database                  DatabaseConfig         `yaml:"database" json:"database"`
 	Queue                     QueueConfig            `yaml:"queue" json:"queue"`
@@ -274,6 +277,7 @@ type PostingConfig struct {
 }
 
 type WatcherConfig struct {
+	Name               string         `yaml:"name" json:"name"`
 	Enabled            bool           `yaml:"enabled" json:"enabled"`
 	WatchDirectory     string         `yaml:"watch_directory" json:"watch_directory"`
 	SizeThreshold      int64          `yaml:"size_threshold" json:"size_threshold"`
@@ -555,6 +559,9 @@ func Load(path string) (*ConfigData, error) {
 		}
 	}
 
+	// Migrate single watcher to watchers slice
+	cfg.migrateWatcherConfig()
+
 	// Validate configuration
 	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
@@ -828,8 +835,50 @@ func (c *ConfigData) GetPostCheckConfig() PostCheck {
 	return c.PostCheck
 }
 
+// GetWatcherConfig returns the first watcher config (legacy compatibility).
 func (c *ConfigData) GetWatcherConfig() WatcherConfig {
+	if len(c.Watchers) > 0 {
+		return c.Watchers[0]
+	}
 	return c.Watcher
+}
+
+// GetWatcherConfigs returns all watcher configurations.
+func (c *ConfigData) GetWatcherConfigs() []WatcherConfig {
+	return c.Watchers
+}
+
+// migrateWatcherConfig migrates the old single-watcher config to the new multi-watcher format.
+func (c *ConfigData) migrateWatcherConfig() {
+	if len(c.Watchers) == 0 && c.Watcher.WatchDirectory != "" {
+		c.Watchers = []WatcherConfig{c.Watcher}
+		c.Watcher = WatcherConfig{} // clear deprecated field
+	}
+	// If still empty, add one default disabled entry
+	if len(c.Watchers) == 0 {
+		c.Watchers = []WatcherConfig{defaultWatcherConfig()}
+	}
+}
+
+// defaultWatcherConfig returns a default WatcherConfig.
+func defaultWatcherConfig() WatcherConfig {
+	return WatcherConfig{
+		Name:           "",
+		Enabled:        false,
+		WatchDirectory: "",
+		SizeThreshold:  104857600, // 100MB
+		Schedule: ScheduleConfig{
+			StartTime: "00:00",
+			EndTime:   "23:59",
+		},
+		IgnorePatterns:     []string{"*.tmp", "*.part", "*.!ut"},
+		MinFileSize:        1048576, // 1MB
+		CheckInterval:      Duration("5m"),
+		DeleteOriginalFile: false,
+		SingleNzbPerFolder: false,
+		FollowSymlinks:     false,
+		MinFileAge:         Duration("60s"),
+	}
 }
 
 func (c *ConfigData) GetNzbCompressionConfig() NzbCompressionConfig {
@@ -898,21 +947,24 @@ func GetDefaultConfig() ConfigData {
 			TempDir:           os.TempDir(),
 			MaintainPar2Files: &disabled, // Default to false to preserve current behavior
 		},
-		Watcher: WatcherConfig{
-			Enabled:        false,
-			WatchDirectory: "",        // Will be set to default in backend if empty
-			SizeThreshold:  104857600, // 100MB
-			Schedule: ScheduleConfig{
-				StartTime: "00:00",
-				EndTime:   "23:59",
+		Watchers: []WatcherConfig{
+			{
+				Name:           "",
+				Enabled:        false,
+				WatchDirectory: "",        // Will be set to default in backend if empty
+				SizeThreshold:  104857600, // 100MB
+				Schedule: ScheduleConfig{
+					StartTime: "00:00",
+					EndTime:   "23:59",
+				},
+				IgnorePatterns:     []string{"*.tmp", "*.part", "*.!ut"},
+				MinFileSize:        1048576, // 1MB
+				CheckInterval:      Duration("5m"),
+				DeleteOriginalFile: false,        // Default to keeping original files for safety
+				SingleNzbPerFolder: false,        // Default to false for backward compatibility
+				FollowSymlinks:     false,        // Default to skipping symlinks to avoid double-counting and external files
+				MinFileAge:         Duration("60s"), // Default to 60s to ensure files are stable before uploading
 			},
-			IgnorePatterns:     []string{"*.tmp", "*.part", "*.!ut"},
-			MinFileSize:        1048576, // 1MB
-			CheckInterval:      Duration("5m"),
-			DeleteOriginalFile: false,    // Default to keeping original files for safety
-			SingleNzbPerFolder: false,    // Default to false for backward compatibility
-			FollowSymlinks:     false,    // Default to skipping symlinks to avoid double-counting and external files
-			MinFileAge:         Duration("60s"), // Default to 60s to ensure files are stable before uploading
 		},
 		NzbCompression: NzbCompressionConfig{
 			Enabled: disabled,

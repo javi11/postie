@@ -171,7 +171,12 @@
             "save_button": "İzleyici Ayarlarını Kaydet",
             "saving": "Kaydediliyor...",
             "saved_success": "İzleyici ayarları kaydedildi",
-            "saved_success_description": "Dosya izleyici yapılandırmanız başarıyla kaydedildi!"
+            "saved_success_description": "Dosya izleyici yapılandırmanız başarıyla kaydedildi!",
+            "add_directory": "İzleme Dizini Ekle",
+            "remove_directory": "Kaldır",
+            "watcher_name": "İzleyici Adı",
+            "watcher_name_description": "Bu izleme dizinini tanımlamak için bir etiket",
+            "watcher_number": "İzleyici #{n}"
         },
         "par2": {
             "title": "PAR2 Kurtarma Dosyaları",
