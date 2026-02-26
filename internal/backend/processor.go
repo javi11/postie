@@ -41,6 +41,12 @@ func (a *App) initializeProcessor() error {
 		return nil
 	}
 
+	// Pool manager must be available to process items
+	if a.poolManager == nil {
+		slog.Warn("Pool manager not available (server configuration may be invalid), skipping processor initialization")
+		return nil
+	}
+
 	if a.queue == nil {
 		slog.Warn("Queue not available, skipping processor initialization")
 		return nil
