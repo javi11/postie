@@ -214,7 +214,7 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 	}
 
 	if poolManager == nil {
-		slog.WarnContext(ctx, "Pool manager is not available, skipping item processing")
+		slog.WarnContext(ctx, "Pool manager is not available, waiting for server configuration")
 		return nil
 	}
 
