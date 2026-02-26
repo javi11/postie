@@ -115,12 +115,62 @@ func New(ctx context.Context, database *database.Database) (*Queue, error) {
 
 	runCtx, runCancel := context.WithCancel(ctx)
 
-	return &Queue{
+	q := &Queue{
 		queue:     queue,
 		db:        database.DB,
 		runCtx:    runCtx,
 		runCancel: runCancel,
-	}, nil
+	}
+
+	// Recover any items that were in-progress when the app last crashed.
+	// These items were deleted from goqite but not yet completed or errored.
+	q.recoverInProgressItems(ctx)
+
+	return q, nil
+}
+
+// recoverInProgressItems re-queues any items that were being processed when the app crashed.
+// These items exist in in_progress_items but not in goqite, completed_items, or errored_items.
+func (q *Queue) recoverInProgressItems(ctx context.Context) {
+	rows, err := q.db.QueryContext(ctx, `
+		SELECT id, path, size, priority, created_at, job_data
+		FROM in_progress_items
+	`)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to query in-progress items for recovery", "error", err)
+		return
+	}
+	defer func() { _ = rows.Close() }()
+
+	var recovered int
+	for rows.Next() {
+		var id, path, createdStr string
+		var size, priority int64
+		var jobData []byte
+		if err := rows.Scan(&id, &path, &size, &priority, &createdStr, &jobData); err != nil {
+			slog.WarnContext(ctx, "Failed to scan in-progress item", "error", err)
+			continue
+		}
+
+		// Re-insert into goqite so it will be processed again
+		err := q.queue.Send(ctx, goqite.Message{
+			Body:     jobData,
+			Priority: int(priority),
+		})
+		if err != nil {
+			slog.WarnContext(ctx, "Failed to re-queue in-progress item", "id", id, "path", path, "error", err)
+			continue
+		}
+
+		// Remove from in_progress_items now that it is back in the queue
+		_, _ = q.db.ExecContext(ctx, "DELETE FROM in_progress_items WHERE id = ?", id)
+		recovered++
+		slog.InfoContext(ctx, "Recovered in-progress item", "id", id, "path", path)
+	}
+
+	if recovered > 0 {
+		slog.InfoContext(ctx, "Recovered items from previous crash", "count", recovered)
+	}
 }
 
 // AddFile adds a file to the queue for processing
@@ -237,7 +287,9 @@ func (q *Queue) AddFileWithPriorityWithoutDuplicateCheck(ctx context.Context, pa
 	})
 }
 
-// ReceiveFile gets the next file job from the queue and removes it immediately
+// ReceiveFile gets the next file job from the queue and removes it immediately.
+// The item is tracked in the in_progress_items table until CompleteFile or MarkAsError is called.
+// On startup, RecoverInProgressItems restores any items that were lost due to a crash.
 func (q *Queue) ReceiveFile(ctx context.Context) (*goqite.Message, *FileJob, error) {
 	msg, err := q.queue.Receive(ctx)
 	if err != nil {
@@ -256,9 +308,23 @@ func (q *Queue) ReceiveFile(ctx context.Context) (*goqite.Message, *FileJob, err
 		return nil, nil, fmt.Errorf("failed to unmarshal job: %w", err)
 	}
 
+	// Track the item as in-progress before deleting from goqite.
+	// This ensures we can recover it if the app crashes before completion.
+	created := job.CreatedAt.Format("2006-01-02T15:04:05.000Z")
+	_, err = q.db.ExecContext(ctx, `
+		INSERT OR REPLACE INTO in_progress_items (id, path, size, priority, created_at, job_data)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, string(msg.ID), job.Path, job.Size, job.Priority, created, msg.Body)
+	if err != nil {
+		// Non-fatal: log and continue — losing crash recovery is better than blocking the queue
+		slog.WarnContext(ctx, "Failed to track in-progress item", "id", string(msg.ID), "error", err)
+	}
+
 	// Delete the message from the queue immediately when starting to process
 	// If processing fails, we'll re-add it to the queue
 	if err := q.queue.Delete(ctx, msg.ID); err != nil {
+		// Clean up the in_progress entry we just added
+		_, _ = q.db.ExecContext(ctx, "DELETE FROM in_progress_items WHERE id = ?", string(msg.ID))
 		return nil, nil, fmt.Errorf("failed to remove job from queue: %w", err)
 	}
 
@@ -284,6 +350,9 @@ func (q *Queue) CompleteFile(ctx context.Context, msgID goqite.ID, nzbPath strin
 	if err != nil {
 		return fmt.Errorf("failed to insert completed item: %w", err)
 	}
+
+	// Remove from in-progress tracking now that it is complete
+	_, _ = q.db.ExecContext(ctx, "DELETE FROM in_progress_items WHERE id = ?", string(msgID))
 
 	return nil
 }
@@ -330,6 +399,15 @@ func (q *Queue) GetQueueItems(params PaginationParams) (*PaginatedResult, error)
 		if totalCount > 0 {
 			allItems, err = q.getPendingItemsPaginated(orderBy, offset, params.Limit)
 		}
+	case "running":
+		// Only query in-progress items
+		err = q.db.QueryRow("SELECT COUNT(*) FROM in_progress_items").Scan(&totalCount)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get in-progress items count: %w", err)
+		}
+		if totalCount > 0 {
+			allItems, err = q.getInProgressItemsPaginated(orderBy, offset, params.Limit)
+		}
 	case "complete":
 		// Only query completed items
 		err = q.db.QueryRow("SELECT COUNT(*) FROM completed_items").Scan(&totalCount)
@@ -350,11 +428,16 @@ func (q *Queue) GetQueueItems(params PaginationParams) (*PaginatedResult, error)
 		}
 	default:
 		// No filter or "all" - query all tables
-		var activeCount, completedCount, erroredCount int
+		var activeCount, runningCount, completedCount, erroredCount int
 
 		err = q.db.QueryRow("SELECT COUNT(*) FROM goqite WHERE queue = 'file_jobs'").Scan(&activeCount)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get active items count: %w", err)
+		}
+
+		err = q.db.QueryRow("SELECT COUNT(*) FROM in_progress_items").Scan(&runningCount)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get in-progress items count: %w", err)
 		}
 
 		err = q.db.QueryRow("SELECT COUNT(*) FROM completed_items").Scan(&completedCount)
@@ -367,7 +450,7 @@ func (q *Queue) GetQueueItems(params PaginationParams) (*PaginatedResult, error)
 			return nil, fmt.Errorf("failed to get errored items count: %w", err)
 		}
 
-		totalCount = activeCount + completedCount + erroredCount
+		totalCount = activeCount + runningCount + completedCount + erroredCount
 
 		if totalCount > 0 {
 			// Get items based on sort order and pagination
@@ -471,6 +554,27 @@ func (q *Queue) getMergedItemsPaginated(orderBy string, offset, limit int) ([]Qu
 
 			UNION ALL
 
+			-- In-progress items (currently being processed)
+			SELECT id,
+				   path as path,
+				   size,
+				   priority,
+				   'running' as status,
+				   json_extract(job_data, '$.retryCount') as retry_count,
+				   NULL as error_message,
+				   created_at,
+				   started_at as updated_at,
+				   NULL as completed_at,
+				   NULL as nzb_path,
+				   path as file_name,
+				   NULL as script_status,
+				   0 as script_retry_count,
+				   NULL as script_last_error,
+				   NULL as script_next_retry_at
+			FROM in_progress_items
+
+			UNION ALL
+
 			-- Completed items
 			SELECT id, path, size, priority, 'complete' as status,
 				   0 as retry_count, NULL as error_message,
@@ -569,9 +673,9 @@ func (q *Queue) getMergedItemsPaginated(orderBy string, offset, limit int) ([]Qu
 // getMergedItemsByStatus gets items sorted by status priority
 func (q *Queue) getMergedItemsByStatus(order string, offset, limit int) ([]QueueItem, error) {
 	// Define status priority order
-	statusOrder := []string{"pending", "error", "complete"}
+	statusOrder := []string{"running", "pending", "error", "complete"}
 	if order == "asc" {
-		statusOrder = []string{"complete", "error", "pending"}
+		statusOrder = []string{"complete", "error", "pending", "running"}
 	}
 
 	var allItems []QueueItem
@@ -587,6 +691,8 @@ func (q *Queue) getMergedItemsByStatus(order string, offset, limit int) ([]Queue
 		var err error
 
 		switch status {
+		case "running":
+			items, err = q.getInProgressItemsPaginated("started_at DESC", currentOffset, remaining)
 		case "pending":
 			items, err = q.getActiveItemsPaginated(currentOffset, remaining)
 		case "complete":
@@ -612,6 +718,52 @@ func (q *Queue) getMergedItemsByStatus(order string, offset, limit int) ([]Queue
 	}
 
 	return allItems, nil
+}
+
+// getInProgressItemsPaginated returns paginated in-progress items
+func (q *Queue) getInProgressItemsPaginated(orderBy string, offset, limit int) ([]QueueItem, error) {
+	query := fmt.Sprintf(`
+		SELECT id, path, size, priority, created_at, started_at, job_data
+		FROM in_progress_items
+		ORDER BY %s
+		LIMIT ? OFFSET ?`, orderBy)
+
+	rows, err := q.db.Query(query, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query in-progress items: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var items []QueueItem
+	for rows.Next() {
+		var id, path, createdStr, startedStr string
+		var size, priority int64
+		var jobData []byte
+
+		if err := rows.Scan(&id, &path, &size, &priority, &createdStr, &startedStr, &jobData); err != nil {
+			continue
+		}
+
+		item := QueueItem{
+			ID:       id,
+			Path:     path,
+			FileName: path,
+			Size:     size,
+			Priority: int(priority),
+			Status:   StatusRunning,
+		}
+
+		if createdTime, err := time.Parse("2006-01-02T15:04:05.000Z", createdStr); err == nil {
+			item.CreatedAt = createdTime
+		}
+		if startedTime, err := time.Parse("2006-01-02T15:04:05.000Z", startedStr); err == nil {
+			item.UpdatedAt = startedTime
+		}
+
+		items = append(items, item)
+	}
+
+	return items, nil
 }
 
 // Helper methods for getting items from specific tables
@@ -995,6 +1147,20 @@ func (q *Queue) RemoveFromQueue(id string) error {
 		return q.RemoveErroredItem(id)
 	}
 
+	// Check if the item is in-progress (delete from tracking table; job will be lost)
+	err = q.db.QueryRow("SELECT EXISTS(SELECT 1 FROM in_progress_items WHERE id = ?)", id).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("failed to check in-progress items: %w", err)
+	}
+
+	if exists {
+		_, err = q.db.Exec("DELETE FROM in_progress_items WHERE id = ?", id)
+		if err != nil {
+			return fmt.Errorf("failed to remove in-progress item: %w", err)
+		}
+		return nil
+	}
+
 	// If not found in completed or errored items, try to remove from active queue
 	return q.queue.Delete(q.runCtx, goqite.ID(id))
 }
@@ -1132,10 +1298,16 @@ func (q *Queue) GetQueueStats() (map[string]any, error) {
 		return nil, err
 	}
 	stats["pending"] = pending
-	stats["total"] = pending
+	stats["total"] = pending // updated below to include running
 
-	// Running count is handled by processor, not queue
-	stats["running"] = 0
+	// Count items currently being processed
+	var running int
+	err = q.db.QueryRow("SELECT COUNT(*) FROM in_progress_items").Scan(&running)
+	if err == nil {
+		stats["running"] = running
+	} else {
+		stats["running"] = 0
+	}
 
 	// Count completed items
 	var complete int
@@ -1155,8 +1327,13 @@ func (q *Queue) GetQueueStats() (map[string]any, error) {
 		stats["error"] = 0
 	}
 
+	// Update total to include running items
+	if r, ok := stats["running"].(int); ok {
+		stats["total"] = pending + r
+	}
+
 	// Add total including completed and errored
-	stats["total_including_completed"] = pending + complete + errorCount
+	stats["total_including_completed"] = pending + running + complete + errorCount
 
 	return stats, nil
 }
@@ -1188,6 +1365,15 @@ func (q *Queue) IsPathInQueue(path string) (bool, error) {
 	err = q.db.QueryRow("SELECT COUNT(*) FROM completed_items WHERE path = ?", path).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("failed to check completed items: %w", err)
+	}
+	if count > 0 {
+		return true, nil
+	}
+
+	// Check in-progress items
+	err = q.db.QueryRow("SELECT COUNT(*) FROM in_progress_items WHERE path = ?", path).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("failed to check in-progress items: %w", err)
 	}
 	if count > 0 {
 		return true, nil
@@ -1371,6 +1557,9 @@ func (q *Queue) MarkAsError(ctx context.Context, msgID goqite.ID, job *FileJob, 
 	if err != nil {
 		return fmt.Errorf("failed to insert errored item: %w", err)
 	}
+
+	// Remove from in-progress tracking now that it is recorded as an error
+	_, _ = q.db.ExecContext(ctx, "DELETE FROM in_progress_items WHERE id = ?", string(msgID))
 
 	return nil
 }
