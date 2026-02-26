@@ -368,16 +368,6 @@ type ProgressStatus struct {
 	ElapsedTime         float64 `json:"elapsedTime"`
 }
 
-// IsConfigVersionOutdated checks if the given config version is outdated
-func IsConfigVersionOutdated(configVersion int) bool {
-	// If no version is specified (0), consider it outdated
-	if configVersion == 0 {
-		return true
-	}
-	// If version is less than current, it's outdated
-	return configVersion < CurrentConfigVersion
-}
-
 // IsConfigVersionTooNew checks if the config version is newer than the current version
 func IsConfigVersionTooNew(configVersion int) bool {
 	return configVersion > CurrentConfigVersion
@@ -404,7 +394,7 @@ func Load(path string) (*ConfigData, error) {
 
 	// Migrate v1 CheckOnly → v2 Role
 	if cfg.Version <= 1 {
-		slog.Info("Migrating config from v1 to v2 (CheckOnly → Role)",
+		slog.Info("Migrating config from v0/v1 to v2 (CheckOnly → Role)",
 			"configPath", path)
 		for i := range cfg.Servers {
 			s := &cfg.Servers[i]
@@ -418,6 +408,13 @@ func Load(path string) (*ConfigData, error) {
 			s.CheckOnly = nil // clear deprecated field
 		}
 		cfg.Version = CurrentConfigVersion
+
+		// Persist the migrated config so future loads don't re-trigger migration
+		if saveErr := SaveConfig(&cfg, path); saveErr != nil {
+			slog.Warn("Failed to save migrated config to disk", "error", saveErr, "configPath", path)
+		} else {
+			slog.Info("Config migration saved successfully", "configPath", path)
+		}
 	}
 
 	// Set default values
@@ -510,11 +507,6 @@ func Load(path string) (*ConfigData, error) {
 	if cfg.Par2.MaintainPar2Files == nil {
 		maintainPar2Files := false
 		cfg.Par2.MaintainPar2Files = &maintainPar2Files
-	}
-
-	// Set version if not present
-	if cfg.Version == 0 {
-		cfg.Version = CurrentConfigVersion
 	}
 
 	// Set default values for NZB compression
