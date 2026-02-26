@@ -571,6 +571,31 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 
 				// If we haven't exceeded max retries, add only failed articles back to queue
 				if post.Retries < int(p.checkCfg.MaxRePost) {
+					// Refresh article headers before re-posting.
+					// A fresh MessageID avoids server-side duplicate detection on the retry,
+					// and the header validation guards against 441 "Missing required fields"
+					// errors that can occur when headers are missing or empty.
+					for _, art := range failedArticles {
+						// Generate a new MessageID for the retry
+						if newMsgID, err := article.GenerateMessageID(); err == nil {
+							art.MessageID = newMsgID
+						}
+						// Ensure required NNTP headers are non-empty
+						if art.From == "" {
+							if defaultFrom := p.cfg.PostHeaders.DefaultFrom; defaultFrom != "" {
+								art.From = defaultFrom
+							} else if from, err := article.GenerateFrom(); err == nil {
+								art.From = from
+							}
+						}
+						if art.Subject == "" {
+							art.Subject = article.GenerateRandomSubject()
+						}
+						if len(art.Groups) == 0 {
+							slog.WarnContext(ctx, "Retried article has no newsgroups", "messageID", art.MessageID)
+						}
+					}
+
 					// Create a new post with only the failed articles
 					failedPost := &Post{
 						FilePath: post.FilePath,
