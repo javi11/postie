@@ -190,7 +190,10 @@
 			"next_run_soon": "Soon",
 			"next_run_minutes": "in {count} {count, plural, =1 {minute} other {minutes}}",
 			"next_run_hours": "in {count} {count, plural, =1 {hour} other {hours}}",
-			"next_run_days": "in {count} {count, plural, =1 {day} other {days}}"
+			"next_run_days": "in {count} {count, plural, =1 {day} other {days}}",
+			"scan_now": "Scan Now",
+			"scan_triggered": "Scan Triggered",
+			"scan_triggered_description": "Directory scan has been started"
 		}
 	}
 }

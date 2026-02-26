@@ -242,6 +242,10 @@ export function TestProviderConnectivity(arg1) {
   return window['go']['backend']['App']['TestProviderConnectivity'](arg1);
 }
 
+export function TriggerScan() {
+  return window['go']['backend']['App']['TriggerScan']();
+}
+
 export function UploadFiles() {
   return window['go']['backend']['App']['UploadFiles']();
 }

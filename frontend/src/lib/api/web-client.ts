@@ -187,6 +187,10 @@ export class WebClient {
 		return this.get<watcher.WatcherStatusInfo>("/watcher/status");
 	}
 
+	async triggerScan(): Promise<void> {
+		return this.post<void>("/watcher/scan");
+	}
+
 	async pauseProcessing(): Promise<void> {
 		return this.post<void>("/processor/pause");
 	}

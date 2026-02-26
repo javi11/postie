@@ -192,7 +192,10 @@
             "next_run_soon": "Yakında",
             "next_run_minutes": "{count} {count, plural, =1 {dakika} other {dakika}} içinde",
             "next_run_hours": "{count} {count, plural, =1 {saat} other {saat}} içinde",
-            "next_run_days": "{count} {count, plural, =1 {gün} other {gün}} içinde"
+            "next_run_days": "{count} {count, plural, =1 {gün} other {gün}} içinde",
+            "scan_now": "Şimdi tara",
+            "scan_triggered": "Tarama başlatıldı",
+            "scan_triggered_description": "Dizin taraması başlatıldı"
         }
     }
 }

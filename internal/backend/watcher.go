@@ -74,6 +74,18 @@ func (a *App) initializeWatcher() error {
 	return nil
 }
 
+// TriggerScan triggers an immediate directory scan outside the normal polling interval
+func (a *App) TriggerScan() {
+	defer a.recoverPanic("TriggerScan")
+
+	if a.watcher == nil {
+		slog.Warn("TriggerScan called but watcher is not initialized")
+		return
+	}
+
+	a.watcher.TriggerScan(a.watchCtx)
+}
+
 // GetWatcherStatus returns the current status of the watcher
 func (a *App) GetWatcherStatus() watcher.WatcherStatusInfo {
 	defer a.recoverPanic("GetWatcherStatus")
