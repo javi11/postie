@@ -12,7 +12,6 @@ import {
 	Eye,
 	Folder,
 	FolderOpen,
-	Save,
 	Trash2,
 } from "lucide-svelte";
 
@@ -28,8 +27,6 @@ $effect(() => {
 		config.watchers = [createDefaultWatcher()];
 	}
 });
-
-let saving = $state(false);
 
 // Track expanded state per watcher card
 let expanded = $state<boolean[]>([]);
@@ -147,26 +144,6 @@ function getWatcherDisplayName(w: configType.WatcherConfig, index: number): stri
 	return $t("settings.watcher.watcher_number", { values: { n: index + 1 } });
 }
 
-async function saveWatcherSettings() {
-	try {
-		saving = true;
-
-		const currentConfig = await apiClient.getConfig();
-		currentConfig.watchers = config.watchers;
-
-		await apiClient.saveConfig(currentConfig);
-
-		toastStore.success(
-			$t("settings.watcher.saved_success"),
-			$t("settings.watcher.saved_success_description")
-		);
-	} catch (error) {
-		console.error("Failed to save watcher settings:", error);
-		toastStore.error($t("common.messages.error_saving"), String(error));
-	} finally {
-		saving = false;
-	}
-}
 </script>
 
 <div class="card bg-base-100 shadow-sm">
@@ -456,17 +433,5 @@ async function saveWatcherSettings() {
       {/each}
     </div>
 
-    <!-- Save Button -->
-    <div class="pt-4 border-t border-base-300">
-      <button
-        type="button"
-        class="btn btn-success"
-        onclick={saveWatcherSettings}
-        disabled={saving}
-      >
-        <Save class="w-4 h-4" />
-        {saving ? $t('common.common.saving') : $t('settings.watcher.save_button')}
-      </button>
-    </div>
   </div>
 </div>

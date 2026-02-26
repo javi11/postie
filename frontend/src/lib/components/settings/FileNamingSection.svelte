@@ -1,9 +1,7 @@
 <script lang="ts">
-import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
-import { toastStore } from "$lib/stores/toast";
 import type { config as configType } from "$lib/wailsjs/go/models";
-import { FileText, Save } from "lucide-svelte";
+import { FileText } from "lucide-svelte";
 
 interface Props {
 	config: configType.ConfigData;
@@ -13,36 +11,12 @@ let { config = $bindable() }: Props = $props();
 
 // Reactive local state
 let maintainOriginalExtension = $state(config.maintain_original_extension ?? true);
-let saving = $state(false);
-
-// Derived state
-let canSave = $derived(!saving);
 
 // Sync local state back to config
 $effect(() => {
 	config.maintain_original_extension = maintainOriginalExtension;
 });
 
-async function saveFileNamingSettings() {
-	if (!canSave) return;
-	
-	try {
-		saving = true;
-
-		// Get current config to avoid conflicts
-		const currentConfig = await apiClient.getConfig();
-
-		// Update only file naming settings
-		currentConfig.maintain_original_extension = maintainOriginalExtension;
-
-		await apiClient.saveConfig(currentConfig);
-	} catch (error) {
-		console.error("Failed to save file naming settings:", error);
-		toastStore.error($t("common.messages.error_saving"), String(error));
-	} finally {
-		saving = false;
-	}
-}
 </script>
 
 <div class="card bg-base-100 shadow-xl">
@@ -73,17 +47,5 @@ async function saveFileNamingSettings() {
 			</span>
 		</div>
 
-		<!-- Save Button -->
-		<div class="pt-4 border-t border-base-300">
-			<button
-				type="button"
-				class="btn btn-success"
-				onclick={saveFileNamingSettings}
-				disabled={!canSave}
-			>
-				<Save class="w-4 h-4" />
-				{saving ? $t('common.common.saving') : $t('settings.file_naming.save_button')}
-			</button>
-		</div>
 	</div>
 </div>

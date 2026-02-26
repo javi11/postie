@@ -1,13 +1,9 @@
 <script lang="ts">
-import apiClient from "$lib/api/client";
 import NntpServerManager from "$lib/components/NntpServerManager.svelte";
 import { t } from "$lib/i18n";
 import { advancedMode } from "$lib/stores/app";
-import { toastStore } from "$lib/stores/toast";
 import { config as configType } from "$lib/wailsjs/go/models";
 import {
-	Save,
-	Server,
 	Upload,
 	ShieldCheck,
 } from "lucide-svelte";
@@ -18,7 +14,6 @@ interface Props {
 
 let { config = $bindable() }: Props = $props();
 
-let saving = $state(false);
 let isAdvanced = $derived($advancedMode);
 
 // Helper to build a ServerConfig from a plain object
@@ -95,63 +90,6 @@ function handleVerifyUpdate(updatedServers: any[]) {
 	];
 }
 
-async function saveServerSettings() {
-	try {
-		saving = true;
-
-		// Validate upload servers have required fields
-		const uploadServers = config.servers.filter(s => (s.role || "upload") !== "verify");
-		for (let i = 0; i < uploadServers.length; i++) {
-			const server = uploadServers[i];
-			if (!server.host || server.host.trim() === "") {
-				toastStore.error(
-					"Configuration Error",
-					$t("settings.server.validation_errors.host_required", {
-						values: { number: i + 1 },
-					}),
-				);
-				return;
-			}
-			if (!server.port || server.port <= 0 || server.port > 65535) {
-				toastStore.error(
-					"Configuration Error",
-					$t("settings.server.validation_errors.port_invalid", {
-						values: { number: i + 1 },
-					}),
-				);
-				return;
-			}
-		}
-
-		// Get the current config from the server to avoid conflicts
-		const currentConfig = await apiClient.getConfig();
-
-		// Update servers with proper type conversion
-		currentConfig.servers = config.servers.map(
-			(server: configType.ServerConfig) => ({
-				...server,
-				port: server.port || 119,
-				max_connections: server.max_connections || 10,
-				max_connection_idle_time_in_seconds:
-					server.max_connection_idle_time_in_seconds || 300,
-				max_connection_ttl_in_seconds:
-					server.max_connection_ttl_in_seconds || 3600,
-			}),
-		);
-
-		await apiClient.saveConfig(currentConfig);
-
-		toastStore.success(
-			$t("settings.server.saved_success"),
-			$t("settings.server.saved_success_description"),
-		);
-	} catch (error) {
-		console.error("Failed to save server settings:", error);
-		toastStore.error($t("common.messages.error_saving"), String(error));
-	} finally {
-		saving = false;
-	}
-}
 </script>
 
 <div class="space-y-6">
@@ -208,19 +146,8 @@ async function saveServerSettings() {
     </div>
   </div>
 
-  <!-- Save Button -->
   <div class="pt-2">
-    <button
-      type="button"
-      class="btn btn-success"
-      onclick={saveServerSettings}
-      disabled={saving}
-    >
-      <Save class="w-4 h-4" />
-      {saving ? $t("common.common.saving") : $t("settings.server.save_button")}
-    </button>
-
-    <p class="text-sm text-base-content/70 mt-3">
+    <p class="text-sm text-base-content/70">
       {@html $t("settings.server.tip")}
     </p>
   </div>

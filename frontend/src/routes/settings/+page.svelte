@@ -17,9 +17,8 @@ import WatcherSection from "$lib/components/settings/WatcherSection.svelte";
 import { t } from "$lib/i18n";
 import { advancedMode, appStatus, settingsSaveFunction } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
-import { parseDuration } from "$lib/utils";
 import { backend, config as configType } from "$lib/wailsjs/go/models";
-import { AlertCircle, CheckCircle, RefreshCw, Settings } from "lucide-svelte";
+import { AlertCircle, CheckCircle, RefreshCw, Save, Settings } from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
 
 let configData: configType.ConfigData | null = $state(null);
@@ -30,6 +29,7 @@ let criticalConfigErrorMessage = $state("");
 let loading = $state(false);
 let loadError = $state(false);
 let isDirty = $state(false);
+let saving = $state(false);
 let savedConfigSnapshot = "";
 
 onMount(() => {
@@ -78,6 +78,7 @@ async function loadConfig() {
 }
 
 async function handleSaveConfig() {
+	saving = true;
 	try {
 		if (!localConfig) {
 			toastStore.error(
@@ -141,36 +142,12 @@ async function handleSaveConfig() {
 		configToSave.posting.article_size_in_bytes =
 			Number.parseInt(configToSave.posting.article_size_in_bytes) || 750000;
 
-		// Convert duration fields to nanoseconds
-		configToSave.posting.retry_delay = parseDuration(
-			configToSave.posting.retry_delay || "5s",
-		);
-
-		// Convert post_check duration fields
-		if (configToSave.post_check) {
-			configToSave.post_check.delay = parseDuration(
-				configToSave.post_check.delay || "10s",
-			);
-		}
+		// Duration fields remain as strings (Go expects human-readable strings like "5s", "1m")
 
 		// Convert queue fields
 		if (configToSave.queue) {
 			configToSave.queue.max_concurrent_uploads =
 				Number.parseInt(configToSave.queue.max_concurrent_uploads) || 1;
-		}
-
-		// Convert post_upload_script timeout
-		if (configToSave.post_upload_script) {
-			configToSave.post_upload_script.timeout = parseDuration(
-				configToSave.post_upload_script.timeout || "30s",
-			);
-		}
-
-		// Convert connection pool duration fields
-		if (configToSave.connection_pool) {
-			configToSave.connection_pool.health_check_interval = parseDuration(
-				configToSave.connection_pool.health_check_interval || "1m",
-			);
 		}
 
 		// Convert par2 integer fields
@@ -180,15 +157,12 @@ async function handleSaveConfig() {
 			Number.parseInt(configToSave.par2.max_input_slices) || 4000;
 
 		// Convert watcher fields
-		if (configToSave.watcher) {
-			configToSave.watcher.size_threshold =
-				Number.parseInt(configToSave.watcher.size_threshold) || 104857600;
-			configToSave.watcher.min_file_size =
-				Number.parseInt(configToSave.watcher.min_file_size) || 1048576;
-
-			configToSave.watcher.check_interval = parseDuration(
-				configToSave.watcher.check_interval || "5m",
-			);
+		if (configToSave.watchers && configToSave.watchers.length > 0) {
+			configToSave.watchers = configToSave.watchers.map((w: any) => ({
+				...w,
+				size_threshold: Number.parseInt(w.size_threshold) || 104857600,
+				min_file_size: Number.parseInt(w.min_file_size) || 1048576,
+			}));
 		}
 
 		// Ensure output_dir is set
@@ -222,6 +196,8 @@ async function handleSaveConfig() {
 			$t("common.messages.configuration_save_failed"),
 			String(error),
 		);
+	} finally {
+		saving = false;
 	}
 }
 
@@ -386,6 +362,29 @@ onDestroy(() => {
               <PostUploadScriptSection bind:config={localConfig} />
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Sticky Save Bar -->
+      <div class="sticky bottom-0 z-10 bg-base-100 border-t border-base-300 shadow-md">
+        <div class="flex items-center justify-end gap-4 p-4">
+          {#if isDirty}
+            <span class="text-sm text-warning font-medium">{$t('settings.header.unsaved_changes')}</span>
+          {/if}
+          <button
+            type="button"
+            class="btn btn-success"
+            onclick={handleSaveConfig}
+            disabled={saving}
+          >
+            {#if saving}
+              <span class="loading loading-spinner loading-sm"></span>
+              {$t('common.common.saving')}
+            {:else}
+              <Save class="w-4 h-4" />
+              {$t('settings.header.save_configuration')}
+            {/if}
+          </button>
         </div>
       </div>
   {:else}

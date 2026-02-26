@@ -1,9 +1,7 @@
 <script lang="ts">
-import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
-import { toastStore } from "$lib/stores/toast";
 import type { config as configType } from "$lib/wailsjs/go/models";
-import { FileCode, Save, Terminal } from "lucide-svelte";
+import { FileCode, Terminal } from "lucide-svelte";
 import DurationInput from "../inputs/DurationInput.svelte";
 
 interface Props {
@@ -30,14 +28,6 @@ if (config && !config.post_upload_script) {
 let enabled = $state(config.post_upload_script?.enabled ?? false);
 let command = $state(config.post_upload_script?.command || "");
 let timeout = $state(config.post_upload_script?.timeout || "30s");
-let saving = $state(false);
-
-// Derived state
-let canSave = $derived(
-	(!enabled || (enabled && command.trim())) && 
-	timeout.trim() && 
-	!saving
-);
 
 // Sync local state back to config
 $effect(() => {
@@ -52,41 +42,6 @@ $effect(() => {
 	config.post_upload_script.timeout = timeout;
 });
 
-async function savePostUploadScriptSettings() {
-	if (!config?.post_upload_script) {
-		return;
-	}
-
-	try {
-		saving = true;
-
-		const currentConfig = await apiClient.getConfig();
-
-		// Validation
-		if (enabled && !command.trim()) {
-			throw new Error("Command is required when script is enabled");
-		}
-		
-		if (!timeout.trim()) {
-			throw new Error("Timeout is required");
-		}
-
-		// Preserve existing fields and only update the ones managed by this UI
-		currentConfig.post_upload_script = {
-			...currentConfig.post_upload_script,
-			enabled: enabled,
-			command: command.trim(),
-			timeout: timeout.trim(),
-		};
-
-		await apiClient.saveConfig(currentConfig);
-	} catch (error) {
-		console.error("Failed to save post upload script settings:", error);
-		toastStore.error($t("common.messages.error_saving"), String(error));
-	} finally {
-		saving = false;
-	}
-}
 </script>
 
 {#if config && config.post_upload_script}
@@ -179,16 +134,6 @@ async function savePostUploadScriptSettings() {
       </div>
     </div>
 
-    <div class="card-actions pt-4 border-t border-base-300">
-      <button
-        class="btn btn-success"
-        onclick={savePostUploadScriptSettings}
-        disabled={!canSave}
-      >
-        <Save class="w-4 h-4" />
-        {saving ? $t('common.common.saving') : $t('settings.post_upload_script.save_button')}
-      </button>
-    </div>
   </div>
 </div>
 {:else}

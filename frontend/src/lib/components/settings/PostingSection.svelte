@@ -1,13 +1,11 @@
 <script lang="ts">
 // Imports
-import apiClient from "$lib/api/client";
 import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 import ThrottleRateInput from "$lib/components/inputs/ThrottleRateInput.svelte";
 import { t } from "$lib/i18n";
 import { advancedMode } from "$lib/stores/app";
-import { toastStore } from "$lib/stores/toast";
 import { config as configType } from "$lib/wailsjs/go/models";
-import { CloudUpload, Plus, Save, Trash2 } from "lucide-svelte";
+import { CloudUpload, Plus, Trash2 } from "lucide-svelte";
   import SizeInput from "$lib/components/inputs/SizeInput.svelte";
 
 // Types
@@ -18,8 +16,6 @@ interface ComponentProps {
 // Props
 let { config = $bindable() }: ComponentProps = $props();
 
-// State
-let saving = $state(false);
 // Reactive local state for form inputs (following best practices)
 let maxRetries = $state(config.posting.max_retries || 3);
 let retryDelay = $state(config.posting.retry_delay || "5s");
@@ -162,31 +158,6 @@ function updateThrottleRate() {
 	// Actual sync happens in $effect above
 }
 
-async function savePostingSettings() {
-	try {
-		saving = true;
-
-		// Get current config to avoid conflicts
-		const currentConfig = await apiClient.getConfig();
-		// Update posting section with type conversion
-		currentConfig.posting = {
-			...config.posting,
-			max_retries: Number.parseInt(String(config.posting.max_retries)) || 3,
-			article_size_in_bytes:
-				Number.parseInt(String(config.posting.article_size_in_bytes)) || 750000,
-			retry_delay: config.posting.retry_delay || "5s",
-			throttle_rate: config.posting.throttle_rate || 0,
-			convertValues: config.posting.convertValues,
-		};
-
-		await apiClient.saveConfig(currentConfig);
-	} catch (error) {
-		console.error("Failed to save posting settings:", error);
-		toastStore.error($t("common.messages.error_saving"), String(error));
-	} finally {
-		saving = false;
-	}
-}
 </script>
 
 <!-- Main Container -->
@@ -536,17 +507,5 @@ async function savePostingSettings() {
       </div>
     </div>
 
-    <!-- Save Button -->
-    <div class="pt-4 border-t border-base-300">
-      <button
-        type="button"
-        class="btn btn-success flex items-center gap-2"
-        onclick={savePostingSettings}
-        disabled={saving}
-      >
-        <Save class="w-4 h-4" />
-        {saving ? $t('common.common.saving') : $t('settings.posting.save_button')}
-      </button>
-    </div>
   </div>
 </div>

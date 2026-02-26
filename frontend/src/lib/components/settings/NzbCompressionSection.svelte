@@ -1,9 +1,7 @@
 <script lang="ts">
-import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
-import { toastStore } from "$lib/stores/toast";
 import type { config as configType } from "$lib/wailsjs/go/models";
-import { Archive, Save } from "lucide-svelte";
+import { Archive } from "lucide-svelte";
 
 interface Props {
 	config: configType.ConfigData;
@@ -24,7 +22,6 @@ if (!config.nzb_compression) {
 let enabled = $state(config.nzb_compression.enabled ?? false);
 let compressionType = $state(config.nzb_compression.type || "none");
 let compressionLevel = $state(config.nzb_compression.level || 0);
-let saving = $state(false);
 
 // Dynamic compression types based on translations
 let compressionTypes = $derived([
@@ -46,13 +43,6 @@ let compressionTypes = $derived([
 let compressionLimits = $derived(getCompressionLimits(compressionType));
 let defaultLevel = $derived(getDefaultLevel(compressionType));
 
-// Derived state
-let canSave = $derived(
-	compressionType && 
-	(compressionType === "none" || 
-	 (compressionLevel >= compressionLimits.min && compressionLevel <= compressionLimits.max)) && 
-	!saving
-);
 
 // Sync local state back to config
 $effect(() => {
@@ -105,39 +95,6 @@ function getDefaultLevel(type: string) {
 	}
 }
 
-async function saveNzbCompressionSettings() {
-	if (!canSave) return;
-	
-	try {
-		saving = true;
-
-		// Validation
-		if (compressionType !== "none") {
-			const limits = getCompressionLimits(compressionType);
-			if (compressionLevel < limits.min || compressionLevel > limits.max) {
-				throw new Error(`Compression level must be between ${limits.min} and ${limits.max}`);
-			}
-		}
-
-		// Get current config to avoid conflicts
-		const currentConfig = await apiClient.getConfig();
-
-		// Update only nzb compression section
-		currentConfig.nzb_compression = {
-			...currentConfig.nzb_compression,
-			enabled: enabled,
-			type: compressionType,
-			level: compressionLevel,
-		};
-
-		await apiClient.saveConfig(currentConfig);
-	} catch (error) {
-		console.error("Failed to save NZB compression settings:", error);
-		toastStore.error($t("common.messages.error_saving"), String(error));
-	} finally {
-		saving = false;
-	}
-}
 
 // Auto-set default level when compression type changes
 $effect(() => {
@@ -249,17 +206,5 @@ $effect(() => {
       </div>
     {/if}
 
-    <!-- Save Button -->
-    <div class="pt-4 border-t border-base-300">
-      <button
-        type="button"
-        class="btn btn-success"
-        onclick={saveNzbCompressionSettings}
-        disabled={!canSave}
-      >
-        <Save class="w-4 h-4" />
-        {saving ? $t('common.common.saving') : $t('settings.nzb_compression.save_button')}
-      </button>
-    </div>
   </div>
 </div>

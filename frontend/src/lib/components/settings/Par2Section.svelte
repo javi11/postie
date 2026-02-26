@@ -4,15 +4,13 @@ import PercentageInput from "$lib/components/inputs/PercentageInput.svelte";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import type { config as configType } from "$lib/wailsjs/go/models";
-import { Info, Save, ShieldCheck } from "lucide-svelte";
+import { Info, ShieldCheck } from "lucide-svelte";
 
 interface Props {
 	config: configType.ConfigData;
 }
 
 let { config = $bindable() }: Props = $props();
-
-let saving = $state(false);
 
 // Preset definitions
 const redundancyPresets = [
@@ -27,9 +25,6 @@ let enabled = $state(config.par2?.enabled ?? false);
 let tempDir = $state(config.par2?.temp_dir || "");
 let redundancy = $state(config.par2?.redundancy || "10%");
 let maintainPar2Files = $state(config.par2?.maintain_par2_files ?? false);
-
-// Derived state
-let canSave = $derived(!saving);
 
 // Sync local state back to config
 $effect(() => {
@@ -57,33 +52,6 @@ async function selectTempDirectory() {
 	} catch (error) {
 		console.error("Failed to select temp directory:", error);
 		toastStore.error($t("common.messages.error"), "Failed to select directory");
-	}
-}
-
-async function savePar2Settings() {
-	if (!canSave) return;
-
-	try {
-		saving = true;
-
-		// Get the current config from the server to avoid conflicts
-		const currentConfig = await apiClient.getConfig();
-
-		// Only update the par2 fields with proper type conversion
-		currentConfig.par2 = {
-			...currentConfig.par2,
-			enabled: enabled,
-			temp_dir: tempDir.trim(),
-			redundancy: redundancy,
-			maintain_par2_files: maintainPar2Files,
-		};
-
-		await apiClient.saveConfig(currentConfig);
-	} catch (error) {
-		console.error("Failed to save PAR2 settings:", error);
-		toastStore.error($t("common.messages.error_saving"), String(error));
-	} finally {
-		saving = false;
 	}
 }
 
@@ -217,16 +185,5 @@ let redundancyDisplay = $derived(redundancy || "10%");
       {/if}
     </div>
 
-    <!-- Save Button -->
-    <div class="pt-4 border-t border-base-300">
-      <button
-        class="btn btn-success"
-        onclick={savePar2Settings}
-        disabled={!canSave}
-      >
-        <Save class="w-4 h-4" />
-        {saving ? $t('common.common.saving') : $t('settings.par2.save_button')}
-      </button>
-    </div>
   </div>
 </div>
