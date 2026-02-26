@@ -106,7 +106,7 @@ type App struct {
 	poolManager          *pool.Manager
 	queue                *queue.Queue
 	processor            *processor.Processor
-	watcher              *watcher.Watcher
+	watchers             []*watcher.Watcher
 	watchCtx             context.Context
 	watchCancel          context.CancelFunc
 	procCtx              context.Context
@@ -382,9 +382,9 @@ func (a *App) Startup(ctx context.Context) {
 		// Initialize post check retry worker if post check is enabled
 		a.initializePostCheckWorker()
 
-		// Initialize watcher if enabled and configuration is valid
-		if err := a.initializeWatcher(); err != nil {
-			slog.Error(fmt.Sprintf("Failed to initialize watcher: %v", err))
+		// Initialize watchers if enabled and configuration is valid
+		if err := a.initializeWatchers(); err != nil {
+			slog.Error(fmt.Sprintf("Failed to initialize watchers: %v", err))
 		}
 	}
 
@@ -403,11 +403,15 @@ func (a *App) Shutdown() {
 		a.postCheckWorker = nil
 	}
 
-	// Stop watcher if running
-	if a.watcher != nil {
-		slog.Info("Stopping watcher")
-		_ = a.watcher.Close()
+	// Stop watchers if running
+	if a.watchCancel != nil {
+		a.watchCancel()
+		a.watchCancel = nil
 	}
+	for _, w := range a.watchers {
+		_ = w.Close()
+	}
+	a.watchers = nil
 
 	// Stop processor if running
 	if a.processor != nil {

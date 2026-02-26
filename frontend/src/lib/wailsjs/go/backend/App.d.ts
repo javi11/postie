@@ -62,7 +62,7 @@ export function GetRunningJobsDetails():Promise<Array<processor.RunningJobDetail
 
 export function GetWatchDirectory():Promise<string>;
 
-export function GetWatcherStatus():Promise<watcher.WatcherStatusInfo>;
+export function GetWatcherStatus():Promise<watcher.WatcherStatusInfo[]>;
 
 export function HandleDroppedFiles(arg1:Array<string>):Promise<void>;
 

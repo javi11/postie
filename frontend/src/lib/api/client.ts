@@ -279,7 +279,7 @@ export class UnifiedClient {
 		throw new Error("No client available");
 	}
 
-	async getWatcherStatus(): Promise<watcher.WatcherStatusInfo> {
+	async getWatcherStatus(): Promise<watcher.WatcherStatusInfo[]> {
 		await this.initialize();
 
 		if (this._environment === "wails") {

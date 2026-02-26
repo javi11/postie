@@ -171,7 +171,12 @@
 			"save_button": "Save Watcher Settings",
 			"saving": "Saving...",
 			"saved_success": "Watcher settings saved",
-			"saved_success_description": "Your file watcher configuration has been saved successfully!"
+			"saved_success_description": "Your file watcher configuration has been saved successfully!",
+			"add_directory": "Add Watch Directory",
+			"remove_directory": "Remove",
+			"watcher_name": "Watcher Name",
+			"watcher_name_description": "A label to identify this watch directory",
+			"watcher_number": "Watcher #{n}"
 		},
 		"par2": {
 			"title": "PAR2 Recovery Files",

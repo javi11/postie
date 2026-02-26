@@ -417,6 +417,7 @@ export namespace config {
 	    }
 	}
 	export class WatcherConfig {
+	    name: string;
 	    enabled: boolean;
 	    watch_directory: string;
 	    size_threshold: number;
@@ -435,6 +436,7 @@ export namespace config {
 
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"] ?? "";
 	        this.enabled = source["enabled"];
 	        this.watch_directory = source["watch_directory"];
 	        this.size_threshold = source["size_threshold"];
@@ -679,7 +681,8 @@ export namespace config {
 	    posting: PostingConfig;
 	    post_check: PostCheck;
 	    par2: Par2Config;
-	    watcher: WatcherConfig;
+	    watcher?: WatcherConfig;
+	    watchers: WatcherConfig[];
 	    nzb_compression: NzbCompressionConfig;
 	    database: DatabaseConfig;
 	    queue: QueueConfig;
@@ -699,7 +702,8 @@ export namespace config {
 	        this.posting = this.convertValues(source["posting"], PostingConfig);
 	        this.post_check = this.convertValues(source["post_check"], PostCheck);
 	        this.par2 = this.convertValues(source["par2"], Par2Config);
-	        this.watcher = this.convertValues(source["watcher"], WatcherConfig);
+	        this.watcher = source["watcher"] ? this.convertValues(source["watcher"], WatcherConfig) : undefined;
+	        this.watchers = this.convertValues(source["watchers"] || [], WatcherConfig);
 	        this.nzb_compression = this.convertValues(source["nzb_compression"], NzbCompressionConfig);
 	        this.database = this.convertValues(source["database"], DatabaseConfig);
 	        this.queue = this.convertValues(source["queue"], QueueConfig);
@@ -851,6 +855,7 @@ export namespace watcher {
 	    }
 	}
 	export class WatcherStatusInfo {
+	    name: string;
 	    enabled: boolean;
 	    initialized: boolean;
 	    watch_directory: string;
@@ -866,6 +871,7 @@ export namespace watcher {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"] ?? "";
 	        this.enabled = source["enabled"];
 	        this.initialized = source["initialized"];
 	        this.watch_directory = source["watch_directory"];

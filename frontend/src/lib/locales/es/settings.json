@@ -166,7 +166,12 @@
 			"save_button": "Guardar Configuración del Monitor",
 			"saving": "Guardando...",
 			"saved_success": "Configuración del monitor guardada",
-			"saved_success_description": "¡Su configuración del monitor de archivos se ha guardado exitosamente!"
+			"saved_success_description": "¡Su configuración del monitor de archivos se ha guardado exitosamente!",
+			"add_directory": "Añadir Directorio",
+			"remove_directory": "Eliminar",
+			"watcher_name": "Nombre del Monitor",
+			"watcher_name_description": "Una etiqueta para identificar este directorio de vigilancia",
+			"watcher_number": "Monitor #{n}"
 		},
 		"par2": {
 			"title": "Archivos de Recuperación PAR2",

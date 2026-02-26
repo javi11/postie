@@ -183,8 +183,8 @@ export class WebClient {
 		return this.get<backend.ProcessorStatus>("/processor/status");
 	}
 
-	async getWatcherStatus(): Promise<watcher.WatcherStatusInfo> {
-		return this.get<watcher.WatcherStatusInfo>("/watcher/status");
+	async getWatcherStatus(): Promise<watcher.WatcherStatusInfo[]> {
+		return this.get<watcher.WatcherStatusInfo[]>("/watcher/status");
 	}
 
 	async triggerScan(): Promise<void> {

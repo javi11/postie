@@ -166,7 +166,12 @@
 			"save_button": "Sauvegarder les Paramètres du Surveillant",
 			"saving": "Sauvegarde...",
 			"saved_success": "Paramètres du surveillant sauvegardés",
-			"saved_success_description": "Votre configuration du surveillant de fichiers a été sauvegardée avec succès !"
+			"saved_success_description": "Votre configuration du surveillant de fichiers a été sauvegardée avec succès !",
+			"add_directory": "Ajouter un Répertoire de Surveillance",
+			"remove_directory": "Supprimer",
+			"watcher_name": "Nom du Surveillant",
+			"watcher_name_description": "Un libellé pour identifier ce répertoire de surveillance",
+			"watcher_number": "Surveillant #{n}"
 		},
 		"par2": {
 			"title": "Fichiers de Récupération PAR2",

@@ -183,3 +183,17 @@ func (mr *MockConfigMockRecorder) GetWatcherConfig() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWatcherConfig", reflect.TypeOf((*MockConfig)(nil).GetWatcherConfig))
 }
+
+// GetWatcherConfigs mocks base method.
+func (m *MockConfig) GetWatcherConfigs() []config.WatcherConfig {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetWatcherConfigs")
+	ret0, _ := ret[0].([]config.WatcherConfig)
+	return ret0
+}
+
+// GetWatcherConfigs indicates an expected call of GetWatcherConfigs.
+func (mr *MockConfigMockRecorder) GetWatcherConfigs() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWatcherConfigs", reflect.TypeOf((*MockConfig)(nil).GetWatcherConfigs))
+}
