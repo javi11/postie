@@ -294,6 +294,15 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 		if errors.Is(err, context.Canceled) {
 			slog.Info("Job cancelled", "msg", msg.ID, "path", job.Path)
 
+			// Only clean up if this is a user cancellation (not app shutdown).
+			// If the outer ctx is also done, keep in_progress_items for crash recovery on next start.
+			if ctx.Err() == nil {
+				if cancelErr := p.queue.CancelFile(ctx, msg.ID); cancelErr != nil {
+					slog.ErrorContext(ctx, "Failed to clean up in-progress item after cancel",
+						"error", cancelErr, "id", string(msg.ID))
+				}
+			}
+
 			return nil
 		}
 		// Handle error with retry logic - re-add job to queue
