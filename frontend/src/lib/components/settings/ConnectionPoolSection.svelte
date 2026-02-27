@@ -1,10 +1,8 @@
 <script lang="ts">
-import apiClient from "$lib/api/client";
 import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 import { t } from "$lib/i18n";
-import { toastStore } from "$lib/stores/toast";
 import type { config as configType } from "$lib/wailsjs/go/models";
-import { Link, Save } from "lucide-svelte";
+import { Link } from "lucide-svelte";
 
 interface Props {
 	config: configType.ConfigData;
@@ -23,15 +21,6 @@ if (!config.connection_pool) {
 // Reactive local state
 let minConnections = $state(config.connection_pool.min_connections || 5);
 let healthCheckInterval = $state(config.connection_pool.health_check_interval || "1m");
-let saving = $state(false);
-
-// Derived state
-let canSave = $derived(
-	minConnections > 0 && 
-	minConnections <= 50 && 
-	healthCheckInterval.trim() && 
-	!saving
-);
 
 // Sync local state back to config
 $effect(() => {
@@ -42,40 +31,6 @@ $effect(() => {
 	config.connection_pool.health_check_interval = healthCheckInterval;
 });
 
-
-async function saveConnectionPoolSettings() {
-	if (!canSave) return;
-	
-	try {
-		saving = true;
-
-		// Validation
-		if (minConnections < 1 || minConnections > 50) {
-			throw new Error("Min connections must be between 1 and 50");
-		}
-		
-		if (!healthCheckInterval.trim()) {
-			throw new Error("Health check interval is required");
-		}
-
-		// Get current config to avoid conflicts
-		const currentConfig = await apiClient.getConfig();
-
-		// Update only connection pool section
-		currentConfig.connection_pool = {
-			...currentConfig.connection_pool,
-			min_connections: minConnections,
-			health_check_interval: healthCheckInterval.trim(),
-		};
-
-		await apiClient.saveConfig(currentConfig);
-	} catch (error) {
-		console.error("Failed to save connection pool settings:", error);
-		toastStore.error($t("common.messages.error_saving"), String(error));
-	} finally {
-		saving = false;
-	}
-}
 
 const healthCheckPresets = [
 	{ label: "30s", value: 30, unit: "s" },
@@ -130,17 +85,5 @@ const healthCheckPresets = [
       </span>
     </div>
 
-    <!-- Save Button -->
-    <div class="pt-4 border-t border-base-300">
-      <button
-        type="button"
-        class="btn btn-success"
-        onclick={saveConnectionPoolSettings}
-        disabled={!canSave}
-      >
-        <Save class="w-4 h-4" />
-        {saving ? $t('common.common.saving') : $t('settings.connection_pool.save_button')}
-      </button>
-    </div>
   </div>
 </div>

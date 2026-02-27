@@ -1,10 +1,8 @@
 <script lang="ts">
-import apiClient from "$lib/api/client";
 import DurationInput from "$lib/components/inputs/DurationInput.svelte";
 import { t } from "$lib/i18n";
-import { toastStore } from "$lib/stores/toast";
 import type { config as configType } from "$lib/wailsjs/go/models";
-import { CheckCircle, Save } from "lucide-svelte";
+import { CheckCircle } from "lucide-svelte";
 
 const presets = [
 	{ label: "5s", value: 5, unit: "s" },
@@ -46,17 +44,6 @@ let deferredCheckDelay = $state(config.post_check?.deferred_check_delay || "5m")
 let deferredMaxRetries = $state(config.post_check?.deferred_max_retries || 5);
 let deferredMaxBackoff = $state(config.post_check?.deferred_max_backoff || "1h");
 let deferredCheckInterval = $state(config.post_check?.deferred_check_interval || "2m");
-let saving = $state(false);
-
-// Derived state
-let canSave = $derived(
-	delay.trim() &&
-	maxReposts >= 0 &&
-	maxReposts <= 10 &&
-	deferredMaxRetries >= 1 &&
-	deferredMaxRetries <= 20 &&
-	!saving
-);
 
 // Ensure post_check exists with defaults
 if (!config.post_check) {
@@ -100,41 +87,6 @@ $effect(() => {
 	config.post_check.deferred_check_interval = deferredCheckInterval;
 });
 
-async function savePostCheckSettings() {
-	try {
-		saving = true;
-
-		// Get the current config from the server to avoid conflicts
-		const currentConfig = await apiClient.getConfig();
-
-		// Validation
-		if (!delay.trim()) {
-			throw new Error("Delay is required");
-		}
-
-		if (maxReposts < 0 || maxReposts > 10) {
-			throw new Error("Max reposts must be between 0 and 10");
-		}
-
-		// Only update the post_check fields with proper type conversion
-		currentConfig.post_check = {
-			enabled: enabled,
-			delay: delay.trim(),
-			max_reposts: maxReposts,
-			deferred_check_delay: deferredCheckDelay.trim(),
-			deferred_max_retries: deferredMaxRetries,
-			deferred_max_backoff: deferredMaxBackoff.trim(),
-			deferred_check_interval: deferredCheckInterval.trim(),
-		};
-
-		await apiClient.saveConfig(currentConfig);
-	} catch (error) {
-		console.error("Failed to save post check settings:", error);
-		toastStore.error($t("common.messages.error_saving"), String(error));
-	} finally {
-		saving = false;
-	}
-}
 </script>
 
 <div class="card bg-base-100 shadow-xl">
@@ -269,16 +221,5 @@ async function savePostCheckSettings() {
       </span>
     </div>
 
-    <!-- Save Button -->
-    <div class="card-actions pt-4 border-t border-base-300">
-      <button
-        class="btn btn-success"
-        onclick={savePostCheckSettings}
-        disabled={!canSave}
-      >
-        <Save class="w-4 h-4" />
-        {saving ? $t('common.common.saving') : $t('settings.post_check.save_button')}
-      </button>
-    </div>
   </div>
 </div>
