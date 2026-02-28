@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -100,14 +100,14 @@ func (h *WebSocketHub) Run() {
 			h.mu.Lock()
 			h.clients[client] = true
 			h.mu.Unlock()
-			log.Printf("WebSocket client connected: %s", client.id)
+			slog.Info("WebSocket client connected", "id", client.id)
 
 		case client := <-h.unregister:
 			h.mu.Lock()
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
 				close(client.send)
-				log.Printf("WebSocket client disconnected: %s", client.id)
+				slog.Info("WebSocket client disconnected", "id", client.id)
 			}
 			h.mu.Unlock()
 
@@ -135,14 +135,14 @@ func (h *WebSocketHub) EmitEvent(eventType string, data any) {
 
 	jsonData, err := json.Marshal(message)
 	if err != nil {
-		log.Printf("Error marshaling WebSocket message: %v", err)
+		slog.Error("Error marshaling WebSocket message", "error", err)
 		return
 	}
 
 	select {
 	case h.broadcast <- jsonData:
 	default:
-		log.Printf("WebSocket broadcast channel full, dropping message")
+		slog.Warn("WebSocket broadcast channel full, dropping message")
 	}
 }
 
@@ -157,7 +157,7 @@ func (c *WebSocketClient) readPump() {
 		_, _, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("WebSocket error: %v", err)
+				slog.Error("WebSocket error", "error", err)
 			}
 			break
 		}
@@ -172,7 +172,7 @@ func (c *WebSocketClient) writePump() {
 
 	for message := range c.send {
 		if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
-			log.Printf("WebSocket write error: %v", err)
+			slog.Error("WebSocket write error", "error", err)
 			return
 		}
 	}
@@ -295,7 +295,7 @@ func (ws *WebServer) getStaticFileHandler() http.Handler {
 		// Production mode - serve from embedded filesystem
 		buildFS, err := frontend.GetBuildFS()
 		if err != nil {
-			log.Printf("Failed to get embedded filesystem: %v", err)
+			slog.Warn("Failed to get embedded filesystem, using disk fallback", "error", err)
 			fs = http.Dir(frontendBuildPath)
 		} else {
 			fs = http.FS(buildFS)
@@ -345,7 +345,7 @@ func (ws *WebServer) LiveHandler(w http.ResponseWriter, r *http.Request) {
 	response := map[string]string{"status": "live"}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("Error encoding live response: %v", err)
+		slog.Error("Error encoding live response", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -366,11 +366,11 @@ func (ws *WebServer) handleTriggerScan(w http.ResponseWriter, r *http.Request) {
 func (ws *WebServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("WebSocket upgrade error: %v", err)
+		slog.Error("WebSocket upgrade error", "error", err)
 		return
 	}
 
-	log.Printf("WebSocket connection established successfully")
+	slog.Info("WebSocket connection established successfully")
 
 	// Create client
 	client := &WebSocketClient{
@@ -454,7 +454,7 @@ func (ws *WebServer) handleGetQueueItems(w http.ResponseWriter, r *http.Request)
 	// Get paginated results
 	result, err := ws.app.GetQueueItems(params)
 	if err != nil {
-		log.Printf("Failed to get paginated queue items: %v", err)
+		slog.Error("Failed to get paginated queue items", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -576,7 +576,7 @@ func (ws *WebServer) handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Processing %d uploaded files", len(files))
+	slog.Info("Processing uploaded files", "count", len(files))
 
 	// Emit initial upload progress
 	ws.wsHub.EmitEvent("upload-progress", map[string]any{
@@ -683,7 +683,7 @@ func (ws *WebServer) handleUploadFolder(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	log.Printf("Processing folder upload: %s with %d files", folderName, len(files))
+	slog.Info("Processing folder upload", "folder", folderName, "count", len(files))
 
 	// Emit initial upload progress
 	ws.wsHub.EmitEvent("upload-progress", map[string]any{
@@ -965,22 +965,21 @@ func (ws *WebServer) categorizeSetupError(err error) (SetupErrorCode, string, st
 }
 
 func (ws *WebServer) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Setup completion requested from %s", r.RemoteAddr)
+	slog.Info("Setup completion requested", "addr", r.RemoteAddr)
 
 	var wizardData backend.SetupWizardData
 	if err := json.NewDecoder(r.Body).Decode(&wizardData); err != nil {
-		log.Printf("Setup completion failed - invalid JSON: %v", err)
+		slog.Error("Setup completion failed - invalid JSON", "error", err)
 		ws.sendErrorResponse(w, http.StatusBadRequest, SetupErrorInvalidInput,
 			"Invalid request data",
 			"The request body contains invalid JSON. Please ensure all required fields are properly formatted.")
 		return
 	}
 
-	log.Printf("Processing setup wizard data: %d servers, output dir: %s",
-		len(wizardData.Servers), wizardData.OutputDirectory)
+	slog.Info("Processing setup wizard data", "servers", len(wizardData.Servers), "output_dir", wizardData.OutputDirectory)
 
 	if err := ws.app.SetupWizardComplete(wizardData); err != nil {
-		log.Printf("Setup wizard completion failed: %v", err)
+		slog.Error("Setup wizard completion failed", "error", err)
 
 		// Categorize the error and provide appropriate response
 		errorCode, message, details := ws.categorizeSetupError(err)
@@ -995,7 +994,7 @@ func (ws *WebServer) handleSetupComplete(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	log.Printf("Setup wizard completed successfully")
+	slog.Info("Setup wizard completed successfully")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]any{
@@ -1079,7 +1078,7 @@ func (ws *WebServer) handleBrowseFilesystem(w http.ResponseWriter, r *http.Reque
 
 	items, err := ws.browseDirectory(targetPath)
 	if err != nil {
-		log.Printf("Error browsing directory %s: %v", targetPath, err)
+		slog.Error("Error browsing directory", "path", targetPath, "error", err)
 		http.Error(w, fmt.Sprintf("Failed to browse directory: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -1134,7 +1133,7 @@ func (ws *WebServer) handleImportFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Importing %d files from remote filesystem", len(requestBody.FilePaths))
+	slog.Info("Importing files from remote filesystem", "count", len(requestBody.FilePaths))
 
 	// Emit initial import progress
 	ws.wsHub.EmitEvent("import-progress", map[string]any{
@@ -1149,14 +1148,14 @@ func (ws *WebServer) handleImportFiles(w http.ResponseWriter, r *http.Request) {
 		// Security: Clean the path and validate
 		cleanPath := filepath.Clean(filePath)
 		if !filepath.IsAbs(cleanPath) {
-			log.Printf("Skipping relative path: %s", filePath)
+			slog.Warn("Skipping relative path", "path", filePath)
 			continue
 		}
 
 		// Check if path exists and is readable
 		info, err := os.Stat(cleanPath)
 		if err != nil {
-			log.Printf("Skipping inaccessible path: %s (%v)", filePath, err)
+			slog.Warn("Skipping inaccessible path", "path", filePath, "error", err)
 			continue
 		}
 
@@ -1229,7 +1228,7 @@ It serves the frontend application and provides REST API endpoints for managing 
 		server.app.Startup(ctx)
 
 		addr := fmt.Sprintf("%s:%s", host, port)
-		log.Printf("Starting web server on %s", addr)
+		slog.Info("Web server started", "addr", addr)
 
 		// Create HTTP server
 		httpServer := &http.Server{
@@ -1254,7 +1253,7 @@ It serves the frontend application and provides REST API endpoints for managing 
 		case err := <-serverErrChan:
 			return err
 		case <-sigChan:
-			log.Println("Received interrupt signal, shutting down gracefully...")
+			slog.Info("Received interrupt signal, shutting down gracefully")
 
 			// Shutdown the app first
 			server.app.Shutdown()
@@ -1265,11 +1264,11 @@ It serves the frontend application and provides REST API endpoints for managing 
 
 			// Shutdown HTTP server
 			if err := httpServer.Shutdown(shutdownCtx); err != nil {
-				log.Printf("Server shutdown error: %v", err)
+				slog.Error("Server shutdown error", "error", err)
 				return err
 			}
 
-			log.Println("Server shut down successfully")
+			slog.Info("Server shut down successfully")
 			return nil
 		}
 	},
@@ -1290,6 +1289,7 @@ func init() {
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		log.Fatal(err)
+		slog.Error("Fatal error", "error", err)
+		os.Exit(1)
 	}
 }

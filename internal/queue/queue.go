@@ -140,32 +140,47 @@ func (q *Queue) recoverInProgressItems(ctx context.Context) {
 		slog.WarnContext(ctx, "Failed to query in-progress items for recovery", "error", err)
 		return
 	}
-	defer func() { _ = rows.Close() }()
 
-	var recovered int
+	// Phase 1: collect all rows into memory before closing the cursor.
+	// With SetMaxOpenConns(1) the open rows cursor holds the single connection,
+	// so any write (Send or DELETE) would deadlock if we tried it here.
+	type item struct {
+		id         string
+		path       string
+		size       int64
+		priority   int64
+		createdStr string
+		jobData    []byte
+	}
+
+	var pending []item
 	for rows.Next() {
-		var id, path, createdStr string
-		var size, priority int64
-		var jobData []byte
-		if err := rows.Scan(&id, &path, &size, &priority, &createdStr, &jobData); err != nil {
+		var it item
+		if err := rows.Scan(&it.id, &it.path, &it.size, &it.priority, &it.createdStr, &it.jobData); err != nil {
 			slog.WarnContext(ctx, "Failed to scan in-progress item", "error", err)
 			continue
 		}
+		pending = append(pending, it)
+	}
+	_ = rows.Close() // release the read lock / connection before writing
 
+	// Phase 2: now that the cursor is closed the connection is free for writes.
+	var recovered int
+	for _, it := range pending {
 		// Re-insert into goqite so it will be processed again
 		err := q.queue.Send(ctx, goqite.Message{
-			Body:     jobData,
-			Priority: int(priority),
+			Body:     it.jobData,
+			Priority: int(it.priority),
 		})
 		if err != nil {
-			slog.WarnContext(ctx, "Failed to re-queue in-progress item", "id", id, "path", path, "error", err)
+			slog.WarnContext(ctx, "Failed to re-queue in-progress item", "id", it.id, "path", it.path, "error", err)
 			continue
 		}
 
 		// Remove from in_progress_items now that it is back in the queue
-		_, _ = q.db.ExecContext(ctx, "DELETE FROM in_progress_items WHERE id = ?", id)
+		_, _ = q.db.ExecContext(ctx, "DELETE FROM in_progress_items WHERE id = ?", it.id)
 		recovered++
-		slog.InfoContext(ctx, "Recovered in-progress item", "id", id, "path", path)
+		slog.InfoContext(ctx, "Recovered in-progress item", "id", it.id, "path", it.path)
 	}
 
 	if recovered > 0 {
@@ -355,6 +370,12 @@ func (q *Queue) CompleteFile(ctx context.Context, msgID goqite.ID, nzbPath strin
 	_, _ = q.db.ExecContext(ctx, "DELETE FROM in_progress_items WHERE id = ?", string(msgID))
 
 	return nil
+}
+
+// CancelFile removes a cancelled job from in-progress tracking.
+func (q *Queue) CancelFile(ctx context.Context, msgID goqite.ID) error {
+	_, err := q.db.ExecContext(ctx, "DELETE FROM in_progress_items WHERE id = ?", string(msgID))
+	return err
 }
 
 // ExtendTimeout extends the processing timeout for a file job
