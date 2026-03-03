@@ -25,7 +25,7 @@ import (
 type Postie struct {
 	par2Cfg                   *config.Par2Config
 	postingCfg                config.PostingConfig
-	par2runner                *par2.NativeExecutor
+	par2runner                par2.Par2Executor
 	poster                    poster.Poster
 	compressionCfg            config.NzbCompressionConfig
 	postUploadScriptCfg       config.PostUploadScriptConfig
@@ -59,7 +59,7 @@ func New(
 	maintainOriginalExtension := cfg.GetMaintainOriginalExtension()
 
 	// Create par2 runner with progress manager
-	par2runner := par2.New(postingConfig.ArticleSizeInBytes, par2Cfg, jobProgress)
+	par2runner := par2.NewExecutor(postingConfig.ArticleSizeInBytes, par2Cfg, jobProgress)
 
 	// Create poster with progress manager
 	p, err := poster.New(ctx, cfg, poolManager, jobProgress)

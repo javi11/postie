@@ -25,6 +25,7 @@ let enabled = $state(config.par2?.enabled ?? false);
 let tempDir = $state(config.par2?.temp_dir || "");
 let redundancy = $state(config.par2?.redundancy || "10%");
 let maintainPar2Files = $state(config.par2?.maintain_par2_files ?? false);
+let parparBinaryPath = $state(config.par2?.parpar_binary_path || "");
 
 // Sync local state back to config
 $effect(() => {
@@ -41,6 +42,10 @@ $effect(() => {
 
 $effect(() => {
 	config.par2.maintain_par2_files = maintainPar2Files;
+});
+
+$effect(() => {
+	config.par2.parpar_binary_path = parparBinaryPath;
 });
 
 async function selectTempDirectory() {
@@ -106,6 +111,21 @@ let redundancyDisplay = $derived(redundancy || "10%");
               </div>
               <p class="text-sm text-base-content/70 mt-1">
                 {$t('settings.par2.temp_dir_description')}
+              </p>
+            </div>
+
+            <div>
+              <label for="parpar-binary-path" class="label">
+                <span class="label-text">{$t('settings.par2.parpar_binary_path')}</span>
+              </label>
+              <input
+                id="parpar-binary-path"
+                class="input input-bordered w-full"
+                bind:value={parparBinaryPath}
+                placeholder={$t('settings.par2.parpar_binary_path_placeholder')}
+              />
+              <p class="text-sm text-base-content/70 mt-1">
+                {$t('settings.par2.parpar_binary_path_description')}
               </p>
             </div>
 

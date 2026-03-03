@@ -194,6 +194,7 @@ type Par2Config struct {
 	Redundancy        string `yaml:"redundancy" json:"redundancy"`
 	TempDir           string `yaml:"temp_dir" json:"temp_dir"`
 	MaintainPar2Files *bool  `yaml:"maintain_par2_files" json:"maintain_par2_files"`
+	ParparBinaryPath  string `yaml:"parpar_binary_path" json:"parpar_binary_path"`
 }
 
 // ServerConfig represents a Usenet server configuration

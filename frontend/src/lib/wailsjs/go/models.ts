@@ -473,17 +473,19 @@ export namespace config {
 	    redundancy: string;
 	    temp_dir: string;
 	    maintain_par2_files?: boolean;
-	
+	    parpar_binary_path: string;
+
 	    static createFrom(source: any = {}) {
 	        return new Par2Config(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.enabled = source["enabled"];
 	        this.redundancy = source["redundancy"];
 	        this.temp_dir = source["temp_dir"];
 	        this.maintain_par2_files = source["maintain_par2_files"];
+	        this.parpar_binary_path = source["parpar_binary_path"];
 	    }
 	}
 	export class PostCheck {

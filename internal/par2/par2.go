@@ -24,6 +24,7 @@ var parregexp = regexp.MustCompile(`(?i)(\.vol\d+\+(\d+))?\.par2$`)
 // Par2Executor defines the interface for executing par2 commands.
 type Par2Executor interface {
 	Create(ctx context.Context, files []fileinfo.FileInfo) ([]string, error)
+	CreateInDirectory(ctx context.Context, files []fileinfo.FileInfo, outputDir string) ([]string, error)
 }
 
 // NativeExecutor implements Par2Executor using the built-in Go PAR2 creator.
@@ -322,6 +323,15 @@ func parseRedundancyPercentage(redundancy string, fileSize uint64, blockSize uin
 // IsPar2File returns true if the given path matches a PAR2 file pattern.
 func IsPar2File(path string) bool {
 	return parregexp.MatchString(path)
+}
+
+// NewExecutor returns the appropriate Par2Executor based on config.
+// If cfg.ParparBinaryPath is non-empty, returns a BinaryExecutor; otherwise NativeExecutor.
+func NewExecutor(articleSize uint64, cfg *config.Par2Config, jobProgress progress.JobProgress) Par2Executor {
+	if cfg != nil && cfg.ParparBinaryPath != "" {
+		return NewBinaryExecutor(articleSize, cfg, jobProgress)
+	}
+	return New(articleSize, cfg, jobProgress)
 }
 
 // calculateParBlockSize calculates the appropriate PAR2 block size for the given file.
