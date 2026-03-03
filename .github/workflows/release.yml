@@ -82,6 +82,7 @@ jobs:
     permissions:
       contents: write
     strategy:
+      fail-fast: false
       matrix:
         include:
           # Linux builds
@@ -107,6 +108,7 @@ jobs:
             goarch: amd64
             runner: ubuntu-latest
             cc: x86_64-w64-mingw32-gcc
+            cgo_ldflags: '-lpthread'
     steps:
       - uses: actions/setup-go@v5
         with:
@@ -147,6 +149,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 1
           CC: ${{ matrix.cc }}
+          CGO_LDFLAGS: ${{ matrix.cgo_ldflags }}
         run: |
           # Set binary extension for Windows
           EXT=""
