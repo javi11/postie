@@ -129,7 +129,7 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
-          install: mingw-w64-x86_64-gcc
+          install: mingw-w64-x86_64-gcc zip
           update: false
 
       # Install cross-compilation tools
