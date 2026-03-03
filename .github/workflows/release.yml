@@ -129,7 +129,7 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
-          install: mingw-w64-x86_64-gcc zip
+          install: mingw-w64-x86_64-gcc
           update: false
 
       # Install cross-compilation tools
@@ -190,7 +190,7 @@ jobs:
           ARCHIVE_NAME="postie-cli_v${{ steps.version.outputs.version }}_${{ matrix.goos }}_${{ matrix.goarch }}"
 
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            zip "${ARCHIVE_NAME}.zip" "$BINARY_NAME"
+            powershell -Command "Compress-Archive -Path '${BINARY_NAME}' -DestinationPath '${ARCHIVE_NAME}.zip'"
           else
             tar -czf "${ARCHIVE_NAME}.tar.gz" "$BINARY_NAME"
           fi
