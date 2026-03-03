@@ -3,11 +3,12 @@
 # syntax=docker/dockerfile:1.11
 
 # Backend build stage with native arch support
-FROM golang:1.26-alpine AS backend-builder
+FROM golang:1.26 AS backend-builder
 
 # Install build dependencies including sqlite with cache mount
-RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
-    apk add --no-cache git gcc g++ musl-dev sqlite-dev
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    apt-get update -qq && apt-get install -y --no-install-recommends \
+    git gcc g++ libsqlite3-dev
 
 # Set working directory
 WORKDIR /app
