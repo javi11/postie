@@ -107,7 +107,7 @@ jobs:
           - goos: windows
             goarch: amd64
             runner: ubuntu-latest
-            cc: x86_64-w64-mingw32-gcc
+            cc: x86_64-w64-mingw32-gcc-posix
             cgo_ldflags: '-lpthread'
     steps:
       - uses: actions/setup-go@v5
