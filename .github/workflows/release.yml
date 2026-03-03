@@ -79,6 +79,9 @@ jobs:
   build-cli:
     runs-on: ${{ matrix.runner }}
     needs: test
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: write
     strategy:
@@ -106,8 +109,8 @@ jobs:
           # Windows builds
           - goos: windows
             goarch: amd64
-            runner: ubuntu-latest
-            cc: x86_64-w64-mingw32-gcc-posix
+            runner: windows-latest
+            cc: C:/msys64/mingw64/bin/gcc.exe
             cgo_ldflags: '-lpthread'
     steps:
       - uses: actions/setup-go@v5
@@ -122,13 +125,11 @@ jobs:
 
       # Install cross-compilation tools
       - name: Install cross-compilation tools
-        if: matrix.cc != ''
+        if: matrix.cc != '' && runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
           if [ "${{ matrix.goos }}" = "linux" ] && [ "${{ matrix.goarch }}" = "arm64" ]; then
             sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-          elif [ "${{ matrix.goos }}" = "windows" ]; then
-            sudo apt-get install -y gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
           fi
 
       # Extract version info
