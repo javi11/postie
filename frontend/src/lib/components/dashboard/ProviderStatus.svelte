@@ -69,6 +69,24 @@ function formatSpeed(bytesPerSec: number): string {
 	return formatBytes(bytesPerSec) + "/s";
 }
 
+function formatElapsed(elapsed: string): string {
+	if (!elapsed || elapsed === "—") return "—";
+
+	const hoursMatch = elapsed.match(/(\d+)h/);
+	const minutesMatch = elapsed.match(/(\d+)m/);
+
+	const hours = hoursMatch ? parseInt(hoursMatch[1]) : 0;
+	const minutes = minutesMatch ? parseInt(minutesMatch[1]) : 0;
+
+	if (hours > 0) {
+		return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+	}
+	if (minutes > 0) {
+		return `${minutes}m`;
+	}
+	return "< 1m";
+}
+
 function startPolling() {
 	if (refreshInterval) return;
 	refreshInterval = setInterval(fetchProviderStatus, REFRESH_INTERVAL);
@@ -147,7 +165,7 @@ onDestroy(() => {
 						<div class="grid grid-cols-4 gap-4 text-sm">
 							<div>
 								<span class="text-base-content/70">{$t("dashboard.provider.avg_speed")}:</span>
-								<span class="font-medium ml-1">{formatSpeed(provider.avgSpeed)}</span>
+								<span class="font-medium ml-1">{provider.activeConnections > 0 ? formatSpeed(provider.avgSpeed) : "—"}</span>
 							</div>
 							<div>
 								<span class="text-base-content/70">{$t("dashboard.provider.inflight")}:</span>
@@ -170,11 +188,11 @@ onDestroy(() => {
 			<div class="mt-4 p-3 bg-base-200 rounded-lg">
 				<div class="flex justify-between items-center text-sm">
 					<span class="text-base-content/70">{$t("dashboard.provider.avg_speed")}:</span>
-					<span class="font-medium">{formatSpeed(poolMetrics.avgSpeed)}</span>
+					<span class="font-medium">{poolMetrics.activeConnections > 0 ? formatSpeed(poolMetrics.avgSpeed) : "—"}</span>
 				</div>
 				<div class="flex justify-between items-center text-sm mt-1">
 					<span class="text-base-content/70">{$t("dashboard.provider.elapsed")}:</span>
-					<span class="font-medium">{poolMetrics.elapsed || "—"}</span>
+					<span class="font-medium">{formatElapsed(poolMetrics.elapsed)}</span>
 				</div>
 				<div class="flex justify-between items-center text-sm mt-1">
 					<span class="text-base-content/70">{$t("dashboard.provider.total_errors")}:</span>
