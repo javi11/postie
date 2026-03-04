@@ -10,7 +10,7 @@ require (
 	github.com/javi11/nntppool/v4 v4.4.2
 	github.com/javi11/nxg v0.1.0
 	github.com/javi11/nzbparser v0.5.4
-	github.com/javi11/par2go v0.0.5
+	github.com/javi11/par2go v0.0.6
 	github.com/klauspost/compress v1.18.2
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/mnightingale/rapidyenc v0.0.0-20251128204712-7aafef1eaf1c
