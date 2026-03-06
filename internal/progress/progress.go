@@ -23,17 +23,19 @@ const (
 )
 
 type ProgressState struct {
-	Max            int64
-	CurrentNum     int64
-	CurrentPercent float64
-	CurrentBytes   float64
-	SecondsSince   float64
-	SecondsLeft    float64
-	KBsPerSecond   float64
-	Description    string
-	Type           ProgressType
-	IsStarted      bool
-	IsPaused       bool
+	Max                  int64
+	CurrentNum           int64
+	CurrentPercent       float64
+	CurrentBytes         float64
+	SecondsSince         float64
+	SecondsLeft          float64
+	KBsPerSecond         float64
+	Description          string
+	Type                 ProgressType
+	IsStarted            bool
+	IsWaiting            bool
+	WaitSecondsRemaining float64
+	IsPaused             bool
 }
 
 // EventEmitter is a function type for emitting events to the frontend
@@ -66,6 +68,7 @@ type Progress interface {
 	GetElapsedTime() time.Duration
 	SetPaused(paused bool)
 	IsPaused() bool
+	SetWaitDeadline(deadline time.Time)
 }
 
 type jobProgress struct {
@@ -213,14 +216,15 @@ func (pm *jobProgress) SetAllPaused(paused bool) {
 }
 
 type progress struct {
-	id        uuid.UUID
-	name      string
-	pType     ProgressType
-	total     int64
-	startTime time.Time
-	progress  *progressbar.ProgressBar
-	paused    bool
-	mu        sync.RWMutex
+	id           uuid.UUID
+	name         string
+	pType        ProgressType
+	total        int64
+	startTime    time.Time
+	progress     *progressbar.ProgressBar
+	paused       bool
+	waitDeadline time.Time
+	mu           sync.RWMutex
 }
 
 func (p *progress) UpdateProgress(processed int64) {
@@ -252,7 +256,18 @@ func (p *progress) GetState() ProgressState {
 	s := p.progress.State()
 	p.mu.RLock()
 	paused := p.paused
+	waitDeadline := p.waitDeadline
 	p.mu.RUnlock()
+
+	secsRemaining := 0.0
+	isWaiting := false
+	if !waitDeadline.IsZero() {
+		remaining := time.Until(waitDeadline).Seconds()
+		if remaining > 0 {
+			isWaiting = true
+			secsRemaining = remaining
+		}
+	}
 
 	// Sanitize float64 values to prevent NaN in JSON serialization
 	currentPercent := s.CurrentPercent
@@ -281,17 +296,19 @@ func (p *progress) GetState() ProgressState {
 	}
 
 	return ProgressState{
-		Max:            s.Max,
-		CurrentNum:     s.CurrentNum,
-		CurrentPercent: currentPercent,
-		CurrentBytes:   currentBytes,
-		SecondsSince:   secondsSince,
-		SecondsLeft:    secondsLeft,
-		KBsPerSecond:   kbsPerSecond,
-		Description:    s.Description,
-		Type:           p.pType,
-		IsStarted:      s.CurrentNum > 0,
-		IsPaused:       paused,
+		Max:                  s.Max,
+		CurrentNum:           s.CurrentNum,
+		CurrentPercent:       currentPercent,
+		CurrentBytes:         currentBytes,
+		SecondsSince:         secondsSince,
+		SecondsLeft:          secondsLeft,
+		KBsPerSecond:         kbsPerSecond,
+		Description:          s.Description,
+		Type:                 p.pType,
+		IsStarted:            s.CurrentNum > 0,
+		IsWaiting:            isWaiting,
+		WaitSecondsRemaining: secsRemaining,
+		IsPaused:             paused,
 	}
 }
 
@@ -337,4 +354,10 @@ func (p *progress) IsPaused() bool {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.paused
+}
+
+func (p *progress) SetWaitDeadline(deadline time.Time) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.waitDeadline = deadline
 }

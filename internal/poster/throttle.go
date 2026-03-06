@@ -13,6 +13,7 @@ type Throttle struct {
 	lastTime atomic.Int64  // last check time in nanoseconds
 	tokens   atomic.Int64  // available tokens (bytes)
 	disabled atomic.Bool   // fast-path check
+	sleepFn  func(time.Duration)
 }
 
 // NewThrottle creates a new throttle with the given rate and interval
@@ -20,6 +21,7 @@ func NewThrottle(rate int64, interval time.Duration) *Throttle {
 	t := &Throttle{
 		rate:     rate,
 		interval: interval,
+		sleepFn:  time.Sleep,
 	}
 
 	if rate <= 0 {
@@ -72,7 +74,7 @@ func (t *Throttle) Wait(bytes int64) {
 		waitNs := (deficit * int64(time.Second)) / t.rate
 
 		if waitNs > 0 {
-			time.Sleep(time.Duration(waitNs))
+			t.sleepFn(time.Duration(waitNs))
 		}
 
 		// After sleeping, consume the tokens

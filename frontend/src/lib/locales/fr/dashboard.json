@@ -60,6 +60,10 @@
 				"waiting": "En attente",
 				"processing": "En traitement",
 				"failed": "Échoué"
+			},
+			"verification": {
+				"pending": "Vérification en cours",
+				"failed": "Vérification échouée"
 			}
 		},
 		"progress": {
@@ -72,7 +76,8 @@
 			"task_status": {
 				"paused": "En Pause",
 				"in_progress": "En Cours",
-				"pending": "En Attente"
+				"pending": "En Attente",
+				"waiting": "En attente de propagation..."
 			},
 			"pause_processing": "Mettre en Pause le Traitement",
 			"resume_processing": "Reprendre le Traitement",

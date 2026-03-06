@@ -350,6 +350,18 @@ func (mr *MockProgressMockRecorder) SetPaused(paused any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPaused", reflect.TypeOf((*MockProgress)(nil).SetPaused), paused)
 }
 
+// SetWaitDeadline mocks base method.
+func (m *MockProgress) SetWaitDeadline(deadline time.Time) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetWaitDeadline", deadline)
+}
+
+// SetWaitDeadline indicates an expected call of SetWaitDeadline.
+func (mr *MockProgressMockRecorder) SetWaitDeadline(deadline any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetWaitDeadline", reflect.TypeOf((*MockProgress)(nil).SetWaitDeadline), deadline)
+}
+
 // UpdateProgress mocks base method.
 func (m *MockProgress) UpdateProgress(processed int64) {
 	m.ctrl.T.Helper()

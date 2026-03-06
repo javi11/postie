@@ -40,6 +40,34 @@ func (m *MockPoolManager) EXPECT() *MockPoolManagerMockRecorder {
 	return m.recorder
 }
 
+// GetCheckPool mocks base method.
+func (m *MockPoolManager) GetCheckPool() pool.NNTPClient {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCheckPool")
+	ret0, _ := ret[0].(pool.NNTPClient)
+	return ret0
+}
+
+// GetCheckPool indicates an expected call of GetCheckPool.
+func (mr *MockPoolManagerMockRecorder) GetCheckPool() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCheckPool", reflect.TypeOf((*MockPoolManager)(nil).GetCheckPool))
+}
+
+// GetPool mocks base method.
+func (m *MockPoolManager) GetPool() pool.NNTPClient {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPool")
+	ret0, _ := ret[0].(pool.NNTPClient)
+	return ret0
+}
+
+// GetPool indicates an expected call of GetPool.
+func (mr *MockPoolManagerMockRecorder) GetPool() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPool", reflect.TypeOf((*MockPoolManager)(nil).GetPool))
+}
+
 // GetUploadPool mocks base method.
 func (m *MockPoolManager) GetUploadPool() pool.NNTPClient {
 	m.ctrl.T.Helper()
@@ -66,32 +94,4 @@ func (m *MockPoolManager) GetVerifyPool() pool.NNTPClient {
 func (mr *MockPoolManagerMockRecorder) GetVerifyPool() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVerifyPool", reflect.TypeOf((*MockPoolManager)(nil).GetVerifyPool))
-}
-
-// GetPool mocks base method (deprecated alias for GetUploadPool).
-func (m *MockPoolManager) GetPool() pool.NNTPClient {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPool")
-	ret0, _ := ret[0].(pool.NNTPClient)
-	return ret0
-}
-
-// GetPool indicates an expected call of GetPool.
-func (mr *MockPoolManagerMockRecorder) GetPool() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPool", reflect.TypeOf((*MockPoolManager)(nil).GetPool))
-}
-
-// GetCheckPool mocks base method (deprecated alias for GetVerifyPool).
-func (m *MockPoolManager) GetCheckPool() pool.NNTPClient {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCheckPool")
-	ret0, _ := ret[0].(pool.NNTPClient)
-	return ret0
-}
-
-// GetCheckPool indicates an expected call of GetCheckPool.
-func (mr *MockPoolManagerMockRecorder) GetCheckPool() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCheckPool", reflect.TypeOf((*MockPoolManager)(nil).GetCheckPool))
 }

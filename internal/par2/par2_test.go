@@ -72,8 +72,9 @@ func (m *mockProgress) GetStartTime() time.Time { return m.startTime }
 func (m *mockProgress) GetElapsedTime() time.Duration {
 	return time.Since(m.startTime)
 }
-func (m *mockProgress) SetPaused(paused bool) { m.isPaused = paused }
-func (m *mockProgress) IsPaused() bool        { return m.isPaused }
+func (m *mockProgress) SetPaused(paused bool)       { m.isPaused = paused }
+func (m *mockProgress) IsPaused() bool              { return m.isPaused }
+func (m *mockProgress) SetWaitDeadline(_ time.Time) {}
 
 // mockJobProgress implements the JobProgress interface for testing
 type mockJobProgress struct {
@@ -346,8 +347,12 @@ func TestCreate(t *testing.T) {
 		// Pre-create PAR2 files
 		mainPar2 := filepath.Join(tempDir, "testfile.bin.par2")
 		volPar2 := filepath.Join(tempDir, "testfile.bin.vol00+01.par2")
-		os.WriteFile(mainPar2, []byte("par2 data"), 0644)
-		os.WriteFile(volPar2, []byte("volume data"), 0644)
+		if err := os.WriteFile(mainPar2, []byte("par2 data"), 0644); err != nil {
+			t.Fatalf("failed to write par2 file: %v", err)
+		}
+		if err := os.WriteFile(volPar2, []byte("volume data"), 0644); err != nil {
+			t.Fatalf("failed to write vol par2 file: %v", err)
+		}
 
 		executor := &NativeExecutor{
 			articleSize: 10000,
@@ -498,7 +503,9 @@ func TestCreateInDirectory(t *testing.T) {
 	t.Run("uses default behavior when outputDir is empty", func(t *testing.T) {
 		tempDir := t.TempDir()
 		configTempDir := filepath.Join(tempDir, "temp")
-		os.MkdirAll(configTempDir, 0755)
+		if err := os.MkdirAll(configTempDir, 0755); err != nil {
+			t.Fatalf("failed to create temp dir: %v", err)
+		}
 
 		testFile := filepath.Join(tempDir, "testfile.bin")
 		createTestFile(t, testFile, 100000)
@@ -541,8 +548,12 @@ func TestCreateInDirectory(t *testing.T) {
 		// Pre-create PAR2 files in output directory
 		mainPar2 := filepath.Join(outputDir, "testfile.bin.par2")
 		volPar2 := filepath.Join(outputDir, "testfile.bin.vol0+1.par2")
-		os.WriteFile(mainPar2, []byte("par2 data"), 0644)
-		os.WriteFile(volPar2, []byte("volume data"), 0644)
+		if err := os.WriteFile(mainPar2, []byte("par2 data"), 0644); err != nil {
+			t.Fatalf("failed to write par2 file: %v", err)
+		}
+		if err := os.WriteFile(volPar2, []byte("volume data"), 0644); err != nil {
+			t.Fatalf("failed to write vol par2 file: %v", err)
+		}
 
 		executor := &NativeExecutor{
 			articleSize: 10000,
@@ -694,10 +705,18 @@ func TestCheckExistingPar2FilesInDir(t *testing.T) {
 		vol2 := filepath.Join(tempDir, "testfile.bin.vol1+2.par2")
 		vol3 := filepath.Join(tempDir, "testfile.bin.vol3+4.par2")
 
-		os.WriteFile(mainPar2, []byte("par2 data"), 0644)
-		os.WriteFile(vol1, []byte("volume 1 data"), 0644)
-		os.WriteFile(vol2, []byte("volume 2 data"), 0644)
-		os.WriteFile(vol3, []byte("volume 3 data"), 0644)
+		if err := os.WriteFile(mainPar2, []byte("par2 data"), 0644); err != nil {
+			t.Fatalf("failed to write par2 file: %v", err)
+		}
+		if err := os.WriteFile(vol1, []byte("volume 1 data"), 0644); err != nil {
+			t.Fatalf("failed to write vol1 file: %v", err)
+		}
+		if err := os.WriteFile(vol2, []byte("volume 2 data"), 0644); err != nil {
+			t.Fatalf("failed to write vol2 file: %v", err)
+		}
+		if err := os.WriteFile(vol3, []byte("volume 3 data"), 0644); err != nil {
+			t.Fatalf("failed to write vol3 file: %v", err)
+		}
 
 		executor := &NativeExecutor{
 			articleSize: 512 * 1024,

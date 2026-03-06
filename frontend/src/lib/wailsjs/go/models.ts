@@ -119,7 +119,8 @@ export namespace backend {
 	    // Go type: time
 	    completedAt?: any;
 	    nzbPath?: string;
-	
+	    verificationStatus?: string;
+
 	    static createFrom(source: any = {}) {
 	        return new QueueItem(source);
 	    }
@@ -138,8 +139,9 @@ export namespace backend {
 	        this.updatedAt = this.convertValues(source["updatedAt"], null);
 	        this.completedAt = this.convertValues(source["completedAt"], null);
 	        this.nzbPath = source["nzbPath"];
+	        this.verificationStatus = source["verificationStatus"];
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -816,12 +818,14 @@ export namespace progress {
 	    Description: string;
 	    Type: string;
 	    IsStarted: boolean;
+	    IsWaiting: boolean;
+	    WaitSecondsRemaining: number;
 	    IsPaused: boolean;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new ProgressState(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.Max = source["Max"];
@@ -834,6 +838,8 @@ export namespace progress {
 	        this.Description = source["Description"];
 	        this.Type = source["Type"];
 	        this.IsStarted = source["IsStarted"];
+	        this.IsWaiting = source["IsWaiting"];
+	        this.WaitSecondsRemaining = source["WaitSecondsRemaining"];
 	        this.IsPaused = source["IsPaused"];
 	    }
 	}

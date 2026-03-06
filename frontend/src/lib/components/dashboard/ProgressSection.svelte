@@ -89,6 +89,36 @@ function getProgressColor(type: string) {
   }
 }
 
+// Returns the status dot color, text color, and label for a progress task
+function getTaskStatus(progressState: any): { dotClass: string; textClass: string; label: string } {
+  if (progressState?.IsPaused) {
+    return {
+      dotClass: "bg-warning animate-pulse",
+      textClass: "text-warning",
+      label: $t("dashboard.progress.task_status.paused"),
+    };
+  }
+  if (progressState?.IsStarted) {
+    return {
+      dotClass: "bg-success animate-pulse",
+      textClass: "text-success",
+      label: $t("dashboard.progress.task_status.in_progress"),
+    };
+  }
+  if (progressState?.IsWaiting) {
+    return {
+      dotClass: "bg-info animate-pulse",
+      textClass: "text-info",
+      label: `${$t("dashboard.progress.task_status.waiting")} ${Math.ceil(progressState.WaitSecondsRemaining)}s`,
+    };
+  }
+  return {
+    dotClass: "bg-warning",
+    textClass: "text-warning",
+    label: $t("dashboard.progress.task_status.pending"),
+  };
+}
+
 async function cancelJob(jobID: string) {
   try {
     await apiClient.cancelJob(jobID);
@@ -211,19 +241,11 @@ function cancelUpload(jobID: string) {
                           <p class="text-sm font-medium text-base-content">
                             {progressState?.Description || progressState?.Type}
                           </p>
-                          <!-- Status indicator based on IsStarted and IsPaused -->
+                          <!-- Status indicator based on IsStarted, IsPaused, IsWaiting -->
                           <div class="flex items-center gap-1">
-                            <div class="w-2 h-2 rounded-full {progressState?.IsPaused
-                              ? 'bg-warning animate-pulse'
-                              : progressState?.IsStarted
-                              ? 'bg-success animate-pulse'
-                              : 'bg-warning'}"></div>
-                            <span class="text-xs font-medium {progressState?.IsPaused
-                              ? 'text-warning'
-                              : progressState?.IsStarted
-                              ? 'text-success'
-                              : 'text-warning'}">
-                              {progressState?.IsPaused ? $t("dashboard.progress.task_status.paused") : progressState?.IsStarted ? $t("dashboard.progress.task_status.in_progress") : $t("dashboard.progress.task_status.pending")}
+                            <div class="w-2 h-2 rounded-full {getTaskStatus(progressState).dotClass}"></div>
+                            <span class="text-xs font-medium {getTaskStatus(progressState).textClass}">
+                              {getTaskStatus(progressState).label}
                             </span>
                           </div>
                         </div>
