@@ -34,21 +34,10 @@
   // Local reactive state for server properties
   let localServers = $state<configType.ServerConfig[]>([]);
 
-  // Shared host/port/ssl for upload mode
-  let sharedHost = $state("");
-  let sharedPort = $state(119);
-  let sharedSSL = $state(false);
-
   // Initialize local state from props only once
   $effect(() => {
     if (localServers.length === 0 && servers.length > 0) {
       localServers = servers.map((server) => ({ ...server }));
-      // Initialize shared host state when in upload mode
-      if (restrictedRole === "upload") {
-        sharedHost = servers[0].host || "";
-        sharedPort = servers[0].port || 119;
-        sharedSSL = servers[0].ssl ?? false;
-      }
     }
   });
 
@@ -56,17 +45,6 @@
   function updateServers(): void {
     servers = localServers.map((server) => ({ ...server }));
     onupdate?.(servers);
-  }
-
-  // Sync shared host/port/ssl to all upload servers
-  function onSharedHostChange(): void {
-    localServers = localServers.map((s) => ({
-      ...s,
-      host: sharedHost,
-      port: sharedPort,
-      ssl: sharedSSL,
-    }));
-    updateServers();
   }
 
   function addServer(): void {
@@ -80,12 +58,6 @@
 
     if (restrictedRole) {
       newServer.role = restrictedRole;
-    }
-
-    if (restrictedRole === "upload") {
-      newServer.host = sharedHost;
-      newServer.port = sharedPort;
-      newServer.ssl = sharedSSL;
     }
 
     localServers = [...localServers, newServer];
@@ -234,9 +206,9 @@
       return;
     }
 
-    // Basic validation first — for upload mode, use shared host
-    const host = restrictedRole === "upload" ? sharedHost : server.host;
-    const port = restrictedRole === "upload" ? sharedPort : server.port;
+    // Basic validation first
+    const host = server.host;
+    const port = server.port;
 
     if (!host || !port) {
       validationStates = {
@@ -258,7 +230,7 @@
         port,
         username: server.username || "",
         password: server.password || "",
-        ssl: restrictedRole === "upload" ? sharedSSL : (server.ssl || false),
+        ssl: server.ssl || false,
         maxConnections: server.max_connections || 10,
         role: server.role || "upload",
       });
@@ -351,74 +323,6 @@
             {$t("settings.server.bulk_operations.disable_all")}
           </button>
         {/if}
-      </div>
-    </div>
-  {/if}
-
-  <!-- Shared Provider Section (upload mode) -->
-  {#if restrictedRole === "upload"}
-    <div class="p-4 bg-base-200 rounded-lg border border-base-300">
-      <div class="mb-3">
-        <p class="font-medium text-sm text-base-content">
-          {$t("settings.server.upload_pool_provider_label")}
-        </p>
-        <p class="text-xs text-base-content/60 mt-0.5">
-          {$t("settings.server.upload_pool_provider_description")}
-        </p>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="md:col-span-2">
-          <label for="shared-host" class="label">
-            <span class="label-text">{$t("settings.server.host")} *</span>
-          </label>
-          <input
-            id="shared-host"
-            class="input input-bordered w-full"
-            bind:value={sharedHost}
-            placeholder="news.example.com"
-            oninput={onSharedHostChange}
-            onchange={onSharedHostChange}
-          />
-        </div>
-        <div>
-          <label for="shared-port" class="label">
-            <span class="label-text">{$t("settings.server.port")} *</span>
-          </label>
-          <input
-            id="shared-port"
-            class="input input-bordered w-full"
-            type="number"
-            bind:value={sharedPort}
-            min="1"
-            max="65535"
-            oninput={onSharedHostChange}
-            onchange={onSharedHostChange}
-          />
-        </div>
-        <div class="flex items-center gap-3 md:col-span-3">
-          <input
-            id="shared-ssl"
-            type="checkbox"
-            class="checkbox"
-            bind:checked={sharedSSL}
-            onchange={onSharedHostChange}
-          />
-          <label for="shared-ssl" class="label-text cursor-pointer">
-            {$t("settings.server.use_ssl_tls")}
-          </label>
-          {#if variant === "settings" && showAdvancedFields}
-            <input
-              id="shared-insecure-ssl"
-              type="checkbox"
-              class="checkbox ml-4"
-              bind:checked={localServers[0]!.insecure_ssl}
-              onchange={() => { localServers = localServers.map(s => ({ ...s, insecure_ssl: localServers[0]!.insecure_ssl })); updateServers(); }}
-            />
-            <label for="shared-insecure-ssl" class="label-text cursor-pointer">
-              {$t("settings.server.allow_insecure_ssl")}
-            </label>
-          {/if}
-        </div>
       </div>
     </div>
   {/if}
@@ -585,73 +489,71 @@
                 </div>
               {/if}
 
-              <!-- Host / Port / SSL — hidden in upload mode (shared at top) -->
-              {#if restrictedRole !== "upload"}
-                <div>
-                  <label for="host-{index}" class="label">
-                    <span class="label-text">
-                      {$t("settings.server.host")} *
-                    </span>
-                  </label>
+              <!-- Host / Port / SSL -->
+              <div>
+                <label for="host-{index}" class="label">
+                  <span class="label-text">
+                    {$t("settings.server.host")} *
+                  </span>
+                </label>
+                <input
+                  id="host-{index}"
+                  class="input input-bordered w-full"
+                  bind:value={localServers[index].host}
+                  placeholder="news.example.com"
+                  required
+                  oninput={() => onServerFieldChange(index)}
+                />
+              </div>
+
+              <div>
+                <label for="port-{index}" class="label">
+                  <span class="label-text">
+                    {$t("settings.server.port")} *
+                  </span>
+                </label>
+                <input
+                  id="port-{index}"
+                  class="input input-bordered w-full"
+                  type="number"
+                  bind:value={localServers[index].port}
+                  min="1"
+                  max="65535"
+                  required
+                  oninput={() => onServerFieldChange(index)}
+                />
+              </div>
+
+              <div class="flex items-center space-x-4 pt-2">
+                <div class="flex items-center">
                   <input
-                    id="host-{index}"
-                    class="input input-bordered w-full"
-                    bind:value={localServers[index].host}
-                    placeholder="news.example.com"
-                    required
-                    oninput={() => onServerFieldChange(index)}
+                    type="checkbox"
+                    class="checkbox mr-2"
+                    bind:checked={localServers[index].ssl}
+                    onchange={() => onServerFieldChange(index)}
                   />
+                  <label for="ssl-{index}" class="label-text cursor-pointer">
+                    {$t("settings.server.use_ssl_tls")}
+                  </label>
                 </div>
 
-                <div>
-                  <label for="port-{index}" class="label">
-                    <span class="label-text">
-                      {$t("settings.server.port")} *
-                    </span>
-                  </label>
-                  <input
-                    id="port-{index}"
-                    class="input input-bordered w-full"
-                    type="number"
-                    bind:value={localServers[index].port}
-                    min="1"
-                    max="65535"
-                    required
-                    oninput={() => onServerFieldChange(index)}
-                  />
-                </div>
-
-                <div class="flex items-center space-x-4 pt-2">
+                {#if variant === "settings" && showAdvancedFields}
                   <div class="flex items-center">
                     <input
                       type="checkbox"
                       class="checkbox mr-2"
-                      bind:checked={localServers[index].ssl}
+                      bind:checked={localServers[index].insecure_ssl}
                       onchange={() => onServerFieldChange(index)}
                     />
-                    <label for="ssl-{index}" class="label-text cursor-pointer">
-                      {$t("settings.server.use_ssl_tls")}
+                    <label
+                      for="insecure-ssl-{index}"
+                      class="label-text cursor-pointer"
+                    >
+                      {$t("settings.server.allow_insecure_ssl")}
                     </label>
                   </div>
-
-                  {#if variant === "settings" && showAdvancedFields}
-                    <div class="flex items-center">
-                      <input
-                        type="checkbox"
-                        class="checkbox mr-2"
-                        bind:checked={localServers[index].insecure_ssl}
-                        onchange={() => onServerFieldChange(index)}
-                      />
-                      <label
-                        for="insecure-ssl-{index}"
-                        class="label-text cursor-pointer"
-                      >
-                        {$t("settings.server.allow_insecure_ssl")}
-                      </label>
-                    </div>
-                  {/if}
-                </div>
-              {/if}
+                {/if}
+              </div>
 
               <div>
                 <label for="username-{index}" class="label">

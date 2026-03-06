@@ -6,6 +6,7 @@ import { config as configType } from "$lib/wailsjs/go/models";
 import {
 	Upload,
 	ShieldCheck,
+	AlertTriangle,
 } from "lucide-svelte";
 
 interface Props {
@@ -15,6 +16,18 @@ interface Props {
 let { config = $bindable() }: Props = $props();
 
 let isAdvanced = $derived($advancedMode);
+
+let hasMultipleUploadBackbones = $derived(
+	(() => {
+		const hosts = new Set(
+			config.servers
+				.filter(s => (s.role || "upload") !== "verify" && s.enabled !== false)
+				.map(s => s.host)
+				.filter(h => h)
+		);
+		return hosts.size > 1;
+	})()
+);
 
 // Helper to build a ServerConfig from a plain object
 function toServerConfig(server: any, role: "upload" | "verify"): configType.ServerConfig {
@@ -107,6 +120,13 @@ function handleVerifyUpdate(updatedServers: any[]) {
           </p>
         </div>
       </div>
+
+      {#if hasMultipleUploadBackbones}
+        <div class="alert alert-warning">
+          <AlertTriangle class="w-5 h-5 shrink-0" />
+          <span class="text-sm">{$t("settings.server.multiple_backbones_warning")}</span>
+        </div>
+      {/if}
 
       <NntpServerManager
         servers={uploadManagedServers}

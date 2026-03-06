@@ -423,7 +423,7 @@
 			"validation": {
 				"cannot_disable_last": "No se puede deshabilitar el último proveedor activo. Al menos un proveedor debe permanecer habilitado.",
 				"cannot_set_all_verify": "No se pueden configurar todos los proveedores como solo verificación. Al menos un servidor de carga debe permanecer.",
-				"upload_host_conflict": "Todos los servidores de carga deben usar el mismo proveedor. Usar múltiples proveedores para carga simultáneamente se considera spam en Usenet."
+				"upload_host_conflict": ""
 			},
 			"role": "Rol del Servidor",
 			"role_upload": "Carga",
@@ -435,18 +435,17 @@
 				"host_required": "Servidor {number}: Se requiere host",
 				"port_invalid": "Servidor {number}: Se requiere un número de puerto válido (1-65535)"
 			},
-			"tip": "<strong>Consejo:</strong> Configure múltiples servidores para mejor redundancia y velocidades de carga. La aplicación distribuirá automáticamente las cargas entre todos los servidores configurados.",
+			"tip": "<strong>Consejo:</strong> Agregue múltiples cuentas para maximizar el ancho de banda de carga. Use servidores en modo \"Solo Verificación\" de otros proveedores para confirmar que los artículos se han propagado. No se recomienda usar múltiples proveedores de carga con diferentes backbones.",
+			"multiple_backbones_warning": "Se detectaron múltiples proveedores de carga con diferentes backbones. Esto no se recomienda: los artículos distribuidos entre diferentes backbones pueden estar incompletos o no disponibles para los usuarios finales. Considere usar un solo proveedor para cargar y proveedores adicionales solo para verificación.",
 			"upload_pool_title": "Pool de Carga",
-			"upload_pool_description": "Agregue múltiples cuentas del mismo proveedor para maximizar el ancho de banda de carga",
-			"upload_pool_provider_label": "Proveedor",
-			"upload_pool_provider_description": "El host y el puerto son compartidos por todas las cuentas de carga",
+			"upload_pool_description": "Agregue múltiples cuentas para maximizar el ancho de banda de carga",
 			"verify_pool_title": "Pool de Verificación",
 			"verify_pool_optional": "Opcional",
 			"verify_pool_description": "Use servidores de otros proveedores para confirmar que los artículos se han propagado por la red Usenet",
 			"verify_pool_empty_notice": "Sin servidores de verificación configurados — el pool de carga se usará para verificar artículos",
-			"add_account": "Agregar Cuenta",
+			"add_account": "Agregar Proveedor",
 			"add_verify_server": "Agregar Servidor de Verificación",
-			"account_number": "Cuenta {number}",
+			"account_number": "Proveedor {number}",
 			"proxy": {
 				"section_title": "Configuración de Proxy",
 				"enable_proxy": "Usar Proxy SOCKS5",
