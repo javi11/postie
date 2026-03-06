@@ -300,6 +300,7 @@ func TestPost(t *testing.T) {
 		checkCfg := createTestPostCheckConfig()
 		enabled := true
 		checkCfg.Enabled = &enabled
+		checkCfg.RetryDelay = config.Duration("0s") // avoid real sleep in tests
 
 		p := &poster{
 			cfg:         createTestConfig(),
@@ -354,7 +355,8 @@ func TestPost(t *testing.T) {
 		checkCfg := createTestPostCheckConfig()
 		enabled := true
 		checkCfg.Enabled = &enabled
-		checkCfg.MaxRePost = 0 // No retries
+		checkCfg.MaxRePost = 0                      // No retries
+		checkCfg.RetryDelay = config.Duration("0s") // avoid real sleep in tests
 
 		p := &poster{
 			cfg:         createTestConfig(),
@@ -1004,6 +1006,7 @@ func TestPostIntegration(t *testing.T) {
 		checkCfg := createTestPostCheckConfig()
 		enabled := true
 		checkCfg.Enabled = &enabled
+		checkCfg.RetryDelay = config.Duration("0s") // avoid real sleep in tests
 
 		// Mock the job progress
 		mockJobProgress := mocks.NewMockJobProgress(ctrl)
