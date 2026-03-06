@@ -361,8 +361,8 @@ function updateThrottleRate() {
               id="default-from"
               class="input input-bordered w-full"
               bind:value={defaultFrom}
-              placeholder="poster@example.com"
-              type="email"
+              placeholder="Poster <poster@example.com>"
+              type="text"
             />
             <p class="text-sm text-base-content/70 mt-1">
               {$t('settings.posting.headers.default_from_description')}

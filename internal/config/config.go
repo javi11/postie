@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/mail"
 	"os"
 	"time"
 
@@ -632,6 +633,13 @@ func (c *ConfigData) validate() error {
 	// Validate queue configuration
 	if c.Queue.MaxConcurrentUploads <= 0 {
 		return fmt.Errorf("queue max concurrent uploads must be positive")
+	}
+
+	// Validate DefaultFrom is a valid RFC 2822 address if set
+	if c.Posting.PostHeaders.DefaultFrom != "" {
+		if _, err := mail.ParseAddress(c.Posting.PostHeaders.DefaultFrom); err != nil {
+			return fmt.Errorf("posting post_headers default_from is not a valid email address: %w", err)
+		}
 	}
 
 	return nil
