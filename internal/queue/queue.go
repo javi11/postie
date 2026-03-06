@@ -1797,7 +1797,7 @@ func (q *Queue) AddPendingArticleChecks(ctx context.Context, completedItemID str
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	for _, article := range articles {
 		nextRetry := article.NextRetryAt.Format("2006-01-02T15:04:05.000Z")
@@ -1825,7 +1825,7 @@ func (q *Queue) GetArticlesForCheck(ctx context.Context, limit int) ([]PendingAr
 	if err != nil {
 		return nil, fmt.Errorf("failed to query pending article checks: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var items []PendingArticleCheck
 	for rows.Next() {
