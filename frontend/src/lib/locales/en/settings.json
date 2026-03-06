@@ -404,9 +404,9 @@
 			"verify_pool_optional": "Optional",
 			"verify_pool_description": "Use servers from other providers to confirm articles have propagated across the Usenet backbone",
 			"verify_pool_empty_notice": "No verify servers configured — the upload pool will be used for article verification",
-			"add_account": "Add Account",
+			"add_account": "Add Provider",
 			"add_verify_server": "Add Verify Server",
-			"account_number": "Account {number}",
+			"account_number": "Provider {number}",
 			"proxy": {
 				"section_title": "Proxy Settings",
 				"enable_proxy": "Use SOCKS5 Proxy",

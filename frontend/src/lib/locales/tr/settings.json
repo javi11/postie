@@ -402,9 +402,9 @@
             "verify_pool_optional": "İsteğe Bağlı",
             "verify_pool_description": "Makalelerin Usenet ağına yayıldığını doğrulamak için diğer sağlayıcıların sunucularını kullanın",
             "verify_pool_empty_notice": "Doğrulama sunucusu yapılandırılmadı — makale doğrulaması için yükleme havuzu kullanılacak",
-            "add_account": "Hesap Ekle",
+            "add_account": "Sağlayıcı Ekle",
             "add_verify_server": "Doğrulama Sunucusu Ekle",
-            "account_number": "Hesap {number}",
+            "account_number": "Sağlayıcı {number}",
             "proxy": {
                 "section_title": "Proxy Ayarları",
                 "enable_proxy": "SOCKS5 Proxy Kullan",

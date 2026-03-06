@@ -443,9 +443,9 @@
 			"verify_pool_optional": "Opcional",
 			"verify_pool_description": "Use servidores de otros proveedores para confirmar que los artículos se han propagado por la red Usenet",
 			"verify_pool_empty_notice": "Sin servidores de verificación configurados — el pool de carga se usará para verificar artículos",
-			"add_account": "Agregar Cuenta",
+			"add_account": "Agregar Proveedor",
 			"add_verify_server": "Agregar Servidor de Verificación",
-			"account_number": "Cuenta {number}",
+			"account_number": "Proveedor {number}",
 			"proxy": {
 				"section_title": "Configuración de Proxy",
 				"enable_proxy": "Usar Proxy SOCKS5",
