@@ -7,7 +7,7 @@ import ToastContainer from "$lib/components/ToastContainer.svelte";
 import { t } from "$lib/i18n";
 import { appStatus } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
-import { ChartPie, FileText, Settings, Activity, Globe } from "lucide-svelte";
+import { AlertCircle, ChartPie, FileText, Settings, Activity, Globe } from "lucide-svelte";
 import { availableLocales, locale, setStoredLocale } from "$lib/i18n";
 import { onMount, onDestroy } from "svelte";
 import type { Snippet } from "svelte";
@@ -25,70 +25,75 @@ let connectionStatus: "connected" | "reconnecting" | "disconnected" = $state("co
 let connectionCheckInterval: ReturnType<typeof setInterval> | undefined;
 
 onMount(async () => {
-	// Initialize theme from localStorage or system preference
-	const savedTheme = localStorage.getItem("theme");
-	const systemPrefersDark = window.matchMedia(
-		"(prefers-color-scheme: dark)",
-	).matches;
-	const defaultTheme = savedTheme || (systemPrefersDark ? "dark" : "light");
-	document.documentElement.setAttribute("data-theme", defaultTheme);
+	try {
+		// Initialize theme from localStorage or system preference
+		const savedTheme = localStorage.getItem("theme");
+		const systemPrefersDark = window.matchMedia(
+			"(prefers-color-scheme: dark)",
+		).matches;
+		const defaultTheme = savedTheme || (systemPrefersDark ? "dark" : "light");
+		document.documentElement.setAttribute("data-theme", defaultTheme);
 
-	// Initialize API client (detects environment and sets up appropriate client)
-	await apiClient.initialize();
+		// Initialize API client (detects environment and sets up appropriate client)
+		await apiClient.initialize();
 
-	// Listen for config updates
-	await apiClient.on("config-updated", async () => {
-		await loadAppStatus();
-	});
-
-	// Listen for menu navigation events (desktop only)
-	if (apiClient.environment === "wails") {
-		await apiClient.on("navigate-to-settings", () => {
-			goto("/settings");
+		// Listen for config updates
+		await apiClient.on("config-updated", async () => {
+			await loadAppStatus();
 		});
 
-		await apiClient.on("navigate-to-dashboard", () => {
-			goto("/");
-		});
+		// Listen for menu navigation events (desktop only)
+		if (apiClient.environment === "wails") {
+			await apiClient.on("navigate-to-settings", () => {
+				goto("/settings");
+			});
 
-		// Listen for edit menu events (desktop only)
-		await apiClient.on("menu-cut", () => {
-			document.execCommand("cut");
-		});
+			await apiClient.on("navigate-to-dashboard", () => {
+				goto("/");
+			});
 
-		await apiClient.on("menu-copy", () => {
-			document.execCommand("copy");
-		});
+			// Listen for edit menu events (desktop only)
+			await apiClient.on("menu-cut", () => {
+				document.execCommand("cut");
+			});
 
-		await apiClient.on("menu-paste", () => {
-			document.execCommand("paste");
-		});
+			await apiClient.on("menu-copy", () => {
+				document.execCommand("copy");
+			});
 
-		await apiClient.on("menu-undo", () => {
-			document.execCommand("undo");
-		});
+			await apiClient.on("menu-paste", () => {
+				document.execCommand("paste");
+			});
 
-		await apiClient.on("menu-redo", () => {
-			document.execCommand("redo");
-		});
+			await apiClient.on("menu-undo", () => {
+				document.execCommand("undo");
+			});
 
-		await apiClient.on("menu-select-all", () => {
-			document.execCommand("selectAll");
-		});
-	}
+			await apiClient.on("menu-redo", () => {
+				document.execCommand("redo");
+			});
 
-	// Load initial app status
-	await loadAppStatus();
-
-	// Periodic connection health check
-	connectionCheckInterval = setInterval(async () => {
-		try {
-			await apiClient.getAppStatus();
-			if (connectionStatus !== "connected") connectionStatus = "connected";
-		} catch {
-			connectionStatus = connectionStatus === "connected" ? "reconnecting" : "disconnected";
+			await apiClient.on("menu-select-all", () => {
+				document.execCommand("selectAll");
+			});
 		}
-	}, 10000);
+
+		// Load initial app status
+		await loadAppStatus();
+
+		// Periodic connection health check
+		connectionCheckInterval = setInterval(async () => {
+			try {
+				await apiClient.getAppStatus();
+				if (connectionStatus !== "connected") connectionStatus = "connected";
+			} catch {
+				connectionStatus = connectionStatus === "connected" ? "reconnecting" : "disconnected";
+			}
+		}, 10000);
+	} catch (error) {
+		console.error("Failed to initialize app:", error);
+		toastStore.error($t("common.common.error"), (error as Error).message);
+	}
 });
 
 async function loadAppStatus() {
@@ -272,6 +277,20 @@ function handler(error: unknown, _reset: () => void) {
 			<!-- Setup page takes full screen -->
 			{@render children()}
 		{/if}
+	{#snippet failed(error)}
+		<div class="flex flex-col items-center justify-center min-h-screen text-center space-y-6">
+			<div class="p-6 bg-error/20 rounded-full">
+				<AlertCircle class="w-16 h-16 text-error" />
+			</div>
+			<div class="space-y-2">
+				<h1 class="text-2xl font-bold">{$t('common.common.error')}</h1>
+				<p class="text-base-content/70">{(error as Error).message}</p>
+			</div>
+			<button class="btn btn-primary" onclick={() => window.location.reload()}>
+				Reload
+			</button>
+		</div>
+	{/snippet}
 	</svelte:boundary>
 
 	<!-- Toast notifications -->

@@ -592,15 +592,6 @@ func (c *ConfigData) validate() error {
 	if len(uploadServers) == 0 {
 		return fmt.Errorf("at least one upload server is required")
 	}
-	uploadHost := uploadServers[0].Host
-	for i, s := range uploadServers[1:] {
-		if s.Host != uploadHost {
-			return fmt.Errorf("upload server %d uses host %q but server 1 uses %q: "+
-				"all upload servers must use the same provider host "+
-				"(add multiple accounts on the same provider, not different providers)", i+2, s.Host, uploadHost)
-		}
-	}
-
 	if len(c.Posting.Groups) == 0 {
 		return fmt.Errorf("posting groups are required")
 	}

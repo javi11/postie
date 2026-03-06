@@ -421,7 +421,7 @@
 			"validation": {
 				"cannot_disable_last": "Impossible de désactiver le dernier fournisseur actif. Au moins un fournisseur doit rester activé.",
 				"cannot_set_all_verify": "Impossible de configurer tous les fournisseurs en vérification uniquement. Au moins un serveur d'envoi doit rester.",
-				"upload_host_conflict": "Tous les serveurs d'envoi doivent utiliser le même fournisseur. Utiliser plusieurs fournisseurs pour l'envoi simultané est considéré comme du spam sur Usenet."
+				"upload_host_conflict": ""
 			},
 			"role": "Rôle du Serveur",
 			"role_upload": "Envoi",
@@ -433,11 +433,10 @@
 				"host_required": "Serveur {number} : L'hôte est requis",
 				"port_invalid": "Serveur {number} : Un numéro de port valide est requis (1-65535)"
 			},
-			"tip": "<strong>Astuce :</strong> Configurez plusieurs serveurs pour une meilleure redondance et des vitesses de téléchargement. L'application distribuera automatiquement les téléchargements entre tous les serveurs configurés.",
+			"tip": "<strong>Astuce :</strong> Ajoutez plusieurs comptes pour maximiser la bande passante d'envoi. Utilisez des serveurs en mode \"Vérification Seule\" d'autres fournisseurs pour confirmer la propagation des articles. L'utilisation de plusieurs fournisseurs d'envoi avec des backbones différents n'est pas recommandée.",
+			"multiple_backbones_warning": "Plusieurs fournisseurs d'envoi avec des backbones différents détectés. Ceci n'est pas recommandé : les articles répartis sur plusieurs backbones peuvent être incomplets ou manquants pour les utilisateurs finaux. Envisagez d'utiliser un seul fournisseur pour l'envoi et des fournisseurs supplémentaires uniquement pour la vérification.",
 			"upload_pool_title": "Pool d'Envoi",
-			"upload_pool_description": "Ajoutez plusieurs comptes du même fournisseur pour maximiser la bande passante d'envoi",
-			"upload_pool_provider_label": "Fournisseur",
-			"upload_pool_provider_description": "L'hôte et le port sont partagés entre tous les comptes d'envoi",
+			"upload_pool_description": "Ajoutez plusieurs comptes pour maximiser la bande passante d'envoi",
 			"verify_pool_title": "Pool de Vérification",
 			"verify_pool_optional": "Optionnel",
 			"verify_pool_description": "Utilisez des serveurs d'autres fournisseurs pour confirmer la propagation des articles sur le réseau Usenet",
