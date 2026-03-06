@@ -59,6 +59,10 @@
                 "processing": "İşleniyor",
                 "completed": "Tamamlandı",
                 "failed": "Başarısız"
+            },
+            "verification": {
+                "pending": "Doğrulanıyor",
+                "failed": "Doğrulama başarısız"
             }
         },
         "progress": {
@@ -71,7 +75,8 @@
             "task_status": {
                 "paused": "Duraklatıldı",
                 "in_progress": "Devam Ediyor",
-                "pending": "Bekliyor"
+                "pending": "Bekliyor",
+                "waiting": "Yayılım bekleniyor..."
             },
             "pause_processing": "İşlemeyi Duraklat",
             "resume_processing": "İşlemeye Devam Et",

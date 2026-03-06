@@ -59,6 +59,10 @@
 				"processing": "Processing",
 				"completed": "Completed",
 				"failed": "Failed"
+			},
+			"verification": {
+				"pending": "Verifying",
+				"failed": "Verify Failed"
 			}
 		},
 		"progress": {
@@ -71,7 +75,8 @@
 			"task_status": {
 				"paused": "Paused",
 				"in_progress": "In Progress",
-				"pending": "Pending"
+				"pending": "Pending",
+				"waiting": "Waiting for propagation..."
 			},
 			"pause_processing": "Pause Processing",
 			"resume_processing": "Resume Processing",

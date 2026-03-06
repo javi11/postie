@@ -72,6 +72,8 @@ type QueueItem struct {
 	ScriptRetryCount  int        `json:"scriptRetryCount"`
 	ScriptLastError   *string    `json:"scriptLastError"`
 	ScriptNextRetryAt *time.Time `json:"scriptNextRetryAt"`
+	// Verification status for completed items (null for non-completed)
+	VerificationStatus *string `json:"verificationStatus"` // verified, pending_verification, verification_failed
 }
 
 type FileJob struct {
@@ -551,7 +553,8 @@ func (q *Queue) getMergedItemsPaginated(orderBy string, offset, limit int) ([]Qu
 	query := fmt.Sprintf(`
 		SELECT id, path, size, priority, status, retry_count, error_message,
 		       created_at, updated_at, completed_at, nzb_path, file_name,
-		       script_status, script_retry_count, script_last_error, script_next_retry_at
+		       script_status, script_retry_count, script_last_error, script_next_retry_at,
+		       verification_status
 		FROM (
 			-- Active queue items
 			SELECT id,
@@ -569,7 +572,8 @@ func (q *Queue) getMergedItemsPaginated(orderBy string, offset, limit int) ([]Qu
 				   NULL as script_status,
 				   0 as script_retry_count,
 				   NULL as script_last_error,
-				   NULL as script_next_retry_at
+				   NULL as script_next_retry_at,
+				   NULL as verification_status
 			FROM goqite
 			WHERE queue = 'file_jobs'
 
@@ -591,7 +595,8 @@ func (q *Queue) getMergedItemsPaginated(orderBy string, offset, limit int) ([]Qu
 				   NULL as script_status,
 				   0 as script_retry_count,
 				   NULL as script_last_error,
-				   NULL as script_next_retry_at
+				   NULL as script_next_retry_at,
+				   NULL as verification_status
 			FROM in_progress_items
 
 			UNION ALL
@@ -601,7 +606,8 @@ func (q *Queue) getMergedItemsPaginated(orderBy string, offset, limit int) ([]Qu
 				   0 as retry_count, NULL as error_message,
 				   created_at, completed_at as updated_at, completed_at, nzb_path,
 				   path as file_name,
-				   script_status, script_retry_count, script_last_error, script_next_retry_at
+				   script_status, script_retry_count, script_last_error, script_next_retry_at,
+				   verification_status
 			FROM completed_items
 
 			UNION ALL
@@ -615,7 +621,8 @@ func (q *Queue) getMergedItemsPaginated(orderBy string, offset, limit int) ([]Qu
 				   NULL as script_status,
 				   0 as script_retry_count,
 				   NULL as script_last_error,
-				   NULL as script_next_retry_at
+				   NULL as script_next_retry_at,
+				   NULL as verification_status
 			FROM errored_items
 		)
 		ORDER BY %s
@@ -634,6 +641,7 @@ func (q *Queue) getMergedItemsPaginated(orderBy string, offset, limit int) ([]Qu
 		var item QueueItem
 		var completedAtStr, nzbPathStr, errorMsgStr sql.NullString
 		var scriptStatusStr, scriptLastErrorStr, scriptNextRetryAtStr sql.NullString
+		var verificationStatusStr sql.NullString
 		var createdAtStr, updatedAtStr string
 
 		err := rows.Scan(
@@ -641,6 +649,7 @@ func (q *Queue) getMergedItemsPaginated(orderBy string, offset, limit int) ([]Qu
 			&item.RetryCount, &errorMsgStr, &createdAtStr, &updatedAtStr,
 			&completedAtStr, &nzbPathStr, &item.FileName,
 			&scriptStatusStr, &item.ScriptRetryCount, &scriptLastErrorStr, &scriptNextRetryAtStr,
+			&verificationStatusStr,
 		)
 		if err != nil {
 			continue // Skip invalid rows
@@ -676,6 +685,9 @@ func (q *Queue) getMergedItemsPaginated(orderBy string, offset, limit int) ([]Qu
 		}
 		if scriptLastErrorStr.Valid {
 			item.ScriptLastError = &scriptLastErrorStr.String
+		}
+		if verificationStatusStr.Valid {
+			item.VerificationStatus = &verificationStatusStr.String
 		}
 
 		// Extract filename from path if needed
@@ -840,7 +852,8 @@ func (q *Queue) getActiveItemsPaginated(offset, limit int) ([]QueueItem, error) 
 func (q *Queue) getCompletedItemsPaginated(offset, limit int) ([]QueueItem, error) {
 	rows, err := q.db.Query(`
 		SELECT id, path, size, priority, nzb_path, created_at, completed_at,
-		       script_status, script_retry_count, script_last_error, script_next_retry_at
+		       script_status, script_retry_count, script_last_error, script_next_retry_at,
+		       verification_status
 		FROM completed_items
 		ORDER BY completed_at DESC
 		LIMIT ? OFFSET ?`, limit, offset)
@@ -855,11 +868,13 @@ func (q *Queue) getCompletedItemsPaginated(offset, limit int) ([]QueueItem, erro
 	for rows.Next() {
 		var id, path, nzbPath, createdAt, completedAt string
 		var scriptStatusStr, scriptLastErrorStr, scriptNextRetryAtStr sql.NullString
+		var verificationStatusStr sql.NullString
 		var size int64
 		var priority, scriptRetryCount int
 
 		if err := rows.Scan(&id, &path, &size, &priority, &nzbPath, &createdAt, &completedAt,
-			&scriptStatusStr, &scriptRetryCount, &scriptLastErrorStr, &scriptNextRetryAtStr); err != nil {
+			&scriptStatusStr, &scriptRetryCount, &scriptLastErrorStr, &scriptNextRetryAtStr,
+			&verificationStatusStr); err != nil {
 			continue
 		}
 
@@ -892,6 +907,9 @@ func (q *Queue) getCompletedItemsPaginated(offset, limit int) ([]QueueItem, erro
 			if nextRetryTime, err := time.Parse("2006-01-02T15:04:05.000Z", scriptNextRetryAtStr.String); err == nil {
 				item.ScriptNextRetryAt = &nextRetryTime
 			}
+		}
+		if verificationStatusStr.Valid {
+			item.VerificationStatus = &verificationStatusStr.String
 		}
 
 		items = append(items, item)
@@ -1028,7 +1046,8 @@ func (q *Queue) getPendingItemsPaginated(orderBy string, offset, limit int) ([]Q
 func (q *Queue) getCompletedItemsPaginatedWithSort(orderBy string, offset, limit int) ([]QueueItem, error) {
 	query := fmt.Sprintf(`
 		SELECT id, path, size, priority, nzb_path, created_at, completed_at,
-		       script_status, script_retry_count, script_last_error, script_next_retry_at
+		       script_status, script_retry_count, script_last_error, script_next_retry_at,
+		       verification_status
 		FROM completed_items
 		ORDER BY %s
 		LIMIT ? OFFSET ?`, orderBy)
@@ -1045,11 +1064,13 @@ func (q *Queue) getCompletedItemsPaginatedWithSort(orderBy string, offset, limit
 	for rows.Next() {
 		var id, path, nzbPath, createdAt, completedAt string
 		var scriptStatusStr, scriptLastErrorStr, scriptNextRetryAtStr sql.NullString
+		var verificationStatusStr sql.NullString
 		var size int64
 		var priority, scriptRetryCount int
 
 		if err := rows.Scan(&id, &path, &size, &priority, &nzbPath, &createdAt, &completedAt,
-			&scriptStatusStr, &scriptRetryCount, &scriptLastErrorStr, &scriptNextRetryAtStr); err != nil {
+			&scriptStatusStr, &scriptRetryCount, &scriptLastErrorStr, &scriptNextRetryAtStr,
+			&verificationStatusStr); err != nil {
 			continue
 		}
 
@@ -1081,6 +1102,9 @@ func (q *Queue) getCompletedItemsPaginatedWithSort(orderBy string, offset, limit
 			if nextRetryTime, err := time.Parse("2006-01-02T15:04:05.000Z", scriptNextRetryAtStr.String); err == nil {
 				item.ScriptNextRetryAt = &nextRetryTime
 			}
+		}
+		if verificationStatusStr.Valid {
+			item.VerificationStatus = &verificationStatusStr.String
 		}
 
 		items = append(items, item)

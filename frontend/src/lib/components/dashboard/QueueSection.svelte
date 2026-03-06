@@ -376,6 +376,19 @@ function getSortIcon(column: string) {
       </p>
     </div>
   {:else}
+    {#snippet verificationBadge(item: backend.QueueItem)}
+      {#if item.status === "complete" && item.verificationStatus === "pending_verification"}
+        <div class="badge badge-warning badge-sm gap-1 shrink-0">
+          <span class="loading loading-spinner loading-xs"></span>
+          {$t("dashboard.queue.verification.pending")}
+        </div>
+      {:else if item.status === "complete" && item.verificationStatus === "verification_failed"}
+        <div class="badge badge-error badge-sm shrink-0">
+          {$t("dashboard.queue.verification.failed")}
+        </div>
+      {/if}
+    {/snippet}
+
     <!-- Mobile card layout -->
     <div class="md:hidden space-y-3">
       {#each queueItems as item (item.id)}
@@ -388,6 +401,7 @@ function getSortIcon(column: string) {
             <div class="badge {getStatusBadgeClass(item.status)} capitalize shrink-0">
               {item.status}
             </div>
+            {@render verificationBadge(item)}
           </div>
           {#if item.errorMessage}
             <details class="mt-2">
@@ -522,6 +536,7 @@ function getSortIcon(column: string) {
                           {$t("dashboard.queue.retry")} {item.retryCount}
                         </div>
                       {/if}
+                      {@render verificationBadge(item)}
                     </div>
                     {#if item.errorMessage}
                       <details class="mt-2">

@@ -516,16 +516,23 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 				return
 			}
 
+			// Create the progress task immediately so the user sees "checking" status
+			// during the RetryDelay wait, preventing the queue item from appearing stuck.
+			post.progress = p.jobProgress.AddProgress(uuid.New(), fmt.Sprintf("%s (check)", filepath.Base(post.FilePath)), progress.ProgressTypeChecking, post.filesize)
+
 			// Wait for articles to propagate to the verify server before checking.
 			// Without this delay, STAT checks run immediately after posting and fail
 			// because the server hasn't received/indexed the articles yet.
 			if delay := p.checkCfg.RetryDelay.ToDuration(); delay > 0 {
+				post.progress.SetWaitDeadline(time.Now().Add(delay))
 				select {
 				case <-ctx.Done():
+					post.progress.SetWaitDeadline(time.Time{})
 					errChan <- ctx.Err()
 					return
 				case <-time.After(delay):
 				}
+				post.progress.SetWaitDeadline(time.Time{})
 			}
 
 			// Create a pool with error handling - use all available CPU cores
@@ -538,8 +545,6 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 			var mu sync.Mutex
 
 			totalArticlesProcessed += len(post.Articles)
-
-			post.progress = p.jobProgress.AddProgress(uuid.New(), fmt.Sprintf("%s (check)", filepath.Base(post.FilePath)), progress.ProgressTypeChecking, post.filesize)
 
 			// Submit all articles to the pool
 			for _, art := range post.Articles {
