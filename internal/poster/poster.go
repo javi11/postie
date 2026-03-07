@@ -10,8 +10,10 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -1051,12 +1053,33 @@ func (p *poster) postArticleWithBody(ctx context.Context, art *article.Article, 
 	postCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
-	if _, err := p.uploadPool.PostYenc(postCtx, headers, bytes.NewReader(body), meta); err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	// Retry once on broken pipe: the pool may have returned a stale connection that
+	// the server silently closed. After the broken pipe error, the pool discards that
+	// connection; the retry picks a fresh one. bytes.NewReader(body) is cheap to
+	// recreate so the body is fully re-readable on each attempt.
+	var lastErr error
+	for attempt := range 2 {
+		if attempt > 0 {
+			slog.WarnContext(ctx, "Retrying article post after broken pipe (stale pooled connection)",
+				"messageID", art.MessageID)
+		}
+
+		_, lastErr = p.uploadPool.PostYenc(postCtx, headers, bytes.NewReader(body), meta)
+		if lastErr == nil {
+			break
+		}
+
+		if errors.Is(lastErr, context.Canceled) || errors.Is(lastErr, context.DeadlineExceeded) {
 			return context.Canceled
 		}
 
-		return fmt.Errorf("error posting article: %w", err)
+		if !isBrokenPipe(lastErr) {
+			break
+		}
+	}
+
+	if lastErr != nil {
+		return fmt.Errorf("error posting article: %w", lastErr)
 	}
 
 	// Apply throttling after posting
@@ -1071,6 +1094,17 @@ func (p *poster) postArticleWithBody(ctx context.Context, art *article.Article, 
 	p.stats.mu.Unlock()
 
 	return nil
+}
+
+// isBrokenPipe reports whether err represents a broken-pipe / connection-reset
+// condition, indicating that the remote server closed the TCP connection before
+// the client finished writing (typically a stale idle pooled connection).
+func isBrokenPipe(err error) bool {
+	if errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "broken pipe") || strings.Contains(msg, "connection reset by peer")
 }
 
 // checkArticle checks if an article exists using the check pool

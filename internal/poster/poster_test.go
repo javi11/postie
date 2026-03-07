@@ -3,10 +3,12 @@ package poster
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -1168,6 +1170,117 @@ func TestPostLoop_Basic(t *testing.T) {
 		}
 
 		err = p.postArticle(ctx, art, file)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "error posting article")
+	})
+
+	t.Run("postArticleWithBody retries once on broken pipe and succeeds", func(t *testing.T) {
+		ctx := context.Background()
+		content := "test content"
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		// First call returns broken pipe; second call succeeds.
+		gomock.InOrder(
+			mockPool.EXPECT().PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(nil, fmt.Errorf("write tcp: %w", syscall.EPIPE)),
+			mockPool.EXPECT().PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(&nntppool.PostResult{}, nil),
+		)
+
+		p := &poster{
+			uploadPool: mockPool,
+			stats:      &Stats{StartTime: time.Now()},
+		}
+
+		art := &article.Article{
+			MessageID:    "test@example.com",
+			Subject:      "Test Subject",
+			From:         "test@example.com",
+			Groups:       []string{"alt.test"},
+			PartNumber:   1,
+			TotalParts:   1,
+			FileName:     "test.txt",
+			OriginalName: "test.txt",
+			Date:         time.Now(),
+			Size:         uint64(len(content)),
+			FileSize:     int64(len(content)),
+		}
+
+		err := p.postArticleWithBody(ctx, art, []byte(content))
+		assert.NoError(t, err)
+		assert.Equal(t, int64(1), p.stats.ArticlesPosted)
+	})
+
+	t.Run("postArticleWithBody does not retry on non-broken-pipe error", func(t *testing.T) {
+		ctx := context.Background()
+		content := "test content"
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		// Only one call expected — non-broken-pipe errors are not retried.
+		mockPool.EXPECT().PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil, errors.New("441 posting failed")).Times(1)
+
+		p := &poster{
+			uploadPool: mockPool,
+			stats:      &Stats{StartTime: time.Now()},
+		}
+
+		art := &article.Article{
+			MessageID:    "test@example.com",
+			Subject:      "Test Subject",
+			From:         "test@example.com",
+			Groups:       []string{"alt.test"},
+			PartNumber:   1,
+			TotalParts:   1,
+			FileName:     "test.txt",
+			OriginalName: "test.txt",
+			Date:         time.Now(),
+			Size:         uint64(len(content)),
+			FileSize:     int64(len(content)),
+		}
+
+		err := p.postArticleWithBody(ctx, art, []byte(content))
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "error posting article")
+	})
+
+	t.Run("postArticleWithBody fails when both attempts return broken pipe", func(t *testing.T) {
+		ctx := context.Background()
+		content := "test content"
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil, fmt.Errorf("write tcp: %w", syscall.EPIPE)).Times(2)
+
+		p := &poster{
+			uploadPool: mockPool,
+			stats:      &Stats{StartTime: time.Now()},
+		}
+
+		art := &article.Article{
+			MessageID:    "test@example.com",
+			Subject:      "Test Subject",
+			From:         "test@example.com",
+			Groups:       []string{"alt.test"},
+			PartNumber:   1,
+			TotalParts:   1,
+			FileName:     "test.txt",
+			OriginalName: "test.txt",
+			Date:         time.Now(),
+			Size:         uint64(len(content)),
+			FileSize:     int64(len(content)),
+		}
+
+		err := p.postArticleWithBody(ctx, art, []byte(content))
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "error posting article")
 	})
