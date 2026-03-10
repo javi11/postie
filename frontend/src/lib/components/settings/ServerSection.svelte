@@ -20,8 +20,8 @@ let isAdvanced = $derived($advancedMode);
 let hasMultipleUploadBackbones = $derived(
 	(() => {
 		const hosts = new Set(
-			config.servers
-				.filter(s => (s.role || "upload") !== "verify" && s.enabled !== false)
+			(config.servers ?? [])
+				.filter(s => s != null && (s.role || "upload") !== "verify" && s.enabled !== false)
 				.map(s => s.host)
 				.filter(h => h)
 		);
@@ -50,8 +50,8 @@ function toServerConfig(server: any, role: "upload" | "verify"): configType.Serv
 
 // Derive filtered lists to pass to each NntpServerManager
 let uploadManagedServers = $derived(
-	config.servers
-		.filter(s => (s.role || "upload") !== "verify")
+	(config.servers ?? [])
+		.filter(s => s != null && (s.role || "upload") !== "verify")
 		.map(s => ({
 			enabled: s.enabled ?? true,
 			host: s.host || "",
@@ -70,8 +70,8 @@ let uploadManagedServers = $derived(
 );
 
 let verifyManagedServers = $derived(
-	config.servers
-		.filter(s => s.role === "verify")
+	(config.servers ?? [])
+		.filter(s => s != null && s.role === "verify")
 		.map(s => ({
 			enabled: s.enabled ?? true,
 			host: s.host || "",
@@ -92,13 +92,13 @@ let verifyManagedServers = $derived(
 function handleUploadUpdate(updatedServers: any[]) {
 	config.servers = [
 		...updatedServers.map(s => toServerConfig(s, "upload")),
-		...config.servers.filter(s => s.role === "verify").map(s => toServerConfig(s, "verify")),
+		...(config.servers ?? []).filter(s => s?.role === "verify").map(s => toServerConfig(s, "verify")),
 	];
 }
 
 function handleVerifyUpdate(updatedServers: any[]) {
 	config.servers = [
-		...config.servers.filter(s => (s.role || "upload") !== "verify").map(s => toServerConfig(s, "upload")),
+		...(config.servers ?? []).filter(s => s != null && (s.role || "upload") !== "verify").map(s => toServerConfig(s, "upload")),
 		...updatedServers.map(s => toServerConfig(s, "verify")),
 	];
 }

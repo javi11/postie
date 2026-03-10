@@ -1105,16 +1105,22 @@ func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 		ProviderErrors:    providerErrors,
 	}
 
-	// Build a map from provider address to inflight config for quick lookup
+	// Build a map from provider address to inflight config for quick lookup.
+	// Key format matches nntppool's internal provider name: "host:port+username" or "host:port".
 	inflightByAddr := make(map[string]int)
 	if a.config != nil {
 		for _, srv := range a.config.Servers {
-			addr := fmt.Sprintf("%s:%d", srv.Host, srv.Port)
+			var key string
+			if srv.Username != "" {
+				key = fmt.Sprintf("%s:%d+%s", srv.Host, srv.Port, srv.Username)
+			} else {
+				key = fmt.Sprintf("%s:%d", srv.Host, srv.Port)
+			}
 			inflight := srv.Inflight
 			if inflight <= 0 {
 				inflight = 10
 			}
-			inflightByAddr[addr] = inflight
+			inflightByAddr[key] = inflight
 		}
 	}
 

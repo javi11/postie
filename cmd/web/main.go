@@ -411,6 +411,11 @@ func (ws *WebServer) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := configData.Validate(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	if err := ws.app.SaveConfig(&configData); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

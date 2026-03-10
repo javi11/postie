@@ -140,7 +140,7 @@ onDestroy(() => {
 			</div>
 		{:else if poolMetrics?.providers && poolMetrics.providers.length > 0}
 			<div class="space-y-3">
-				{#each poolMetrics.providers as provider (provider.host)}
+				{#each poolMetrics.providers as provider, i (i)}
 					{@const StatusIcon = getProviderStatusIcon(provider)}
 					<div class="border border-base-300 rounded-lg p-4">
 						<div class="flex items-center justify-between mb-3">
