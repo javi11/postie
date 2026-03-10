@@ -316,6 +316,12 @@ function getSortIcon(column: string) {
 	}
 	return sortOrder === "asc" ? ArrowUp : ArrowDown;
 }
+
+let FilenameIcon = $derived(getSortIcon("filename"));
+let SizeIcon = $derived(getSortIcon("size"));
+let StatusSortIcon = $derived(getSortIcon("status"));
+let PriorityIcon = $derived(getSortIcon("priority"));
+let CreatedIcon = $derived(getSortIcon("created"));
 </script>
 
 <div class="space-y-6">
@@ -564,10 +570,7 @@ function getSortIcon(column: string) {
                 >
                   <div class="flex items-center gap-1">
                     {$t("dashboard.queue.file")}
-                    <svelte:component
-                      this={getSortIcon("filename")}
-                      class="w-4 h-4 {sortBy === 'filename' ? 'text-primary' : 'text-base-content/40'}"
-                    />
+                    <FilenameIcon class="w-4 h-4 {sortBy === 'filename' ? 'text-primary' : 'text-base-content/40'}" />
                   </div>
                 </th>
                 <th
@@ -576,10 +579,7 @@ function getSortIcon(column: string) {
                 >
                   <div class="flex items-center gap-1">
                     {$t("dashboard.queue.size")}
-                    <svelte:component
-                      this={getSortIcon("size")}
-                      class="w-4 h-4 {sortBy === 'size' ? 'text-primary' : 'text-base-content/40'}"
-                    />
+                    <SizeIcon class="w-4 h-4 {sortBy === 'size' ? 'text-primary' : 'text-base-content/40'}" />
                   </div>
                 </th>
                 <th
@@ -588,10 +588,7 @@ function getSortIcon(column: string) {
                 >
                   <div class="flex items-center gap-1">
                     {$t("dashboard.queue.status")}
-                    <svelte:component
-                      this={getSortIcon("status")}
-                      class="w-4 h-4 {sortBy === 'status' ? 'text-primary' : 'text-base-content/40'}"
-                    />
+                    <StatusSortIcon class="w-4 h-4 {sortBy === 'status' ? 'text-primary' : 'text-base-content/40'}" />
                   </div>
                 </th>
                 <th
@@ -600,10 +597,7 @@ function getSortIcon(column: string) {
                 >
                   <div class="flex items-center gap-1">
                     {$t("dashboard.queue.priority")}
-                    <svelte:component
-                      this={getSortIcon("priority")}
-                      class="w-4 h-4 {sortBy === 'priority' ? 'text-primary' : 'text-base-content/40'}"
-                    />
+                    <PriorityIcon class="w-4 h-4 {sortBy === 'priority' ? 'text-primary' : 'text-base-content/40'}" />
                   </div>
                 </th>
                 <th
@@ -612,10 +606,7 @@ function getSortIcon(column: string) {
                 >
                   <div class="flex items-center gap-1">
                     {$t("dashboard.queue.created")}
-                    <svelte:component
-                      this={getSortIcon("created")}
-                      class="w-4 h-4 {sortBy === 'created' ? 'text-primary' : 'text-base-content/40'}"
-                    />
+                    <CreatedIcon class="w-4 h-4 {sortBy === 'created' ? 'text-primary' : 'text-base-content/40'}" />
                   </div>
                 </th>
                 <th class="text-right">{$t("dashboard.queue.actions")}</th>
@@ -649,10 +640,13 @@ function getSortIcon(column: string) {
                   </td>
                   <td>
                     <div class="flex items-center gap-2 flex-wrap">
-                      <svelte:component
-                        this={getStatusIcon(item.status)}
-                        class="w-4 h-4 {getStatusIconClass(item.status)}"
-                      />
+                      {#if item.status === "complete"}
+                        <CheckCircle class="w-4 h-4 {getStatusIconClass(item.status)}" />
+                      {:else if item.status === "error"}
+                        <AlertCircle class="w-4 h-4 {getStatusIconClass(item.status)}" />
+                      {:else}
+                        <Clock class="w-4 h-4 {getStatusIconClass(item.status)}" />
+                      {/if}
                       <div class="badge {getStatusBadgeClass(item.status)} capitalize">
                         {item.status}
                       </div>
@@ -808,8 +802,7 @@ function getSortIcon(column: string) {
         <button class="btn btn-error" onclick={confirmBatchDelete}>{$t("common.actions.delete")}</button>
       </div>
     </div>
-    <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
-    <div class="modal-backdrop" onclick={() => pendingBatchDelete = false}></div>
+    <button aria-label={$t("common.actions.cancel")} class="modal-backdrop" onclick={() => pendingBatchDelete = false}></button>
   </div>
 {/if}
 
@@ -824,7 +817,6 @@ function getSortIcon(column: string) {
         <button class="btn btn-error" onclick={confirmRemove}>{$t("common.actions.delete")}</button>
       </div>
     </div>
-    <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
-    <div class="modal-backdrop" onclick={cancelRemove}></div>
+    <button aria-label={$t("common.actions.cancel")} class="modal-backdrop" onclick={cancelRemove}></button>
   </div>
 {/if}
