@@ -106,8 +106,11 @@ func (m *Manager) GetCheckPool() NNTPClient {
 	return m.GetVerifyPool()
 }
 
-// providerKey returns a unique key for a server config (used to match providers across config changes).
+// providerKey returns a unique key for a server config matching nntppool's internal provider name format.
 func providerKey(s config.ServerConfig) string {
+	if s.Username != "" {
+		return fmt.Sprintf("%s:%d+%s", s.Host, s.Port, s.Username)
+	}
 	return fmt.Sprintf("%s:%d", s.Host, s.Port)
 }
 
@@ -145,7 +148,9 @@ func (m *Manager) UpdateConfig(newCfg *config.ConfigData) error {
 	// Diff upload providers
 	oldUploadServers := m.config.GetUploadServers()
 	newUploadServers := newCfg.GetUploadServers()
-	m.diffProviders(m.uploadPool, oldUploadServers, newUploadServers, "upload")
+	if err := m.diffProviders(m.uploadPool, oldUploadServers, newUploadServers, "upload"); err != nil {
+		return fmt.Errorf("upload pool update failed: %w", err)
+	}
 
 	// Diff verify providers
 	oldVerifyServers := m.config.GetVerifyServers()
@@ -158,7 +163,9 @@ func (m *Manager) UpdateConfig(newCfg *config.ConfigData) error {
 	switch {
 	case hasNewVerify && hasOldVerify && m.verifyPool != m.uploadPool:
 		// Both old and new have dedicated verify pools — diff the verify pool
-		m.diffProviders(m.verifyPool, oldVerifyServers, newVerifyServers, "verify")
+		if err := m.diffProviders(m.verifyPool, oldVerifyServers, newVerifyServers, "verify"); err != nil {
+			return fmt.Errorf("verify pool update failed: %w", err)
+		}
 	case hasNewVerify && !hasOldVerify:
 		// New config introduces verify servers — create dedicated verify pool
 		verifyPool, err := newCfg.GetVerifyPool()
@@ -190,7 +197,7 @@ func (m *Manager) UpdateConfig(newCfg *config.ConfigData) error {
 
 // diffProviders computes the diff between old and new server lists and applies
 // AddProvider/RemoveProvider operations on the given pool.
-func (m *Manager) diffProviders(pool NNTPClient, oldServers, newServers []config.ServerConfig, poolName string) {
+func (m *Manager) diffProviders(pool NNTPClient, oldServers, newServers []config.ServerConfig, poolName string) error {
 	oldMap := make(map[string]config.ServerConfig, len(oldServers))
 	for _, s := range oldServers {
 		oldMap[providerKey(s)] = s
@@ -220,13 +227,12 @@ func (m *Manager) diffProviders(pool NNTPClient, oldServers, newServers []config
 		if !exists || serverConfigChanged(oldSrv, newSrv) {
 			provider := config.ServerConfigToProvider(newSrv)
 			if err := pool.AddProvider(provider); err != nil {
-				slog.Error("Failed to add provider to pool",
-					"pool", poolName, "provider", key, "error", err)
-			} else {
-				slog.Info("Added provider to pool", "pool", poolName, "provider", key)
+				return fmt.Errorf("failed to add provider %q to %s pool: %w", key, poolName, err)
 			}
+			slog.Info("Added provider to pool", "pool", poolName, "provider", key)
 		}
 	}
+	return nil
 }
 
 // serverConfigChanged returns true if any relevant fields differ between two server configs.

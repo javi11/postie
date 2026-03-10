@@ -89,6 +89,11 @@ func (a *App) SaveConfig(configData *config.ConfigData) error {
 
 	slog.Info("Saving config", "path", a.configPath, "configData", configData)
 
+	// Validate structure before anything else (prevents writing bad config to disk)
+	if err := configData.Validate(); err != nil {
+		return err
+	}
+
 	// Ensure version is set to current version when saving
 	configData.Version = config.CurrentConfigVersion
 

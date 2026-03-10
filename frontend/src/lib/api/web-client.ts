@@ -122,7 +122,8 @@ export class WebClient {
 		});
 
 		if (!response.ok) {
-			throw new Error(`HTTP error! status: ${response.status}`);
+			const errText = await response.text();
+			throw new Error(errText.trim() || `HTTP error! status: ${response.status}`);
 		}
 
 		// Handle empty responses

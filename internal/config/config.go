@@ -177,11 +177,11 @@ type ConfigData struct {
 	ConnectionPool ConnectionPoolConfig `yaml:"connection_pool" json:"connection_pool"`
 	Posting        PostingConfig        `yaml:"posting" json:"posting"`
 	// Check uploaded article configuration. used to check if an article was successfully uploaded and propagated.
-	PostCheck                 PostCheck              `yaml:"post_check" json:"post_check"`
-	Par2                      Par2Config             `yaml:"par2" json:"par2"`
+	PostCheck PostCheck  `yaml:"post_check" json:"post_check"`
+	Par2      Par2Config `yaml:"par2" json:"par2"`
 	// Watcher is deprecated: use Watchers instead. Retained for backward-compatible YAML parsing.
-	Watcher        WatcherConfig  `yaml:"watcher,omitempty" json:"watcher,omitempty"`
-	Watchers       []WatcherConfig `yaml:"watchers" json:"watchers"`
+	Watcher                   WatcherConfig          `yaml:"watcher,omitempty" json:"watcher,omitempty"`
+	Watchers                  []WatcherConfig        `yaml:"watchers" json:"watchers"`
 	NzbCompression            NzbCompressionConfig   `yaml:"nzb_compression" json:"nzb_compression"`
 	Database                  DatabaseConfig         `yaml:"database" json:"database"`
 	Queue                     QueueConfig            `yaml:"queue" json:"queue"`
@@ -200,16 +200,16 @@ type Par2Config struct {
 
 // ServerConfig represents a Usenet server configuration
 type ServerConfig struct {
-	Host                           string     `yaml:"host" json:"host"`
-	Port                           int        `yaml:"port" json:"port"`
-	Username                       string     `yaml:"username" json:"username"`
-	Password                       string     `yaml:"password" json:"password"`
-	SSL                            bool       `yaml:"ssl" json:"ssl"`
-	MaxConnections                 int        `yaml:"max_connections" json:"max_connections"`
-	MaxConnectionIdleTimeInSeconds int        `yaml:"max_connection_idle_time_in_seconds" json:"max_connection_idle_time_in_seconds"`
-	MaxConnectionTTLInSeconds      int        `yaml:"max_connection_ttl_in_seconds" json:"max_connection_ttl_in_seconds"`
-	InsecureSSL                    bool       `yaml:"insecure_ssl" json:"insecure_ssl"`
-	Enabled                        *bool      `yaml:"enabled" json:"enabled"`
+	Host                           string `yaml:"host" json:"host"`
+	Port                           int    `yaml:"port" json:"port"`
+	Username                       string `yaml:"username" json:"username"`
+	Password                       string `yaml:"password" json:"password"`
+	SSL                            bool   `yaml:"ssl" json:"ssl"`
+	MaxConnections                 int    `yaml:"max_connections" json:"max_connections"`
+	MaxConnectionIdleTimeInSeconds int    `yaml:"max_connection_idle_time_in_seconds" json:"max_connection_idle_time_in_seconds"`
+	MaxConnectionTTLInSeconds      int    `yaml:"max_connection_ttl_in_seconds" json:"max_connection_ttl_in_seconds"`
+	InsecureSSL                    bool   `yaml:"insecure_ssl" json:"insecure_ssl"`
+	Enabled                        *bool  `yaml:"enabled" json:"enabled"`
 	// Role defines how this server is used: "upload" for posting, "verify" for STAT checks only.
 	// All upload-role servers must share the same provider host.
 	Role ServerRole `yaml:"role" json:"role"`
@@ -565,15 +565,15 @@ func Load(path string) (*ConfigData, error) {
 	cfg.migrateWatcherConfig()
 
 	// Validate configuration
-	if err := cfg.validate(); err != nil {
+	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	return &cfg, nil
 }
 
-// validate validates the configuration
-func (c *ConfigData) validate() error {
+// Validate validates the configuration
+func (c *ConfigData) Validate() error {
 	for i, s := range c.Servers {
 		if s.Host == "" {
 			return fmt.Errorf("server %d: host is required", i)
@@ -586,6 +586,17 @@ func (c *ConfigData) validate() error {
 		if s.MaxConnections <= 0 {
 			return fmt.Errorf("server %d: max_connections must be positive", i)
 		}
+	}
+
+	// Validate that no two servers share the same host+username (would collide in nntppool)
+	type serverKey struct{ host, username string }
+	seen := make(map[serverKey]int)
+	for i, s := range c.Servers {
+		k := serverKey{s.Host, s.Username}
+		if j, exists := seen[k]; exists {
+			return fmt.Errorf("servers %d and %d have the same host (%q) and username (%q); each provider account must be unique", j+1, i+1, s.Host, s.Username)
+		}
+		seen[k] = i
 	}
 
 	// Validate upload servers: at least one required, all must share the same host
@@ -770,7 +781,7 @@ func (c *ConfigData) GetNNTPPool() (*nntppool.Client, error) {
 
 	providers := getProviders(enabledServers)
 
-	client, err := nntppool.NewClient(context.Background(), providers)
+	client, err := nntppool.NewClient(context.Background(), providers, nntppool.WithDispatchStrategy(nntppool.DispatchRoundRobin))
 	if err != nil {
 		return nil, fmt.Errorf("error creating NNTP client: %w", err)
 	}
@@ -802,7 +813,7 @@ func (c *ConfigData) GetVerifyPool() (*nntppool.Client, error) {
 
 	if len(verifyServers) > 0 {
 		providers := getProviders(verifyServers)
-		client, err := nntppool.NewClient(context.Background(), providers)
+		client, err := nntppool.NewClient(context.Background(), providers, nntppool.WithDispatchStrategy(nntppool.DispatchRoundRobin))
 		if err != nil {
 			return nil, fmt.Errorf("error creating verify pool: %w", err)
 		}
@@ -960,9 +971,9 @@ func GetDefaultConfig() ConfigData {
 				IgnorePatterns:     []string{"*.tmp", "*.part", "*.!ut"},
 				MinFileSize:        1048576, // 1MB
 				CheckInterval:      Duration("5m"),
-				DeleteOriginalFile: false,        // Default to keeping original files for safety
-				SingleNzbPerFolder: false,        // Default to false for backward compatibility
-				FollowSymlinks:     false,        // Default to skipping symlinks to avoid double-counting and external files
+				DeleteOriginalFile: false,           // Default to keeping original files for safety
+				SingleNzbPerFolder: false,           // Default to false for backward compatibility
+				FollowSymlinks:     false,           // Default to skipping symlinks to avoid double-counting and external files
 				MinFileAge:         Duration("60s"), // Default to 60s to ensure files are stable before uploading
 			},
 		},
