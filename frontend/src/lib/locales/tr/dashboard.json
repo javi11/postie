@@ -17,6 +17,8 @@
         },
         "queue": {
             "title": "Yükleme Kuyruğu",
+            "search_placeholder": "Dosya adı ara…",
+            "search_within_page": "yalnızca mevcut sayfa",
             "items": "öğe",
             "total_size": "Toplam Boyut",
             "nzb": "NZB",
@@ -51,6 +53,9 @@
             "next": "Sonraki",
             "retry_all_failed": "Başarısızları Tekrarla",
             "bulk_retry_success": "{count} öğe başarıyla yeniden denendi",
+            "delete_selected": "Seçilenleri Sil ({count})",
+            "confirm_delete_selected": "{count} seçili öğeyi silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.",
+            "batch_deleted": "{count} öğe kuyruktan kaldırıldı.",
             "status_types": {
                 "pending": "bekliyor",
                 "complete": "tamamlandı",
@@ -67,6 +72,8 @@
         },
         "progress": {
             "title": "Yükleme İlerlemesi",
+            "file_size": "Dosya Boyutu",
+            "path": "Yol",
             "status": {
                 "active": "Aktif",
                 "idle": "Boşta",

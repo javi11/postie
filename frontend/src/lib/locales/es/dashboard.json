@@ -17,6 +17,8 @@
 		},
 		"queue": {
 			"title": "Cola de Carga",
+			"search_placeholder": "Buscar archivo…",
+			"search_within_page": "solo página actual",
 			"items": "elementos",
 			"total_size": "Tamaño Total",
 			"progress": "Progreso",
@@ -52,6 +54,9 @@
 			"next": "Siguiente",
 			"retry_all_failed": "Reintentar Fallidos",
 			"bulk_retry_success": "Se reintentaron {count} elementos exitosamente",
+			"delete_selected": "Eliminar seleccionados ({count})",
+			"confirm_delete_selected": "¿Estás seguro de que deseas eliminar {count} elementos seleccionados? Esta acción no se puede deshacer.",
+			"batch_deleted": "{count} elementos eliminados de la cola.",
 			"status_types": {
 				"pending": "pendiente",
 				"complete": "completo",
@@ -69,6 +74,8 @@
 		},
 		"progress": {
 			"title": "Progreso de Carga",
+			"file_size": "Tamaño de archivo",
+			"path": "Ruta",
 			"status": {
 				"active": "Activo",
 				"idle": "Inactivo",

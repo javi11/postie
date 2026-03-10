@@ -4,7 +4,6 @@ import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import { formatDate, formatFileSize, getStatusBadgeClass, getStatusIconClass } from "$lib/utils";
 import type { backend } from "$lib/wailsjs/go/models";
-// Using backend types for pagination
 import {
 	AlertCircle,
 	ArrowDown,
@@ -15,42 +14,52 @@ import {
 	ChevronRight,
 	Clock,
 	Download,
-	FileText,
-	Filter,
 	List,
 	Play,
 	RotateCcw,
+	Search,
 	Trash2,
 	Upload,
 } from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
 
-let paginatedResult: backend.PaginatedQueueResult | null = null;
-let initialLoad = true;
+let paginatedResult = $state<backend.PaginatedQueueResult | null>(null);
+let initialLoad = $state(true);
 let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
-// Pagination state - now controlled by server
-let currentPage = 1;
-let itemsPerPage = 10;
-let sortBy = "created";
-let sortOrder = "desc";
-let statusFilter = ""; // "" = all, "pending", "complete", "error"
+// Pagination state - controlled by server
+let currentPage = $state(1);
+let itemsPerPage = $state(10);
+let sortBy = $state("created");
+let sortOrder = $state("desc");
+let statusFilter = $state(""); // "" = all, "pending", "complete", "error"
+let searchQuery = $state("");
 
-// Computed properties for pagination - now from server response
-$: queueItems = paginatedResult?.items || [];
-$: totalPages = paginatedResult?.totalPages || 0;
-$: totalItems = paginatedResult?.totalItems || 0;
-$: startItem = paginatedResult ? Math.max(1, (currentPage - 1) * itemsPerPage + 1) : 0;
-$: endItem = paginatedResult ? Math.min(currentPage * itemsPerPage, totalItems) : 0;
-$: hasNext = paginatedResult?.hasNext || false;
-$: hasPrev = paginatedResult?.hasPrev || false;
+// Derived from server response
+let queueItems = $derived(paginatedResult?.items ?? []);
+let totalPages = $derived(paginatedResult?.totalPages ?? 0);
+let totalItems = $derived(paginatedResult?.totalItems ?? 0);
+let startItem = $derived(paginatedResult ? Math.max(1, (currentPage - 1) * itemsPerPage + 1) : 0);
+let endItem = $derived(paginatedResult ? Math.min(currentPage * itemsPerPage, totalItems) : 0);
+let hasNext = $derived(paginatedResult?.hasNext ?? false);
+let hasPrev = $derived(paginatedResult?.hasPrev ?? false);
+
+// Client-side search within current page
+let filteredItems = $derived(
+	searchQuery.trim()
+		? queueItems.filter((item) =>
+				item.fileName?.toLowerCase().includes(searchQuery.toLowerCase()),
+			)
+		: queueItems,
+);
 
 let intervalId: ReturnType<typeof setInterval> | undefined;
-
-// Reactive statements to reload queue when pagination parameters change
-$: if (currentPage || itemsPerPage || sortBy || sortOrder || statusFilter !== undefined) {
-	loadQueue();
-}
+let pendingRemoveId = $state<string | null>(null);
+let selectedIds = $state(new Set<string>());
+let pendingBatchDelete = $state(false);
+const allSelected = $derived(
+	filteredItems.length > 0 && filteredItems.every((item) => selectedIds.has(item.id)),
+);
 
 function startPolling() {
 	if (intervalId) return;
@@ -74,22 +83,19 @@ function handleVisibilityChange() {
 }
 
 onMount(() => {
-	// Listen for queue updates with debouncing to prevent double-fetches
 	apiClient.on("queue-updated", () => {
 		clearTimeout(debounceTimer);
 		debounceTimer = setTimeout(loadQueue, 100);
 	});
 
-	// Set up periodic refresh for queue (pauses when tab inactive)
 	startPolling();
 	document.addEventListener("visibilitychange", handleVisibilityChange);
 
-	// Load initial queue
+	// Initial load
 	loadQueue();
 });
 
 onDestroy(() => {
-	// Clean up event listener and timers
 	apiClient.off("queue-updated");
 	clearTimeout(debounceTimer);
 	stopPolling();
@@ -115,10 +121,7 @@ async function loadQueue() {
 	}
 }
 
-let pendingRemoveId: string | null = null;
-
 async function removeFromQueue(id: string) {
-	// Set pending for confirmation — the confirm dialog is shown in template
 	pendingRemoveId = id;
 }
 
@@ -136,10 +139,7 @@ async function confirmRemove() {
 		);
 	} catch (error) {
 		console.error("Failed to remove item from queue:", error);
-		toastStore.error(
-			$t("common.messages.failed_to_remove_item"),
-			String(error),
-		);
+		toastStore.error($t("common.messages.failed_to_remove_item"), String(error));
 	}
 }
 
@@ -147,15 +147,48 @@ function cancelRemove() {
 	pendingRemoveId = null;
 }
 
+function toggleSelectAll() {
+	if (allSelected) {
+		selectedIds = new Set();
+	} else {
+		selectedIds = new Set(filteredItems.map((i) => i.id));
+	}
+}
+
+function toggleItem(id: string) {
+	const next = new Set(selectedIds);
+	if (next.has(id)) next.delete(id);
+	else next.add(id);
+	selectedIds = next;
+}
+
+async function batchDeleteSelected() {
+	pendingBatchDelete = true;
+}
+
+async function confirmBatchDelete() {
+	const ids = [...selectedIds];
+	let successCount = 0;
+	for (const id of ids) {
+		try {
+			await apiClient.removeFromQueue(id);
+			successCount++;
+		} catch (e) {
+			console.error("Failed to remove", id, e);
+		}
+	}
+	selectedIds = new Set();
+	pendingBatchDelete = false;
+	toastStore.success($t("dashboard.queue.batch_deleted", { values: { count: successCount } }));
+	await loadQueue();
+}
+
 async function downloadNZB(id: string) {
 	try {
 		await apiClient.downloadNZB(id);
 	} catch (error) {
 		console.error("Failed to download NZB:", error);
-		toastStore.error(
-			$t("common.messages.failed_to_download_nzb"),
-			String(error),
-		);
+		toastStore.error($t("common.messages.failed_to_download_nzb"), String(error));
 	}
 }
 
@@ -176,10 +209,7 @@ async function changePriority(id: string, newPriority: number) {
 		await loadQueue();
 	} catch (error) {
 		console.error("Failed to update priority:", error);
-		toastStore.error(
-			$t("common.messages.failed_to_update_priority"),
-			String(error),
-		);
+		toastStore.error($t("common.messages.failed_to_update_priority"), String(error));
 	}
 }
 
@@ -199,13 +229,17 @@ function getStatusIcon(status: string) {
 function goToPage(page: number) {
 	if (page >= 1 && page <= totalPages) {
 		currentPage = page;
+		selectedIds = new Set();
+		loadQueue();
 	}
 }
 
 function changeItemsPerPage(event: Event) {
 	const target = event.target as HTMLSelectElement;
 	itemsPerPage = Number.parseInt(target.value);
-	currentPage = 1; // Reset to first page when changing items per page
+	currentPage = 1;
+	selectedIds = new Set();
+	loadQueue();
 }
 
 function toggleSort(column: string) {
@@ -215,13 +249,16 @@ function toggleSort(column: string) {
 		sortBy = column;
 		sortOrder = "desc";
 	}
-	currentPage = 1; // Reset to first page when changing sort
+	currentPage = 1;
+	selectedIds = new Set();
+	loadQueue();
 }
 
-function changeStatusFilter(event: Event) {
-	const target = event.target as HTMLSelectElement;
-	statusFilter = target.value;
-	currentPage = 1; // Reset to first page when changing filter
+function setStatusFilter(value: string) {
+	statusFilter = value;
+	currentPage = 1;
+	selectedIds = new Set();
+	loadQueue();
 }
 
 async function clearCompleted() {
@@ -239,11 +276,26 @@ async function clearCompleted() {
 }
 
 async function retryAllFailed() {
-	const failedItems = queueItems.filter((item) => item.status === "error");
-	if (failedItems.length === 0) return;
+	// Fetch all error items across all pages (not just current page)
+	let allFailedItems: backend.QueueItem[] = [];
+	try {
+		const result = await apiClient.getQueueItems({
+			page: 1,
+			limit: 9999,
+			sortBy: "created",
+			order: "desc",
+			status: "error",
+		});
+		allFailedItems = result?.items ?? [];
+	} catch {
+		// Fall back to current page items
+		allFailedItems = queueItems.filter((item) => item.status === "error");
+	}
+
+	if (allFailedItems.length === 0) return;
 
 	let succeeded = 0;
-	for (const item of failedItems) {
+	for (const item of allFailedItems) {
 		try {
 			await apiClient.retryJob(item.id);
 			succeeded++;
@@ -268,79 +320,125 @@ function getSortIcon(column: string) {
 
 <div class="space-y-6">
   <!-- Header -->
-  <div class="flex items-center gap-3 mb-6">
+  <div class="flex items-center gap-3 mb-4">
     <div class="p-2 rounded-lg bg-gradient-to-br from-secondary to-accent">
       <List class="w-6 h-6 text-secondary-content" />
     </div>
-    <div class="flex-1">
+    <div class="flex-1 min-w-0">
       <h2 class="text-xl font-semibold">
         {$t("dashboard.queue.title")}
       </h2>
-      <div class="flex flex-wrap items-center gap-3 mt-1">
+      <div class="flex items-center gap-2 mt-1">
         <div class="badge badge-info">
           <span class="text-sm font-medium">
             {totalItems} {$t("dashboard.queue.items")}
           </span>
         </div>
-        {#if !initialLoad}
-          <!-- Status Filter -->
-          <div class="flex items-center gap-2">
-            <Filter class="w-4 h-4 text-base-content/70" />
-            <select
-              id="status-filter"
-              class="select select-bordered select-sm"
-              value={statusFilter}
-              onchange={changeStatusFilter}
-            >
-              <option value="">{$t("dashboard.queue.filter_all")}</option>
-              <option value="pending">{$t("dashboard.queue.filter_pending")}</option>
-              <option value="complete">{$t("dashboard.queue.filter_complete")}</option>
-              <option value="error">{$t("dashboard.queue.filter_error")}</option>
-            </select>
-          </div>
-          <!-- Items per page -->
-          <div class="flex items-center gap-2">
-            <label for="items-per-page" class="text-sm text-base-content/70">
-              {$t("dashboard.queue.items_per_page")}:
-            </label>
-            <select
-              id="items-per-page"
-              class="select select-bordered select-sm"
-              value={itemsPerPage}
-              onchange={changeItemsPerPage}
-            >
-              <option value={5}>5</option>
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-            </select>
-          </div>
-          <!-- Bulk Actions -->
-          {#if totalItems > 0}
-            <div class="flex items-center gap-2 ml-auto">
-              <button
-                class="btn btn-xs btn-warning gap-1"
-                onclick={retryAllFailed}
-                disabled={!queueItems.some((i) => i.status === "error")}
-                title={$t("dashboard.queue.retry_all_failed")}
-              >
-                <RotateCcw class="w-3 h-3" />
-                {$t("dashboard.queue.retry_all_failed")}
-              </button>
-              <button
-                class="btn btn-xs btn-ghost gap-1"
-                onclick={clearCompleted}
-                title={$t("dashboard.header.clear_completed")}
-              >
-                <Trash2 class="w-3 h-3" />
-                {$t("dashboard.header.clear_completed")}
-              </button>
-            </div>
-          {/if}
-        {/if}
       </div>
     </div>
   </div>
+
+  {#if !initialLoad}
+    <!-- Filter Tabs + Search + Controls row -->
+    <div class="flex flex-wrap items-center gap-3">
+      <!-- Status filter tabs -->
+      <div class="join">
+        <button
+          type="button"
+          class="btn btn-sm join-item {statusFilter === '' ? 'btn-primary' : 'btn-ghost'}"
+          onclick={() => setStatusFilter('')}
+        >
+          {$t("dashboard.queue.filter_all")}
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm join-item {statusFilter === 'pending' ? 'btn-primary' : 'btn-ghost'}"
+          onclick={() => setStatusFilter('pending')}
+        >
+          {$t("dashboard.queue.filter_pending")}
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm join-item {statusFilter === 'complete' ? 'btn-primary' : 'btn-ghost'}"
+          onclick={() => setStatusFilter('complete')}
+        >
+          {$t("dashboard.queue.filter_complete")}
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm join-item {statusFilter === 'error' ? 'btn-error' : 'btn-ghost'}"
+          onclick={() => setStatusFilter('error')}
+        >
+          {$t("dashboard.queue.filter_error")}
+        </button>
+      </div>
+
+      <!-- Search input -->
+      <div class="relative">
+        <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-base-content/50 pointer-events-none" />
+        <input
+          type="search"
+          class="input input-bordered input-sm pl-8 w-44"
+          placeholder={$t("dashboard.queue.search_placeholder")}
+          bind:value={searchQuery}
+        />
+      </div>
+      {#if searchQuery.trim()}
+        <span class="text-xs text-base-content/50 italic">
+          {filteredItems.length}/{queueItems.length} — {$t("dashboard.queue.search_within_page")}
+        </span>
+      {/if}
+
+      <!-- Items per page -->
+      <div class="flex items-center gap-2 ml-auto">
+        <label for="items-per-page" class="text-sm text-base-content/70 hidden sm:block">
+          {$t("dashboard.queue.items_per_page")}:
+        </label>
+        <select
+          id="items-per-page"
+          class="select select-bordered select-sm"
+          value={itemsPerPage}
+          onchange={changeItemsPerPage}
+        >
+          <option value={5}>5</option>
+          <option value={10}>10</option>
+          <option value={25}>25</option>
+          <option value={50}>50</option>
+        </select>
+      </div>
+
+      <!-- Bulk Actions -->
+      {#if totalItems > 0}
+        <div class="flex items-center gap-2">
+          {#if selectedIds.size > 0}
+            <button
+              class="btn btn-xs btn-error gap-1"
+              onclick={batchDeleteSelected}
+            >
+              <Trash2 class="w-3 h-3" />
+              {$t("dashboard.queue.delete_selected", { values: { count: selectedIds.size } })}
+            </button>
+          {/if}
+          <button
+            class="btn btn-xs btn-warning gap-1"
+            onclick={retryAllFailed}
+            title={$t("dashboard.queue.retry_all_failed")}
+          >
+            <RotateCcw class="w-3 h-3" />
+            {$t("dashboard.queue.retry_all_failed")}
+          </button>
+          <button
+            class="btn btn-xs btn-ghost gap-1"
+            onclick={clearCompleted}
+            title={$t("dashboard.header.clear_completed")}
+          >
+            <Trash2 class="w-3 h-3" />
+            {$t("dashboard.header.clear_completed")}
+          </button>
+        </div>
+      {/if}
+    </div>
+  {/if}
 
   {#if initialLoad}
     <!-- Loading Skeleton -->
@@ -391,39 +489,50 @@ function getSortIcon(column: string) {
 
     <!-- Mobile card layout -->
     <div class="md:hidden space-y-3">
-      {#each queueItems as item (item.id)}
+      {#each filteredItems as item (item.id)}
         <div class="card bg-base-100 shadow-sm border border-base-300 p-4">
           <div class="flex items-start justify-between gap-2">
-            <div class="min-w-0 flex-1">
-              <div class="font-medium truncate" title={item.fileName}>{item.fileName}</div>
-              <div class="text-xs text-base-content/60 mt-0.5">{formatFileSize(item.size)}</div>
+            <div class="flex items-start gap-2 min-w-0 flex-1">
+              <input
+                type="checkbox"
+                class="checkbox checkbox-sm mt-0.5 shrink-0"
+                checked={selectedIds.has(item.id)}
+                onclick={() => toggleItem(item.id)}
+              />
+              <div class="min-w-0 flex-1">
+                <div class="font-medium truncate" title={item.fileName}>{item.fileName}</div>
+                <div class="text-xs text-base-content/60 mt-0.5">{formatFileSize(item.size)}</div>
+              </div>
             </div>
-            <div class="badge {getStatusBadgeClass(item.status)} capitalize shrink-0">
-              {item.status}
+            <div class="flex flex-col items-end gap-1 shrink-0">
+              <div class="badge {getStatusBadgeClass(item.status)} capitalize">{item.status}</div>
+              {@render verificationBadge(item)}
             </div>
-            {@render verificationBadge(item)}
           </div>
           {#if item.errorMessage}
-            <details class="mt-2">
-              <summary class="text-xs text-error cursor-pointer hover:underline">
-                {item.errorMessage.length > 60
-                  ? item.errorMessage.substring(0, 60) + "..."
-                  : item.errorMessage}
-              </summary>
-              <div class="text-xs text-error mt-1 break-all">{item.errorMessage}</div>
-            </details>
+            <p class="text-xs text-error mt-2 break-words leading-snug">
+              {item.errorMessage.length > 100
+                ? item.errorMessage.substring(0, 100) + "…"
+                : item.errorMessage}
+            </p>
           {/if}
           <div class="flex items-center justify-between mt-3 pt-2 border-t border-base-200">
             <div class="text-xs text-base-content/60">{formatDate(item.createdAt)}</div>
             <div class="flex items-center gap-1">
+              {#if item.priority > 0}
+                <span class="badge badge-outline badge-xs">P{item.priority}</span>
+              {/if}
               {#if item.status === "complete"}
                 <button class="btn btn-primary btn-xs" onclick={() => downloadNZB(item.id)} aria-label={$t("dashboard.queue.download_nzb")}>
                   <Download class="w-3 h-3" />
                 </button>
               {/if}
               {#if item.status === "error"}
-                <button class="btn btn-warning btn-xs" onclick={() => retryJob(item.id)} aria-label={$t("dashboard.queue.retry")}>
+                <button class="btn btn-warning btn-xs relative" onclick={() => retryJob(item.id)} aria-label={$t("dashboard.queue.retry")}>
                   <Play class="w-3 h-3" />
+                  {#if item.retryCount > 0}
+                    <sup class="absolute -top-1 -right-1 text-[9px] leading-none bg-warning-content text-warning rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold">{item.retryCount}</sup>
+                  {/if}
                 </button>
               {/if}
               <button class="btn btn-error btn-xs" onclick={() => removeFromQueue(item.id)} aria-label={$t("dashboard.queue.remove_from_queue")}>
@@ -441,6 +550,14 @@ function getSortIcon(column: string) {
           <table class="table table-zebra">
             <thead>
               <tr>
+                <th class="w-8">
+                  <input
+                    type="checkbox"
+                    class="checkbox checkbox-sm"
+                    checked={allSelected}
+                    onclick={toggleSelectAll}
+                  />
+                </th>
                 <th
                   class="cursor-pointer hover:bg-base-200 select-none"
                   onclick={() => toggleSort("filename")}
@@ -505,8 +622,16 @@ function getSortIcon(column: string) {
               </tr>
             </thead>
             <tbody>
-              {#each queueItems as item (item.id)}
+              {#each filteredItems as item (item.id)}
                 <tr>
+                  <td>
+                    <input
+                      type="checkbox"
+                      class="checkbox checkbox-sm"
+                      checked={selectedIds.has(item.id)}
+                      onclick={() => toggleItem(item.id)}
+                    />
+                  </td>
                   <td>
                     <div class="max-w-xs">
                       <div class="font-medium truncate" title={item.fileName}>
@@ -523,7 +648,7 @@ function getSortIcon(column: string) {
                     </span>
                   </td>
                   <td>
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 flex-wrap">
                       <svelte:component
                         this={getStatusIcon(item.status)}
                         class="w-4 h-4 {getStatusIconClass(item.status)}"
@@ -531,24 +656,14 @@ function getSortIcon(column: string) {
                       <div class="badge {getStatusBadgeClass(item.status)} capitalize">
                         {item.status}
                       </div>
-                      {#if item.retryCount > 0}
-                        <div class="badge badge-warning badge-sm">
-                          {$t("dashboard.queue.retry")} {item.retryCount}
-                        </div>
-                      {/if}
                       {@render verificationBadge(item)}
                     </div>
                     {#if item.errorMessage}
-                      <details class="mt-2">
-                        <summary class="text-xs text-error cursor-pointer hover:underline">
-                          {item.errorMessage.length > 50
-                            ? item.errorMessage.substring(0, 50) + "..."
-                            : item.errorMessage}
-                        </summary>
-                        <div class="alert alert-error alert-sm mt-1">
-                          <span class="text-xs whitespace-pre-wrap break-all">{item.errorMessage}</span>
-                        </div>
-                      </details>
+                      <p class="text-xs text-error mt-1.5 max-w-xs break-words leading-snug">
+                        {item.errorMessage.length > 120
+                          ? item.errorMessage.substring(0, 120) + "…"
+                          : item.errorMessage}
+                      </p>
                     {/if}
                   </td>
                   <td>
@@ -570,7 +685,7 @@ function getSortIcon(column: string) {
                         >▼</button>
                       </div>
                     {:else}
-                      <span class="text-xs text-base-content/50">—</span>
+                      <span class="text-sm text-base-content/50">{item.priority}</span>
                     {/if}
                   </td>
                   <td>
@@ -597,12 +712,15 @@ function getSortIcon(column: string) {
                       {/if}
                       {#if item.status === "error"}
                         <button
-                          class="btn btn-warning btn-xs"
+                          class="btn btn-warning btn-xs relative"
                           onclick={() => retryJob(item.id)}
                           title={$t("dashboard.queue.retry")}
                           aria-label={$t("dashboard.queue.retry")}
                         >
                           <Play class="w-4 h-4" />
+                          {#if item.retryCount > 0}
+                            <sup class="absolute -top-1 -right-1 text-[9px] leading-none bg-warning-content text-warning rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold">{item.retryCount}</sup>
+                          {/if}
                         </button>
                       {/if}
                       <button
@@ -620,7 +738,6 @@ function getSortIcon(column: string) {
             </tbody>
           </table>
         </div>
-
     </div>
 
     <!-- Pagination Controls (shared between mobile/desktop) -->
@@ -679,6 +796,22 @@ function getSortIcon(column: string) {
     {/if}
   {/if}
 </div>
+
+<!-- Batch delete confirmation dialog -->
+{#if pendingBatchDelete}
+  <div class="modal modal-open" role="dialog">
+    <div class="modal-box max-w-sm">
+      <h3 class="text-lg font-bold">{$t("common.actions.confirm")}</h3>
+      <p class="py-4">{$t("dashboard.queue.confirm_delete_selected", { values: { count: selectedIds.size } })}</p>
+      <div class="modal-action">
+        <button class="btn btn-ghost" onclick={() => pendingBatchDelete = false}>{$t("common.actions.cancel")}</button>
+        <button class="btn btn-error" onclick={confirmBatchDelete}>{$t("common.actions.delete")}</button>
+      </div>
+    </div>
+    <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+    <div class="modal-backdrop" onclick={() => pendingBatchDelete = false}></div>
+  </div>
+{/if}
 
 <!-- Remove confirmation dialog -->
 {#if pendingRemoveId}

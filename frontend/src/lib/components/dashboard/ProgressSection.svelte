@@ -275,61 +275,41 @@ function cancelUpload(jobID: string) {
                     ></div>
                   </div>
 
-                  <!-- Progress Stats -->
-                  {#if !progressState?.IsPaused}
-                    <div class="grid grid-cols-2 gap-4 text-xs text-base-content/70">
-                      <div>
-                        <span class="block">{$t('dashboard.progress.elapsed')}</span>
-                        <span class="font-medium text-base-content">{formatTime((progressState?.SecondsSince || 0) * 1000)}</span>
-                      </div>
-                      <div>
-                        <span class="block">{$t('dashboard.progress.remaining')}</span>
-                        <span class="font-medium text-base-content">{formatTime((progressState?.SecondsLeft || 0) * 1000)}</span>
-                      </div>
-
-                      <!-- Show speed for upload tasks -->
-                      {#if (progressState.Type === "uploading" || progressState.Type === "checking") && progressState?.KBsPerSecond}
-                        <div>
-                          <span class="block">{$t('dashboard.progress.speed')}</span>
-                          <span class="font-medium text-base-content">{formatSpeed((progressState.KBsPerSecond || 0) * 1024)}</span>
-                        </div>
-                      {/if}
-
-                      <!-- Hide current/total for par2 generation, show as formatted bytes for uploads -->
-                      {#if progressState.Type !== "par2_generation"}
-                        <div>
-                          <span class="block">{$t('dashboard.progress.current')}</span>
-                          <span class="font-medium text-base-content">
-                              {formatFileSize(progressState.CurrentBytes)}
-                          </span>
-                        </div>
-                        <div>
-                          <span class="block">{$t('dashboard.progress.total')}</span>
-                          <span class="font-medium text-base-content">
-                              {formatFileSize(progressState.Max)}
-                          </span>
-                        </div>
-                      {/if}
+                  <!-- Progress Stats (dimmed when paused) -->
+                  <div class="grid grid-cols-2 gap-4 text-xs transition-opacity duration-300 {progressState?.IsPaused ? 'opacity-40' : 'text-base-content/70'}">
+                    <div>
+                      <span class="block text-base-content/70">{$t('dashboard.progress.elapsed')}</span>
+                      <span class="font-medium text-base-content">{formatTime((progressState?.SecondsSince || 0) * 1000)}</span>
                     </div>
-                  {:else}
-                    <!-- Show only current/total for paused tasks -->
-                    {#if progressState.Type !== "par2_generation"}
-                      <div class="grid grid-cols-2 gap-4 text-xs text-base-content/70">
-                        <div>
-                          <span class="block">{$t('dashboard.progress.current')}</span>
-                          <span class="font-medium text-base-content">
-                              {formatFileSize(progressState.CurrentBytes)}
-                          </span>
-                        </div>
-                        <div>
-                          <span class="block">{$t('dashboard.progress.total')}</span>
-                          <span class="font-medium text-base-content">
-                              {formatFileSize(progressState.Max)}
-                          </span>
-                        </div>
+                    <div>
+                      <span class="block text-base-content/70">{$t('dashboard.progress.remaining')}</span>
+                      <span class="font-medium text-base-content">{formatTime((progressState?.SecondsLeft || 0) * 1000)}</span>
+                    </div>
+
+                    <!-- Show speed for upload tasks (only when not paused) -->
+                    {#if !progressState?.IsPaused && (progressState.Type === "uploading" || progressState.Type === "checking") && progressState?.KBsPerSecond}
+                      <div>
+                        <span class="block text-base-content/70">{$t('dashboard.progress.speed')}</span>
+                        <span class="font-medium text-base-content">{formatSpeed((progressState.KBsPerSecond || 0) * 1024)}</span>
                       </div>
                     {/if}
-                  {/if}
+
+                    <!-- Hide current/total for par2 generation -->
+                    {#if progressState.Type !== "par2_generation"}
+                      <div>
+                        <span class="block text-base-content/70">{$t('dashboard.progress.current')}</span>
+                        <span class="font-medium text-base-content">
+                            {formatFileSize(progressState.CurrentBytes)}
+                        </span>
+                      </div>
+                      <div>
+                        <span class="block text-base-content/70">{$t('dashboard.progress.total')}</span>
+                        <span class="font-medium text-base-content">
+                            {formatFileSize(progressState.Max)}
+                        </span>
+                      </div>
+                    {/if}
+                  </div>
                 </div>
               {/each}
             </div>
@@ -339,13 +319,13 @@ function cancelUpload(jobID: string) {
           <div class="bg-base-200/50 rounded-xl p-4 space-y-3">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div class="flex justify-between items-center">
-                <span class="text-sm text-base-content/70">File Size</span>
+                <span class="text-sm text-base-content/70">{$t('dashboard.progress.file_size')}</span>
                 <span class="text-sm font-medium text-base-content">
                   {formatFileSize(job.size)}
                 </span>
               </div>
               <div class="flex justify-between items-center">
-                <span class="text-sm text-base-content/70">Path</span>
+                <span class="text-sm text-base-content/70">{$t('dashboard.progress.path')}</span>
                 <span class="text-sm font-medium text-base-content truncate" title="{job.path}">
                   {job.path.split('/').pop()}
                 </span>

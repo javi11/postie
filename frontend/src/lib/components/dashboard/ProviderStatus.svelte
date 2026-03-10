@@ -4,6 +4,7 @@ import { t } from "$lib/i18n";
 import { backend } from "$lib/wailsjs/go/models";
 import { CheckCircle, Clock, AlertCircle, Server, WifiOff } from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
+  import { formatElapsed } from '$lib/utils';
 
 let poolMetrics = $state<backend.NntpPoolMetrics | null>(null);
 let initialLoad = $state(true);
@@ -67,24 +68,6 @@ function formatBytes(bytes: number): string {
 function formatSpeed(bytesPerSec: number): string {
 	if (bytesPerSec === 0) return "0 B/s";
 	return formatBytes(bytesPerSec) + "/s";
-}
-
-function formatElapsed(elapsed: string): string {
-	if (!elapsed || elapsed === "—") return "—";
-
-	const hoursMatch = elapsed.match(/(\d+)h/);
-	const minutesMatch = elapsed.match(/(\d+)m/);
-
-	const hours = hoursMatch ? parseInt(hoursMatch[1]) : 0;
-	const minutes = minutesMatch ? parseInt(minutesMatch[1]) : 0;
-
-	if (hours > 0) {
-		return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
-	}
-	if (minutes > 0) {
-		return `${minutes}m`;
-	}
-	return "< 1m";
 }
 
 function startPolling() {

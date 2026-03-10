@@ -116,7 +116,12 @@ async function loadQueueStats() {
           <Clock class="w-6 h-6 text-warning" />
         </div>
       </div>
-      {#if queueStats.pending > 0}
+      {#if queueStats.running > 0}
+        <div class="mt-3 flex items-center">
+          <div class="w-2 h-2 bg-primary rounded-full animate-pulse mr-2"></div>
+          <span class="text-xs text-primary font-medium">{queueStats.running} {$t('dashboard.stats.queue_stats.currently_processing')}</span>
+        </div>
+      {:else if queueStats.pending > 0}
         <div class="mt-3 flex items-center">
           <div class="w-2 h-2 bg-amber-500 rounded-full animate-pulse mr-2"></div>
           <span class="text-xs text-warning">{$t('dashboard.stats.queue_stats.waiting_to_process')}</span>

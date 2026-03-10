@@ -448,12 +448,18 @@ func (ws *WebServer) handleGetQueueItems(w http.ResponseWriter, r *http.Request)
 		order = "desc" // Default sort order
 	}
 
+	status := query.Get("status")
+	if status != "" && status != "pending" && status != "complete" && status != "error" && status != "running" {
+		status = ""
+	}
+
 	// Create pagination parameters
 	params := backend.PaginationParams{
 		Page:   page,
 		Limit:  limit,
 		SortBy: sortBy,
 		Order:  order,
+		Status: status,
 	}
 
 	// Get paginated results

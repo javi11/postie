@@ -164,6 +164,9 @@ export class WebClient {
 			sortBy: params.sortBy,
 			order: params.order,
 		});
+		if (params.status) {
+			queryParams.set("status", params.status);
+		}
 		return this.get<backend.PaginatedQueueResult>(`/queue?${queryParams}`);
 	}
 

@@ -5,6 +5,7 @@ import { toastStore } from "$lib/stores/toast";
 import { onMount, onDestroy } from "svelte";
 import { Activity, Upload, Server, AlertCircle, AlertTriangle, Gauge } from "lucide-svelte";
 import type { backend } from "$lib/wailsjs/go/models";
+import { formatElapsed } from "$lib/utils";
 
 let metrics = $state<backend.NntpPoolMetrics | null>(null);
 let loading = $state(true);
@@ -137,7 +138,7 @@ function formatNumber(num: number): string {
 					<Activity class="w-8 h-8" />
 				</div>
 				<div class="stat-title">{$t('metrics.elapsed')}</div>
-				<div class="stat-value text-info text-2xl">{metrics.elapsed || "—"}</div>
+				<div class="stat-value text-info text-2xl">{formatElapsed(metrics.elapsed) || "—"}</div>
 			</div>
 
 			<!-- Total Errors -->
