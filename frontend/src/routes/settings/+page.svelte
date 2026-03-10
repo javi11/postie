@@ -19,7 +19,7 @@ import { advancedMode, appStatus, settingsSaveFunction } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
 import { backend, config as configType } from "$lib/wailsjs/go/models";
 import { AlertCircle, CheckCircle, RefreshCw, Save, Settings } from "lucide-svelte";
-import { onDestroy, onMount } from "svelte";
+import { onDestroy, onMount, tick } from "svelte";
 
 let configData: configType.ConfigData | null = $state(null);
 let localConfig: configType.ConfigData | null = $state(null);
@@ -65,7 +65,6 @@ async function loadConfig() {
 		) {
 			localConfig.servers = [new configType.ServerConfig()];
 		}
-		savedConfigSnapshot = JSON.stringify(localConfig);
 		isDirty = false;
 	} catch (error) {
 		console.error("Failed to load config:", error);
@@ -74,6 +73,13 @@ async function loadConfig() {
 		localConfig = null;
 	} finally {
 		loading = false;
+	}
+
+	// After loading=false, components render and run initializeDefaults().
+	// tick() waits for that DOM update cycle before capturing the snapshot.
+	if (localConfig) {
+		await tick();
+		savedConfigSnapshot = JSON.stringify(localConfig);
 	}
 }
 
