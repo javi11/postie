@@ -17,6 +17,8 @@
 		},
 		"queue": {
 			"title": "Upload Queue",
+			"search_placeholder": "Search filename…",
+			"search_within_page": "current page only",
 			"items": "items",
 			"total_size": "Total Size",
 			"nzb": "NZB",
@@ -51,6 +53,9 @@
 			"next": "Next",
 			"retry_all_failed": "Retry Failed",
 			"bulk_retry_success": "Successfully retried {count} items",
+			"delete_selected": "Delete Selected ({count})",
+			"confirm_delete_selected": "Are you sure you want to delete {count} selected items? This cannot be undone.",
+			"batch_deleted": "{count} items removed from the queue.",
 			"status_types": {
 				"pending": "pending",
 				"complete": "complete",
@@ -67,6 +72,8 @@
 		},
 		"progress": {
 			"title": "Upload Progress",
+			"file_size": "File Size",
+			"path": "Path",
 			"status": {
 				"active": "Active",
 				"idle": "Idle",

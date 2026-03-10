@@ -26,6 +26,24 @@ export function formatDate(dateString: string): string {
 	return new Date(dateString).toLocaleString();
 }
 
+export function formatElapsed(elapsed: string): string {
+	if (!elapsed || elapsed === "—") return "—";
+
+	const hoursMatch = elapsed.match(/(\d+)h/);
+	const minutesMatch = elapsed.match(/(\d+)m/);
+
+	const hours = hoursMatch ? parseInt(hoursMatch[1]) : 0;
+	const minutes = minutesMatch ? parseInt(minutesMatch[1]) : 0;
+
+	if (hours > 0) {
+		return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+	}
+	if (minutes > 0) {
+		return `${minutes}m`;
+	}
+	return "< 1m";
+}
+
 /**
  * Format time in milliseconds to human readable format (HH:MM:SS or MM:SS)
  */

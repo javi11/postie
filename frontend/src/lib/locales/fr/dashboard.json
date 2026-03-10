@@ -17,6 +17,8 @@
 		},
 		"queue": {
 			"title": "File d'Attente de Téléchargement",
+			"search_placeholder": "Rechercher un fichier…",
+			"search_within_page": "page actuelle uniquement",
 			"items": "éléments",
 			"total_size": "Taille Totale",
 			"nzb": "NZB",
@@ -53,6 +55,9 @@
 			"next": "Suivant",
 			"retry_all_failed": "Réessayer échoués",
 			"bulk_retry_success": "{count} éléments réessayés avec succès",
+			"delete_selected": "Supprimer la sélection ({count})",
+			"confirm_delete_selected": "Êtes-vous sûr de vouloir supprimer {count} éléments sélectionnés ? Cette action est irréversible.",
+			"batch_deleted": "{count} éléments supprimés de la file d'attente.",
 			"status_types": {
 				"pending": "en attente",
 				"complete": "terminé",
@@ -68,6 +73,8 @@
 		},
 		"progress": {
 			"title": "Progression de Téléchargement",
+			"file_size": "Taille du fichier",
+			"path": "Chemin",
 			"status": {
 				"active": "Actif",
 				"idle": "Inactif",
