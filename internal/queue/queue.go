@@ -1222,6 +1222,12 @@ func (q *Queue) RemoveCompletedItem(id string) error {
 		return fmt.Errorf("failed to get NZB path: %w", err)
 	}
 
+	// Delete dependent article checks first (FK constraint)
+	_, err = q.db.Exec("DELETE FROM pending_article_checks WHERE completed_item_id = ?", id)
+	if err != nil {
+		return fmt.Errorf("failed to delete pending article checks: %w", err)
+	}
+
 	// Delete the database record
 	_, err = q.db.Exec("DELETE FROM completed_items WHERE id = ?", id)
 	if err != nil {
@@ -1270,6 +1276,12 @@ func (q *Queue) ClearQueue() error {
 		nzbPaths = append(nzbPaths, nzbPath)
 	}
 
+	// Clear pending article checks first (FK constraint)
+	_, err = q.db.Exec("DELETE FROM pending_article_checks")
+	if err != nil {
+		return err
+	}
+
 	// Clear completed items from database
 	_, err = q.db.Exec("DELETE FROM completed_items")
 	if err != nil {
@@ -1314,6 +1326,12 @@ func (q *Queue) ClearCompletedItems() error {
 			continue
 		}
 		nzbPaths = append(nzbPaths, nzbPath)
+	}
+
+	// Clear pending article checks first (FK constraint)
+	_, err = q.db.Exec("DELETE FROM pending_article_checks")
+	if err != nil {
+		return err
 	}
 
 	// Clear completed items from database
