@@ -70,6 +70,8 @@
 				"pending": "Verificando",
 				"failed": "Verificación fallida"
 			},
+			"duration": "Duración",
+			"processing_time": "Tiempo de procesamiento",
 			"nzb": "NZB"
 		},
 		"progress": {

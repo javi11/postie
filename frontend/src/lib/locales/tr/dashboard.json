@@ -68,7 +68,9 @@
             "verification": {
                 "pending": "Doğrulanıyor",
                 "failed": "Doğrulama başarısız"
-            }
+            },
+            "duration": "Süre",
+            "processing_time": "İşlem süresi"
         },
         "progress": {
             "title": "Yükleme İlerlemesi",

@@ -69,7 +69,9 @@
 			"verification": {
 				"pending": "Vérification en cours",
 				"failed": "Vérification échouée"
-			}
+			},
+			"duration": "Durée",
+			"processing_time": "Temps de traitement"
 		},
 		"progress": {
 			"title": "Progression de Téléchargement",

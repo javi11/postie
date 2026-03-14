@@ -206,7 +206,7 @@ func (q *Queue) AddFile(ctx context.Context, path string, size int64) error {
 		Path:       path,
 		Size:       size,
 		Priority:   0,
-		CreatedAt:  time.Now(),
+		CreatedAt:  time.Now().UTC(),
 		RetryCount: 0,
 	}
 
@@ -230,7 +230,7 @@ func (q *Queue) AddFileWithoutDuplicateCheck(ctx context.Context, path string, s
 		Path:       path,
 		Size:       size,
 		Priority:   0,
-		CreatedAt:  time.Now(),
+		CreatedAt:  time.Now().UTC(),
 		RetryCount: 0,
 	}
 
@@ -263,7 +263,7 @@ func (q *Queue) AddFileWithPriority(ctx context.Context, path string, size int64
 		Path:       path,
 		Size:       size,
 		Priority:   priority,
-		CreatedAt:  time.Now(),
+		CreatedAt:  time.Now().UTC(),
 		RetryCount: 0,
 	}
 
@@ -287,7 +287,7 @@ func (q *Queue) AddFileWithPriorityWithoutDuplicateCheck(ctx context.Context, pa
 		Path:       path,
 		Size:       size,
 		Priority:   priority,
-		CreatedAt:  time.Now(),
+		CreatedAt:  time.Now().UTC(),
 		RetryCount: 0,
 	}
 

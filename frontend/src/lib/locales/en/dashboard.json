@@ -68,7 +68,9 @@
 			"verification": {
 				"pending": "Verifying",
 				"failed": "Verify Failed"
-			}
+			},
+			"duration": "Duration",
+			"processing_time": "Processing time"
 		},
 		"progress": {
 			"title": "Upload Progress",
