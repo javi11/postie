@@ -500,11 +500,12 @@ export namespace config {
 	    deferred_max_retries: number;
 	    deferred_max_backoff: string;
 	    deferred_check_interval: string;
-	
+	    deferred_batch_size: number;
+
 	    static createFrom(source: any = {}) {
 	        return new PostCheck(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.enabled = source["enabled"];
@@ -514,6 +515,7 @@ export namespace config {
 	        this.deferred_max_retries = source["deferred_max_retries"];
 	        this.deferred_max_backoff = source["deferred_max_backoff"];
 	        this.deferred_check_interval = source["deferred_check_interval"];
+	        this.deferred_batch_size = source["deferred_batch_size"];
 	    }
 	}
 	export class CustomHeader {

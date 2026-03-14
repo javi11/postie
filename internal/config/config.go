@@ -253,6 +253,8 @@ type PostCheck struct {
 	DeferredMaxBackoff Duration `yaml:"deferred_max_backoff" json:"deferred_max_backoff"`
 	// Worker poll interval for deferred checks. Default value is `2m`.
 	DeferredCheckInterval Duration `yaml:"deferred_check_interval" json:"deferred_check_interval"`
+	// Number of articles processed per deferred check cycle. Default value is 500.
+	DeferredBatchSize int `yaml:"deferred_batch_size" json:"deferred_batch_size"`
 }
 
 // NewsgroupConfig represents a single newsgroup configuration
@@ -508,6 +510,9 @@ func Load(path string) (*ConfigData, error) {
 	}
 	if cfg.PostCheck.DeferredCheckInterval == "" {
 		cfg.PostCheck.DeferredCheckInterval = Duration("2m")
+	}
+	if cfg.PostCheck.DeferredBatchSize <= 0 {
+		cfg.PostCheck.DeferredBatchSize = 500
 	}
 
 	if cfg.Par2.Redundancy == "" {

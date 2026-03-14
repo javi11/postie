@@ -291,6 +291,53 @@ func TestGenerate(t *testing.T) {
 		assert.NoError(t, err, "Compressed NZB file should exist")
 	})
 
+	t.Run("folder name with dots does not get truncated at first dot", func(t *testing.T) {
+		segmentSize := uint64(1000)
+		compressionConfig := config.NzbCompressionConfig{
+			Enabled: false,
+			Type:    config.CompressionTypeNone,
+			Level:   0,
+		}
+
+		// maintainOriginalExtension=false triggers the old buggy path that split on dots
+		generator := NewGenerator(segmentSize, compressionConfig, false).(*Generator)
+
+		testArticle := &article.Article{
+			MessageID:       "test-message-id-1",
+			OriginalName:    "file.rar",
+			OriginalSubject: "Test Subject",
+			From:            "test@example.com",
+			Groups:          []string{"alt.test"},
+			PartNumber:      1,
+			TotalParts:      1,
+			Size:            500,
+			FileNumber:      1,
+			FileName:        "file.rar",
+		}
+		generator.AddArticle(testArticle)
+
+		tempDir, err := os.MkdirTemp("", "nzb-test")
+		require.NoError(t, err)
+		defer func() {
+			_ = os.RemoveAll(tempDir)
+		}()
+
+		outputPath := filepath.Join(tempDir, "Sun.Moments.nzb")
+
+		finalPath, err := generator.Generate(outputPath)
+		require.NoError(t, err, "Generate should succeed")
+
+		assert.Equal(t, outputPath, finalPath, "Returned path must equal the requested output path")
+
+		_, err = os.Stat(outputPath)
+		assert.NoError(t, err, "NZB file should exist at Sun.Moments.nzb")
+
+		// Regression guard: the old bug would create Sun.nzb instead
+		truncatedPath := filepath.Join(tempDir, "Sun.nzb")
+		_, statErr := os.Stat(truncatedPath)
+		assert.True(t, os.IsNotExist(statErr), "Sun.nzb must NOT exist (regression guard)")
+	})
+
 	t.Run("generate with no articles", func(t *testing.T) {
 		segmentSize := uint64(1000)
 		compressionConfig := config.NzbCompressionConfig{

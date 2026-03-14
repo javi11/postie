@@ -234,7 +234,9 @@
             "deferred_max_backoff": "Maksimum Geri Çekilme",
             "deferred_max_backoff_description": "Yeniden denemeler arasındaki maksimum bekleme süresi (üstel geri çekilme)",
             "deferred_check_interval": "Kontrol Aralığı",
-            "deferred_check_interval_description": "Arka plan çalışanının bekleyen kontrolleri yoklama sıklığı"
+            "deferred_check_interval_description": "Arka plan çalışanının bekleyen kontrolleri yoklama sıklığı",
+            "deferred_batch_size": "Ertelenmiş Toplu İşlem Boyutu",
+            "deferred_batch_size_description": "Her ertelenmiş kontrol döngüsünde işlenen makale sayısı. Büyük yüklemeler için artırın."
         },
         "posting": {
             "title": "Gönderim Yapılandırması",

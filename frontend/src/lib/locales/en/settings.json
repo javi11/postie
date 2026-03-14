@@ -229,6 +229,8 @@
 			"deferred_max_backoff_description": "Maximum delay between deferred rechecks (exponential backoff cap)",
 			"deferred_check_interval": "Worker Poll Interval",
 			"deferred_check_interval_description": "How often the background worker checks for articles needing verification",
+			"deferred_batch_size": "Deferred Batch Size",
+			"deferred_batch_size_description": "Number of articles processed per deferred check cycle. Increase for large uploads.",
 			"info_title": "Post Check:",
 			"info_description": "Verifies article availability after upload to ensure successful propagation. May increase upload time but improves reliability.",
 			"save_button": "Save Post Check Settings",

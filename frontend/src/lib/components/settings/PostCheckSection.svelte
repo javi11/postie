@@ -44,6 +44,7 @@ let deferredCheckDelay = $state(config.post_check?.deferred_check_delay || "5m")
 let deferredMaxRetries = $state(config.post_check?.deferred_max_retries || 5);
 let deferredMaxBackoff = $state(config.post_check?.deferred_max_backoff || "1h");
 let deferredCheckInterval = $state(config.post_check?.deferred_check_interval || "2m");
+let deferredBatchSize = $state(config.post_check?.deferred_batch_size || 500);
 
 // Ensure post_check exists with defaults
 if (!config.post_check) {
@@ -55,6 +56,7 @@ if (!config.post_check) {
 		deferred_max_retries: 5,
 		deferred_max_backoff: "1h",
 		deferred_check_interval: "2m",
+		deferred_batch_size: 500,
 	};
 }
 
@@ -85,6 +87,10 @@ $effect(() => {
 
 $effect(() => {
 	config.post_check.deferred_check_interval = deferredCheckInterval;
+});
+
+$effect(() => {
+	config.post_check.deferred_batch_size = deferredBatchSize;
 });
 
 </script>
@@ -211,6 +217,25 @@ $effect(() => {
             maxValue={30}
             presets={deferredIntervalPresets}
           />
+        </div>
+
+        <div class="form-control">
+          <label class="label" for="deferred-batch-size">
+            <span class="label-text">{$t('settings.post_check.deferred_batch_size')}</span>
+          </label>
+          <input
+            id="deferred-batch-size"
+            type="number"
+            class="input input-bordered"
+            bind:value={deferredBatchSize}
+            min="1"
+            max="10000"
+          />
+          <div class="label">
+            <span class="label-text-alt">
+              {$t('settings.post_check.deferred_batch_size_description')}
+            </span>
+          </div>
         </div>
       </div>
     {/if}

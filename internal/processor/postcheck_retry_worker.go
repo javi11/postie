@@ -12,12 +12,22 @@ import (
 	"github.com/javi11/postie/internal/queue"
 )
 
+// postCheckQueue is the subset of *queue.Queue used by PostCheckRetryWorker.
+type postCheckQueue interface {
+	GetArticlesForCheck(ctx context.Context, limit int) ([]queue.PendingArticleCheck, error)
+	MarkArticleVerified(ctx context.Context, id int64) error
+	MarkArticleCheckFailed(ctx context.Context, id int64) error
+	UpdateArticleCheckRetry(ctx context.Context, id int64, retryCount int, nextRetryAt time.Time) error
+	GetPendingCheckCountForItem(ctx context.Context, completedItemID string) (total int, pending int, failed int, err error)
+	UpdateCompletedItemVerificationStatus(ctx context.Context, completedItemID string, status string) error
+}
+
 // PostCheckRetryWorker handles deferred article verification via STAT checks.
 // When immediate post-check verification fails after all retries, articles are
 // stored in the database and this worker periodically rechecks them with
 // exponential backoff.
 type PostCheckRetryWorker struct {
-	queue         *queue.Queue
+	queue         postCheckQueue
 	checkPool     pool.NNTPClient
 	cfg           config.PostCheck
 	ctx           context.Context
@@ -26,12 +36,13 @@ type PostCheckRetryWorker struct {
 	initialDelay  time.Duration
 	maxBackoff    time.Duration
 	maxRetries    int
+	batchSize     int
 }
 
 // NewPostCheckRetryWorker creates a new post check retry worker
 func NewPostCheckRetryWorker(
 	ctx context.Context,
-	q *queue.Queue,
+	q postCheckQueue,
 	checkPool pool.NNTPClient,
 	cfg config.PostCheck,
 ) *PostCheckRetryWorker {
@@ -57,6 +68,11 @@ func NewPostCheckRetryWorker(
 		maxRetries = 5
 	}
 
+	batchSize := cfg.DeferredBatchSize
+	if batchSize <= 0 {
+		batchSize = 500
+	}
+
 	return &PostCheckRetryWorker{
 		queue:         q,
 		checkPool:     checkPool,
@@ -67,6 +83,7 @@ func NewPostCheckRetryWorker(
 		initialDelay:  initialDelay,
 		maxBackoff:    maxBackoff,
 		maxRetries:    maxRetries,
+		batchSize:     batchSize,
 	}
 }
 
@@ -81,7 +98,8 @@ func (w *PostCheckRetryWorker) Start() {
 		"checkInterval", w.checkInterval,
 		"initialDelay", w.initialDelay,
 		"maxBackoff", w.maxBackoff,
-		"maxRetries", w.maxRetries)
+		"maxRetries", w.maxRetries,
+		"batchSize", w.batchSize)
 
 	go w.run()
 }
@@ -103,24 +121,28 @@ func (w *PostCheckRetryWorker) run() {
 			slog.Info("Post check retry worker stopped")
 			return
 		case <-ticker.C:
-			w.processRetries()
+			for w.processRetries() {
+				if w.ctx.Err() != nil {
+					return
+				}
+			}
 		}
 	}
 }
 
-// processRetries checks for and processes pending article verifications
-func (w *PostCheckRetryWorker) processRetries() {
+// processRetries checks for and processes pending article verifications.
+// Returns true if a full batch was processed (more items may be pending).
+func (w *PostCheckRetryWorker) processRetries() bool {
 	ctx := w.ctx
 
-	// Get articles that need checking (limit to 50 at a time)
-	articles, err := w.queue.GetArticlesForCheck(ctx, 50)
+	articles, err := w.queue.GetArticlesForCheck(ctx, w.batchSize)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to get articles for deferred check", "error", err)
-		return
+		return false
 	}
 
 	if len(articles) == 0 {
-		return
+		return false
 	}
 
 	slog.InfoContext(ctx, "Processing deferred article checks", "count", len(articles))
@@ -130,7 +152,7 @@ func (w *PostCheckRetryWorker) processRetries() {
 
 	for _, article := range articles {
 		if ctx.Err() != nil {
-			return
+			return false
 		}
 
 		completedItems[article.CompletedItemID] = true
@@ -191,6 +213,8 @@ func (w *PostCheckRetryWorker) processRetries() {
 	for completedItemID := range completedItems {
 		w.updateCompletedItemStatus(ctx, completedItemID)
 	}
+
+	return len(articles) == w.batchSize
 }
 
 // checkArticle verifies if an article exists on the server via STAT command
