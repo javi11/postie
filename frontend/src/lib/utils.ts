@@ -173,6 +173,21 @@ export function parseDuration(durationStr: string): number {
 }
 
 /**
+ * Format duration in milliseconds to compact human-readable format (e.g., "2h 15m", "45m 30s", "12s")
+ */
+export function formatDuration(ms: number): string {
+	const absMs = Math.abs(ms);
+	if (absMs < 1000) return "—";
+	const totalSeconds = Math.floor(absMs / 1000);
+	const hours = Math.floor(totalSeconds / 3600);
+	const minutes = Math.floor((totalSeconds % 3600) / 60);
+	const seconds = totalSeconds % 60;
+	if (hours > 0) return `${hours}h ${minutes}m`;
+	if (minutes > 0) return `${minutes}m ${seconds}s`;
+	return `${seconds}s`;
+}
+
+/**
  * Debounce function to limit rapid function calls
  */
 export function debounce<T extends (...args: unknown[]) => unknown>(

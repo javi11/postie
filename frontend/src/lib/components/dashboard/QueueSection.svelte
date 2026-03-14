@@ -2,7 +2,7 @@
 import apiClient from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
-import { formatDate, formatFileSize, getStatusBadgeClass, getStatusIconClass } from "$lib/utils";
+import { formatDate, formatDuration, formatFileSize, getStatusBadgeClass, getStatusIconClass } from "$lib/utils";
 import type { backend } from "$lib/wailsjs/go/models";
 import {
 	AlertCircle,
@@ -523,7 +523,20 @@ let CreatedIcon = $derived(getSortIcon("created"));
             </p>
           {/if}
           <div class="flex items-center justify-between mt-3 pt-2 border-t border-base-200">
-            <div class="text-xs text-base-content/60">{formatDate(item.createdAt)}</div>
+            <div class="text-xs text-base-content/60">
+              {formatDate(item.createdAt)}
+              {#if item.completedAt}
+                <span class="ml-2 text-base-content/50">
+                  <Clock class="w-3 h-3 inline mr-0.5" />
+                  {formatDuration(new Date(item.completedAt).getTime() - new Date(item.createdAt).getTime())}
+                </span>
+              {:else if item.status === "error"}
+                <span class="ml-2 text-error/60">
+                  <Clock class="w-3 h-3 inline mr-0.5" />
+                  {formatDuration(new Date(item.updatedAt).getTime() - new Date(item.createdAt).getTime())}
+                </span>
+              {/if}
+            </div>
             <div class="flex items-center gap-1">
               {#if item.priority > 0}
                 <span class="badge badge-outline badge-xs">P{item.priority}</span>
@@ -689,6 +702,15 @@ let CreatedIcon = $derived(getSortIcon("created"));
                     {#if item.completedAt}
                       <div class="text-xs text-base-content/70 mt-1">
                         {$t("dashboard.queue.completed")}: {formatDate(item.completedAt)}
+                      </div>
+                      <div class="text-xs text-base-content/50 mt-1">
+                        <Clock class="w-3 h-3 inline mr-0.5" />
+                        {formatDuration(new Date(item.completedAt).getTime() - new Date(item.createdAt).getTime())}
+                      </div>
+                    {:else if item.status === "error"}
+                      <div class="text-xs text-error/70 mt-1">
+                        <Clock class="w-3 h-3 inline mr-0.5" />
+                        {formatDuration(new Date(item.updatedAt).getTime() - new Date(item.createdAt).getTime())}
                       </div>
                     {/if}
                   </td>
