@@ -12,12 +12,22 @@ import (
 	"github.com/javi11/postie/internal/queue"
 )
 
+// postCheckQueue is the subset of *queue.Queue used by PostCheckRetryWorker.
+type postCheckQueue interface {
+	GetArticlesForCheck(ctx context.Context, limit int) ([]queue.PendingArticleCheck, error)
+	MarkArticleVerified(ctx context.Context, id int64) error
+	MarkArticleCheckFailed(ctx context.Context, id int64) error
+	UpdateArticleCheckRetry(ctx context.Context, id int64, retryCount int, nextRetryAt time.Time) error
+	GetPendingCheckCountForItem(ctx context.Context, completedItemID string) (total int, pending int, failed int, err error)
+	UpdateCompletedItemVerificationStatus(ctx context.Context, completedItemID string, status string) error
+}
+
 // PostCheckRetryWorker handles deferred article verification via STAT checks.
 // When immediate post-check verification fails after all retries, articles are
 // stored in the database and this worker periodically rechecks them with
 // exponential backoff.
 type PostCheckRetryWorker struct {
-	queue         *queue.Queue
+	queue         postCheckQueue
 	checkPool     pool.NNTPClient
 	cfg           config.PostCheck
 	ctx           context.Context
@@ -32,7 +42,7 @@ type PostCheckRetryWorker struct {
 // NewPostCheckRetryWorker creates a new post check retry worker
 func NewPostCheckRetryWorker(
 	ctx context.Context,
-	q *queue.Queue,
+	q postCheckQueue,
 	checkPool pool.NNTPClient,
 	cfg config.PostCheck,
 ) *PostCheckRetryWorker {
