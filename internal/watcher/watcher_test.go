@@ -887,3 +887,135 @@ func TestSymlinkInGroupByFolder(t *testing.T) {
 		t.Errorf("Expected folder path %s, got %s", expectedPath, mockQueue.addFileCalls[0])
 	}
 }
+
+func TestGroupByFolder_NestedSubdirs(t *testing.T) {
+	watcher, tempDir := createTestWatcher(t)
+
+	content := []byte("test content!!")
+	modTime := time.Now().Add(-10 * time.Second)
+
+	sunMomentsDir := filepath.Join(tempDir, "Sun.Moments")
+	if err := os.MkdirAll(sunMomentsDir, 0755); err != nil {
+		t.Fatalf("Failed to create Sun.Moments dir: %v", err)
+	}
+	proofDir := filepath.Join(sunMomentsDir, "Proof")
+	if err := os.MkdirAll(proofDir, 0755); err != nil {
+		t.Fatalf("Failed to create Proof dir: %v", err)
+	}
+	sampleDir := filepath.Join(sunMomentsDir, "Sample")
+	if err := os.MkdirAll(sampleDir, 0755); err != nil {
+		t.Fatalf("Failed to create Sample dir: %v", err)
+	}
+
+	createTestFile(t, sunMomentsDir, "file1.rar", content, modTime)
+	createTestFile(t, sunMomentsDir, "file2.rar", content, modTime)
+	createTestFile(t, proofDir, "proof.jpg", content, modTime)
+	createTestFile(t, sampleDir, "sample.mkv", content, modTime)
+
+	mockQueue := &mockQueueWithDuplicateCheck{
+		addFileCalls: make([]string, 0),
+	}
+	watcher.queue = mockQueue
+
+	ctx := context.Background()
+	if err := watcher.scanDirectoryGroupByFolder(ctx); err != nil {
+		t.Fatalf("First scan failed: %v", err)
+	}
+	if err := watcher.scanDirectoryGroupByFolder(ctx); err != nil {
+		t.Fatalf("Second scan failed: %v", err)
+	}
+
+	if len(mockQueue.addFileCalls) != 1 {
+		t.Errorf("Expected 1 folder entry, got %d: %v", len(mockQueue.addFileCalls), mockQueue.addFileCalls)
+	}
+
+	expectedPath := "FOLDER:" + filepath.Join(tempDir, "Sun.Moments")
+	if len(mockQueue.addFileCalls) > 0 && mockQueue.addFileCalls[0] != expectedPath {
+		t.Errorf("Expected %s, got %s", expectedPath, mockQueue.addFileCalls[0])
+	}
+}
+
+func TestGroupByFolder_FilesDirectlyInWatchFolder(t *testing.T) {
+	watcher, tempDir := createTestWatcher(t)
+
+	content := []byte("test content!!")
+	modTime := time.Now().Add(-10 * time.Second)
+
+	createTestFile(t, tempDir, "file1.rar", content, modTime)
+	createTestFile(t, tempDir, "file2.rar", content, modTime)
+
+	mockQueue := &mockQueueWithDuplicateCheck{
+		addFileCalls: make([]string, 0),
+	}
+	watcher.queue = mockQueue
+
+	ctx := context.Background()
+	if err := watcher.scanDirectoryGroupByFolder(ctx); err != nil {
+		t.Fatalf("First scan failed: %v", err)
+	}
+	if err := watcher.scanDirectoryGroupByFolder(ctx); err != nil {
+		t.Fatalf("Second scan failed: %v", err)
+	}
+
+	if len(mockQueue.addFileCalls) != 2 {
+		t.Errorf("Expected 2 individual file entries, got %d: %v", len(mockQueue.addFileCalls), mockQueue.addFileCalls)
+	}
+
+	for _, call := range mockQueue.addFileCalls {
+		if len(call) >= 7 && call[:7] == "FOLDER:" {
+			t.Errorf("Expected individual file path, got folder entry: %s", call)
+		}
+	}
+}
+
+func TestGroupByFolder_MixedRootAndSubdir(t *testing.T) {
+	watcher, tempDir := createTestWatcher(t)
+
+	content := []byte("test content!!")
+	modTime := time.Now().Add(-10 * time.Second)
+
+	rootFile := createTestFile(t, tempDir, "standalone.rar", content, modTime)
+
+	releaseDir := filepath.Join(tempDir, "Release")
+	if err := os.MkdirAll(releaseDir, 0755); err != nil {
+		t.Fatalf("Failed to create Release dir: %v", err)
+	}
+	createTestFile(t, releaseDir, "release1.rar", content, modTime)
+	createTestFile(t, releaseDir, "release2.rar", content, modTime)
+
+	mockQueue := &mockQueueWithDuplicateCheck{
+		addFileCalls: make([]string, 0),
+	}
+	watcher.queue = mockQueue
+
+	ctx := context.Background()
+	if err := watcher.scanDirectoryGroupByFolder(ctx); err != nil {
+		t.Fatalf("First scan failed: %v", err)
+	}
+	if err := watcher.scanDirectoryGroupByFolder(ctx); err != nil {
+		t.Fatalf("Second scan failed: %v", err)
+	}
+
+	if len(mockQueue.addFileCalls) != 2 {
+		t.Errorf("Expected 2 entries (1 file + 1 folder), got %d: %v", len(mockQueue.addFileCalls), mockQueue.addFileCalls)
+	}
+
+	expectedFolderEntry := "FOLDER:" + filepath.Join(tempDir, "Release")
+	hasFile := false
+	hasFolder := false
+	for _, call := range mockQueue.addFileCalls {
+		if call == rootFile {
+			hasFile = true
+		}
+		if call == expectedFolderEntry {
+			hasFolder = true
+		}
+	}
+
+	if !hasFile {
+		t.Errorf("Expected individual file entry %s in calls %v", rootFile, mockQueue.addFileCalls)
+	}
+	if !hasFolder {
+		t.Errorf("Expected folder entry %s in calls %v", expectedFolderEntry, mockQueue.addFileCalls)
+	}
+}
