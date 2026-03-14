@@ -26,6 +26,7 @@ type PostCheckRetryWorker struct {
 	initialDelay  time.Duration
 	maxBackoff    time.Duration
 	maxRetries    int
+	batchSize     int
 }
 
 // NewPostCheckRetryWorker creates a new post check retry worker
@@ -57,6 +58,11 @@ func NewPostCheckRetryWorker(
 		maxRetries = 5
 	}
 
+	batchSize := cfg.DeferredBatchSize
+	if batchSize <= 0 {
+		batchSize = 500
+	}
+
 	return &PostCheckRetryWorker{
 		queue:         q,
 		checkPool:     checkPool,
@@ -67,6 +73,7 @@ func NewPostCheckRetryWorker(
 		initialDelay:  initialDelay,
 		maxBackoff:    maxBackoff,
 		maxRetries:    maxRetries,
+		batchSize:     batchSize,
 	}
 }
 
@@ -81,7 +88,8 @@ func (w *PostCheckRetryWorker) Start() {
 		"checkInterval", w.checkInterval,
 		"initialDelay", w.initialDelay,
 		"maxBackoff", w.maxBackoff,
-		"maxRetries", w.maxRetries)
+		"maxRetries", w.maxRetries,
+		"batchSize", w.batchSize)
 
 	go w.run()
 }
@@ -103,24 +111,28 @@ func (w *PostCheckRetryWorker) run() {
 			slog.Info("Post check retry worker stopped")
 			return
 		case <-ticker.C:
-			w.processRetries()
+			for w.processRetries() {
+				if w.ctx.Err() != nil {
+					return
+				}
+			}
 		}
 	}
 }
 
-// processRetries checks for and processes pending article verifications
-func (w *PostCheckRetryWorker) processRetries() {
+// processRetries checks for and processes pending article verifications.
+// Returns true if a full batch was processed (more items may be pending).
+func (w *PostCheckRetryWorker) processRetries() bool {
 	ctx := w.ctx
 
-	// Get articles that need checking (limit to 50 at a time)
-	articles, err := w.queue.GetArticlesForCheck(ctx, 50)
+	articles, err := w.queue.GetArticlesForCheck(ctx, w.batchSize)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to get articles for deferred check", "error", err)
-		return
+		return false
 	}
 
 	if len(articles) == 0 {
-		return
+		return false
 	}
 
 	slog.InfoContext(ctx, "Processing deferred article checks", "count", len(articles))
@@ -130,7 +142,7 @@ func (w *PostCheckRetryWorker) processRetries() {
 
 	for _, article := range articles {
 		if ctx.Err() != nil {
-			return
+			return false
 		}
 
 		completedItems[article.CompletedItemID] = true
@@ -191,6 +203,8 @@ func (w *PostCheckRetryWorker) processRetries() {
 	for completedItemID := range completedItems {
 		w.updateCompletedItemStatus(ctx, completedItemID)
 	}
+
+	return len(articles) == w.batchSize
 }
 
 // checkArticle verifies if an article exists on the server via STAT command
