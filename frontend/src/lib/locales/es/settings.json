@@ -222,6 +222,8 @@
 			"deferred_max_backoff_description": "Retraso máximo entre reverificaciones diferidas (límite de retroceso exponencial)",
 			"deferred_check_interval": "Intervalo de Sondeo del Worker",
 			"deferred_check_interval_description": "Con qué frecuencia el worker verifica artículos que necesitan verificación",
+			"deferred_batch_size": "Tamaño de Lote Diferido",
+			"deferred_batch_size_description": "Número de artículos procesados por ciclo de verificación diferida. Aumentar para cargas grandes.",
 			"info_title": "Verificación Post:",
 			"info_description": "Verifica la disponibilidad del artículo después de la carga para asegurar una propagación exitosa. Puede aumentar el tiempo de carga pero mejora la confiabilidad.",
 			"save_button": "Guardar Configuración de Verificación",
