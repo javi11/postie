@@ -298,6 +298,11 @@ type WatcherConfig struct {
 	// This prevents uploading files that are still being written to (e.g. slow copies, torrents).
 	// Default: 60s
 	MinFileAge Duration `yaml:"min_file_age" json:"min_file_age"`
+	// MinFileAgeToDelete is the minimum time to wait after a successful upload before
+	// deleting the original file. Useful when a downstream tool (e.g. AltMount) needs
+	// time to import the generated NZB before the source file disappears.
+	// Requires DeleteOriginalFile=true. Default: 0 (delete immediately).
+	MinFileAgeToDelete Duration `yaml:"min_file_age_to_delete" json:"min_file_age_to_delete"`
 }
 
 type ScheduleConfig struct {
@@ -889,6 +894,7 @@ func defaultWatcherConfig() WatcherConfig {
 		SingleNzbPerFolder: false,
 		FollowSymlinks:     false,
 		MinFileAge:         Duration("60s"),
+		MinFileAgeToDelete: Duration("0s"),
 	}
 }
 
@@ -975,6 +981,7 @@ func GetDefaultConfig() ConfigData {
 				SingleNzbPerFolder: false,           // Default to false for backward compatibility
 				FollowSymlinks:     false,           // Default to skipping symlinks to avoid double-counting and external files
 				MinFileAge:         Duration("60s"), // Default to 60s to ensure files are stable before uploading
+				MinFileAgeToDelete: Duration("0s"),  // Default to 0s (delete immediately)
 			},
 		},
 		NzbCompression: NzbCompressionConfig{

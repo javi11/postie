@@ -431,6 +431,7 @@ export namespace config {
 	    single_nzb_per_folder: boolean;
 	    follow_symlinks: boolean;
 	    min_file_age: string;
+	    min_file_age_to_delete: string;
 
 	    static createFrom(source: any = {}) {
 	        return new WatcherConfig(source);
@@ -450,6 +451,7 @@ export namespace config {
 	        this.single_nzb_per_folder = source["single_nzb_per_folder"];
 	        this.follow_symlinks = source["follow_symlinks"];
 	        this.min_file_age = source["min_file_age"];
+	        this.min_file_age_to_delete = source["min_file_age_to_delete"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
