@@ -10,6 +10,7 @@ import { onMount, onDestroy } from "svelte";
 // Use the generated types from Wails
 let progressUpdateInterval: NodeJS.Timeout | null = null;
 let isPaused = $state(false);
+let destroyed = false;
 
 // Fetch progress data from API
 async function fetchProgressData() {
@@ -18,6 +19,7 @@ async function fetchProgressData() {
       apiClient.getRunningJobDetails(),
       apiClient.isProcessingPaused()
     ]);
+    if (destroyed) return;
     runningJobs.set(jobDetails);
     isPaused = pausedStatus;
   } catch (error) {
@@ -57,6 +59,7 @@ onMount(() => {
 });
 
 onDestroy(() => {
+  destroyed = true;
   stopPolling();
   document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
@@ -124,15 +127,7 @@ async function cancelJob(jobID: string) {
     await apiClient.cancelJob(jobID);
 
     // Immediately remove the job from running jobs store as a safety measure
-    runningJobs.update((jobs) => {
-      console.log("Force removing cancelled job from running jobs:", jobID);
-      const index = jobs.findIndex((job) => job.id === jobID);
-      if (index !== -1) {
-        jobs.splice(index, 1);
-      }
-      
-      return jobs;
-    });
+    runningJobs.update((jobs) => jobs.filter((job) => job.id !== jobID));
 
     toastStore.success(
       $t("common.messages.job_cancelled"),
