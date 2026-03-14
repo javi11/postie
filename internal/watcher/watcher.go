@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -227,9 +228,10 @@ func (w *Watcher) scanDirectory(ctx context.Context) error {
 
 // scanDirectoryGroupByFolder scans the directory and groups files by folder for single NZB per folder mode
 func (w *Watcher) scanDirectoryGroupByFolder(ctx context.Context) error {
-	// Map to collect files by their parent directory
+	// Map to collect files by their top-level subdirectory under the watch folder
 	filesByFolder := make(map[string][]string)
 	sizeByFolder := make(map[string]int64)
+	individualFiles := make(map[string]int64)
 	var mapMutex sync.Mutex
 
 	// Walk the directory tree and collect files by folder
@@ -266,14 +268,23 @@ func (w *Watcher) scanDirectoryGroupByFolder(ctx context.Context) error {
 			return nil
 		}
 
-		// Get the parent directory
-		folderPath := filepath.Dir(path)
+		// Determine which top-level subdirectory this file belongs to
+		relPath, err := filepath.Rel(w.watchFolder, path)
+		if err != nil {
+			return err
+		}
+		parts := strings.SplitN(filepath.ToSlash(relPath), "/", 2)
 
-		// Add file to the folder's file list
 		mapMutex.Lock()
-		filesByFolder[folderPath] = append(filesByFolder[folderPath], path)
-		sizeByFolder[folderPath] += info.Size()
-
+		if len(parts) == 1 {
+			// File is directly in the watch folder — handle individually
+			individualFiles[path] = info.Size()
+		} else {
+			// File is inside a subdirectory — group under the top-level subdir
+			folderPath := filepath.Join(w.watchFolder, parts[0])
+			filesByFolder[folderPath] = append(filesByFolder[folderPath], path)
+			sizeByFolder[folderPath] += info.Size()
+		}
 		mapMutex.Unlock()
 		return nil
 	})
@@ -355,6 +366,34 @@ func (w *Watcher) scanDirectoryGroupByFolder(ctx context.Context) error {
 		for _, filePath := range files {
 			slog.DebugContext(ctx, "File in folder", "folder", folderName, "file", filepath.Base(filePath))
 		}
+	}
+
+	// Process files that are directly in the watch folder (not in any subdirectory)
+	for path, size := range individualFiles {
+		// Check if file is currently being processed
+		if w.processor != nil && w.processor.IsPathBeingProcessed(path) {
+			slog.InfoContext(ctx, "File is currently being processed, ignoring", "path", path)
+			continue
+		}
+
+		// Check if file is already in queue
+		inQueue, err := w.queue.IsPathInQueue(path)
+		if err != nil {
+			slog.ErrorContext(ctx, "Error checking if path is in queue", "path", path, "error", err)
+			continue
+		}
+
+		if inQueue {
+			slog.DebugContext(ctx, "File already exists in queue, ignoring", "path", path)
+			continue
+		}
+
+		if err := w.queue.AddFile(ctx, path, size); err != nil {
+			slog.ErrorContext(ctx, "Error adding file to queue", "path", path, "error", err)
+			continue
+		}
+
+		slog.InfoContext(ctx, "Added file to queue", "path", filepath.Base(path), "size", size)
 	}
 
 	return nil

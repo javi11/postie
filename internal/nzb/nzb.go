@@ -334,6 +334,10 @@ func (g *Generator) AddFileHash(filename string, hash string) {
 
 // generateFinalNzbPath creates the final NZB path based on the configuration
 func (g *Generator) generateFinalNzbPath(originalFilePath string) string {
+	if strings.HasSuffix(strings.ToLower(originalFilePath), ".nzb") {
+		return originalFilePath
+	}
+
 	dir := filepath.Dir(originalFilePath)
 	basename := filepath.Base(originalFilePath)
 

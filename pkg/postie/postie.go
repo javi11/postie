@@ -429,14 +429,19 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 
 	startTime := time.Now()
 
-	// Determine the folder name from the first file's path
-	// This will be used as the NZB filename
-	firstFilePath := files[0].Path
-	folderPath := filepath.Dir(firstFilePath)
-	folderName := filepath.Base(folderPath)
-	if folderName == "." || folderName == "/" {
-		// If files are in root, use a default name
-		folderName = "upload"
+	// Determine the folder name from rootDir (top-level subdir under the watch folder)
+	// This is more robust than deriving from files[0].Path which may be a nested file
+	folderName := filepath.Base(rootDir)
+	if folderName == "." || folderName == "/" || folderName == "" {
+		// Fallback: derive from the first file's relative path
+		relPath, err := filepath.Rel(rootDir, files[0].Path)
+		if err == nil {
+			parts := strings.SplitN(filepath.ToSlash(relPath), "/", 2)
+			folderName = parts[0]
+		}
+		if folderName == "." || folderName == "/" || folderName == "" {
+			folderName = "upload"
+		}
 	}
 
 	slog.InfoContext(ctx, "Posting folder as single NZB", "folder", folderName, "files", len(files))
@@ -517,7 +522,7 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 		}
 
 		// Generate NZB and return with deferred error if present
-		nzbPath := filepath.Join(outputDir, folderName)
+		nzbPath := filepath.Join(outputDir, folderName+".nzb")
 		finalPath, nzbErr := nzbGen.Generate(nzbPath)
 		if nzbErr != nil {
 			return "", fmt.Errorf("error generating NZB file for folder: %w", nzbErr)
@@ -593,7 +598,7 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 
 	// Generate single NZB file for the entire folder
 	// Use folder name as the base for NZB filename
-	nzbPath := filepath.Join(outputDir, folderName)
+	nzbPath := filepath.Join(outputDir, folderName+".nzb")
 	finalPath, err := nzbGen.Generate(nzbPath)
 	if err != nil {
 		return "", fmt.Errorf("error generating NZB file for folder: %w", err)
