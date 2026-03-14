@@ -82,6 +82,7 @@ func (a *App) initializeProcessor() error {
 		PoolManager:               a.poolManager,
 		OutputFolder:              outputDir,
 		DeleteOriginalFile:        watcherCfg.DeleteOriginalFile,
+		DeleteDelay:               watcherCfg.MinFileAgeToDelete.ToDuration(),
 		MaintainOriginalExtension: a.config.GetMaintainOriginalExtension(),
 		WatchFolder:               watcherCfg.WatchDirectory,
 		FollowSymlinks:            watcherCfg.FollowSymlinks,

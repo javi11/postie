@@ -39,6 +39,7 @@ type Processor struct {
 	jobsMux                   sync.RWMutex
 	jobsWg                    sync.WaitGroup // WaitGroup to track running jobs
 	deleteOriginalFile        bool
+	deleteDelay               time.Duration
 	maintainOriginalExtension bool
 	watchFolder               string // Path to the watch folder for maintaining folder structure
 	followSymlinks            bool   // Control whether to follow symlinks when collecting folder files
@@ -71,6 +72,7 @@ type ProcessorOptions struct {
 	PoolManager               *pool.Manager
 	OutputFolder              string
 	DeleteOriginalFile        bool
+	DeleteDelay               time.Duration // delay before deleting original files
 	MaintainOriginalExtension bool
 	WatchFolder               string
 	FollowSymlinks            bool                                // Control whether to follow symlinks when collecting folder files
@@ -110,6 +112,7 @@ func New(opts ProcessorOptions) *Processor {
 		runningJobs:               make(map[string]*RunningJob),
 		reservedPaths:             make(map[string]time.Time),
 		deleteOriginalFile:        opts.DeleteOriginalFile,
+		deleteDelay:               opts.DeleteDelay,
 		maintainOriginalExtension: opts.MaintainOriginalExtension,
 		watchFolder:               opts.WatchFolder,
 		followSymlinks:            opts.FollowSymlinks,
@@ -452,6 +455,15 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 
 	// Delete the original files if configured
 	if p.deleteOriginalFile {
+		if p.deleteDelay > 0 {
+			slog.InfoContext(ctx, "Waiting before deleting original files", "delay", p.deleteDelay)
+			select {
+			case <-time.After(p.deleteDelay):
+			case <-ctx.Done():
+				slog.WarnContext(ctx, "Context cancelled while waiting to delete files")
+				return actualNzbPath, jobPostie, nil
+			}
+		}
 		for _, fileInfo := range filesToProcess {
 			if err := os.Remove(fileInfo.Path); err != nil {
 				slog.WarnContext(ctx, "Could not delete original file", "path", fileInfo.Path, "error", err)

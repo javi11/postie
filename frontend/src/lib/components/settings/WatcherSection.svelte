@@ -53,6 +53,13 @@ const minFileAgePresets = [
   { label: "10m", value: 10, unit: "m" },
 ];
 
+const minFileAgeToDeletePresets = [
+  { label: "0s", value: 0, unit: "s" },
+  { label: "5m", value: 5, unit: "m" },
+  { label: "10m", value: 10, unit: "m" },
+  { label: "30m", value: 30, unit: "m" },
+];
+
 const sizeThresholdPresets = [
   { label: "50MB", value: 50, unit: "MB" },
   { label: "100MB", value: 100, unit: "MB" },
@@ -75,6 +82,7 @@ function createDefaultWatcher(): configType.WatcherConfig {
 	w.watch_directory = "";
 	w.check_interval = "5m";
 	w.min_file_age = "60s";
+	w.min_file_age_to_delete = "0s";
 	w.size_threshold = 104857600;
 	w.min_file_size = 1048576;
 	w.delete_original_file = false;
@@ -292,6 +300,14 @@ function getWatcherDisplayName(w: configType.WatcherConfig, index: number): stri
                   description={$t('settings.watcher.min_file_age_description')}
                   presets={minFileAgePresets}
                   id="min-file-age-{index}"
+                />
+
+                <DurationInput
+                  bind:value={watcher.min_file_age_to_delete}
+                  label={$t('settings.watcher.min_file_age_to_delete')}
+                  description={$t('settings.watcher.min_file_age_to_delete_description')}
+                  presets={minFileAgeToDeletePresets}
+                  id="min-file-age-to-delete-{index}"
                 />
 
                 <SizeInput
