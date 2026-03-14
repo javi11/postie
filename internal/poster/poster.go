@@ -506,6 +506,8 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 
 	deferredEnabled := p.checkCfg.DeferredCheckDelay.ToDuration() > 0
 
+	firstPost := true
+
 	for post := range checkQueue {
 		select {
 		case <-ctx.Done():
@@ -523,18 +525,21 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 			post.progress = p.jobProgress.AddProgress(uuid.New(), fmt.Sprintf("%s (check)", filepath.Base(post.FilePath)), progress.ProgressTypeChecking, post.filesize)
 
 			// Wait for articles to propagate to the verify server before checking.
-			// Without this delay, STAT checks run immediately after posting and fail
-			// because the server hasn't received/indexed the articles yet.
-			if delay := p.checkCfg.RetryDelay.ToDuration(); delay > 0 {
-				post.progress.SetWaitDeadline(time.Now().Add(delay))
-				select {
-				case <-ctx.Done():
+			// Only needed for the first file: subsequent files are posted after enough
+			// time has already elapsed during the first file's posting and checking.
+			if firstPost {
+				firstPost = false
+				if delay := p.checkCfg.RetryDelay.ToDuration(); delay > 0 {
+					post.progress.SetWaitDeadline(time.Now().Add(delay))
+					select {
+					case <-ctx.Done():
+						post.progress.SetWaitDeadline(time.Time{})
+						errChan <- ctx.Err()
+						return
+					case <-time.After(delay):
+					}
 					post.progress.SetWaitDeadline(time.Time{})
-					errChan <- ctx.Err()
-					return
-				case <-time.After(delay):
 				}
-				post.progress.SetWaitDeadline(time.Time{})
 			}
 
 			// Create a pool with error handling - use all available CPU cores
