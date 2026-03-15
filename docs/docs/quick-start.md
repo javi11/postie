@@ -79,7 +79,8 @@ posting:
   retry_delay: 5s
   article_size_in_bytes: 750000 # ~750KB per article
   groups:
-    - alt.binaries.test
+    - name: alt.binaries.test
+      enabled: true
   obfuscation_policy: full # Options: full, partial, none
 
 post_check:
@@ -91,8 +92,6 @@ output_dir: "./output"
 ```
 
 Save this file and start Postie with: `./postie -config config.yaml`
-
-**💡 Note**: Even with manual configuration, we recommend using the web interface for uploading and monitoring, as it provides a much better user experience.
 
 **💡 Note**: Even with manual configuration, we recommend using the web interface for uploading and monitoring, as it provides a much better user experience.
 

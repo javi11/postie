@@ -33,8 +33,8 @@ Below is a complete example of a configuration file with all available options:
 # Global output directory for processed files and NZB files
 output_dir: "./output"
 
-# Whether to maintain the original file extension in the NZB filename
-maintain_original_extension: false
+# Whether to maintain the original file extension in the NZB filename (default: true)
+maintain_original_extension: true
 
 servers:
   - host: news.example.com
@@ -47,11 +47,13 @@ servers:
     max_connection_ttl_in_seconds: 3600
     insecure_ssl: false
     enabled: true
+    role: upload # "upload" (default) or "verify" — see Server Roles below
+    inflight: 10 # Concurrent requests per connection (default: 10)
+    # proxy_url: socks5://user:pass@host:1080 # Optional SOCKS5 proxy
 
 connection_pool:
   min_connections: 5
   health_check_interval: 1m
-  skip_providers_verification_on_creation: false
 
 posting:
   # Wait for par2 generation before uploading the file.
@@ -62,12 +64,13 @@ posting:
   retry_delay: 5s
   article_size_in_bytes: 750000
   groups:
-    - alt.bin.test
+    - name: alt.binaries.test
+      enabled: true
   throttle_rate: 0 # unlimited (bytes per second)
   message_id_format: random # Options: random, nxg
   obfuscation_policy: full # Options: full, partial, none
   par2_obfuscation_policy: full # Options: full, partial, none
-  group_policy: each_file # Options: all, each_file
+  group_policy: each_file # Options: all, each_file (default: each_file)
   post_headers:
     add_nxg_header: false
     default_from: ""
@@ -79,37 +82,52 @@ post_check:
   enabled: true
   delay: 10s
   max_reposts: 1
+  deferred_check_delay: 5m # Delay before first deferred re-check (default: 5m)
+  deferred_max_retries: 5 # Max deferred retry attempts (default: 5)
+  deferred_max_backoff: 1h # Max backoff cap for deferred checks (default: 1h)
+  deferred_check_interval: 2m # Worker poll interval for deferred checks (default: 2m)
+  deferred_batch_size: 500 # Articles processed per deferred check cycle (default: 500)
 
 par2:
   enabled: true
-  redundancy: "10%" # Recovery data percentage (e.g., "5%", "10%", "20%")
+  redundancy: "1n*1.2" # ParPar redundancy expression (default: "1n*1.2"); percentage format also accepted (e.g. "10%")
   temp_dir: "" # Optional temporary directory for PAR2 operations
   maintain_par2_files: false # Keep PAR2 files after successful upload
+  parpar_binary_path: "" # Path to external parpar binary (empty = use built-in)
 
 nzb_compression:
   enabled: false # Whether to enable compression of the output NZB file
   type: none # Options: none, zstd, brotli, zip
   level: 0 # Compression level (zstd: 1-22, brotli: 0-11, zip: 0-9)
 
-watcher:
-  enabled: false # Whether to enable the file watcher
-  watch_directory: "" # Directory to watch for new files
-  size_threshold: 104857600 # 100MB
-  schedule:
-    start_time: "00:00"
-    end_time: "23:59"
-  ignore_patterns:
-    - "*.tmp"
-    - "*.part"
-    - "*.!ut"
-  min_file_size: 1048576 # 1MB
-  check_interval: 5m
-  delete_original_file: false # Delete source files after successful upload
+# Multiple watchers are supported. Use the watchers array (v1 single watcher key is still accepted for backward compatibility).
+watchers:
+  - name: "main" # Optional label for this watcher
+    enabled: false # Whether to enable the file watcher
+    watch_directory: "" # Directory to watch for new files
+    size_threshold: 104857600 # 100MB
+    schedule:
+      start_time: "00:00"
+      end_time: "23:59"
+    ignore_patterns:
+      - "*.tmp"
+      - "*.part"
+      - "*.!ut"
+    min_file_size: 1048576 # 1MB
+    check_interval: 5m
+    delete_original_file: false # Delete source files after successful upload
+    single_nzb_per_folder: false # Create one NZB per folder instead of per file (default: false)
+    follow_symlinks: false # Follow symbolic links during directory scanning (default: false)
+    min_file_age: 60s # Min time since last modification before processing (default: 60s)
+    min_file_age_to_delete: 0s # Min time after upload before deleting source file (default: 0s)
+
+# Database configuration (used for queue persistence)
+database:
+  database_type: sqlite # Options: sqlite, postgres, mysql (default: sqlite)
+  database_path: ./postie.db # Database file path or connection string (default: ./postie.db)
 
 # Queue configuration for upload management
 queue:
-  database_type: sqlite # Options: sqlite, postgres, mysql (only sqlite implemented currently)
-  database_path: ./postie.db # Database file path or connection string
   max_concurrent_uploads: 1 # Maximum concurrent uploads from queue
 
 # Post upload script configuration
@@ -117,6 +135,11 @@ post_upload_script:
   enabled: false # Whether to enable post upload script execution
   command: "" # Command to execute, use {nzb_path} placeholder for NZB file path
   timeout: 30s # Maximum time to wait for command execution
+  max_retries: 3 # Max retry attempts for failed script executions (0 = unlimited, default: 3)
+  retry_delay: 30s # Base delay between retries with exponential backoff (default: 30s)
+  max_backoff: 1h # Maximum backoff cap for retries (default: 1h)
+  max_retry_duration: 24h # Total max window to keep retrying (default: 24h)
+  retry_check_interval: 1m # How often to check for pending retries (default: 1m)
 ```
 
 ## Configuration Sections
@@ -137,9 +160,23 @@ servers:
     max_connection_ttl_in_seconds: 3600 # Max total lifetime of a connection
     insecure_ssl: false # Set to true to skip SSL certificate verification
     enabled: true # Whether this server is enabled
+    role: upload # "upload" (default) or "verify" — see Server Roles below
+    inflight: 10 # Concurrent in-flight requests per connection (default: 10)
+    proxy_url: "" # Optional SOCKS5 proxy (format: socks5://user:pass@host:port)
 ```
 
 You can add multiple servers for redundancy. Postie will automatically fail over to another server if one becomes unavailable. It will also randomly post to any of the servers specified, so be aware if you use different backbones.
+
+#### Server Roles
+
+Each server has a `role` that determines how it is used:
+
+- **`upload`** (default): Used for posting articles. All upload-role servers share the same provider pool.
+- **`verify`**: Used only for STAT checks (post verification). Verify servers are never used for posting.
+
+Use `verify` servers when you have access to a second provider whose retention you want to check against, without actually posting to it.
+
+> **Note:** The deprecated `check_only` field from v1 configs is automatically migrated to `role: verify` on first load.
 
 **💡 Tip: Use the web UI to easily add, remove, and test server configurations with real-time validation.**
 
@@ -151,7 +188,6 @@ Configure how connections are managed:
 connection_pool:
   min_connections: 5 # Minimum number of connections to maintain alive in watch mode.
   health_check_interval: 1m # How often to check connection health.
-  skip_providers_verification_on_creation: false # Skip initial server verification.
 ```
 
 **💡 Tip: The web UI provides real-time connection status and allows you to test your configuration before saving.**
@@ -166,13 +202,14 @@ posting:
   max_retries: 3 # Maximum retry attempts for posting
   retry_delay: 5s # Delay between retry attempts
   article_size_in_bytes: 750000 # Size of each article (default: 750KB)
-  groups: # Newsgroups to post to
-    - alt.bin.test
+  groups: # Newsgroups to post to (array of objects with name + enabled)
+    - name: alt.binaries.test
+      enabled: true
   throttle_rate: 0 # Upload speed limit in bytes/sec (0 = unlimited)
   message_id_format: random # Format of message IDs ("random" or "[nxg](https://github.com/javi11/nxg)")
   obfuscation_policy: full # Level of obfuscation ("full", "partial", or "none")
   par2_obfuscation_policy: full # Obfuscation for PAR2 files
-  group_policy: each_file # How to distribute posts ("all" or "each_file")
+  group_policy: each_file # How to distribute posts ("all" or "each_file") — default: each_file
   post_headers: # Additional headers configuration
     add_nxg_header: false # Whether to add [X-NXG](https://github.com/javi11/nxg) header
     default_from: "" # Default poster name
@@ -201,8 +238,14 @@ Configure post verification:
 ```yaml
 post_check:
   enabled: true # Whether to verify posts after uploading using STAT method
-  delay: 5s # Delay between check attempts
+  delay: 10s # Delay between check attempts (default: 10s)
   max_reposts: 1 # Maximum number of reposts if check fails
+  # Deferred check settings — used when an article is not yet available at check time
+  deferred_check_delay: 5m # Initial delay before first deferred re-check (default: 5m)
+  deferred_max_retries: 5 # Maximum deferred retry attempts (default: 5)
+  deferred_max_backoff: 1h # Maximum backoff cap for deferred checks (default: 1h)
+  deferred_check_interval: 2m # Worker poll interval for deferred checks (default: 2m)
+  deferred_batch_size: 500 # Articles processed per deferred check cycle (default: 500)
 ```
 
 ### PAR2 Recovery Files
@@ -214,9 +257,10 @@ Configure PAR2 recovery file generation:
 ```yaml
 par2:
   enabled: true
-  redundancy: "10%" # Recovery data percentage (e.g., "5%", "10%", "20%")
+  redundancy: "1n*1.2" # ParPar redundancy expression (default: "1n*1.2"); percentage also accepted (e.g. "10%")
   temp_dir: "" # Optional temporary directory for PAR2 operations
   maintain_par2_files: false # Keep PAR2 files after successful upload
+  parpar_binary_path: "" # Path to external parpar binary (empty = use built-in)
 ```
 
 **💡 Tip: The web UI provides easy-to-use controls for redundancy settings with preset buttons for common percentages.**
@@ -251,26 +295,43 @@ When compression is enabled, the generated NZB files will be compressed using th
 
 ### File Watcher
 
-Configure automatic file watching and posting:
+Postie supports **multiple file watchers** — each watches a different directory. Configure them as an array under `watchers`. The legacy single `watcher:` key (used in v1 configs) is still accepted for backward compatibility and will be automatically migrated.
 
 ```yaml
-watcher:
-  enabled: false # Whether to enable the file watcher
-  watch_directory: "" # Directory to watch for new files
-  size_threshold: 104857600 # 100MB
-  schedule:
-    start_time: "00:00" # When to start posting (24h format)
-    end_time: "23:59" # When to stop posting (24h format)
-  ignore_patterns:
-    - "*.tmp"
-    - "*.part"
-    - "*.!ut"
-  min_file_size: 1048576 # 1MB
-  check_interval: 5m # How often to check for new files
-  delete_original_file: false # Delete source files after upload
+watchers:
+  - name: "downloads" # Optional label for this watcher instance
+    enabled: false # Whether to enable this watcher
+    watch_directory: "" # Directory to watch for new files
+    size_threshold: 104857600 # 100MB
+    schedule:
+      start_time: "00:00" # When to start posting (24h format)
+      end_time: "23:59" # When to stop posting (24h format)
+    ignore_patterns:
+      - "*.tmp"
+      - "*.part"
+      - "*.!ut"
+    min_file_size: 1048576 # 1MB
+    check_interval: 5m # How often to check for new files
+    delete_original_file: false # Delete source files after upload
+    single_nzb_per_folder: false # Create one NZB per folder instead of per file (default: false)
+    follow_symlinks: false # Follow symbolic links during scanning (default: false)
+    min_file_age: 60s # Min time since last modification before processing (default: 60s)
+    min_file_age_to_delete: 0s # Min time after upload before deleting source (default: 0s; requires delete_original_file: true)
 ```
 
+You can add as many entries as needed under `watchers` to monitor multiple directories simultaneously.
+
 **💡 Tip: The web UI provides an easy way to select directories, test ignore patterns, and validate schedule configurations.**
+
+### Database
+
+Configure the database used for queue persistence:
+
+```yaml
+database:
+  database_type: sqlite # Database type: sqlite (default), postgres, mysql
+  database_path: ./postie.db # File path (sqlite) or connection string (postgres/mysql)
+```
 
 ### Queue Management
 
@@ -278,9 +339,7 @@ Configure the upload queue system:
 
 ```yaml
 queue:
-  database_type: sqlite # Database type (sqlite, postgres, mysql - only sqlite implemented currently)
-  database_path: ./postie.db # Database file path or connection string
-  max_concurrent_uploads: 1 # Maximum concurrent uploads from queue
+  max_concurrent_uploads: 1 # Maximum concurrent uploads from queue (default: 1)
 ```
 
 ### Post Upload Script
@@ -291,7 +350,12 @@ Configure commands to run after successful uploads:
 post_upload_script:
   enabled: false # Whether to enable post upload script execution
   command: "" # Command to execute, use {nzb_path} placeholder for NZB file path
-  timeout: 30s # Maximum time to wait for command execution
+  timeout: 30s # Maximum time to wait for command execution (default: 30s)
+  max_retries: 3 # Max retry attempts for failed executions; 0 = unlimited (default: 3)
+  retry_delay: 30s # Base delay between retries with exponential backoff (default: 30s)
+  max_backoff: 1h # Maximum backoff cap to prevent very long waits (default: 1h)
+  max_retry_duration: 24h # Total max window to keep retrying; after this, marked failed (default: 24h)
+  retry_check_interval: 1m # How often to check for pending retries (default: 1m)
 ```
 
 Example webhook notification:
@@ -313,8 +377,8 @@ Additional global configuration options:
 # Global output directory for processed files and NZB files
 output_dir: "./output"
 
-# Whether to maintain the original file extension in the NZB filename
-maintain_original_extension: false
+# Whether to maintain the original file extension in the NZB filename (default: true)
+maintain_original_extension: true
 ```
 
 > **Note:** For information about file hashing and verification, please see the [File Hash and Verification](file-hash.md) documentation.
