@@ -27,28 +27,51 @@ The file watcher scans the configured directory at regular intervals. When a fil
 
 ### Manual YAML Configuration
 
-If you prefer to configure manually, add this section to your `config.yaml`:
+Postie supports **multiple file watchers** configured as an array under `watchers`. The legacy single `watcher:` key (used in v1 configs) is still accepted and will be automatically migrated on first load.
 
 ```yaml
-watcher:
-  enabled: true # Enable the file watcher
-  watch_directory: "/path/to/watch" # Directory to monitor
-  size_threshold: 104857600 # Minimum size for batch processing (100MB)
-  schedule: # Optional posting schedule
-    start_time: "00:00" # When to start posting (24h format)
-    end_time: "23:59" # When to stop posting (24h format)
-  ignore_patterns: # File patterns to ignore
-    - "*.tmp"
-    - "*.part"
-    - "*.!ut"
-  min_file_size: 1048576 # Minimum file size to process (1MB)
-  check_interval: 5m # How often to check for new files
-  delete_original_file: false # Whether to delete source files after successful upload
+# Multiple watchers — each entry watches a different directory
+watchers:
+  - name: "downloads" # Optional label for this watcher instance
+    enabled: true # Enable this watcher
+    watch_directory: "/path/to/watch" # Directory to monitor
+    size_threshold: 104857600 # Minimum size for batch processing (100MB)
+    schedule: # Optional posting schedule
+      start_time: "00:00" # When to start posting (24h format)
+      end_time: "23:59" # When to stop posting (24h format)
+    ignore_patterns: # File patterns to ignore
+      - "*.tmp"
+      - "*.part"
+      - "*.!ut"
+    min_file_size: 1048576 # Minimum file size to process (1MB)
+    check_interval: 5m # How often to check for new files
+    delete_original_file: false # Whether to delete source files after successful upload
+    single_nzb_per_folder: false # Create one NZB per folder instead of per file (default: false)
+    follow_symlinks: false # Follow symbolic links during scanning (default: false)
+    min_file_age: 60s # Min time since last modification before a file is eligible (default: 60s)
+    min_file_age_to_delete: 0s # Min time after upload before deleting source file (default: 0s)
 ```
+
+To watch multiple directories, add additional entries to the `watchers` array:
+
+```yaml
+watchers:
+  - name: "tv-shows"
+    enabled: true
+    watch_directory: "/downloads/tv"
+    # ...
+  - name: "movies"
+    enabled: true
+    watch_directory: "/downloads/movies"
+    # ...
+```
+
+> **Backward compatibility**: The old single-watcher `watcher:` key is still accepted for v1 config files and will be automatically migrated to the `watchers` array on first load.
 
 ### Configuration Options
 
-- **enabled**: Whether the file watcher is active
+- **name**: Optional label to identify this watcher in logs and the web UI
+- **enabled**: Whether this watcher instance is active
 - **watch_directory**: The directory to monitor for new files
 - **size_threshold**: Minimum accumulated size of files before batch processing
 - **schedule**: Optional time window when posting is allowed
@@ -58,6 +81,10 @@ watcher:
 - **min_file_size**: Minimum size of individual files to process
 - **check_interval**: How frequently to scan the watch directory
 - **delete_original_file**: Whether to permanently delete source files after successful upload (default: false)
+- **single_nzb_per_folder**: When true, creates one NZB per folder instead of one NZB per file (default: false)
+- **follow_symlinks**: Whether to follow symbolic links during directory scanning; set to false (default) to avoid double-counting files outside the watch directory
+- **min_file_age**: Minimum time since last modification before a file is eligible for upload — prevents uploading files still being written (default: 60s)
+- **min_file_age_to_delete**: Minimum time after a successful upload before the source file is deleted; useful when a downstream tool needs time to import the NZB (requires `delete_original_file: true`, default: 0s)
 
 ## Starting the Watcher
 
