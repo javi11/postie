@@ -46,12 +46,6 @@ docker-compose up -d
 [![Download for macOS](https://img.shields.io/badge/macOS-Download-0078d4?style=for-the-badge&logo=apple)](https://github.com/javi11/postie/releases/latest/download/postie_darwin_amd64.zip)
 [![Download for Linux](https://img.shields.io/badge/Linux-Download-0078d4?style=for-the-badge&logo=linux)](https://github.com/javi11/postie/releases/latest/download/postie_linux_amd64.zip)
 
-## Screenshots
-
-![Postie Dashboard](./docs/static/examples/dashboard.png)
-
-Web interface dashboard showing upload progress and queue management
-
 ## Documentation
 
 For detailed documentation, installation instructions, configuration options, and usage examples, please visit the [Postie Documentation Site](https://postie.kipsilabs.top).
