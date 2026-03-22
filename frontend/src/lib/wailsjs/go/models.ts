@@ -478,6 +478,9 @@ export namespace config {
 	    temp_dir: string;
 	    maintain_par2_files?: boolean;
 	    parpar_binary_path: string;
+	    num_goroutines: number;
+	    memory_limit: number;
+	    slice_size: number;
 
 	    static createFrom(source: any = {}) {
 	        return new Par2Config(source);
@@ -490,6 +493,9 @@ export namespace config {
 	        this.temp_dir = source["temp_dir"];
 	        this.maintain_par2_files = source["maintain_par2_files"];
 	        this.parpar_binary_path = source["parpar_binary_path"];
+	        this.num_goroutines = source["num_goroutines"] ?? 0;
+	        this.memory_limit = source["memory_limit"] ?? 0;
+	        this.slice_size = source["slice_size"] ?? 0;
 	    }
 	}
 	export class PostCheck {

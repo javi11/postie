@@ -205,6 +205,12 @@
             "status": {
                 "redundancy": "Yedeklilik"
             },
+            "num_goroutines": "CPU İş Parçacıkları",
+            "num_goroutines_description": "PAR2 kodlama için paralel iş parçacığı sayısı. 0 = otomatik (tüm CPU çekirdeklerini kullanır)",
+            "memory_limit": "Bellek Sınırı",
+            "memory_limit_description": "Kurtarma arabellekleri için kullanılan maksimum bellek. 0 = otomatik (RAM'in %75'i veya 4 GiB)",
+            "slice_size": "Dilim Boyutu",
+            "slice_size_description": "PAR2 blok boyutu (bayt cinsinden). 0 = otomatik (makale boyutundan türetilir). Büyük yüklemeler için 10 MiB önerilir.",
             "save_button": "PAR2 Ayarlarını Kaydet",
             "saving": "Kaydediliyor...",
             "saved_success": "PAR2 ayarları kaydedildi",

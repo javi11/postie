@@ -200,6 +200,12 @@
 			"status": {
 				"redundancy": "Redondance"
 			},
+			"num_goroutines": "Threads CPU",
+			"num_goroutines_description": "Nombre de threads parallèles pour l'encodage PAR2. 0 = automatique (utilise tous les cœurs CPU)",
+			"memory_limit": "Limite de mémoire",
+			"memory_limit_description": "Mémoire maximale utilisée pour les tampons de récupération. 0 = automatique (75% de la RAM ou 4 Gio)",
+			"slice_size": "Taille de bloc",
+			"slice_size_description": "Taille de bloc PAR2 en octets. 0 = automatique (dérivé de la taille des articles). 10 Mio est recommandé pour les grands uploads.",
 			"save_button": "Sauvegarder les Paramètres PAR2",
 			"saving": "Sauvegarde...",
 			"saved_success": "Paramètres PAR2 sauvegardés",

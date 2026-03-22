@@ -265,7 +265,9 @@ func TestCreate(t *testing.T) {
 		executor := &NativeExecutor{
 			articleSize: 10000,
 			cfg: &config.Par2Config{
-				Redundancy: "10",
+				Redundancy:  "10",
+				SliceSize:   10 * 1024 * 1024,       // 10 MiB — matches config.Load() default
+				MemoryLimit: 4 * 1024 * 1024 * 1024, // 4 GiB — matches config.Load() default
 			},
 			jobProgress: newMockJobProgress(),
 		}
@@ -316,7 +318,9 @@ func TestCreate(t *testing.T) {
 		executor := &NativeExecutor{
 			articleSize: 10000,
 			cfg: &config.Par2Config{
-				Redundancy: "10",
+				Redundancy:  "10",
+				SliceSize:   10 * 1024 * 1024,       // 10 MiB — matches config.Load() default
+				MemoryLimit: 4 * 1024 * 1024 * 1024, // 4 GiB — matches config.Load() default
 			},
 			jobProgress: newMockJobProgress(),
 		}
@@ -403,8 +407,10 @@ func TestCreate(t *testing.T) {
 		executor := &NativeExecutor{
 			articleSize: 10000,
 			cfg: &config.Par2Config{
-				Redundancy: "10",
-				TempDir:    tempDir,
+				Redundancy:  "10",
+				TempDir:     tempDir,
+				SliceSize:   10 * 1024 * 1024,       // 10 MiB — matches config.Load() default
+				MemoryLimit: 4 * 1024 * 1024 * 1024, // 4 GiB — matches config.Load() default
 			},
 			jobProgress: newMockJobProgress(),
 		}
@@ -440,7 +446,9 @@ func TestCreate(t *testing.T) {
 		executor := &NativeExecutor{
 			articleSize: 10000,
 			cfg: &config.Par2Config{
-				Redundancy: "10",
+				Redundancy:  "10",
+				SliceSize:   10 * 1024 * 1024,       // 10 MiB — matches config.Load() default
+				MemoryLimit: 4 * 1024 * 1024 * 1024, // 4 GiB — matches config.Load() default
 			},
 			jobProgress: newMockJobProgress(),
 		}
@@ -469,7 +477,9 @@ func TestCreateInDirectory(t *testing.T) {
 		executor := &NativeExecutor{
 			articleSize: 10000,
 			cfg: &config.Par2Config{
-				Redundancy: "10",
+				Redundancy:  "10",
+				SliceSize:   10 * 1024 * 1024,       // 10 MiB — matches config.Load() default
+				MemoryLimit: 4 * 1024 * 1024 * 1024, // 4 GiB — matches config.Load() default
 			},
 			jobProgress: newMockJobProgress(),
 		}
@@ -513,8 +523,10 @@ func TestCreateInDirectory(t *testing.T) {
 		executor := &NativeExecutor{
 			articleSize: 10000,
 			cfg: &config.Par2Config{
-				Redundancy: "10",
-				TempDir:    configTempDir,
+				Redundancy:  "10",
+				TempDir:     configTempDir,
+				SliceSize:   10 * 1024 * 1024,       // 10 MiB — matches config.Load() default
+				MemoryLimit: 4 * 1024 * 1024 * 1024, // 4 GiB — matches config.Load() default
 			},
 			jobProgress: newMockJobProgress(),
 		}
@@ -605,7 +617,9 @@ func TestCreateInDirectory(t *testing.T) {
 		executor := &NativeExecutor{
 			articleSize: 10000,
 			cfg: &config.Par2Config{
-				Redundancy: "10",
+				Redundancy:  "10",
+				SliceSize:   10 * 1024 * 1024,       // 10 MiB — matches config.Load() default
+				MemoryLimit: 4 * 1024 * 1024 * 1024, // 4 GiB — matches config.Load() default
 			},
 			jobProgress: newMockJobProgress(),
 		}
@@ -649,7 +663,9 @@ func TestCreateInDirectory(t *testing.T) {
 		executor := &NativeExecutor{
 			articleSize: 10000,
 			cfg: &config.Par2Config{
-				Redundancy: "10",
+				Redundancy:  "10",
+				SliceSize:   10 * 1024 * 1024,       // 10 MiB — matches config.Load() default
+				MemoryLimit: 4 * 1024 * 1024 * 1024, // 4 GiB — matches config.Load() default
 			},
 			jobProgress: newMockJobProgress(),
 		}

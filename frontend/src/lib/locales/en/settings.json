@@ -205,6 +205,12 @@
 			"status": {
 				"redundancy": "Redundancy"
 			},
+			"num_goroutines": "CPU Threads",
+			"num_goroutines_description": "Number of parallel threads for PAR2 encoding. 0 = auto (uses all CPU cores)",
+			"memory_limit": "Memory Limit",
+			"memory_limit_description": "Maximum memory used for recovery buffers. 0 = auto (75% of RAM or 4 GiB)",
+			"slice_size": "Slice Size",
+			"slice_size_description": "PAR2 block size in bytes. 0 = auto (derived from article size). 10 MiB is recommended for large uploads.",
 			"save_button": "Save PAR2 Settings",
 			"saving": "Saving...",
 			"saved_success": "PAR2 settings saved",

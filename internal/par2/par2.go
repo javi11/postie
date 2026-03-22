@@ -190,7 +190,12 @@ func (p *NativeExecutor) CreateInDirectory(ctx context.Context, files []fileinfo
 
 // createPar2ForFile creates PAR2 files for a single input file in the given directory.
 func (p *NativeExecutor) createPar2ForFile(ctx context.Context, file fileinfo.FileInfo, dirPath string) ([]string, error) {
-	parBlockSize := calculateParBlockSize(file.Size, p.articleSize)
+	var parBlockSize uint64
+	if p.cfg.SliceSize > 0 {
+		parBlockSize = uint64(p.cfg.SliceSize)
+	} else {
+		parBlockSize = calculateParBlockSize(file.Size, p.articleSize)
+	}
 	par2FileName := filepath.Base(file.Path) + ".par2"
 	par2Path := filepath.Join(dirPath, par2FileName)
 
@@ -218,9 +223,11 @@ func (p *NativeExecutor) createPar2ForFile(ctx context.Context, file fileinfo.Fi
 	}
 
 	opts := par2go.Options{
-		SliceSize:   int(parBlockSize),
-		NumRecovery: numRecovery,
-		Creator:     "Postie",
+		SliceSize:     int(parBlockSize),
+		NumRecovery:   numRecovery,
+		NumGoroutines: p.cfg.NumGoroutines,
+		MemoryLimit:   p.cfg.MemoryLimit,
+		Creator:       "Postie",
 		OnProgress: func(phase string, pct float64) {
 			if pg == nil {
 				return
