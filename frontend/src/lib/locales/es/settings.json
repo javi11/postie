@@ -200,6 +200,12 @@
 			"status": {
 				"redundancy": "Redundancia"
 			},
+			"num_goroutines": "Hilos de CPU",
+			"num_goroutines_description": "Número de hilos paralelos para la codificación PAR2. 0 = automático (usa todos los núcleos de CPU)",
+			"memory_limit": "Límite de memoria",
+			"memory_limit_description": "Memoria máxima utilizada para los búferes de recuperación. 0 = automático (75% de la RAM o 4 GiB)",
+			"slice_size": "Tamaño de bloque",
+			"slice_size_description": "Tamaño de bloque PAR2 en bytes. 0 = automático (derivado del tamaño del artículo). Se recomiendan 10 MiB para archivos grandes.",
 			"save_button": "Guardar Configuración PAR2",
 			"saving": "Guardando...",
 			"saved_success": "Configuración PAR2 guardada",

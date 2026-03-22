@@ -1,5 +1,6 @@
 <script lang="ts">
 import apiClient from "$lib/api/client";
+import ByteSizeInput from "$lib/components/inputs/ByteSizeInput.svelte";
 import PercentageInput from "$lib/components/inputs/PercentageInput.svelte";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
@@ -26,6 +27,9 @@ let tempDir = $state(config.par2?.temp_dir || "");
 let redundancy = $state(config.par2?.redundancy || "10%");
 let maintainPar2Files = $state(config.par2?.maintain_par2_files ?? false);
 let parparBinaryPath = $state(config.par2?.parpar_binary_path || "");
+let numGoroutines = $state(config.par2?.num_goroutines ?? 0);
+let memoryLimit = $state(config.par2?.memory_limit ?? 0);
+let sliceSize = $state(config.par2?.slice_size ?? 0);
 
 // Sync local state back to config
 $effect(() => {
@@ -46,6 +50,18 @@ $effect(() => {
 
 $effect(() => {
 	config.par2.parpar_binary_path = parparBinaryPath;
+});
+
+$effect(() => {
+	config.par2.num_goroutines = numGoroutines;
+});
+
+$effect(() => {
+	config.par2.memory_limit = memoryLimit;
+});
+
+$effect(() => {
+	config.par2.slice_size = sliceSize;
 });
 
 async function selectTempDirectory() {
@@ -153,6 +169,39 @@ let redundancyDisplay = $derived(redundancy || "10%");
               minValue={1}
               maxValue={50}
               id="redundancy"
+            />
+
+            <div>
+              <label for="num-goroutines" class="label">
+                <span class="label-text">{$t('settings.par2.num_goroutines')}</span>
+              </label>
+              <input
+                id="num-goroutines"
+                type="number"
+                class="input input-bordered w-full"
+                bind:value={numGoroutines}
+                min="0"
+                max="64"
+              />
+              <p class="text-sm text-base-content/70 mt-1">
+                {$t('settings.par2.num_goroutines_description')}
+              </p>
+            </div>
+
+            <ByteSizeInput
+              bind:value={memoryLimit}
+              label={$t('settings.par2.memory_limit')}
+              description={$t('settings.par2.memory_limit_description')}
+              minValue={0}
+              id="memory-limit"
+            />
+
+            <ByteSizeInput
+              bind:value={sliceSize}
+              label={$t('settings.par2.slice_size')}
+              description={$t('settings.par2.slice_size_description')}
+              minValue={0}
+              id="slice-size"
             />
           </div>
 

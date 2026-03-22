@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	defaultRedundancy = "1n*1.2" //https://github.com/animetosho/ParPar/blob/6feee4dd94bb18480f0bf08cd9d17ffc7e671b69/help-full.txt#L75
+	defaultRedundancy = "5%" //https://github.com/animetosho/ParPar/blob/6feee4dd94bb18480f0bf08cd9d17ffc7e671b69/help-full.txt#L75
 	// CurrentConfigVersion represents the current configuration version
 	CurrentConfigVersion = 2
 )
@@ -196,6 +196,9 @@ type Par2Config struct {
 	TempDir           string `yaml:"temp_dir" json:"temp_dir"`
 	MaintainPar2Files *bool  `yaml:"maintain_par2_files" json:"maintain_par2_files"`
 	ParparBinaryPath  string `yaml:"parpar_binary_path" json:"parpar_binary_path"`
+	NumGoroutines     int    `yaml:"num_goroutines" json:"num_goroutines"`
+	MemoryLimit       int64  `yaml:"memory_limit" json:"memory_limit"`
+	SliceSize         int64  `yaml:"slice_size" json:"slice_size"`
 }
 
 // ServerConfig represents a Usenet server configuration
@@ -517,6 +520,14 @@ func Load(path string) (*ConfigData, error) {
 
 	if cfg.Par2.Redundancy == "" {
 		cfg.Par2.Redundancy = defaultRedundancy
+	}
+
+	if cfg.Par2.MemoryLimit == 0 {
+		cfg.Par2.MemoryLimit = 4 * 1024 * 1024 * 1024 // 4 GiB
+	}
+
+	if cfg.Par2.SliceSize == 0 {
+		cfg.Par2.SliceSize = 10 * 1024 * 1024 // 10 MiB
 	}
 
 	// Set default for maintain par2 files (default to false to preserve current behavior)
@@ -968,6 +979,8 @@ func GetDefaultConfig() ConfigData {
 			Redundancy:        defaultRedundancy,
 			TempDir:           os.TempDir(),
 			MaintainPar2Files: &disabled, // Default to false to preserve current behavior
+			MemoryLimit:       4 * 1024 * 1024 * 1024,
+			SliceSize:         10 * 1024 * 1024,
 		},
 		Watchers: []WatcherConfig{
 			{
