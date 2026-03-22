@@ -196,6 +196,10 @@ func (p *NativeExecutor) createPar2ForFile(ctx context.Context, file fileinfo.Fi
 	} else {
 		parBlockSize = calculateParBlockSize(file.Size, p.articleSize)
 	}
+	// Guard: block size must never exceed the file size (prevents native library segfault)
+	if file.Size > 0 && parBlockSize > file.Size {
+		parBlockSize = file.Size
+	}
 	par2FileName := filepath.Base(file.Path) + ".par2"
 	par2Path := filepath.Join(dirPath, par2FileName)
 

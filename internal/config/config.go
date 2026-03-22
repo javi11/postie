@@ -195,8 +195,9 @@ type Par2Config struct {
 	Redundancy        string `yaml:"redundancy" json:"redundancy"`
 	TempDir           string `yaml:"temp_dir" json:"temp_dir"`
 	MaintainPar2Files *bool  `yaml:"maintain_par2_files" json:"maintain_par2_files"`
-	ParparBinaryPath  string `yaml:"parpar_binary_path" json:"parpar_binary_path"`
-	NumGoroutines     int    `yaml:"num_goroutines" json:"num_goroutines"`
+	ParparBinaryPath  string   `yaml:"parpar_binary_path" json:"parpar_binary_path"`
+	ParparExtraArgs   []string `yaml:"parpar_extra_args" json:"parpar_extra_args"`
+	NumGoroutines     int      `yaml:"num_goroutines" json:"num_goroutines"`
 	MemoryLimit       int64  `yaml:"memory_limit" json:"memory_limit"`
 	SliceSize         int64  `yaml:"slice_size" json:"slice_size"`
 }

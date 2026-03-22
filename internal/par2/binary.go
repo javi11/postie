@@ -91,8 +91,9 @@ func (b *BinaryExecutor) runParpar(ctx context.Context, file fileinfo.FileInfo, 
 		"-s", fmt.Sprintf("%db", blockSize),
 		"-r", fmt.Sprintf("%d", numRecovery),
 		"-o", outputBase,
-		file.Path,
 	}
+	args = append(args, b.cfg.ParparExtraArgs...)
+	args = append(args, file.Path)
 
 	// Progress: emit start
 	progressID := uuid.New()
@@ -104,7 +105,7 @@ func (b *BinaryExecutor) runParpar(ctx context.Context, file fileinfo.FileInfo, 
 
 	slog.InfoContext(ctx, "Invoking parpar binary",
 		"binary", b.cfg.ParparBinaryPath, "file", file.Path, "outputBase", outputBase,
-		"blockSize", blockSize, "recoverySlices", numRecovery)
+		"blockSize", blockSize, "recoverySlices", numRecovery, "extraArgs", b.cfg.ParparExtraArgs)
 
 	cmd := exec.CommandContext(ctx, b.cfg.ParparBinaryPath, args...)
 
