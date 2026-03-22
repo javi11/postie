@@ -27,6 +27,7 @@ let tempDir = $state(config.par2?.temp_dir || "");
 let redundancy = $state(config.par2?.redundancy || "10%");
 let maintainPar2Files = $state(config.par2?.maintain_par2_files ?? false);
 let parparBinaryPath = $state(config.par2?.parpar_binary_path || "");
+let parparExtraArgs = $state((config.par2?.parpar_extra_args ?? []).join('\n'));
 let numGoroutines = $state(config.par2?.num_goroutines ?? 0);
 let memoryLimit = $state(config.par2?.memory_limit ?? 0);
 let sliceSize = $state(config.par2?.slice_size ?? 0);
@@ -50,6 +51,10 @@ $effect(() => {
 
 $effect(() => {
 	config.par2.parpar_binary_path = parparBinaryPath;
+});
+
+$effect(() => {
+	config.par2.parpar_extra_args = parparExtraArgs.split('\n').map(s => s.trim()).filter(Boolean);
 });
 
 $effect(() => {
@@ -144,6 +149,24 @@ let redundancyDisplay = $derived(redundancy || "10%");
                 {$t('settings.par2.parpar_binary_path_description')}
               </p>
             </div>
+
+            {#if parparBinaryPath}
+            <div class="md:col-span-2">
+              <label for="parpar-extra-args" class="label">
+                <span class="label-text">{$t('settings.par2.parpar_extra_args')}</span>
+              </label>
+              <textarea
+                id="parpar-extra-args"
+                class="textarea textarea-bordered w-full font-mono text-sm"
+                rows="3"
+                bind:value={parparExtraArgs}
+                placeholder={$t('settings.par2.parpar_extra_args_placeholder')}
+              ></textarea>
+              <p class="text-sm text-base-content/70 mt-1">
+                {$t('settings.par2.parpar_extra_args_description')}
+              </p>
+            </div>
+            {/if}
 
             <!-- Maintain PAR2 Files -->
             <div class="form-control">
