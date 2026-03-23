@@ -538,9 +538,9 @@ func Load(path string) (*ConfigData, error) {
 		cfg.Par2.MaintainPar2Files = &maintainPar2Files
 	}
 
-	// Set default for skip if par2 exists (default to false to preserve current behavior)
+	// Set default for skip if par2 exists (default to true)
 	if cfg.Par2.SkipIfPar2Exists == nil {
-		skipIfPar2Exists := false
+		skipIfPar2Exists := true
 		cfg.Par2.SkipIfPar2Exists = &skipIfPar2Exists
 	}
 
