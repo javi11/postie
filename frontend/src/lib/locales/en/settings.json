@@ -195,6 +195,8 @@
 			"parpar_extra_args_description": "Additional flags passed to parpar, one per line (e.g. --memory 2048M). Applied after -s, -r, -o.",
 			"maintain_par2_files": "Maintain PAR2 Files",
 			"maintain_par2_files_description": "Keep PAR2 files permanently after successful upload (useful for archive integrity and future repairs)",
+			"skip_if_par2_exists": "Skip PAR2 Generation if Files Already Exist",
+			"skip_if_par2_exists_description": "When enabled, if the source folder already contains .par2 files, PAR2 generation is skipped and the existing files are uploaded instead",
 			"redundancy": "Redundancy",
 			"redundancy_description": "Recovery data percentage",
 			"info": {

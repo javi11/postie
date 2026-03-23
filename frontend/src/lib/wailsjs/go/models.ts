@@ -477,6 +477,7 @@ export namespace config {
 	    redundancy: string;
 	    temp_dir: string;
 	    maintain_par2_files?: boolean;
+	    skip_if_par2_exists?: boolean;
 	    parpar_binary_path: string;
 	    parpar_extra_args: string[];
 	    num_goroutines: number;
@@ -493,6 +494,7 @@ export namespace config {
 	        this.redundancy = source["redundancy"];
 	        this.temp_dir = source["temp_dir"];
 	        this.maintain_par2_files = source["maintain_par2_files"];
+	        this.skip_if_par2_exists = source["skip_if_par2_exists"];
 	        this.parpar_binary_path = source["parpar_binary_path"];
 	        this.parpar_extra_args = source["parpar_extra_args"] ?? [];
 	        this.num_goroutines = source["num_goroutines"] ?? 0;

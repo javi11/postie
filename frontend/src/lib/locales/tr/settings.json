@@ -195,6 +195,8 @@
             "parpar_extra_args_description": "Additional flags passed to parpar, one per line (e.g. --memory 2048M). Applied after -s, -r, -o.",
             "maintain_par2_files": "PAR2 Dosyalarını Koru",
             "maintain_par2_files_description": "Başarılı yüklemeden sonra PAR2 dosyalarını kalıcı olarak sakla (arşiv bütünlüğü ve gelecekteki onarımlar için yararlıdır)",
+            "skip_if_par2_exists": "Dosyalar Zaten Mevcutsa PAR2 Oluşturmayı Atla",
+            "skip_if_par2_exists_description": "Etkinleştirildiğinde, kaynak klasör zaten .par2 dosyaları içeriyorsa PAR2 oluşturma atlanır ve mevcut dosyalar yüklenir",
             "redundancy": "Yedeklilik",
             "redundancy_description": "Kurtarma verisi yüzdesi",
             "info": {
