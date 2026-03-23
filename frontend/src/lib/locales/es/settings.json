@@ -190,6 +190,8 @@
 			"parpar_extra_args_description": "Additional flags passed to parpar, one per line (e.g. --memory 2048M). Applied after -s, -r, -o.",
 			"maintain_par2_files": "Mantener Archivos PAR2",
 			"maintain_par2_files_description": "Conservar los archivos PAR2 permanentemente después de una subida exitosa (útil para la integridad del archivo y futuras reparaciones)",
+			"skip_if_par2_exists": "Omitir Generación PAR2 si los Archivos Ya Existen",
+			"skip_if_par2_exists_description": "Cuando está habilitado, si la carpeta de origen ya contiene archivos .par2, se omite la generación de PAR2 y se suben los archivos existentes",
 			"redundancy": "Redundancia",
 			"redundancy_description": "Porcentaje de datos de recuperación",
 			"info": {

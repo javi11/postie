@@ -26,6 +26,7 @@ let enabled = $state(config.par2?.enabled ?? false);
 let tempDir = $state(config.par2?.temp_dir || "");
 let redundancy = $state(config.par2?.redundancy || "10%");
 let maintainPar2Files = $state(config.par2?.maintain_par2_files ?? false);
+let skipIfPar2Exists = $state(config.par2?.skip_if_par2_exists ?? true);
 let parparBinaryPath = $state(config.par2?.parpar_binary_path || "");
 let parparExtraArgs = $state((config.par2?.parpar_extra_args ?? []).join('\n'));
 let numGoroutines = $state(config.par2?.num_goroutines ?? 0);
@@ -47,6 +48,10 @@ $effect(() => {
 
 $effect(() => {
 	config.par2.maintain_par2_files = maintainPar2Files;
+});
+
+$effect(() => {
+	config.par2.skip_if_par2_exists = skipIfPar2Exists;
 });
 
 $effect(() => {
@@ -181,6 +186,22 @@ let redundancyDisplay = $derived(redundancy || "10%");
               </label>
               <p class="text-sm text-base-content/70 mt-1">
                 {$t('settings.par2.maintain_par2_files_description')}
+              </p>
+            </div>
+
+            <!-- Skip PAR2 Generation if Files Already Exist -->
+            <div class="form-control">
+              <label for="skip-if-par2-exists" class="cursor-pointer label">
+                <span class="label-text">{$t('settings.par2.skip_if_par2_exists')}</span>
+                <input
+                  id="skip-if-par2-exists"
+                  type="checkbox"
+                  class="checkbox"
+                  bind:checked={skipIfPar2Exists}
+                />
+              </label>
+              <p class="text-sm text-base-content/70 mt-1">
+                {$t('settings.par2.skip_if_par2_exists_description')}
               </p>
             </div>
 

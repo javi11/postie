@@ -194,7 +194,8 @@ type Par2Config struct {
 	Enabled           *bool  `yaml:"enabled" json:"enabled"`
 	Redundancy        string `yaml:"redundancy" json:"redundancy"`
 	TempDir           string `yaml:"temp_dir" json:"temp_dir"`
-	MaintainPar2Files *bool  `yaml:"maintain_par2_files" json:"maintain_par2_files"`
+	MaintainPar2Files  *bool `yaml:"maintain_par2_files" json:"maintain_par2_files"`
+	SkipIfPar2Exists   *bool `yaml:"skip_if_par2_exists" json:"skip_if_par2_exists"`
 	ParparBinaryPath  string   `yaml:"parpar_binary_path" json:"parpar_binary_path"`
 	ParparExtraArgs   []string `yaml:"parpar_extra_args" json:"parpar_extra_args"`
 	NumGoroutines     int      `yaml:"num_goroutines" json:"num_goroutines"`
@@ -535,6 +536,12 @@ func Load(path string) (*ConfigData, error) {
 	if cfg.Par2.MaintainPar2Files == nil {
 		maintainPar2Files := false
 		cfg.Par2.MaintainPar2Files = &maintainPar2Files
+	}
+
+	// Set default for skip if par2 exists (default to true)
+	if cfg.Par2.SkipIfPar2Exists == nil {
+		skipIfPar2Exists := true
+		cfg.Par2.SkipIfPar2Exists = &skipIfPar2Exists
 	}
 
 	// Set default values for NZB compression

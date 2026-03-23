@@ -421,6 +421,16 @@ func (p *Postie) post(
 	return finalPath, nil
 }
 
+// hasPar2Files returns true if any file in the list is a PAR2 file.
+func hasPar2Files(files []fileinfo.FileInfo) bool {
+	for _, f := range files {
+		if par2.IsPar2File(f.Path) {
+			return true
+		}
+	}
+	return false
+}
+
 // postFolder posts all files from a folder as a single NZB
 func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, rootDir string, outputDir string) (string, error) {
 	if len(files) == 0 {
@@ -486,25 +496,33 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 	if *p.postingCfg.WaitForPar2 {
 		// Create PAR2 files for all files in the folder
 		if *p.par2Cfg.Enabled {
-			// Determine PAR2 output directory based on maintain_par2_files setting
-			var par2OutputDir string
-			if p.par2Cfg.MaintainPar2Files != nil && *p.par2Cfg.MaintainPar2Files {
-				// For folder posting, PAR2 files go directly in outputDir
-				par2OutputDir = outputDir
-
-				slog.DebugContext(ctx, "Generating PAR2 files directly in output directory",
-					"folder", folderName, "outputDir", par2OutputDir)
-			}
-			// If par2OutputDir is empty, CreateInDirectory will use default behavior (temp/source dir)
-
-			createdPar2Paths, err = p.par2runner.CreateInDirectory(ctx, files, par2OutputDir)
-			if err != nil {
-				if !errors.Is(err, context.Canceled) {
-					slog.ErrorContext(ctx, "Error during par2 creation. Upload will continue without par2.", "error", err)
-				}
-				// Continue without PAR2 files
+			// Skip PAR2 generation if option enabled and PAR2 files already exist in source
+			skipGeneration := p.par2Cfg.SkipIfPar2Exists != nil &&
+				*p.par2Cfg.SkipIfPar2Exists && hasPar2Files(files)
+			if skipGeneration {
+				slog.InfoContext(ctx, "Skipping PAR2 generation: existing PAR2 files detected in source folder",
+					"folder", folderName)
 			} else {
-				allFilePaths = append(allFilePaths, createdPar2Paths...)
+				// Determine PAR2 output directory based on maintain_par2_files setting
+				var par2OutputDir string
+				if p.par2Cfg.MaintainPar2Files != nil && *p.par2Cfg.MaintainPar2Files {
+					// For folder posting, PAR2 files go directly in outputDir
+					par2OutputDir = outputDir
+
+					slog.DebugContext(ctx, "Generating PAR2 files directly in output directory",
+						"folder", folderName, "outputDir", par2OutputDir)
+				}
+				// If par2OutputDir is empty, CreateInDirectory will use default behavior (temp/source dir)
+
+				createdPar2Paths, err = p.par2runner.CreateInDirectory(ctx, files, par2OutputDir)
+				if err != nil {
+					if !errors.Is(err, context.Canceled) {
+						slog.ErrorContext(ctx, "Error during par2 creation. Upload will continue without par2.", "error", err)
+					}
+					// Continue without PAR2 files
+				} else {
+					allFilePaths = append(allFilePaths, createdPar2Paths...)
+				}
 			}
 		}
 
@@ -543,6 +561,13 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 		// Create PAR2 files in parallel
 		errg.Go(func() error {
 			if !*p.par2Cfg.Enabled {
+				return nil
+			}
+
+			// Skip PAR2 generation if option enabled and PAR2 files already exist in source
+			if p.par2Cfg.SkipIfPar2Exists != nil && *p.par2Cfg.SkipIfPar2Exists && hasPar2Files(files) {
+				slog.InfoContext(ctx, "Skipping PAR2 generation: existing PAR2 files detected in source folder",
+					"folder", folderName)
 				return nil
 			}
 
