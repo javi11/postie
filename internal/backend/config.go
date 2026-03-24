@@ -197,6 +197,12 @@ func (a *App) applyConfigChanges(configData *config.ConfigData) error {
 		return err
 	}
 
+	// Clear any pending config before reinitializing components so that the new
+	// processor starts with an unblocked canProcessNextItem callback.
+	a.pendingConfigMux.Lock()
+	a.pendingConfig = nil
+	a.pendingConfigMux.Unlock()
+
 	// Initialize queue if not yet created (e.g. after setup wizard on first start)
 	if a.queue == nil {
 		if err := a.initializeQueue(); err != nil {
@@ -240,11 +246,6 @@ func (a *App) applyConfigChanges(configData *config.ConfigData) error {
 			}
 		}
 	}
-
-	// Clear any pending config since we just applied changes
-	a.pendingConfigMux.Lock()
-	a.pendingConfig = nil
-	a.pendingConfigMux.Unlock()
 
 	// Emit a config update event to the frontend for both desktop and web modes
 	if !a.isWebMode {
@@ -627,12 +628,14 @@ func (a *App) canProcessNextItem() bool {
 		hasActiveWork = hasActiveWork || len(runningJobs) > 0
 	}
 
-	// If no active work, try to apply pending config automatically
-	if !hasActiveWork {
+	// If no active work, try to apply pending config automatically.
+	// Use CompareAndSwap to ensure only one goroutine attempts the apply at a time.
+	if !hasActiveWork && a.isApplyingConfig.CompareAndSwap(false, true) {
 		slog.Info("No active work detected, attempting to apply pending configuration")
 
 		// Apply pending config in background to avoid blocking the processor
 		go func() {
+			defer a.isApplyingConfig.Store(false)
 			if err := a.ApplyPendingConfig(); err != nil {
 				slog.Error("Failed to auto-apply pending configuration", "error", err)
 			}

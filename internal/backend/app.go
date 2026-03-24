@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"crypto/tls"
@@ -119,6 +120,7 @@ type App struct {
 	firstStart           bool
 	pendingConfig        *config.ConfigData
 	pendingConfigMux     sync.RWMutex
+	isApplyingConfig     atomic.Bool
 	postCheckWorker      *processor.PostCheckRetryWorker
 }
 
