@@ -51,9 +51,10 @@ type Processor struct {
 	isPaused  bool
 	pausedMux sync.RWMutex
 	// Auto-pause functionality
-	isAutoPaused        bool
-	autoPauseReason     string
-	autoPausedMux       sync.RWMutex
+	isAutoPaused         bool
+	autoPauseReason      string
+	isAutoBlockingNewJobs bool // blocks new jobs without pausing running ones
+	autoPausedMux        sync.RWMutex
 	providerCheckTicker *time.Ticker
 	providerCheckCtx    context.Context
 	providerCheckCancel context.CancelFunc
@@ -156,6 +157,17 @@ func (p *Processor) processQueueItems(ctx context.Context) error {
 
 	if paused {
 		return nil // Skip processing when paused
+	}
+
+	// Check if new jobs are auto-blocked due to provider unavailability.
+	// Unlike manual pause, this does NOT affect already-running jobs.
+	p.autoPausedMux.RLock()
+	autoBlocked := p.isAutoBlockingNewJobs
+	p.autoPausedMux.RUnlock()
+
+	if autoBlocked {
+		slog.DebugContext(ctx, "Processor waiting - providers unavailable, blocking new jobs")
+		return nil
 	}
 
 	// Check if we can process next item (e.g., pending config changes)
@@ -771,6 +783,14 @@ func (p *Processor) Close() error {
 	return nil
 }
 
+// setAutoBlock enables or disables blocking of new jobs due to provider unavailability.
+// Unlike PauseProcessing(), this does NOT pause jobs that are already running.
+func (p *Processor) setAutoBlock(blocking bool) {
+	p.autoPausedMux.Lock()
+	defer p.autoPausedMux.Unlock()
+	p.isAutoBlockingNewJobs = blocking
+}
+
 // IsAutoPaused returns true if the processor was automatically paused due to provider unavailability
 func (p *Processor) IsAutoPaused() bool {
 	p.autoPausedMux.RLock()
@@ -843,10 +863,15 @@ func (p *Processor) checkAndHandleProviderAvailability() {
 		"totalProviders", totalProviders,
 		"wasAutoPaused", wasAutoPaused)
 
-	// If no providers are available and we haven't auto-paused yet
+	// If no providers are available and we haven't auto-paused yet.
+	// Use setAutoBlock instead of PauseProcessing so that already-running jobs
+	// are not paused — they must be allowed to continue (and reconnect) so that
+	// ActiveConnections eventually becomes > 0 and auto-resume can trigger.
+	// Pausing running jobs creates a deadlock: paused jobs make no connections,
+	// errors never clear, auto-resume never fires.
 	if activeProviders == 0 && totalProviders > 0 && !wasAutoPaused {
-		slog.Warn("No providers available - auto-pausing processing")
-		p.PauseProcessing()
+		slog.Warn("No providers available - blocking new jobs (running jobs continue unaffected)")
+		p.setAutoBlock(true)
 
 		p.autoPausedMux.Lock()
 		p.isAutoPaused = true
@@ -854,15 +879,13 @@ func (p *Processor) checkAndHandleProviderAvailability() {
 		p.autoPausedMux.Unlock()
 	}
 
-	// If providers are available and we were auto-paused
+	// If providers are available and we were auto-paused, unblock new jobs.
+	// Do not touch the manual pause state — if the user manually paused,
+	// that remains in effect.
 	if activeProviders > 0 && wasAutoPaused {
-		// Only resume if the processor was paused by us (auto-pause)
-		// Check if it's still paused - if user manually resumed, don't override
-		if p.IsPaused() {
-			slog.Info("Providers available - auto-resuming processing",
-				"activeProviders", activeProviders)
-			p.ResumeProcessing()
-		}
+		slog.Info("Providers available - unblocking new jobs",
+			"activeProviders", activeProviders)
+		p.setAutoBlock(false)
 
 		p.autoPausedMux.Lock()
 		p.isAutoPaused = false
