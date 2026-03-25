@@ -99,6 +99,57 @@ jobs:
           path: build/bin
           retention-days: 7
 
+  build-cli-windows:
+    runs-on: windows-latest
+    needs: test
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.26
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: mingw-w64-x86_64-gcc
+          update: false
+
+      - name: Extract version info
+        id: version
+        run: |
+          COMMIT=$(git rev-parse --short HEAD)
+          echo "version=dev-$COMMIT" >> $GITHUB_OUTPUT
+
+      - name: Build Windows CLI
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: 1
+          CC: gcc
+          CGO_LDFLAGS: '-static-libgcc -static-libstdc++ -Wl,-Bstatic -lpthread -Wl,-Bdynamic'
+        run: |
+          go build \
+            -trimpath \
+            -tags=cli \
+            -ldflags="-s -w -X 'main.Version=${{ steps.version.outputs.version }}'" \
+            -o "postie-cli-windows-amd64.exe" \
+            ./cmd/postie/postie.go
+
+      - name: Upload Windows CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: postie-cli-windows-amd64-dev
+          path: postie-cli-windows-amd64.exe
+          retention-days: 7
+
   build-gui-macos:
     runs-on: macos-latest
     needs: test
