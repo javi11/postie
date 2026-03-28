@@ -49,6 +49,14 @@ func (b *BinaryExecutor) CreateInDirectory(ctx context.Context, files []fileinfo
 			continue
 		}
 		dirPath := b.resolveDir(file, outputDir)
+		// Always check the source directory first — pre-existing PAR2 files take priority.
+		sourceDir := filepath.Dir(file.Path)
+		if sourceDir != dirPath {
+			if existing, ok := checkExistingPar2FilesInPath(ctx, file, sourceDir); ok {
+				all = append(all, existing...)
+				continue
+			}
+		}
 		if existing, ok := checkExistingPar2FilesInPath(ctx, file, dirPath); ok {
 			all = append(all, existing...)
 			continue

@@ -44,15 +44,20 @@ func New(articleSize uint64, cfg *config.Par2Config, jobProgress progress.JobPro
 }
 
 // checkExistingPar2Files checks if PAR2 files already exist for the given source file.
+// It always checks the source directory first, then falls back to TempDir if configured.
 func (p *NativeExecutor) checkExistingPar2Files(ctx context.Context, sourceFile fileinfo.FileInfo) ([]string, bool) {
-	var dirPath string
-	if p.cfg.TempDir != "" {
-		dirPath = p.cfg.TempDir
-	} else {
-		dirPath = filepath.Dir(sourceFile.Path)
+	// Always check the source directory first — this is where pre-existing PAR2 files live.
+	sourceDirPath := filepath.Dir(sourceFile.Path)
+	if existing, ok := checkExistingPar2FilesInPath(ctx, sourceFile, sourceDirPath); ok {
+		return existing, ok
 	}
 
-	return checkExistingPar2FilesInPath(ctx, sourceFile, dirPath)
+	// Fall back to TempDir if configured (reuse from a previous generation run).
+	if p.cfg.TempDir != "" && p.cfg.TempDir != sourceDirPath {
+		return checkExistingPar2FilesInPath(ctx, sourceFile, p.cfg.TempDir)
+	}
+
+	return nil, false
 }
 
 // checkExistingPar2FilesInDir checks if PAR2 files already exist in a specific directory.
@@ -154,6 +159,11 @@ func (p *NativeExecutor) CreateInDirectory(ctx context.Context, files []fileinfo
 				slog.ErrorContext(ctx, "Failed to create output directory", "path", dirPath, "error", err)
 				dirPath = filepath.Dir(file.Path)
 			} else {
+				// Check source directory first — pre-existing PAR2 files take priority.
+				if existingPaths, exists := checkExistingPar2FilesInPath(ctx, file, filepath.Dir(file.Path)); exists {
+					createdPar2Paths = append(createdPar2Paths, existingPaths...)
+					continue
+				}
 				if existingPaths, exists := p.checkExistingPar2FilesInDir(ctx, file, dirPath); exists {
 					createdPar2Paths = append(createdPar2Paths, existingPaths...)
 					continue

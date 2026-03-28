@@ -438,6 +438,72 @@ func TestCreate(t *testing.T) {
 		}
 	})
 
+	t.Run("reuses existing PAR2 files in source dir when TempDir is configured", func(t *testing.T) {
+		sourceDir := t.TempDir()
+		tempDir := t.TempDir()
+		testFile := filepath.Join(sourceDir, "testfile.bin")
+		createTestFile(t, testFile, 50000)
+
+		// Pre-create PAR2 files in the SOURCE directory (not in TempDir)
+		mainPar2 := filepath.Join(sourceDir, "testfile.bin.par2")
+		volPar2 := filepath.Join(sourceDir, "testfile.bin.vol00+01.par2")
+		if err := os.WriteFile(mainPar2, []byte("par2 data"), 0644); err != nil {
+			t.Fatalf("failed to write par2 file: %v", err)
+		}
+		if err := os.WriteFile(volPar2, []byte("volume data"), 0644); err != nil {
+			t.Fatalf("failed to write vol par2 file: %v", err)
+		}
+
+		executor := &NativeExecutor{
+			articleSize: 10000,
+			cfg: &config.Par2Config{
+				Redundancy: "10",
+				TempDir:    tempDir, // TempDir is configured but PAR2 is in source dir
+			},
+			jobProgress: newMockJobProgress(),
+		}
+
+		files := []fileinfo.FileInfo{
+			{Path: testFile, Size: 50000},
+		}
+
+		createdFiles, err := executor.Create(context.Background(), files)
+		if err != nil {
+			t.Fatalf("Create failed: %v", err)
+		}
+
+		// Should return existing files from source dir, not generate new ones in TempDir
+		if len(createdFiles) < 2 {
+			t.Fatalf("Expected at least 2 existing PAR2 files, got %d", len(createdFiles))
+		}
+
+		foundMain := false
+		foundVol := false
+		for _, f := range createdFiles {
+			if f == mainPar2 {
+				foundMain = true
+			}
+			if f == volPar2 {
+				foundVol = true
+			}
+		}
+		if !foundMain {
+			t.Error("Main PAR2 file from source dir not found in returned paths")
+		}
+		if !foundVol {
+			t.Error("Volume PAR2 file from source dir not found in returned paths")
+		}
+
+		// Verify nothing was created in TempDir
+		entries, err := os.ReadDir(tempDir)
+		if err != nil {
+			t.Fatalf("failed to read temp dir: %v", err)
+		}
+		if len(entries) > 0 {
+			t.Errorf("Expected TempDir to be empty (no new PAR2 generated), but found %d files", len(entries))
+		}
+	})
+
 	t.Run("handles context cancellation", func(t *testing.T) {
 		tempDir := t.TempDir()
 		testFile := filepath.Join(tempDir, "testfile.bin")
@@ -604,6 +670,139 @@ func TestCreateInDirectory(t *testing.T) {
 		}
 		if !foundVol {
 			t.Error("Volume PAR2 file not found in returned paths")
+		}
+	})
+
+	t.Run("reuses existing PAR2 files in source dir when TempDir configured and no outputDir", func(t *testing.T) {
+		sourceDir := t.TempDir()
+		tempDir := t.TempDir()
+		testFile := filepath.Join(sourceDir, "testfile.bin")
+		createTestFile(t, testFile, 50000)
+
+		// Pre-create PAR2 files in the SOURCE directory (not TempDir)
+		mainPar2 := filepath.Join(sourceDir, "testfile.bin.par2")
+		volPar2 := filepath.Join(sourceDir, "testfile.bin.vol00+01.par2")
+		if err := os.WriteFile(mainPar2, []byte("par2 data"), 0644); err != nil {
+			t.Fatalf("failed to write par2 file: %v", err)
+		}
+		if err := os.WriteFile(volPar2, []byte("volume data"), 0644); err != nil {
+			t.Fatalf("failed to write vol par2 file: %v", err)
+		}
+
+		executor := &NativeExecutor{
+			articleSize: 10000,
+			cfg: &config.Par2Config{
+				Redundancy: "10",
+				TempDir:    tempDir, // TempDir configured but PAR2 exists in source dir
+			},
+			jobProgress: newMockJobProgress(),
+		}
+
+		files := []fileinfo.FileInfo{
+			{Path: testFile, Size: 50000},
+		}
+
+		// Call with empty outputDir — should detect par2 in source dir, not regenerate in TempDir
+		createdFiles, err := executor.CreateInDirectory(context.Background(), files, "")
+		if err != nil {
+			t.Fatalf("CreateInDirectory failed: %v", err)
+		}
+
+		if len(createdFiles) < 2 {
+			t.Fatalf("Expected at least 2 existing PAR2 files, got %d", len(createdFiles))
+		}
+
+		foundMain := false
+		foundVol := false
+		for _, f := range createdFiles {
+			if f == mainPar2 {
+				foundMain = true
+			}
+			if f == volPar2 {
+				foundVol = true
+			}
+		}
+		if !foundMain {
+			t.Error("Main PAR2 file from source dir not found in returned paths")
+		}
+		if !foundVol {
+			t.Error("Volume PAR2 file from source dir not found in returned paths")
+		}
+
+		// Verify nothing was created in TempDir
+		entries, err := os.ReadDir(tempDir)
+		if err != nil {
+			t.Fatalf("failed to read temp dir: %v", err)
+		}
+		if len(entries) > 0 {
+			t.Errorf("Expected TempDir to be empty (existing PAR2 found in source), but found %d files", len(entries))
+		}
+	})
+
+	t.Run("reuses existing PAR2 files in source dir when outputDir configured", func(t *testing.T) {
+		sourceDir := t.TempDir()
+		outputDir := t.TempDir()
+		testFile := filepath.Join(sourceDir, "testfile.bin")
+		createTestFile(t, testFile, 50000)
+
+		// Pre-create PAR2 files in the SOURCE directory (not outputDir)
+		mainPar2 := filepath.Join(sourceDir, "testfile.bin.par2")
+		volPar2 := filepath.Join(sourceDir, "testfile.bin.vol00+01.par2")
+		if err := os.WriteFile(mainPar2, []byte("par2 data"), 0644); err != nil {
+			t.Fatalf("failed to write par2 file: %v", err)
+		}
+		if err := os.WriteFile(volPar2, []byte("volume data"), 0644); err != nil {
+			t.Fatalf("failed to write vol par2 file: %v", err)
+		}
+
+		executor := &NativeExecutor{
+			articleSize: 10000,
+			cfg: &config.Par2Config{
+				Redundancy: "10",
+			},
+			jobProgress: newMockJobProgress(),
+		}
+
+		files := []fileinfo.FileInfo{
+			{Path: testFile, Size: 50000},
+		}
+
+		// Call with outputDir — should detect par2 in source dir, not regenerate in outputDir
+		createdFiles, err := executor.CreateInDirectory(context.Background(), files, outputDir)
+		if err != nil {
+			t.Fatalf("CreateInDirectory failed: %v", err)
+		}
+
+		if len(createdFiles) < 2 {
+			t.Fatalf("Expected at least 2 existing PAR2 files, got %d", len(createdFiles))
+		}
+
+		foundMain := false
+		foundVol := false
+		for _, f := range createdFiles {
+			if f == mainPar2 {
+				foundMain = true
+			}
+			if f == volPar2 {
+				foundVol = true
+			}
+		}
+		if !foundMain {
+			t.Error("Main PAR2 file from source dir not found in returned paths")
+		}
+		if !foundVol {
+			t.Error("Volume PAR2 file from source dir not found in returned paths")
+		}
+
+		// Verify no new PAR2 was created in outputDir
+		outputEntries, err := os.ReadDir(outputDir)
+		if err != nil {
+			t.Fatalf("failed to read output dir: %v", err)
+		}
+		for _, e := range outputEntries {
+			if strings.HasSuffix(e.Name(), ".par2") {
+				t.Errorf("Unexpected PAR2 file created in outputDir: %s", e.Name())
+			}
 		}
 	})
 
