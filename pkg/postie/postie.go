@@ -439,20 +439,7 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 
 	startTime := time.Now()
 
-	// Determine the folder name from rootDir (top-level subdir under the watch folder)
-	// This is more robust than deriving from files[0].Path which may be a nested file
-	folderName := filepath.Base(rootDir)
-	if folderName == "." || folderName == "/" || folderName == "" {
-		// Fallback: derive from the first file's relative path
-		relPath, err := filepath.Rel(rootDir, files[0].Path)
-		if err == nil {
-			parts := strings.SplitN(filepath.ToSlash(relPath), "/", 2)
-			folderName = parts[0]
-		}
-		if folderName == "." || folderName == "/" || folderName == "" {
-			folderName = "upload"
-		}
-	}
+	folderName := deriveFolderName(rootDir, files)
 
 	slog.InfoContext(ctx, "Posting folder as single NZB", "folder", folderName, "files", len(files))
 
@@ -704,4 +691,29 @@ func (p *Postie) ExecutePostUploadScript(ctx context.Context, nzbPath string, it
 
 	slog.InfoContext(ctx, "Post upload script executed successfully", "command", command, "output", string(output))
 	return nil
+}
+
+// deriveFolderName determines the top-level subfolder name from files relative to rootDir.
+// When rootDir is the watch folder and files live under a subfolder (e.g. SingleNzbPerFolder
+// watcher mode or the "Add Folder" button), this returns that subfolder name rather than the
+// watch folder's own name.
+// Falls back to filepath.Base(rootDir) when files are directly in rootDir or when no files
+// are provided. Falls back further to "upload" when rootDir is "/" or otherwise yields an
+// empty/ambiguous name.
+func deriveFolderName(rootDir string, files []fileinfo.FileInfo) string {
+	if len(files) > 0 {
+		relPath, err := filepath.Rel(rootDir, files[0].Path)
+		if err == nil {
+			parts := strings.SplitN(filepath.ToSlash(relPath), "/", 2)
+			if len(parts) > 1 && parts[0] != "." && parts[0] != "" {
+				return parts[0]
+			}
+		}
+	}
+	// Fallback: use the base name of rootDir itself
+	name := filepath.Base(rootDir)
+	if name == "." || name == "/" || name == "" {
+		return "upload"
+	}
+	return name
 }
