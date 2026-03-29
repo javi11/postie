@@ -16,9 +16,13 @@ $effect(() => {
 			const status = await apiClient.getAppStatus();
 			appStatus = status;
 
-			// If not first start and not needing configuration, redirect to dashboard
-			if (!status.isFirstStart && !status.needsConfiguration) {
-				goto("/");
+			// Wizard is only for first-time setup — redirect away on all subsequent visits
+			if (!status.isFirstStart) {
+				if (status.needsConfiguration) {
+					goto("/settings");
+				} else {
+					goto("/");
+				}
 				return;
 			}
 
