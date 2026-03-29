@@ -123,10 +123,7 @@ async function loadAppStatus() {
 		}
 	} catch (error) {
 		console.error("Failed to load app status:", error);
-		// If we can't load app status, redirect to setup to be safe
-		if (page.route.id !== "/setup") {
-			goto("/setup");
-		}
+		// Do not redirect to setup on error — wizard must only show on first start
 	}
 }
 
