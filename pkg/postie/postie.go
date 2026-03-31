@@ -509,6 +509,9 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 					// Continue without PAR2 files
 				} else {
 					allFilePaths = append(allFilePaths, createdPar2Paths...)
+					for k, v := range buildPar2RelativePaths(files, createdPar2Paths) {
+						relativePaths[k] = v
+					}
 				}
 			}
 		}
@@ -576,8 +579,8 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 				return nil
 			}
 
-			// PAR2 files don't need relative paths - use standard Post
-			if err := p.poster.Post(ctx, createdPar2Paths, rootDir, nzbGen); err != nil {
+			par2RelPaths := buildPar2RelativePaths(files, createdPar2Paths)
+			if err := p.poster.PostWithRelativePaths(ctx, createdPar2Paths, rootDir, nzbGen, par2RelPaths); err != nil {
 				if !errors.Is(err, context.Canceled) {
 					slog.ErrorContext(ctx, "Error during upload of par2 files. Upload will continue without par2.", "error", err)
 				}
@@ -691,6 +694,28 @@ func (p *Postie) ExecutePostUploadScript(ctx context.Context, nzbPath string, it
 
 	slog.InfoContext(ctx, "Post upload script executed successfully", "command", command, "output", string(output))
 	return nil
+}
+
+// buildPar2RelativePaths builds a relative-path map for PAR2 files by matching each
+// par2 file's base name to its source file's base name (par2 names are sourceBase+".par2"
+// or sourceBase+".vol*+*.par2"). The relative path is derived from the source file's
+// relative path directory joined with the par2 base name.
+func buildPar2RelativePaths(sourceFiles []fileinfo.FileInfo, par2Paths []string) map[string]string {
+	result := make(map[string]string)
+	for _, par2Path := range par2Paths {
+		par2Base := filepath.Base(par2Path)
+		for _, sf := range sourceFiles {
+			if sf.RelativePath == "" {
+				continue
+			}
+			sfBase := filepath.Base(sf.Path)
+			if strings.HasPrefix(par2Base, sfBase+".") {
+				result[par2Path] = filepath.Join(filepath.Dir(sf.RelativePath), par2Base)
+				break
+			}
+		}
+	}
+	return result
 }
 
 // deriveFolderName determines the top-level subfolder name from files relative to rootDir.
