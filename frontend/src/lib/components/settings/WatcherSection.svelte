@@ -350,7 +350,7 @@ function getWatcherDisplayName(w: configType.WatcherConfig, index: number): stri
                 <div>
                   <div class="form-control">
                     <label class="label cursor-pointer justify-start gap-3">
-                      <input type="checkbox" class="toggle toggle-primary" bind:checked={watcher.single_nzb_per_folder} />
+                      <input type="checkbox" id="single-nzb-per-folder-{index}" class="toggle toggle-primary" bind:checked={watcher.single_nzb_per_folder} />
                       <span class="label-text">{$t('settings.watcher.single_nzb_per_folder')}</span>
                     </label>
                   </div>
