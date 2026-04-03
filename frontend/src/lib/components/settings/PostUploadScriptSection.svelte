@@ -106,13 +106,37 @@ $effect(() => {
       <div class="alert alert-info">
         <div class="flex items-start gap-3">
           <FileCode class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-          <div class="space-y-2">
+          <div class="space-y-2 w-full">
             <p class="text-sm font-medium">
               {$t('settings.post_upload_script.examples.title')}
             </p>
             <p class="text-sm">
               {$t('settings.post_upload_script.examples.description')}
             </p>
+            <div class="overflow-x-auto">
+              <table class="table table-xs text-xs font-mono w-full">
+                <thead>
+                  <tr>
+                    <th class="text-base-content/60">Placeholder</th>
+                    <th class="text-base-content/60">Resolves to</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="text-success font-semibold">{"{nzb_path}"}</td>
+                    <td class="text-base-content/70">/output/Movies/My Movie.nzb</td>
+                  </tr>
+                  <tr>
+                    <td class="text-info font-semibold">{"{source_path}"}</td>
+                    <td class="text-base-content/70">/watch/Movies/My Movie/My Movie.mkv</td>
+                  </tr>
+                  <tr>
+                    <td class="text-secondary font-semibold">{"{source_dir}"}</td>
+                    <td class="text-base-content/70">/watch/Movies/My Movie</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
             <div class="space-y-2">
               <div class="bg-base-200 p-3 rounded text-xs font-mono space-y-2">
                 <div>
