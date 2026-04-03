@@ -641,19 +641,21 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 
 // ExecutePostUploadScript executes the post-upload script for a completed item
 // This should be called after the file has been marked as completed in the database
-func (p *Postie) ExecutePostUploadScript(ctx context.Context, nzbPath string, itemID string) error {
+func (p *Postie) ExecutePostUploadScript(ctx context.Context, nzbPath string, sourcePath string, itemID string) error {
 	if !p.postUploadScriptCfg.Enabled || p.postUploadScriptCfg.Command == "" {
 		return nil
 	}
 
-	slog.InfoContext(ctx, "Executing post upload script", "command", p.postUploadScriptCfg.Command, "nzb_path", nzbPath, "item_id", itemID)
+	slog.InfoContext(ctx, "Executing post upload script", "command", p.postUploadScriptCfg.Command, "nzb_path", nzbPath, "source_path", sourcePath, "item_id", itemID)
 
 	// Create timeout context
 	timeoutCtx, cancel := context.WithTimeout(ctx, p.postUploadScriptCfg.Timeout.ToDuration())
 	defer cancel()
 
-	// Replace {nzb_path} placeholder with actual NZB path
+	// Replace placeholders with actual values
 	command := strings.ReplaceAll(p.postUploadScriptCfg.Command, "{nzb_path}", nzbPath)
+	command = strings.ReplaceAll(command, "{source_path}", sourcePath)
+	command = strings.ReplaceAll(command, "{source_dir}", filepath.Dir(sourcePath))
 
 	// Parse command using appropriate shell for the OS
 	var cmd *exec.Cmd

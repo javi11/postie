@@ -295,7 +295,8 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 		}
 
 		// Execute post upload script if configured (NZB is valid)
-		if scriptErr := jobPostie.ExecutePostUploadScript(ctx, actualNzbPath, completedItemID); scriptErr != nil {
+		sourcePath := strings.TrimPrefix(job.Path, "FOLDER:")
+		if scriptErr := jobPostie.ExecutePostUploadScript(ctx, actualNzbPath, sourcePath, completedItemID); scriptErr != nil {
 			slog.ErrorContext(ctx, "Post upload script execution failed", "error", scriptErr, "nzbPath", actualNzbPath)
 		}
 
@@ -334,7 +335,8 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 	// Execute post upload script if configured
 	// Note: We don't return the error here to avoid failing the completion if the script fails
 	// The script failure will be tracked in the database for retry
-	if scriptErr := jobPostie.ExecutePostUploadScript(ctx, actualNzbPath, string(msg.ID)); scriptErr != nil {
+	sourcePath := strings.TrimPrefix(job.Path, "FOLDER:")
+	if scriptErr := jobPostie.ExecutePostUploadScript(ctx, actualNzbPath, sourcePath, string(msg.ID)); scriptErr != nil {
 		slog.ErrorContext(ctx, "Post upload script execution failed", "error", scriptErr, "nzbPath", actualNzbPath)
 	}
 
