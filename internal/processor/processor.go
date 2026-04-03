@@ -464,6 +464,12 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 	// Pass isFolder flag to force folder mode (single NZB) for explicit folder uploads
 	actualNzbPath, err := jobPostie.Post(pausableCtx, filesToProcess, inputFolder, p.outputFolder, isFolder)
 	if err != nil {
+		// DeferredCheckError is non-fatal: the NZB was generated and jobPostie is valid.
+		// Return them so the caller can execute the post-upload script and store deferred checks.
+		var deferredErr *poster.DeferredCheckError
+		if errors.As(err, &deferredErr) {
+			return actualNzbPath, jobPostie, err
+		}
 		return "", nil, err
 	}
 
