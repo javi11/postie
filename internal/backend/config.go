@@ -175,12 +175,75 @@ func (a *App) poolConfigChanged(newConfig *config.ConfigData) bool {
 		return true
 	}
 
-	// Compare posting settings that affect the pool
-	if oldConfig.Posting.MaxRetries != newConfig.Posting.MaxRetries ||
-		oldConfig.Posting.RetryDelay != newConfig.Posting.RetryDelay {
+	return false
+}
+
+// processorConfigChanged checks if config fields captured at processor init time have changed.
+// The processor holds a.poolManager by pointer so pool-only changes don't require a restart.
+func (a *App) processorConfigChanged(newConfig *config.ConfigData) bool {
+	if a.config == nil {
+		return true
+	}
+	old := a.config
+
+	if old.GetOutputDir() != newConfig.GetOutputDir() {
+		return true
+	}
+	if old.GetMaintainOriginalExtension() != newConfig.GetMaintainOriginalExtension() {
+		return true
+	}
+	if old.GetQueueConfig() != newConfig.GetQueueConfig() {
 		return true
 	}
 
+	// Watcher fields captured by processor at init time
+	oldW := old.GetWatcherConfig()
+	newW := newConfig.GetWatcherConfig()
+	if oldW.DeleteOriginalFile != newW.DeleteOriginalFile ||
+		oldW.MinFileAgeToDelete != newW.MinFileAgeToDelete ||
+		oldW.WatchDirectory != newW.WatchDirectory ||
+		oldW.FollowSymlinks != newW.FollowSymlinks {
+		return true
+	}
+
+	return false
+}
+
+// watcherConfigChanged checks if any watcher configuration has changed.
+func (a *App) watcherConfigChanged(newConfig *config.ConfigData) bool {
+	if a.config == nil {
+		return true
+	}
+	oldCfgs := a.config.GetWatcherConfigs()
+	newCfgs := newConfig.GetWatcherConfigs()
+	if len(oldCfgs) != len(newCfgs) {
+		return true
+	}
+	for i := range newCfgs {
+		o, n := oldCfgs[i], newCfgs[i]
+		if o.Name != n.Name ||
+			o.Enabled != n.Enabled ||
+			o.WatchDirectory != n.WatchDirectory ||
+			o.SizeThreshold != n.SizeThreshold ||
+			o.Schedule != n.Schedule ||
+			o.MinFileSize != n.MinFileSize ||
+			o.CheckInterval != n.CheckInterval ||
+			o.DeleteOriginalFile != n.DeleteOriginalFile ||
+			o.SingleNzbPerFolder != n.SingleNzbPerFolder ||
+			o.FollowSymlinks != n.FollowSymlinks ||
+			o.MinFileAge != n.MinFileAge ||
+			o.MinFileAgeToDelete != n.MinFileAgeToDelete {
+			return true
+		}
+		if len(o.IgnorePatterns) != len(n.IgnorePatterns) {
+			return true
+		}
+		for j := range n.IgnorePatterns {
+			if o.IgnorePatterns[j] != n.IgnorePatterns[j] {
+				return true
+			}
+		}
+	}
 	return false
 }
 
@@ -190,7 +253,10 @@ func (a *App) applyConfigChanges(configData *config.ConfigData) error {
 		return err
 	}
 
+	// Capture change flags before reloading config (a.config = old, configData = new)
 	poolCfgChanged := a.poolConfigChanged(configData)
+	procNeedsRestart := a.processorConfigChanged(configData)
+	watchNeedsRestart := a.watcherConfigChanged(configData)
 
 	// Reload configuration
 	if err := a.loadConfig(); err != nil {
@@ -210,20 +276,11 @@ func (a *App) applyConfigChanges(configData *config.ConfigData) error {
 		}
 	}
 
-	if err := a.initializeProcessor(); err != nil {
-		slog.Error("Failed to re-initialize processor after config change", "error", err)
-	}
-
-	// Always check watcher configuration
-	if err := a.initializeWatchers(); err != nil {
-		slog.Error("Failed to re-initialize watchers after config change", "error", err)
-	}
-
 	// Update or create the connection pool manager
+	poolManagerCreated := false
 	if a.poolManager != nil && poolCfgChanged {
 		if err := a.poolManager.UpdateConfig(a.config); err != nil {
 			slog.Error("Failed to update connection pool manager with new config", "error", err)
-			// Don't fail the entire config update for this, but log the error
 		} else {
 			slog.Info("Connection pool manager updated with new configuration")
 		}
@@ -235,16 +292,29 @@ func (a *App) applyConfigChanges(configData *config.ConfigData) error {
 		poolManager, err := pool.New(a.config)
 		if err != nil {
 			slog.Error("Failed to create connection pool manager", "error", err)
-			// Don't fail the entire config update, but log the error
 		} else {
 			a.poolManager = poolManager
+			poolManagerCreated = true
 			slog.Info("Connection pool manager created successfully")
-
-			// Re-initialize processor with the new pool manager
-			if err := a.initializeProcessor(); err != nil {
-				slog.Error("Failed to re-initialize processor with new pool manager", "error", err)
-			}
 		}
+	}
+
+	// Restart processor only when captured-at-init options changed or a new pool manager was created
+	if procNeedsRestart || poolManagerCreated {
+		if err := a.initializeProcessor(); err != nil {
+			slog.Error("Failed to re-initialize processor after config change", "error", err)
+		}
+	} else {
+		slog.Info("Processor-relevant config unchanged, skipping processor restart")
+	}
+
+	// Restart watchers only when watcher config changed
+	if watchNeedsRestart {
+		if err := a.initializeWatchers(); err != nil {
+			slog.Error("Failed to re-initialize watchers after config change", "error", err)
+		}
+	} else {
+		slog.Info("Watcher config unchanged, skipping watcher restart")
 	}
 
 	// Emit a config update event to the frontend for both desktop and web modes
