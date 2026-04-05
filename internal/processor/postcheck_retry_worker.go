@@ -27,16 +27,17 @@ type postCheckQueue interface {
 // stored in the database and this worker periodically rechecks them with
 // exponential backoff.
 type PostCheckRetryWorker struct {
-	queue         postCheckQueue
-	checkPool     pool.NNTPClient
-	cfg           config.PostCheck
-	ctx           context.Context
-	cancel        context.CancelFunc
-	checkInterval time.Duration
-	initialDelay  time.Duration
-	maxBackoff    time.Duration
-	maxRetries    int
-	batchSize     int
+	queue           postCheckQueue
+	checkPool       pool.NNTPClient
+	cfg             config.PostCheck
+	ctx             context.Context
+	cancel          context.CancelFunc
+	checkInterval   time.Duration
+	initialDelay    time.Duration
+	maxBackoff      time.Duration
+	maxRetries      int
+	batchSize       int
+	onStatusChanged func() // notified when a completed item's verification status is updated
 }
 
 // NewPostCheckRetryWorker creates a new post check retry worker
@@ -45,6 +46,7 @@ func NewPostCheckRetryWorker(
 	q postCheckQueue,
 	checkPool pool.NNTPClient,
 	cfg config.PostCheck,
+	onStatusChanged func(),
 ) *PostCheckRetryWorker {
 	workerCtx, cancel := context.WithCancel(ctx)
 
@@ -74,16 +76,17 @@ func NewPostCheckRetryWorker(
 	}
 
 	return &PostCheckRetryWorker{
-		queue:         q,
-		checkPool:     checkPool,
-		cfg:           cfg,
-		ctx:           workerCtx,
-		cancel:        cancel,
-		checkInterval: checkInterval,
-		initialDelay:  initialDelay,
-		maxBackoff:    maxBackoff,
-		maxRetries:    maxRetries,
-		batchSize:     batchSize,
+		queue:           q,
+		checkPool:       checkPool,
+		cfg:             cfg,
+		ctx:             workerCtx,
+		cancel:          cancel,
+		checkInterval:   checkInterval,
+		initialDelay:    initialDelay,
+		maxBackoff:      maxBackoff,
+		maxRetries:      maxRetries,
+		batchSize:       batchSize,
+		onStatusChanged: onStatusChanged,
 	}
 }
 
@@ -266,6 +269,8 @@ func (w *PostCheckRetryWorker) updateCompletedItemStatus(ctx context.Context, co
 	if err := w.queue.UpdateCompletedItemVerificationStatus(ctx, completedItemID, status); err != nil {
 		slog.ErrorContext(ctx, "Failed to update completed item verification status",
 			"error", err, "completedItemID", completedItemID)
+	} else if w.onStatusChanged != nil {
+		w.onStatusChanged()
 	}
 }
 

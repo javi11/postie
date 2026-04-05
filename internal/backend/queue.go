@@ -25,8 +25,9 @@ type QueueItem struct {
 	ErrorMessage *string    `json:"errorMessage"`
 	CreatedAt    time.Time  `json:"createdAt"`
 	UpdatedAt    time.Time  `json:"updatedAt"`
-	CompletedAt  *time.Time `json:"completedAt"`
-	NzbPath      *string    `json:"nzbPath"`
+	CompletedAt        *time.Time `json:"completedAt"`
+	NzbPath            *string    `json:"nzbPath"`
+	VerificationStatus *string    `json:"verificationStatus"`
 }
 
 // QueueStats represents queue statistics
@@ -208,8 +209,9 @@ func (a *App) GetQueueItems(params PaginationParams) (*PaginatedQueueResult, err
 			ErrorMessage: queueItem.ErrorMessage,
 			CreatedAt:    queueItem.CreatedAt,
 			UpdatedAt:    queueItem.UpdatedAt,
-			CompletedAt:  queueItem.CompletedAt,
-			NzbPath:      queueItem.NzbPath,
+			CompletedAt:        queueItem.CompletedAt,
+			NzbPath:            queueItem.NzbPath,
+			VerificationStatus: queueItem.VerificationStatus,
 		}
 		items = append(items, item)
 	}
