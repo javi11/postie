@@ -15,19 +15,21 @@ import (
 
 // fakeQueue is a hand-rolled implementation of postCheckQueue for tests.
 type fakeQueue struct {
-	articles    []queue.PendingArticleCheck
-	verified    []int64
-	failed      []int64
-	retried     []int64
-	getErr      error
-	verifyErr   error
-	failErr     error
-	retryErr    error
-	countTotal  int
-	countPend   int
-	countFailed int
-	countErr    error
-	statusErr   error
+	articles       []queue.PendingArticleCheck
+	verified       []int64
+	failed         []int64
+	retried        []int64
+	getErr         error
+	verifyErr      error
+	failErr        error
+	retryErr       error
+	countTotal     int
+	countPend      int
+	countFailed    int
+	countErr       error
+	statusErr      error
+	statusSet      string // last status passed to UpdateCompletedItemVerificationStatus
+	statusSetCount int    // number of times UpdateCompletedItemVerificationStatus was called
 }
 
 func (f *fakeQueue) GetArticlesForCheck(_ context.Context, limit int) ([]queue.PendingArticleCheck, error) {
@@ -59,7 +61,9 @@ func (f *fakeQueue) GetPendingCheckCountForItem(_ context.Context, _ string) (to
 	return f.countTotal, f.countPend, f.countFailed, f.countErr
 }
 
-func (f *fakeQueue) UpdateCompletedItemVerificationStatus(_ context.Context, _ string, _ string) error {
+func (f *fakeQueue) UpdateCompletedItemVerificationStatus(_ context.Context, _ string, status string) error {
+	f.statusSet = status
+	f.statusSetCount++
 	return f.statusErr
 }
 
@@ -93,7 +97,7 @@ func newWorker(ctx context.Context, q postCheckQueue, pool *mocks.MockNNTPClient
 		DeferredMaxRetries:    maxRetries,
 		DeferredBatchSize:     batchSize,
 	}
-	w := NewPostCheckRetryWorker(ctx, q, pool, cfg)
+	w := NewPostCheckRetryWorker(ctx, q, pool, cfg, nil)
 	return w
 }
 
@@ -238,6 +242,133 @@ func TestProcessRetries(t *testing.T) {
 		if got {
 			t.Error("expected false on queue error, got true")
 		}
+	})
+
+	t.Run("onStatusChanged called when all articles verified", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		articles := makeArticles(1, 0)
+		q := &fakeQueue{articles: articles, countTotal: 1, countPend: 0, countFailed: 0}
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stat(gomock.Any(), articles[0].MessageID).Return(nil, nil).Times(1)
+
+		called := false
+		enabled := makeEnabled(true)
+		cfg := config.PostCheck{
+			Enabled:               enabled,
+			DeferredCheckInterval: config.Duration("1m"),
+			DeferredCheckDelay:    config.Duration("5m"),
+			DeferredMaxBackoff:    config.Duration("1h"),
+			DeferredMaxRetries:    5,
+			DeferredBatchSize:     10,
+		}
+		w := NewPostCheckRetryWorker(context.Background(), q, mockPool, cfg, func() { called = true })
+
+		w.processRetries()
+
+		if !called {
+			t.Error("expected onStatusChanged to be called after all articles verified, but it was not")
+		}
+		if q.statusSet != "verified" {
+			t.Errorf("expected status 'verified', got %q", q.statusSet)
+		}
+	})
+
+	t.Run("onStatusChanged called when verification fails", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		// retryCount=4, maxRetries=5 → newRetryCount=5 >= 5 → mark failed
+		articles := makeArticles(1, 4)
+		q := &fakeQueue{articles: articles, countTotal: 1, countPend: 0, countFailed: 1}
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stat(gomock.Any(), articles[0].MessageID).Return(nil, errors.New("not found")).Times(1)
+
+		called := false
+		enabled := makeEnabled(true)
+		cfg := config.PostCheck{
+			Enabled:               enabled,
+			DeferredCheckInterval: config.Duration("1m"),
+			DeferredCheckDelay:    config.Duration("5m"),
+			DeferredMaxBackoff:    config.Duration("1h"),
+			DeferredMaxRetries:    5,
+			DeferredBatchSize:     10,
+		}
+		w := NewPostCheckRetryWorker(context.Background(), q, mockPool, cfg, func() { called = true })
+
+		w.processRetries()
+
+		if !called {
+			t.Error("expected onStatusChanged to be called after verification_failed, but it was not")
+		}
+		if q.statusSet != "verification_failed" {
+			t.Errorf("expected status 'verification_failed', got %q", q.statusSet)
+		}
+	})
+
+	t.Run("onStatusChanged not called when articles still pending", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		articles := makeArticles(1, 0) // retryCount=0, maxRetries=5 → schedules retry
+		q := &fakeQueue{articles: articles, countTotal: 1, countPend: 1} // still pending
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stat(gomock.Any(), articles[0].MessageID).Return(nil, errors.New("not found")).Times(1)
+
+		called := false
+		w := newWorker(context.Background(), q, mockPool, 10, 5)
+		w.onStatusChanged = func() { called = true }
+
+		w.processRetries()
+
+		if called {
+			t.Error("expected onStatusChanged NOT to be called when articles are still pending, but it was")
+		}
+		if q.statusSetCount != 0 {
+			t.Errorf("expected UpdateCompletedItemVerificationStatus not to be called, got %d calls", q.statusSetCount)
+		}
+	})
+
+	t.Run("onStatusChanged not called when status update fails", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		articles := makeArticles(1, 0)
+		q := &fakeQueue{
+			articles:    articles,
+			countTotal:  1,
+			countPend:   0,
+			countFailed: 0,
+			statusErr:   errors.New("db error"),
+		}
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stat(gomock.Any(), articles[0].MessageID).Return(nil, nil).Times(1)
+
+		called := false
+		w := newWorker(context.Background(), q, mockPool, 10, 5)
+		w.onStatusChanged = func() { called = true }
+
+		w.processRetries()
+
+		if called {
+			t.Error("expected onStatusChanged NOT to be called when status update fails, but it was")
+		}
+	})
+
+	t.Run("nil onStatusChanged does not panic", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		articles := makeArticles(1, 0)
+		q := &fakeQueue{articles: articles, countTotal: 1, countPend: 0}
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stat(gomock.Any(), articles[0].MessageID).Return(nil, nil).Times(1)
+
+		// nil callback — should not panic
+		w := newWorker(context.Background(), q, mockPool, 10, 5)
+
+		w.processRetries() // no panic expected
 	})
 
 	t.Run("bad groups JSON marks failed", func(t *testing.T) {

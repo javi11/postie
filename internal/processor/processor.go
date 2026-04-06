@@ -62,6 +62,8 @@ type Processor struct {
 	canProcessNextItem func() bool
 	// Callback when job fails permanently
 	onJobError func(fileName, errorMessage string)
+	// Callback when any job finishes (success or deferred)
+	onJobComplete func()
 	// Shutdown flag to prevent new operations during close
 	isShuttingDown bool
 }
@@ -79,6 +81,7 @@ type ProcessorOptions struct {
 	FollowSymlinks            bool                                // Control whether to follow symlinks when collecting folder files
 	CanProcessNextItem        func() bool                         // Callback to check if processor can start new items
 	OnJobError                func(fileName, errorMessage string) // Callback when job fails permanently
+	OnJobComplete             func()                             // Callback when any job finishes (success or deferred)
 }
 type RunningJobDetails struct {
 	ID       string                   `json:"id"`
@@ -121,6 +124,7 @@ func New(opts ProcessorOptions) *Processor {
 		providerCheckCancel:       providerCancel,
 		canProcessNextItem:        opts.CanProcessNextItem,
 		onJobError:                opts.OnJobError,
+		onJobComplete:             opts.OnJobComplete,
 	}
 
 	// Start provider availability monitoring if we have a pool manager
@@ -300,6 +304,10 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 			slog.ErrorContext(ctx, "Post upload script execution failed", "error", scriptErr, "nzbPath", actualNzbPath)
 		}
 
+		if p.onJobComplete != nil {
+			p.onJobComplete()
+		}
+
 		return nil
 	}
 
@@ -338,6 +346,10 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 	sourcePath := strings.TrimPrefix(job.Path, "FOLDER:")
 	if scriptErr := jobPostie.ExecutePostUploadScript(ctx, actualNzbPath, sourcePath, string(msg.ID)); scriptErr != nil {
 		slog.ErrorContext(ctx, "Post upload script execution failed", "error", scriptErr, "nzbPath", actualNzbPath)
+	}
+
+	if p.onJobComplete != nil {
+		p.onJobComplete()
 	}
 
 	return nil

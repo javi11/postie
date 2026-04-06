@@ -99,6 +99,13 @@ func (a *App) initializeProcessor() error {
 				a.webEventEmitter("job-error", eventData)
 			}
 		},
+		OnJobComplete: func() {
+			if !a.isWebMode {
+				runtime.EventsEmit(a.ctx, "queue-updated")
+			} else if a.webEventEmitter != nil {
+				a.webEventEmitter("queue-updated", nil)
+			}
+		},
 	})
 
 	// Start processor
@@ -136,7 +143,13 @@ func (a *App) initializePostCheckWorker() {
 		return
 	}
 
-	a.postCheckWorker = processor.NewPostCheckRetryWorker(a.ctx, a.queue, checkPool, postCheckCfg)
+	a.postCheckWorker = processor.NewPostCheckRetryWorker(a.ctx, a.queue, checkPool, postCheckCfg, func() {
+		if !a.isWebMode {
+			runtime.EventsEmit(a.ctx, "queue-updated")
+		} else if a.webEventEmitter != nil {
+			a.webEventEmitter("queue-updated", nil)
+		}
+	})
 	a.postCheckWorker.Start()
 	slog.Info("Post check retry worker initialized")
 }
