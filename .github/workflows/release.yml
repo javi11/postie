@@ -96,7 +96,7 @@ jobs:
           - goos: linux
             goarch: arm64
             runner: ubuntu-latest
-            cc: aarch64-linux-gnu-gcc
+            cc: 'zig cc -target aarch64-linux-musl'
           # macOS builds
           - goos: darwin
             goarch: amd64
@@ -132,14 +132,12 @@ jobs:
           install: mingw-w64-x86_64-gcc
           update: false
 
-      # Install cross-compilation tools
-      - name: Install cross-compilation tools
-        if: matrix.cc != '' && runner.os == 'Linux'
-        run: |
-          sudo apt-get update -qq
-          if [ "${{ matrix.goos }}" = "linux" ] && [ "${{ matrix.goarch }}" = "arm64" ]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-          fi
+      # Install Zig for cross-compilation (Linux ARM64)
+      - name: Install Zig
+        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.14.1
 
       # Extract version info
       - name: Extract version info
@@ -513,7 +511,7 @@ jobs:
           sbom: false
 
   build-image-arm64:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     needs: [test, build-frontend]
     permissions:
       contents: write
