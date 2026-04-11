@@ -21,6 +21,11 @@ import (
 
 var parregexp = regexp.MustCompile(`(?i)(\.vol\d+\+(\d+))?\.par2$`)
 
+// maxPar2Blocks is the PAR2 specification limit for the maximum number of
+// data + recovery blocks. The format uses 16-bit identifiers, so the
+// theoretical maximum is 2^15 = 32768.
+const maxPar2Blocks = 32768
+
 // Par2Executor defines the interface for executing par2 commands.
 type Par2Executor interface {
 	Create(ctx context.Context, files []fileinfo.FileInfo) ([]string, error)
@@ -226,6 +231,14 @@ func (p *NativeExecutor) createPar2ForFile(ctx context.Context, file fileinfo.Fi
 			return nil, nil
 		}
 	}
+	// PAR2 spec requires slice size to be a multiple of 4
+	parBlockSize = alignDown(parBlockSize, 4)
+	if parBlockSize < 4 {
+		slog.WarnContext(ctx, "Block size too small for PAR2 creation, skipping",
+			"path", file.Path, "size", file.Size)
+		return nil, nil
+	}
+
 	par2FileName := filepath.Base(file.Path) + ".par2"
 	par2Path := filepath.Join(dirPath, par2FileName)
 
@@ -371,17 +384,24 @@ func NewExecutor(articleSize uint64, cfg *config.Par2Config, jobProgress progres
 	return New(articleSize, cfg, jobProgress)
 }
 
-// calculateParBlockSize calculates the appropriate PAR2 block size for the given file.
-func calculateParBlockSize(fileSize uint64, articleSize uint64) uint64 {
-	maxParBlocks := uint64(32768)
+// alignDown rounds v down to the nearest multiple of alignment.
+func alignDown(v, alignment uint64) uint64 {
+	return (v / alignment) * alignment
+}
 
-	if fileSize/articleSize < maxParBlocks {
-		return articleSize
+// calculateParBlockSize calculates the appropriate PAR2 block size for the given file.
+// The returned value is always a multiple of 4 as required by the PAR2 specification.
+func calculateParBlockSize(fileSize uint64, articleSize uint64) uint64 {
+	var blockSize uint64
+	if fileSize/articleSize < maxPar2Blocks {
+		blockSize = articleSize
+	} else {
+		minParBlockSize := (fileSize / maxPar2Blocks) + 1
+		multiplier := minParBlockSize / articleSize
+		if minParBlockSize%articleSize != 0 {
+			multiplier++
+		}
+		blockSize = multiplier * articleSize
 	}
-	minParBlockSize := (fileSize / maxParBlocks) + 1
-	multiplier := minParBlockSize / articleSize
-	if minParBlockSize%articleSize != 0 {
-		multiplier++
-	}
-	return multiplier * articleSize
+	return alignDown(blockSize, 4)
 }
