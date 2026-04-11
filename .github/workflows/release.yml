@@ -137,7 +137,7 @@ jobs:
         if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
         uses: mlugg/setup-zig@v2
         with:
-          version: 0.14.1
+          version: 0.15.1
 
       # Extract version info
       - name: Extract version info
@@ -474,11 +474,11 @@ jobs:
           path: frontend/build/
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # docker login
       - name: Docker login
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -487,7 +487,7 @@ jobs:
       # Extract metadata for tags and labels
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -497,7 +497,7 @@ jobs:
       # build and push amd64 image
       - name: Build and push AMD64 image
         id: build
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile.ci
@@ -531,11 +531,11 @@ jobs:
           path: frontend/build/
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # docker login
       - name: Docker login
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -544,7 +544,7 @@ jobs:
       # Extract metadata for tags and labels
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -554,7 +554,7 @@ jobs:
       # build and push arm64 image
       - name: Build and push ARM64 image
         id: build
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile.ci
@@ -582,7 +582,7 @@ jobs:
 
       # docker login
       - name: Docker login
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
