@@ -167,11 +167,17 @@ jobs:
             EXT=".exe"
           fi
 
+          # Set extra ldflags for static linking on Windows
+          EXTRA_LDFLAGS=""
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            EXTRA_LDFLAGS="-linkmode external -extldflags '-static'"
+          fi
+
           # Build the binary
           go build \
             -trimpath \
             -tags=cli \
-            -ldflags="-s -w -X 'main.Version=${{ steps.version.outputs.version }}' -X 'main.GitCommit=${{ steps.version.outputs.commit }}' -X 'main.Timestamp=${{ steps.version.outputs.timestamp }}'" \
+            -ldflags="-s -w ${EXTRA_LDFLAGS} -X 'main.Version=${{ steps.version.outputs.version }}' -X 'main.GitCommit=${{ steps.version.outputs.commit }}' -X 'main.Timestamp=${{ steps.version.outputs.timestamp }}'" \
             -o "postie-cli-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}" \
             ./cmd/postie/postie.go
 

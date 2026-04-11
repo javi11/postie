@@ -139,7 +139,7 @@ jobs:
           go build \
             -trimpath \
             -tags=cli \
-            -ldflags="-s -w -X 'main.Version=${{ steps.version.outputs.version }}'" \
+            -ldflags="-s -w -linkmode external -extldflags '-static' -X 'main.Version=${{ steps.version.outputs.version }}'" \
             -o "postie-cli-windows-amd64.exe" \
             ./cmd/postie/postie.go
 
