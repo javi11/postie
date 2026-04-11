@@ -129,10 +129,12 @@ func newChromedpCtx(t *testing.T) (context.Context, context.CancelFunc) {
 // tabLabel must match the aria-label of the DaisyUI radio tab input.
 func openSettingsTab(_ context.Context, tabLabel string) chromedp.Tasks {
 	tabSelector := `input[role="tab"][aria-label="` + tabLabel + `"]`
+	// Wait for the tab radio itself to appear — this confirms the settings page
+	// has fully hydrated and the Svelte config fetch has completed, so any
+	// {#if enabled} blocks inside the tab panel are already rendered.
 	return chromedp.Tasks{
 		chromedp.Navigate(baseURL + "/settings"),
-		chromedp.WaitReady("body"),
-		chromedp.Sleep(300 * time.Millisecond),
+		chromedp.WaitVisible(tabSelector, chromedp.ByQuery),
 		chromedp.Click(tabSelector, chromedp.ByQuery),
 		chromedp.Sleep(200 * time.Millisecond),
 	}
