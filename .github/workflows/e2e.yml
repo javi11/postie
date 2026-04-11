@@ -25,8 +25,5 @@ jobs:
       - name: Build web binary
         run: go build -o ./bin/postie-web ./cmd/web
 
-      - name: Install Chromium
-        run: sudo apt-get install -y chromium-browser
-
       - name: Run E2E tests
         run: go test -v -tags e2e -timeout 120s ./tests/e2e/...
