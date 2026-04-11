@@ -74,7 +74,7 @@ jobs:
           go-version: 1.26
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -159,7 +159,7 @@ jobs:
           go-version: 1.26
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Checkout
         uses: actions/checkout@v4

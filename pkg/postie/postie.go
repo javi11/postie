@@ -440,6 +440,9 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 	startTime := time.Now()
 
 	folderName := deriveFolderName(rootDir, files)
+	// All generated files (NZB and PAR2) go into a dedicated subfolder named after
+	// the source folder, regardless of whether watch and output are on the same volume.
+	folderOutputDir := filepath.Join(outputDir, folderName)
 
 	slog.InfoContext(ctx, "Posting folder as single NZB", "folder", folderName, "files", len(files))
 
@@ -493,8 +496,8 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 				// Determine PAR2 output directory based on maintain_par2_files setting
 				var par2OutputDir string
 				if p.par2Cfg.MaintainPar2Files != nil && *p.par2Cfg.MaintainPar2Files {
-					// For folder posting, PAR2 files go directly in outputDir
-					par2OutputDir = outputDir
+					// For folder posting, PAR2 files go into the folder-specific output subdirectory
+					par2OutputDir = folderOutputDir
 
 					slog.DebugContext(ctx, "Generating PAR2 files directly in output directory",
 						"folder", folderName, "outputDir", par2OutputDir)
@@ -530,7 +533,7 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 		}
 
 		// Generate NZB and return with deferred error if present
-		nzbPath := filepath.Join(outputDir, folderName+".nzb")
+		nzbPath := filepath.Join(folderOutputDir, folderName+".nzb")
 		finalPath, nzbErr := nzbGen.Generate(nzbPath)
 		if nzbErr != nil {
 			return "", fmt.Errorf("error generating NZB file for folder: %w", nzbErr)
@@ -564,8 +567,8 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 			// Determine PAR2 output directory based on maintain_par2_files setting
 			var par2OutputDir string
 			if p.par2Cfg.MaintainPar2Files != nil && *p.par2Cfg.MaintainPar2Files {
-				// For folder posting, PAR2 files go directly in outputDir
-				par2OutputDir = outputDir
+				// For folder posting, PAR2 files go into the folder-specific output subdirectory
+				par2OutputDir = folderOutputDir
 
 				slog.DebugContext(ctx, "Generating PAR2 files directly in output directory",
 					"folder", folderName, "outputDir", par2OutputDir)
@@ -612,8 +615,8 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 	}
 
 	// Generate single NZB file for the entire folder
-	// Use folder name as the base for NZB filename
-	nzbPath := filepath.Join(outputDir, folderName+".nzb")
+	// Use folder name as the base for NZB filename, placed inside the folder-specific output subdir
+	nzbPath := filepath.Join(folderOutputDir, folderName+".nzb")
 	finalPath, err := nzbGen.Generate(nzbPath)
 	if err != nil {
 		return "", fmt.Errorf("error generating NZB file for folder: %w", err)
