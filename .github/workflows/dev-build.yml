@@ -81,6 +81,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Set up MSYS2 (needed for static linking of MinGW runtimes)
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: mingw-w64-x86_64-gcc
+          update: false
+
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
@@ -91,6 +99,8 @@ jobs:
         run: wails build -platform windows/amd64 -ldflags="-extldflags=-static"
         env:
           CGO_ENABLED: 1
+          CC: gcc
+          CGO_LDFLAGS: '-static-libgcc -static-libstdc++ -Wl,-Bstatic -lpthread -Wl,-Bdynamic'
 
       - name: Upload Windows GUI artifact
         uses: actions/upload-artifact@v4
