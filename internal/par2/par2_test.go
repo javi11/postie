@@ -218,6 +218,11 @@ func TestCalculateParBlockSize(t *testing.T) {
 		{32768*512*1024 - 1, 512 * 1024, 512 * 1024},
 		{32768*512*1024*3 + 1, 512 * 1024, 512 * 1024 * 4},
 		{1024, 512 * 1024, 512 * 1024},
+		// articleSize not a multiple of 4 — must be rounded down
+		{10 * 1024 * 1024, 361254, 361252},
+		{10 * 1024 * 1024, 750001, 750000},
+		// articleSize already a multiple of 4
+		{10 * 1024 * 1024, 750000, 750000},
 	}
 
 	for i, tc := range testCases {
