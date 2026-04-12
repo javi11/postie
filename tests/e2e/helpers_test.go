@@ -111,6 +111,9 @@ func newChromedpCtx(t *testing.T) (context.Context, context.CancelFunc) {
 		chromedp.Flag("headless", true),
 		chromedp.NoSandbox,
 		chromedp.Flag("disable-gpu", true),
+		// Workaround for Chromium ThreadCache crash on newer Linux kernels
+		// (FATAL:scheduler_loop_quarantine_support.h Check failed: ThreadCache::IsValid)
+		chromedp.Flag("disable-features", "PartitionAlloc"),
 	)
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), opts...)
 	ctx, cancel := chromedp.NewContext(allocCtx)
