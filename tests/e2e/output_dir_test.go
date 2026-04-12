@@ -58,7 +58,7 @@ type queueResponse struct {
 		Status  string  `json:"status"`
 		NzbPath *string `json:"nzbPath"`
 	} `json:"items"`
-	Total int `json:"total"`
+	TotalItems int `json:"totalItems"`
 }
 
 // waitForQueueComplete polls the queue API until at least one item reaches
@@ -85,7 +85,7 @@ func waitForQueueComplete(t *testing.T, timeout time.Duration) queueResponse {
 			continue
 		}
 
-		if qr.Total > 0 {
+		if qr.TotalItems > 0 {
 			return qr
 		}
 
