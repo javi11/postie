@@ -61,17 +61,18 @@ type queueResponse struct {
 	Total int `json:"total"`
 }
 
-// waitForQueueComplete polls the queue API until all items reach "complete" status
-// or the timeout elapses. Returns the final queue response.
+// waitForQueueComplete polls the queue API until at least one item reaches
+// "complete" status or the timeout elapses. Returns the final queue response.
 func waitForQueueComplete(t *testing.T, timeout time.Duration) queueResponse {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 
 	for time.Now().Before(deadline) {
+		// Check for completed items
 		resp, err := http.Get(baseURL + "/api/queue?status=complete&limit=100")
 		if err != nil {
 			t.Logf("GET /api/queue: %v (retrying)", err)
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(1 * time.Second)
 			continue
 		}
 
@@ -80,7 +81,7 @@ func waitForQueueComplete(t *testing.T, timeout time.Duration) queueResponse {
 		resp.Body.Close()
 		if err != nil {
 			t.Logf("decode queue response: %v (retrying)", err)
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(1 * time.Second)
 			continue
 		}
 
@@ -88,7 +89,16 @@ func waitForQueueComplete(t *testing.T, timeout time.Duration) queueResponse {
 			return qr
 		}
 
-		time.Sleep(500 * time.Millisecond)
+		// Log current queue state for debugging
+		if statsResp, err := http.Get(baseURL + "/api/queue/stats"); err == nil {
+			var stats map[string]any
+			if json.NewDecoder(statsResp.Body).Decode(&stats) == nil {
+				t.Logf("queue stats: %v", stats)
+			}
+			statsResp.Body.Close()
+		}
+
+		time.Sleep(2 * time.Second)
 	}
 
 	t.Fatal("timed out waiting for queue items to complete")
@@ -117,9 +127,12 @@ func TestOutputDir_UploadPlacesNzbInOutputDir(t *testing.T) {
 	outputDir := t.TempDir()
 	cfg := getConfig(t)
 	cfg["output_dir"] = outputDir
-	// Disable par2 to speed up the test
+	// Disable par2 and post_check to speed up the test
 	if par2, ok := cfg["par2"].(map[string]any); ok {
 		par2["enabled"] = false
+	}
+	if postCheck, ok := cfg["post_check"].(map[string]any); ok {
+		postCheck["enabled"] = false
 	}
 	saveConfig(t, cfg)
 
@@ -191,8 +204,9 @@ func TestOutputDir_ConfigPersistsRoundTrip(t *testing.T) {
 
 // TestOutputDir_ConfigCanBeCleared verifies output_dir can be reset to empty.
 func TestOutputDir_ConfigCanBeCleared(t *testing.T) {
+	tmpDir := t.TempDir()
 	cfg := getConfig(t)
-	cfg["output_dir"] = "/some/path"
+	cfg["output_dir"] = tmpDir
 	saveConfig(t, cfg)
 
 	cfg = getConfig(t)
