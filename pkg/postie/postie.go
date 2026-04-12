@@ -255,8 +255,7 @@ func (p *Postie) postInParallel(
 		var par2OutputDir string
 		if p.par2Cfg.MaintainPar2Files != nil && *p.par2Cfg.MaintainPar2Files {
 			// Generate PAR2 files directly in output directory
-			dirPath := filepath.Dir(f.Path)
-			relativePath := strings.TrimPrefix(dirPath, rootDir)
+			relativePath := relativePathFrom(rootDir, f.Path)
 			par2OutputDir = filepath.Join(outputDir, relativePath)
 
 			slog.DebugContext(ctx, "Generating PAR2 files directly in output directory",
@@ -309,11 +308,10 @@ func (p *Postie) postInParallel(
 	}
 
 	// Generate single NZB file for all files
-	dirPath := filepath.Dir(f.Path)
-	dirPath = strings.TrimPrefix(dirPath, rootDir)
+	relativePath := relativePathFrom(rootDir, f.Path)
 
 	// Use the original filename as input for NZB generation
-	nzbPath := filepath.Join(outputDir, dirPath, filepath.Base(f.Path))
+	nzbPath := filepath.Join(outputDir, relativePath, filepath.Base(f.Path))
 	finalPath, err := nzbGen.Generate(nzbPath)
 	if err != nil {
 		return "", fmt.Errorf("error generating NZB file: %w", err)
@@ -366,8 +364,7 @@ func (p *Postie) post(
 		var par2OutputDir string
 		if p.par2Cfg.MaintainPar2Files != nil && *p.par2Cfg.MaintainPar2Files {
 			// Generate PAR2 files directly in output directory
-			dirPath := filepath.Dir(f.Path)
-			relativePath := strings.TrimPrefix(dirPath, rootDir)
+			relativePath := relativePathFrom(rootDir, f.Path)
 			par2OutputDir = filepath.Join(outputDir, relativePath)
 
 			slog.DebugContext(ctx, "Generating PAR2 files directly in output directory",
@@ -401,11 +398,10 @@ func (p *Postie) post(
 	}
 
 	// Generate single NZB file for all files
-	dirPath := filepath.Dir(f.Path)
-	dirPath = strings.TrimPrefix(dirPath, rootDir)
+	relativePath := relativePathFrom(rootDir, f.Path)
 
 	// Use the original filename as input for NZB generation
-	nzbPath := filepath.Join(outputDir, dirPath, filepath.Base(f.Path))
+	nzbPath := filepath.Join(outputDir, relativePath, filepath.Base(f.Path))
 	finalPath, err := nzbGen.Generate(nzbPath)
 	if err != nil {
 		return "", fmt.Errorf("error generating NZB file: %w", err)
@@ -746,4 +742,16 @@ func deriveFolderName(rootDir string, files []fileinfo.FileInfo) string {
 		return "upload"
 	}
 	return name
+}
+
+// relativePathFrom computes the relative path of filePath's directory from rootDir.
+// Falls back to empty string (placing output directly in outputDir) if paths
+// cannot be made relative (e.g. cross-volume on Windows).
+func relativePathFrom(rootDir, filePath string) string {
+	dirPath := filepath.Dir(filePath)
+	rel, err := filepath.Rel(rootDir, dirPath)
+	if err != nil || rel == "." {
+		return ""
+	}
+	return rel
 }
