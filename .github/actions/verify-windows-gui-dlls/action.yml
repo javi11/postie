@@ -1,0 +1,30 @@
+name: Verify Windows GUI DLL dependencies
+description: Fails if the built Windows GUI exe imports MinGW runtime DLLs (libgcc_s_seh-1.dll, libstdc++-6.dll, libwinpthread-1.dll).
+inputs:
+  exe-glob:
+    description: Glob for the built GUI exe
+    required: false
+    default: build/bin/*.exe
+runs:
+  using: composite
+  steps:
+    - name: Check PE imports for forbidden MinGW runtime DLLs
+      shell: msys2 {0}
+      run: |
+        set -euo pipefail
+        exe=$(ls ${{ inputs.exe-glob }} | head -n1)
+        if [ -z "$exe" ]; then
+          echo "::error::No exe found matching glob '${{ inputs.exe-glob }}'"
+          exit 1
+        fi
+        echo "Inspecting: $exe"
+        imports=$(objdump -p "$exe" | grep -i "DLL Name:" || true)
+        echo "--- DLL imports ---"
+        echo "$imports"
+        echo "-------------------"
+        forbidden='libgcc_s_seh-1\.dll|libstdc\+\+-6\.dll|libwinpthread-1\.dll'
+        if echo "$imports" | grep -iE "$forbidden"; then
+          echo "::error::Windows GUI exe depends on MinGW runtime DLL(s); static linking regressed."
+          exit 1
+        fi
+        echo "OK: no MinGW runtime DLL dependencies found."

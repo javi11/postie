@@ -416,6 +416,10 @@ jobs:
           CC: gcc
           CGO_LDFLAGS: '-static-libgcc -static-libstdc++ -Wl,-Bstatic -lpthread -Wl,-Bdynamic'
 
+      # Verify the built exe doesn't dynamically depend on MinGW runtime DLLs
+      - name: Verify no MinGW runtime DLL dependencies
+        uses: ./.github/actions/verify-windows-gui-dlls
+
       # Upload Windows artifact
       - name: Upload Windows GUI artifact
         uses: actions/upload-artifact@v4
