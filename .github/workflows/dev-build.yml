@@ -96,11 +96,12 @@ jobs:
         run: npm install -g bun
 
       - name: Build Windows GUI
-        run: wails build -platform windows/amd64 -ldflags="-extldflags=-static"
+        shell: msys2 {0}
+        run: wails build -platform windows/amd64 -ldflags="-linkmode external -extldflags=-static"
         env:
           CGO_ENABLED: 1
           CC: gcc
-          CGO_LDFLAGS: '-static-libgcc -static-libstdc++ -Wl,-Bstatic -lpthread -Wl,-Bdynamic'
+          CGO_LDFLAGS: '-static-libgcc -static-libstdc++'
 
       - name: Verify no MinGW runtime DLL dependencies
         uses: ./.github/actions/verify-windows-gui-dlls
