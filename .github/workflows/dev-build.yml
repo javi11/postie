@@ -88,6 +88,7 @@ jobs:
           msystem: MINGW64
           install: mingw-w64-x86_64-gcc
           update: false
+          path-type: inherit
 
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
