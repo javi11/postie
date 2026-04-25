@@ -202,6 +202,10 @@ export function SelectFolder() {
   return window['go']['backend']['App']['SelectFolder']();
 }
 
+export function SelectFolders() {
+  return window['go']['backend']['App']['SelectFolders']();
+}
+
 export function SelectOutputDirectory() {
   return window['go']['backend']['App']['SelectOutputDirectory']();
 }
@@ -252,6 +256,10 @@ export function UploadFiles() {
 
 export function UploadFolder(arg1) {
   return window['go']['backend']['App']['UploadFolder'](arg1);
+}
+
+export function UploadFolders(arg1) {
+  return window['go']['backend']['App']['UploadFolders'](arg1);
 }
 
 export function ValidateNNTPServer(arg1) {

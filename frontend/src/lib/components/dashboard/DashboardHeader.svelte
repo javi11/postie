@@ -124,17 +124,27 @@ function closeFileExplorer() {
 async function handleFolderUpload() {
   try {
     if (apiClient.environment === "wails") {
-      // Desktop mode: use native folder picker
-      const folderPath = await apiClient.selectFolder();
-      if (folderPath) {
-        await apiClient.uploadFolder(folderPath);
+      // Desktop mode: use native multi-folder picker
+      const folderPaths = await apiClient.selectFolders();
+      if (folderPaths.length === 0) return;
+
+      await apiClient.uploadFolders(folderPaths);
+
+      if (folderPaths.length === 1) {
         toastStore.success(
           $t("dashboard.header.folder_added"),
           $t("dashboard.header.folder_added_description")
         );
+      } else {
+        toastStore.success(
+          $t("dashboard.header.folders_added"),
+          $t("dashboard.header.folders_added_description", { count: folderPaths.length })
+        );
       }
     } else {
       // Web mode: use hidden input with webkitdirectory attribute
+      // Web mode already supports selecting one folder at a time via the browser's native picker;
+      // multiple folder uploads require repeated clicks (browser limitation).
       const input = document.createElement("input");
       input.type = "file";
       // @ts-ignore - webkitdirectory is not in the type definitions
@@ -145,11 +155,7 @@ async function handleFolderUpload() {
 
       input.onchange = async () => {
         if (input.files && input.files.length > 0) {
-          // In web mode, we need to send the files to the server
-          const fileList = input.files;
-
-          // Use the existing file upload mechanism
-          uploadActions.startUpload(fileList);
+          uploadActions.startUpload(input.files);
 
           try {
             await apiClient.uploadFileList(
