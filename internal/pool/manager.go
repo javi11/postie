@@ -130,17 +130,31 @@ func (m *Manager) UpdateConfig(newCfg *config.ConfigData) error {
 
 	slog.Info("Updating NNTP connection pools with new configuration")
 
-	// If pools don't exist yet, create them from scratch
+	// If pools don't exist yet, build them in place while holding the lock so
+	// concurrent Close calls can't race with us. Close any leftover pools
+	// before overwriting to avoid leaks (defensive — should not normally
+	// happen when m.uploadPool == nil).
 	if m.uploadPool == nil {
-		m.mu.Unlock()
-		// Temporarily unlock since New doesn't need the lock and we reassign below
-		mgr, err := New(newCfg)
-		m.mu.Lock()
+		uploadPool, err := newCfg.GetUploadPool()
 		if err != nil {
-			return fmt.Errorf("failed to create pools: %w", err)
+			return fmt.Errorf("failed to create upload pool: %w", err)
 		}
-		m.uploadPool = mgr.uploadPool
-		m.verifyPool = mgr.verifyPool
+		verifyPool, err := newCfg.GetVerifyPool()
+		if err != nil {
+			slog.Warn("Failed to create dedicated verify pool, will use upload pool", "error", err)
+			verifyPool = uploadPool
+		}
+
+		if m.verifyPool != nil && m.verifyPool != m.uploadPool {
+			_ = m.verifyPool.Close()
+		}
+		// m.uploadPool is nil here by branch condition, but guard for safety.
+		if m.uploadPool != nil {
+			_ = m.uploadPool.Close()
+		}
+
+		m.uploadPool = uploadPool
+		m.verifyPool = verifyPool
 		m.config = newCfg
 		return nil
 	}
@@ -233,6 +247,17 @@ func (m *Manager) diffProviders(pool NNTPClient, oldServers, newServers []config
 		}
 	}
 	return nil
+}
+
+// ServerConfigChanged returns true if any provider-relevant fields differ between two server configs.
+// This is the canonical predicate for "did this provider's pool-affecting state change".
+func ServerConfigChanged(a, b config.ServerConfig) bool {
+	return serverConfigChanged(a, b)
+}
+
+// ProviderKey returns the canonical provider key for a server config.
+func ProviderKey(s config.ServerConfig) string {
+	return providerKey(s)
 }
 
 // serverConfigChanged returns true if any relevant fields differ between two server configs.

@@ -139,40 +139,40 @@ func (a *App) SaveConfig(configData *config.ConfigData) error {
 	return a.applyConfigChanges(configData)
 }
 
-// poolConfigChanged checks if pool-related configuration has changed
+// poolConfigChanged checks whether the provider list has changed in a way that
+// requires touching the NNTP pool. Only provider-affecting fields are
+// considered — non-provider settings (Posting, Watcher, Queue, etc.) must not
+// trigger pool updates.
+//
+// Note: ConnectionPool.MinConnections and ConnectionPool.HealthCheckInterval
+// are deliberately excluded. They are nntppool.NewClient construction options
+// and cannot be applied to a running client by AddProvider/RemoveProvider, so
+// changing them requires an application restart to take effect.
+//
+// Server reordering with no other changes is treated as no change (providers
+// are matched by their canonical key, not by index).
 func (a *App) poolConfigChanged(newConfig *config.ConfigData) bool {
 	if a.config == nil {
 		return true // No existing config, so pool needs to be created
 	}
 
-	oldConfig := a.config
+	oldByKey := make(map[string]config.ServerConfig, len(a.config.Servers))
+	for _, s := range a.config.Servers {
+		oldByKey[pool.ProviderKey(s)] = s
+	}
 
-	// Compare servers
-	if len(oldConfig.Servers) != len(newConfig.Servers) {
+	if len(newConfig.Servers) != len(oldByKey) {
 		return true
 	}
 
-	for i, newServer := range newConfig.Servers {
-		oldServer := oldConfig.Servers[i]
-		if newServer.Host != oldServer.Host ||
-			newServer.Port != oldServer.Port ||
-			newServer.Username != oldServer.Username ||
-			newServer.Password != oldServer.Password ||
-			newServer.SSL != oldServer.SSL ||
-			newServer.MaxConnections != oldServer.MaxConnections ||
-			newServer.MaxConnectionIdleTimeInSeconds != oldServer.MaxConnectionIdleTimeInSeconds ||
-			newServer.MaxConnectionTTLInSeconds != oldServer.MaxConnectionTTLInSeconds ||
-			newServer.InsecureSSL != oldServer.InsecureSSL ||
-			((newServer.Enabled == nil) != (oldServer.Enabled == nil)) ||
-			(newServer.Enabled != nil && oldServer.Enabled != nil && *newServer.Enabled != *oldServer.Enabled) {
+	for _, newSrv := range newConfig.Servers {
+		oldSrv, ok := oldByKey[pool.ProviderKey(newSrv)]
+		if !ok {
 			return true
 		}
-	}
-
-	// Compare connection pool settings
-	if oldConfig.ConnectionPool.MinConnections != newConfig.ConnectionPool.MinConnections ||
-		oldConfig.ConnectionPool.HealthCheckInterval != newConfig.ConnectionPool.HealthCheckInterval {
-		return true
+		if pool.ServerConfigChanged(oldSrv, newSrv) {
+			return true
+		}
 	}
 
 	return false
@@ -276,18 +276,21 @@ func (a *App) applyConfigChanges(configData *config.ConfigData) error {
 		}
 	}
 
-	// Update or create the connection pool manager
+	// Update or create the connection pool manager. The pool is only touched
+	// when the provider list actually changed (poolCfgChanged), or when no
+	// pool exists yet but servers are now configured.
 	poolManagerCreated := false
-	if a.poolManager != nil && poolCfgChanged {
+	switch {
+	case a.poolManager != nil && poolCfgChanged:
 		if err := a.poolManager.UpdateConfig(a.config); err != nil {
 			slog.Error("Failed to update connection pool manager with new config", "error", err)
 		} else {
 			slog.Info("Connection pool manager updated with new configuration")
 		}
-	} else if a.poolManager != nil {
+	case a.poolManager != nil:
 		slog.Info("Pool configuration unchanged, skipping pool update")
-	} else if a.poolManager == nil && len(a.config.Servers) > 0 {
-		// Create pool manager if it doesn't exist but we now have servers configured
+	case len(a.config.Servers) > 0:
+		// First-time creation: poolManager is nil and we now have servers.
 		slog.Info("Creating connection pool manager for newly configured servers")
 		poolManager, err := pool.New(a.config)
 		if err != nil {
