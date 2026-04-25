@@ -474,6 +474,31 @@ export class UnifiedClient {
 		throw new Error("Use uploadFileList for web folder uploads");
 	}
 
+	async selectFolders(): Promise<string[]> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			const paths = await client.App.SelectFolders();
+			return paths ?? [];
+		}
+
+		// In web mode, folder selection is handled via HTML input with webkitdirectory
+		return [];
+	}
+
+	async uploadFolders(folderPaths: string[]): Promise<void> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			return client.App.UploadFolders(folderPaths);
+		}
+
+		// In web mode, folder upload is handled via uploadFileList with webkitdirectory files
+		throw new Error("Use uploadFileList for web folder uploads");
+	}
+
 	// Logs
 	async getLogs(): Promise<string> {
 		await this.initialize();
