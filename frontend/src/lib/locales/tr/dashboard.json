@@ -8,9 +8,11 @@
             "description": "Dosya yüklemelerinizi yönetin ve ilerlemeyi izleyin",
             "add_files": "Dosya Ekle",
             "add_folder": "Klasör Ekle",
-            "add_folder_tooltip": "Tüm klasörü tek bir NZB olarak yükle",
+            "add_folder_tooltip": "Bir veya daha fazla klasörü her biri tek bir NZB olarak yükle",
             "folder_added": "Klasör Eklendi",
             "folder_added_description": "Klasör yükleme kuyruğuna eklendi",
+            "folders_added": "Klasörler Eklendi",
+            "folders_added_description": "{{count}} klasör yükleme kuyruğuna eklendi",
             "import_files": "Dosyaları İçe Aktar",
             "import_files_tooltip": "Uzak sunucudan dosyalara göz atın ve içe aktarın",
             "clear_completed": "Tamamlananları Temizle"
