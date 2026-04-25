@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -825,7 +826,7 @@ func TestAddPost(t *testing.T) {
 
 		var wg sync.WaitGroup
 		var postsInFlight sync.WaitGroup
-		failedPosts := 0
+		var failedPosts atomic.Int64
 		postQueue := make(chan *Post, 10)
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 
@@ -863,7 +864,7 @@ func TestAddPost(t *testing.T) {
 
 		var wg sync.WaitGroup
 		var postsInFlight sync.WaitGroup
-		failedPosts := 0
+		var failedPosts atomic.Int64
 		postQueue := make(chan *Post, 10)
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 
