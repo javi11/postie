@@ -218,18 +218,15 @@ func (p *NativeExecutor) createPar2ForFile(ctx context.Context, file fileinfo.Fi
 	// clamping to prevent buffer overreads and segfaults.
 	if file.Size > 0 && parBlockSize > file.Size {
 		const simdSafeAlignment = uint64(128)
-		if file.Size >= simdSafeAlignment {
-			parBlockSize = (file.Size / simdSafeAlignment) * simdSafeAlignment
-		} else {
-			// File too small for 128-byte alignment; round to nearest multiple of 4 (PAR2 spec)
-			parBlockSize = (file.Size / 4) * 4
-		}
-		if parBlockSize < 4 {
-			// File is smaller than minimum valid PAR2 slice size — skip creation
-			slog.WarnContext(ctx, "File too small for PAR2 creation, skipping",
+		if file.Size < simdSafeAlignment {
+			// File smaller than SIMD-safe alignment — par2go's C backend may read
+			// past the buffer end with sub-stride slice sizes, causing a segfault
+			// on AVX-512 hardware. Skip PAR2 creation for such tiny files.
+			slog.WarnContext(ctx, "File too small for SIMD-safe PAR2 creation, skipping",
 				"path", file.Path, "size", file.Size)
 			return nil, nil
 		}
+		parBlockSize = (file.Size / simdSafeAlignment) * simdSafeAlignment
 	}
 	// PAR2 spec requires slice size to be a multiple of 4
 	parBlockSize = alignDown(parBlockSize, 4)
