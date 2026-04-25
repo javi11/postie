@@ -106,6 +106,8 @@ export function SelectConfigFile():Promise<string>;
 
 export function SelectFolder():Promise<string>;
 
+export function SelectFolders():Promise<Array<string>>;
+
 export function SelectOutputDirectory():Promise<string>;
 
 export function SelectTempDirectory():Promise<string>;
@@ -131,5 +133,7 @@ export function TriggerScan():Promise<void>;
 export function UploadFiles():Promise<void>;
 
 export function UploadFolder(arg1:string):Promise<void>;
+
+export function UploadFolders(arg1:Array<string>):Promise<void>;
 
 export function ValidateNNTPServer(arg1:backend.ServerData):Promise<backend.ValidationResult>;
