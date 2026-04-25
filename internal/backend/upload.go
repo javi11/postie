@@ -148,6 +148,34 @@ func (a *App) SelectFolder() (string, error) {
 	return folderPath, nil
 }
 
+// SelectFolders opens a native multi-select dialog and returns paths of all selected folders.
+// Returns nil slice (not an error) when the user cancels.
+func (a *App) SelectFolders() ([]string, error) {
+	defer a.recoverPanic("SelectFolders")
+
+	selected, err := runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select folders to upload",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error opening folder dialog: %w", err)
+	}
+
+	// Filter to directories only so files accidentally selected are ignored
+	var dirs []string
+	for _, p := range selected {
+		info, err := os.Stat(p)
+		if err != nil {
+			slog.Warn("Could not stat selected path, skipping", "path", p, "error", err)
+			continue
+		}
+		if info.IsDir() {
+			dirs = append(dirs, p)
+		}
+	}
+
+	return dirs, nil
+}
+
 // UploadFolder uploads all files from a folder as a single NZB
 // The folder structure will be preserved in the article subjects
 func (a *App) UploadFolder(folderPath string) error {
@@ -209,6 +237,83 @@ func (a *App) UploadFolder(folderPath string) error {
 	slog.Info("Folder added to queue", "folder", folderName, "files", totalFiles, "size", totalSize)
 
 	// Emit event to refresh queue in frontend
+	if !a.isWebMode {
+		runtime.EventsEmit(a.ctx, "queue-updated")
+	} else if a.webEventEmitter != nil {
+		a.webEventEmitter("queue-updated", nil)
+	}
+
+	return nil
+}
+
+// UploadFolders queues multiple folders for upload as separate NZBs.
+func (a *App) UploadFolders(folderPaths []string) error {
+	defer a.recoverPanic("UploadFolders")
+
+	if len(folderPaths) == 0 {
+		return fmt.Errorf("no folder paths provided")
+	}
+
+	// Check configuration once before processing all folders
+	status := a.GetAppStatus()
+	if status.NeedsConfiguration {
+		return fmt.Errorf("configuration required: Please configure at least one server in the Settings page before uploading files")
+	}
+
+	if a.queue == nil {
+		return fmt.Errorf("queue not initialized")
+	}
+
+	addedCount := 0
+	for _, folderPath := range folderPaths {
+		info, err := os.Stat(folderPath)
+		if err != nil {
+			slog.Warn("Could not access folder, skipping", "path", folderPath, "error", err)
+			continue
+		}
+		if !info.IsDir() {
+			slog.Warn("Path is not a folder, skipping", "path", folderPath)
+			continue
+		}
+
+		filesByFolder, sizeByFolder, err := processDirectoryRecursively(folderPath)
+		if err != nil {
+			slog.Error("Error processing directory, skipping", "path", folderPath, "error", err)
+			continue
+		}
+
+		var totalFiles int
+		var totalSize int64
+		for _, files := range filesByFolder {
+			totalFiles += len(files)
+		}
+		for _, size := range sizeByFolder {
+			totalSize += size
+		}
+
+		if totalFiles == 0 {
+			slog.Warn("Folder contains no files, skipping", "path", folderPath)
+			continue
+		}
+
+		folderName := filepath.Base(folderPath)
+		folderQueuePath := "FOLDER:" + folderPath
+		if err := a.queue.AddFile(context.Background(), folderQueuePath, totalSize); err != nil {
+			slog.Warn("Could not add folder to queue, skipping", "folder", folderName, "error", err)
+			continue
+		}
+
+		addedCount++
+		slog.Info("Folder added to queue", "folder", folderName, "files", totalFiles, "size", totalSize)
+	}
+
+	if addedCount == 0 {
+		return fmt.Errorf("no valid folders could be added to queue")
+	}
+
+	slog.Info("Added folders to queue", "added", addedCount, "total", len(folderPaths))
+
+	// Emit a single event after all folders are queued
 	if !a.isWebMode {
 		runtime.EventsEmit(a.ctx, "queue-updated")
 	} else if a.webEventEmitter != nil {
