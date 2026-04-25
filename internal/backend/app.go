@@ -478,8 +478,6 @@ func (a *App) GetAppStatus() AppStatus {
 		status.NeedsConfiguration = true
 	}
 
-	slog.Debug("Current application status", "status", status)
-
 	return status
 }
 
