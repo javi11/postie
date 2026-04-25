@@ -8,6 +8,10 @@ import {context} from '../models';
 
 export function AddFilesToQueue():Promise<void>;
 
+export function GetAPIKey():Promise<string>;
+
+export function RegenerateAPIKey():Promise<string>;
+
 export function ApplyPendingConfig():Promise<void>;
 
 export function CancelJob(arg1:string):Promise<void>;

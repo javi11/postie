@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/javi11/postie/internal/apikey"
 	"github.com/javi11/postie/internal/database"
 	"github.com/javi11/postie/internal/queue"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -106,6 +107,14 @@ func (a *App) initializeQueue() error {
 	a.queue, err = queue.New(a.procCtx, db)
 	if err != nil {
 		return fmt.Errorf("failed to create queue: %w", err)
+	}
+
+	// Generate the HTTP API key on first start when the API is enabled so the
+	// gated upload endpoint always has something to validate against.
+	if a.config != nil && a.config.GetAPIConfig().Enabled {
+		if _, keyErr := apikey.EnsureKey(a.procCtx, apikey.NewSQLStore(db.DB)); keyErr != nil {
+			slog.Warn("failed to ensure API key", "error", keyErr)
+		}
 	}
 
 	slog.Info("Queue initialized successfully")

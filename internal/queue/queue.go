@@ -39,12 +39,22 @@ type PaginatedResult struct {
 // QueueInterface defines the interface for queue operations
 type QueueInterface interface {
 	AddFile(ctx context.Context, path string, size int64) error
+	AddFileWithOptions(ctx context.Context, path string, size int64, opts AddOptions) error
 	GetQueueItems(params PaginationParams) (*PaginatedResult, error)
 	RemoveFromQueue(id string) error
 	ClearQueue() error
 	GetQueueStats() (map[string]any, error)
 	SetQueueItemPriorityWithReorder(ctx context.Context, id string, newPriority int) error
 	IsPathInQueue(path string) (bool, error)
+	PendingTotalSize(ctx context.Context) (int64, error)
+}
+
+// AddOptions carries optional per-job fields when adding to the queue.
+// Zero values preserve existing behavior; only the API entry point sets these today.
+type AddOptions struct {
+	Priority       int
+	InputFolder    string // overrides processor's inferred root for relative-path → NZB output
+	DeleteOriginal *bool  // overrides watcher.DeleteOriginalFile for this job only
 }
 
 type Queue struct {
@@ -82,6 +92,13 @@ type FileJob struct {
 	Priority   int       `json:"priority"`
 	CreatedAt  time.Time `json:"createdAt"`
 	RetryCount int       `json:"retryCount"`
+	// InputFolder is the root directory used to derive the relative path
+	// for NZB output. When empty, the processor falls back to its existing
+	// inference (FOLDER: prefix → parent, watch folder match, or file dir).
+	InputFolder string `json:"inputFolder,omitempty"`
+	// DeleteOriginal optionally overrides the global delete-original setting
+	// for this specific job. nil → use the processor's default.
+	DeleteOriginal *bool `json:"deleteOriginal,omitempty"`
 }
 
 type CompletedItem struct {
@@ -302,6 +319,62 @@ func (q *Queue) AddFileWithPriorityWithoutDuplicateCheck(ctx context.Context, pa
 		Body:     jobData,
 		Priority: job.Priority,
 	})
+}
+
+// AddFileWithOptions adds a file to the queue with optional per-job overrides
+// (priority, input folder for relative-path output, delete-original flag).
+// Skips the add if the path is already tracked anywhere in the queue.
+func (q *Queue) AddFileWithOptions(ctx context.Context, path string, size int64, opts AddOptions) error {
+	exists, err := q.IsPathInQueue(path)
+	if err != nil {
+		return fmt.Errorf("failed to check if path exists: %w", err)
+	}
+	if exists {
+		slog.DebugContext(ctx, "File already exists in queue, ignoring", "path", path)
+		return nil
+	}
+
+	job := FileJob{
+		Path:           path,
+		Size:           size,
+		Priority:       opts.Priority,
+		CreatedAt:      time.Now().UTC(),
+		RetryCount:     0,
+		InputFolder:    opts.InputFolder,
+		DeleteOriginal: opts.DeleteOriginal,
+	}
+
+	jobData, err := json.Marshal(job)
+	if err != nil {
+		return fmt.Errorf("failed to marshal job: %w", err)
+	}
+
+	slog.InfoContext(ctx, "Adding file to queue with options",
+		"path", path, "size", size,
+		"priority", opts.Priority,
+		"inputFolder", opts.InputFolder,
+		"hasDeleteOverride", opts.DeleteOriginal != nil,
+	)
+
+	return q.queue.Send(ctx, goqite.Message{
+		Body:     jobData,
+		Priority: job.Priority,
+	})
+}
+
+// PendingTotalSize returns the sum of pending FileJob sizes still queued in
+// goqite. Used by the processor to gate pickup behind queue.min_size_to_start.
+func (q *Queue) PendingTotalSize(ctx context.Context) (int64, error) {
+	var total sql.NullInt64
+	err := q.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(CAST(json_extract(body, '$.size') AS INTEGER)), 0)
+		FROM goqite
+		WHERE queue = 'file_jobs'
+	`).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("failed to compute pending total size: %w", err)
+	}
+	return total.Int64, nil
 }
 
 // ReceiveFile gets the next file job from the queue and removes it immediately.

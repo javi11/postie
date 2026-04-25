@@ -280,6 +280,16 @@ func (ws *WebServer) setupRoutes() {
 	api.HandleFunc("/watcher/status", ws.handleGetWatcherStatus).Methods("GET")
 	api.HandleFunc("/watcher/scan", ws.handleTriggerScan).Methods("POST")
 
+	// API key management for the settings UI (open routes, same as other UI APIs)
+	api.HandleFunc("/api-key", ws.handleGetAPIKey).Methods("GET")
+	api.HandleFunc("/api-key/regenerate", ws.handleRegenerateAPIKey).Methods("POST")
+
+	// Gated external API: only mount when api.enabled = true and protected by
+	// the X-API-Key / Bearer token middleware.
+	v1 := ws.router.PathPrefix("/api/v1").Subrouter()
+	v1.Use(ws.apiKeyMiddleware)
+	v1.HandleFunc("/queue/upload", ws.handleAPIQueueUpload).Methods("POST")
+
 	// Serve static files (catch-all)
 	ws.router.PathPrefix("/").Handler(ws.getStaticFileHandler())
 }

@@ -1,5 +1,6 @@
 <script lang="ts">
 import apiClient from "$lib/api/client";
+import ByteSizeInput from "$lib/components/inputs/ByteSizeInput.svelte";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import type { config as configType } from "$lib/wailsjs/go/models";
@@ -13,17 +14,28 @@ let { config = $bindable() }: Props = $props();
 
 // Reactive local state
 let maxConcurrentUploads = $state(config.queue?.max_concurrent_uploads || 3);
+let minSizeToStart = $state(config.queue?.min_size_to_start || 0);
 let showClearModal = $state(false);
 let clearing = $state(false);
+
+const minSizePresets = [
+	{ label: $t("settings.queue.min_size_disabled"), value: 0 },
+	{ label: "50 GB", value: 50 * 1000 * 1000 * 1000 },
+	{ label: "100 GB", value: 100 * 1000 * 1000 * 1000 },
+	{ label: "200 GB", value: 200 * 1000 * 1000 * 1000 },
+	{ label: "500 GB", value: 500 * 1000 * 1000 * 1000 },
+];
 
 // Sync local state back to config
 $effect(() => {
 	if (!config.queue) {
 		config.queue = {
 			max_concurrent_uploads: 3,
+			min_size_to_start: 0,
 		};
 	}
 	config.queue.max_concurrent_uploads = maxConcurrentUploads;
+	config.queue.min_size_to_start = minSizeToStart;
 });
 
 async function clearQueue() {
@@ -78,6 +90,16 @@ async function clearQueue() {
             </span>
           </div>
         </div>
+
+        <ByteSizeInput
+          bind:value={minSizeToStart}
+          id="min-size-to-start"
+          label={$t('settings.queue.min_size_to_start')}
+          description={$t('settings.queue.min_size_to_start_description')}
+          presets={minSizePresets}
+          minValue={0}
+          maxValue={10 * 1000 * 1000 * 1000 * 1000}
+        />
       </div>
     </div>
 

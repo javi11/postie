@@ -6,6 +6,14 @@ export function AddFilesToQueue() {
   return window['go']['backend']['App']['AddFilesToQueue']();
 }
 
+export function GetAPIKey() {
+  return window['go']['backend']['App']['GetAPIKey']();
+}
+
+export function RegenerateAPIKey() {
+  return window['go']['backend']['App']['RegenerateAPIKey']();
+}
+
 export function ApplyPendingConfig() {
   return window['go']['backend']['App']['ApplyPendingConfig']();
 }

@@ -364,14 +364,28 @@ export namespace config {
 	}
 	export class QueueConfig {
 	    max_concurrent_uploads: number;
-	
+	    min_size_to_start: number;
+
 	    static createFrom(source: any = {}) {
 	        return new QueueConfig(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.max_concurrent_uploads = source["max_concurrent_uploads"];
+	        this.min_size_to_start = source["min_size_to_start"];
+	    }
+	}
+	export class APIConfig {
+	    enabled: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new APIConfig(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
 	    }
 	}
 	export class DatabaseConfig {
@@ -704,6 +718,7 @@ export namespace config {
 	    nzb_compression: NzbCompressionConfig;
 	    database: DatabaseConfig;
 	    queue: QueueConfig;
+	    api: APIConfig;
 	    output_dir: string;
 	    maintain_original_extension?: boolean;
 	    post_upload_script: PostUploadScriptConfig;
@@ -725,6 +740,7 @@ export namespace config {
 	        this.nzb_compression = this.convertValues(source["nzb_compression"], NzbCompressionConfig);
 	        this.database = this.convertValues(source["database"], DatabaseConfig);
 	        this.queue = this.convertValues(source["queue"], QueueConfig);
+	        this.api = this.convertValues(source["api"], APIConfig);
 	        this.output_dir = source["output_dir"];
 	        this.maintain_original_extension = source["maintain_original_extension"];
 	        this.post_upload_script = this.convertValues(source["post_upload_script"], PostUploadScriptConfig);
