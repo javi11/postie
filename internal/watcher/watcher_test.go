@@ -64,6 +64,14 @@ func (m *mockQueueWithDuplicateCheck) SetQueueItemPriorityWithReorder(ctx contex
 	return nil
 }
 
+func (m *mockQueueWithDuplicateCheck) AddFileWithOptions(ctx context.Context, path string, size int64, opts queue.AddOptions) error {
+	return m.AddFile(ctx, path, size)
+}
+
+func (m *mockQueueWithDuplicateCheck) PendingTotalSize(ctx context.Context) (int64, error) {
+	return 0, nil
+}
+
 func (m *mockQueueWithDuplicateCheck) RunMigrations() error {
 	return nil
 }

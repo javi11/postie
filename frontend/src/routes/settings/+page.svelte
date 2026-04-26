@@ -1,6 +1,7 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
 import apiClient from "$lib/api/client";
+import ApiSection from "$lib/components/settings/ApiSection.svelte";
 import ConnectionPoolSection from "$lib/components/settings/ConnectionPoolSection.svelte";
 import FileNamingSection from "$lib/components/settings/FileNamingSection.svelte";
 import GeneralSection from "$lib/components/settings/GeneralSection.svelte";
@@ -366,6 +367,7 @@ onDestroy(() => {
             <div class="space-y-6">
               <WatcherSection bind:config={localConfig} />
               <PostUploadScriptSection bind:config={localConfig} />
+              <ApiSection bind:config={localConfig} />
             </div>
           </div>
         </div>

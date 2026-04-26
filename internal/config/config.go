@@ -161,6 +161,7 @@ type Config interface {
 	GetNzbCompressionConfig() NzbCompressionConfig
 	GetDatabaseConfig() DatabaseConfig
 	GetQueueConfig() QueueConfig
+	GetAPIConfig() APIConfig
 	GetPostUploadScriptConfig() PostUploadScriptConfig
 	GetMaintainOriginalExtension() bool
 }
@@ -185,6 +186,7 @@ type ConfigData struct {
 	NzbCompression            NzbCompressionConfig   `yaml:"nzb_compression" json:"nzb_compression"`
 	Database                  DatabaseConfig         `yaml:"database" json:"database"`
 	Queue                     QueueConfig            `yaml:"queue" json:"queue"`
+	API                       APIConfig              `yaml:"api" json:"api"`
 	OutputDir                 string                 `yaml:"output_dir" json:"output_dir"`
 	MaintainOriginalExtension *bool                  `yaml:"maintain_original_extension" json:"maintain_original_extension"`
 	PostUploadScript          PostUploadScriptConfig `yaml:"post_upload_script" json:"post_upload_script"`
@@ -339,6 +341,20 @@ type DatabaseConfig struct {
 type QueueConfig struct {
 	// Maximum concurrent uploads from queue
 	MaxConcurrentUploads int `yaml:"max_concurrent_uploads" json:"max_concurrent_uploads"`
+	// MinSizeToStart holds back queue processing until the cumulative size of
+	// pending file jobs (in bytes) reaches this floor. Useful when uploads are
+	// pushed via the HTTP API and you want to batch them into a single drain.
+	// 0 disables gating (default).
+	MinSizeToStart int64 `yaml:"min_size_to_start" json:"min_size_to_start"`
+}
+
+// APIConfig represents the external HTTP API configuration. The API exposes a
+// gated endpoint (POST /api/v1/queue/upload) for pushing files to the upload
+// queue. The API key itself is stored in SQLite, not here.
+type APIConfig struct {
+	// Enabled controls whether the gated endpoint is mounted and serves traffic.
+	// When false, requests to /api/v1/queue/upload return 403.
+	Enabled bool `yaml:"enabled" json:"enabled"`
 }
 
 // PostUploadScriptConfig represents the post upload script configuration
@@ -932,6 +948,10 @@ func (c *ConfigData) GetDatabaseConfig() DatabaseConfig {
 
 func (c *ConfigData) GetQueueConfig() QueueConfig {
 	return c.Queue
+}
+
+func (c *ConfigData) GetAPIConfig() APIConfig {
+	return c.API
 }
 
 func (c *ConfigData) GetOutputDir() string {

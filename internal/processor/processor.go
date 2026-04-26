@@ -237,6 +237,19 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 		return nil
 	}
 
+	// Aggregate-size threshold: hold off picking up new jobs until the total
+	// pending bytes meet the configured floor. 0 disables gating (default).
+	if minSize := int64(p.cfg.MinSizeToStart); minSize > 0 {
+		pending, err := p.queue.PendingTotalSize(ctx)
+		if err != nil {
+			slog.WarnContext(ctx, "Failed to read pending queue size, processing anyway", "error", err)
+		} else if pending < minSize {
+			slog.DebugContext(ctx, "Queue below min_size_to_start, holding",
+				"pending", pending, "threshold", minSize)
+			return nil
+		}
+	}
+
 	// Get next item from queue
 	msg, job, err := p.queue.ReceiveFile(ctx)
 	if err != nil {
@@ -457,15 +470,22 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 
 	// Determine the input folder for maintaining folder structure
 	var inputFolder string
-	if isFolder {
+	switch {
+	case job.InputFolder != "":
+		// Job-supplied root (e.g., HTTP API "relative_path"): use it verbatim
+		// so the NZB output mirrors the directory tree below it.
+		inputFolder = job.InputFolder
+		slog.DebugContext(jobCtx, "Using job-supplied input folder",
+			"inputFolder", inputFolder, "filePath", job.Path)
+	case isFolder:
 		// For folder processing, use the parent directory of the folder
 		inputFolder = filepath.Dir(folderPath)
-	} else if p.watchFolder != "" && isWithinPath(job.Path, p.watchFolder) {
+	case p.watchFolder != "" && isWithinPath(job.Path, p.watchFolder):
 		// For files from the watcher, use the watch folder as root to maintain structure
 		inputFolder = p.watchFolder
 		slog.DebugContext(jobCtx, "Using watch folder as root for folder structure",
 			"watchFolder", p.watchFolder, "filePath", job.Path)
-	} else {
+	default:
 		// For manually added files, use the directory containing the file
 		inputFolder = filepath.Dir(job.Path)
 		slog.DebugContext(jobCtx, "Using file directory as root",
@@ -485,8 +505,13 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 		return "", nil, err
 	}
 
-	// Delete the original files if configured
-	if p.deleteOriginalFile {
+	// Delete the original files if configured. A job-level override (set by the
+	// HTTP API) takes precedence over the processor's global setting.
+	deleteOriginal := p.deleteOriginalFile
+	if job.DeleteOriginal != nil {
+		deleteOriginal = *job.DeleteOriginal
+	}
+	if deleteOriginal {
 		if p.deleteDelay > 0 {
 			slog.InfoContext(ctx, "Waiting before deleting original files", "delay", p.deleteDelay)
 			select {

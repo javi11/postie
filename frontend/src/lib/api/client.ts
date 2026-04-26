@@ -308,6 +308,38 @@ export class UnifiedClient {
 		throw new Error("No client available");
 	}
 
+	async getApiKey(): Promise<string> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			return client.App.GetAPIKey();
+		}
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.getApiKey();
+		}
+
+		throw new Error("No client available");
+	}
+
+	async regenerateApiKey(): Promise<string> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			return client.App.RegenerateAPIKey();
+		}
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.regenerateApiKey();
+		}
+
+		throw new Error("No client available");
+	}
+
 	async getRunningJobDetails(): Promise<processor.RunningJobDetails[]> {
 		await this.initialize();
 

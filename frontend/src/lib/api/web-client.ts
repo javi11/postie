@@ -195,6 +195,16 @@ export class WebClient {
 		return this.post<void>("/watcher/scan");
 	}
 
+	async getApiKey(): Promise<string> {
+		const res = await this.get<{ key: string }>("/api-key");
+		return res.key;
+	}
+
+	async regenerateApiKey(): Promise<string> {
+		const res = await this.post<{ key: string }>("/api-key/regenerate");
+		return res.key;
+	}
+
 	async pauseProcessing(): Promise<void> {
 		return this.post<void>("/processor/pause");
 	}

@@ -170,6 +170,20 @@ func (mr *MockConfigMockRecorder) GetQueueConfig() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetQueueConfig", reflect.TypeOf((*MockConfig)(nil).GetQueueConfig))
 }
 
+// GetAPIConfig mocks base method.
+func (m *MockConfig) GetAPIConfig() config.APIConfig {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAPIConfig")
+	ret0, _ := ret[0].(config.APIConfig)
+	return ret0
+}
+
+// GetAPIConfig indicates an expected call of GetAPIConfig.
+func (mr *MockConfigMockRecorder) GetAPIConfig() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAPIConfig", reflect.TypeOf((*MockConfig)(nil).GetAPIConfig))
+}
+
 // GetWatcherConfig mocks base method.
 func (m *MockConfig) GetWatcherConfig() config.WatcherConfig {
 	m.ctrl.T.Helper()
