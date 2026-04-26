@@ -34,7 +34,7 @@ COPY ./frontend/build ./frontend/build
 RUN --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
     --mount=type=cache,target=/tmp/go-build-cache,sharing=locked \
     CGO_ENABLED=1 GOOS=linux \
-    go build -a -ldflags '-linkmode external -extldflags "-static"' -o postie-web cmd/web/main.go
+    go build -a -ldflags '-linkmode external -extldflags "-static"' -o postie-web ./cmd/web
 
 # Final stage - use LinuxServer.io base image (has s6-overlay + PUID/PGID support)
 FROM ghcr.io/linuxserver/baseimage-ubuntu:jammy
