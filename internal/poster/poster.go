@@ -1064,7 +1064,7 @@ func (p *poster) postArticleWithBody(ctx context.Context, art *article.Article, 
 	}
 
 	// Add Date header
-	headers.Extra["Date"] = []string{art.Date.UTC().Format(time.RFC1123)}
+	headers.Extra["Date"] = []string{art.Date.UTC().Format(time.RFC1123Z)}
 
 	// Add custom headers
 	if art.CustomHeaders != nil {

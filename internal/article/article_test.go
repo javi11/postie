@@ -129,7 +129,7 @@ func TestEncode(t *testing.T) {
 	if !strings.Contains(result, "X-Test: Value") {
 		t.Error("Encoded output missing custom header")
 	}
-	if !strings.Contains(result, "Date: Sun, 01 Jan 2023 00:00:00 UTC") {
+	if !strings.Contains(result, "Date: Sun, 01 Jan 2023 00:00:00 +0000") {
 		t.Error("Encoded output missing Date header")
 	}
 

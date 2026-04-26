@@ -94,7 +94,7 @@ func (a *Article) Encode(body []byte) (io.Reader, func(), error) {
 	headers["From"] = a.From
 	headers["Newsgroups"] = strings.Join(a.Groups, ",")
 	headers["Message-ID"] = fmt.Sprintf("<%s>", a.MessageID)
-	headers["Date"] = a.Date.UTC().Format(time.RFC1123)
+	headers["Date"] = a.Date.UTC().Format(time.RFC1123Z)
 
 	if a.XNxgHeader != "" {
 		headers["X-Nxg"] = a.XNxgHeader
