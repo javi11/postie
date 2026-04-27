@@ -81,7 +81,7 @@
 			"type": "go",
 			"request": "launch",
 			"mode": "auto",
-			"program": "${workspaceFolder}/cmd/web/main.go",
+			"program": "${workspaceFolder}/cmd/web",
 			"args": ["-p", "8080"],
 			"cwd": "${workspaceFolder}",
 			"env": {
