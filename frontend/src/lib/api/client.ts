@@ -3,7 +3,8 @@
 import { browser } from "$app/environment";
 import type { backend, config, processor, watcher } from "$lib/wailsjs/go/models";
 // Using backend types for pagination - remove temporary types import
-import type { WebClient } from "./web-client";
+import type { ArrInstance, WebClient } from "./web-client";
+export type { ArrInstance };
 
 type WailsApp = typeof import("$lib/wailsjs/go/backend/App");
 type WailsRuntime = typeof import("$lib/wailsjs/runtime/runtime");
@@ -935,6 +936,52 @@ export class UnifiedClient {
 		}
 
 		throw new Error("No client available");
+	}
+
+	// ── Arr webhook integration (web mode only) ────────────────────────────
+
+	async getArrInstances(): Promise<ArrInstance[]> {
+		await this.initialize();
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.getArrInstances();
+		}
+
+		throw new Error("Arr webhook integration is only available in web mode");
+	}
+
+	async addArrInstance(instance: ArrInstance): Promise<ArrInstance> {
+		await this.initialize();
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.addArrInstance(instance);
+		}
+
+		throw new Error("Arr webhook integration is only available in web mode");
+	}
+
+	async removeArrInstance(id: string): Promise<void> {
+		await this.initialize();
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.removeArrInstance(id);
+		}
+
+		throw new Error("Arr webhook integration is only available in web mode");
+	}
+
+	async testArrConnection(instance: ArrInstance): Promise<void> {
+		await this.initialize();
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.testArrConnection(instance);
+		}
+
+		throw new Error("Arr webhook integration is only available in web mode");
 	}
 }
 

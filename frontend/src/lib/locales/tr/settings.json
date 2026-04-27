@@ -495,5 +495,30 @@
 			"obfuscate_subject_description": "Konu satırını gizle",
 			"obfuscate_filename_description": "Gönderilerdeki dosya adlarını gizle"
 		}
+	},
+	"arr": {
+		"title": "Arr Entegrasyonu",
+		"description": "Radarr, Sonarr, Lidarr veya Readarr bir dosyayı içe aktardığında otomatik olarak kuyruğa ekler.",
+		"add_instance": "Örnek Ekle",
+		"no_instances": "Henüz yapılandırılmış *arr örneği yok.",
+		"instance_name": "Örnek adı",
+		"instance_name_placeholder": "Radarr'ım",
+		"type": "Uygulama türü",
+		"url": "URL",
+		"url_placeholder": "http://localhost:7878",
+		"api_key": "API anahtarı",
+		"api_key_placeholder": "arr API anahtarınız",
+		"delete_after_upload": "Yüklemeden sonra dosyayı kitaplıktan sil",
+		"test_connection": "Test Et",
+		"save_instance": "Webhook kur",
+		"remove_instance": "Kaldır",
+		"testing": "Test ediliyor…",
+		"setting_up": "Ayarlanıyor…",
+		"connection_ok": "Bağlantı başarılı",
+		"webhook_created": "Webhook başarıyla kaydedildi",
+		"webhook_removed": "Örnek kaldırıldı",
+		"error_test": "Bağlantı başarısız",
+		"error_setup": "Webhook kurulumu başarısız",
+		"error_remove": "Örnek kaldırılamadı"
 	}
 }

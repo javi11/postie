@@ -490,5 +490,30 @@
 				"info_message": "La configuration du proxy SOCKS5 est appliquée par serveur. Incluez les identifiants dans l'URL si nécessaire."
 			}
 		}
+	},
+	"arr": {
+		"title": "Intégration Arr",
+		"description": "Met automatiquement les fichiers en file d'attente quand Radarr, Sonarr, Lidarr ou Readarr les importe.",
+		"add_instance": "Ajouter une instance",
+		"no_instances": "Aucune instance *arr configurée.",
+		"instance_name": "Nom de l'instance",
+		"instance_name_placeholder": "Mon Radarr",
+		"type": "Type d'application",
+		"url": "URL",
+		"url_placeholder": "http://localhost:7878",
+		"api_key": "Clé API",
+		"api_key_placeholder": "Votre clé API arr",
+		"delete_after_upload": "Supprimer le fichier de la bibliothèque après l'envoi",
+		"test_connection": "Tester",
+		"save_instance": "Configurer le webhook",
+		"remove_instance": "Supprimer",
+		"testing": "Test en cours…",
+		"setting_up": "Configuration…",
+		"connection_ok": "Connexion réussie",
+		"webhook_created": "Webhook enregistré avec succès",
+		"webhook_removed": "Instance supprimée",
+		"error_test": "Échec de la connexion",
+		"error_setup": "Échec de la configuration du webhook",
+		"error_remove": "Impossible de supprimer l'instance"
 	}
 }

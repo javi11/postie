@@ -190,6 +190,7 @@ type ConfigData struct {
 	OutputDir                 string                 `yaml:"output_dir" json:"output_dir"`
 	MaintainOriginalExtension *bool                  `yaml:"maintain_original_extension" json:"maintain_original_extension"`
 	PostUploadScript          PostUploadScriptConfig `yaml:"post_upload_script" json:"post_upload_script"`
+	Arr                       ArrConfig              `yaml:"arr,omitempty" json:"arr,omitempty"`
 }
 
 type Par2Config struct {
@@ -380,6 +381,33 @@ type PostUploadScriptConfig struct {
 	MaxRetryDuration Duration `yaml:"max_retry_duration" json:"max_retry_duration"`
 	// How often to check for pending retries. Default value is `1m`.
 	RetryCheckInterval Duration `yaml:"retry_check_interval" json:"retry_check_interval"`
+}
+
+// ArrType identifies which *arr application an instance belongs to.
+type ArrType string
+
+const (
+	ArrTypeRadarr  ArrType = "radarr"
+	ArrTypeSonarr  ArrType = "sonarr"
+	ArrTypeLidarr  ArrType = "lidarr"
+	ArrTypeReadarr ArrType = "readarr"
+)
+
+// ArrInstance holds connection info and webhook state for a single *arr app.
+type ArrInstance struct {
+	ID                string  `yaml:"id"                  json:"id"`
+	Name              string  `yaml:"name"                json:"name"`
+	Type              ArrType `yaml:"type"                json:"type"`
+	URL               string  `yaml:"url"                 json:"url"`
+	APIKey            string  `yaml:"api_key"             json:"api_key"`
+	Enabled           bool    `yaml:"enabled"             json:"enabled"`
+	WebhookID         int64   `yaml:"webhook_id"          json:"webhook_id"`
+	DeleteAfterUpload bool    `yaml:"delete_after_upload" json:"delete_after_upload"`
+}
+
+// ArrConfig holds all configured *arr instances.
+type ArrConfig struct {
+	Instances []ArrInstance `yaml:"instances" json:"instances"`
 }
 
 // ProgressStatus represents the progress of file processing operations

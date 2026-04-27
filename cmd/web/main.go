@@ -280,6 +280,14 @@ func (ws *WebServer) setupRoutes() {
 	api.HandleFunc("/watcher/status", ws.handleGetWatcherStatus).Methods("GET")
 	api.HandleFunc("/watcher/scan", ws.handleTriggerScan).Methods("POST")
 
+	// Arr webhook integration (web mode only — hidden in desktop UI)
+	api.HandleFunc("/arr/instances", ws.handleListArrInstances).Methods("GET")
+	api.HandleFunc("/arr/instances", ws.handleAddArrInstance).Methods("POST")
+	api.HandleFunc("/arr/instances/{id}", ws.handleRemoveArrInstance).Methods("DELETE")
+	api.HandleFunc("/arr/instances/{id}/test", ws.handleTestArrConnection).Methods("POST")
+	// Webhook receiver — API key validated from ?apiKey query param (arr can't send custom headers)
+	api.HandleFunc("/arr/webhook/{instanceId}", ws.handleArrWebhook).Methods("POST")
+
 	// API key management for the settings UI (open routes, same as other UI APIs)
 	api.HandleFunc("/api-key", ws.handleGetAPIKey).Methods("GET")
 	api.HandleFunc("/api-key/regenerate", ws.handleRegenerateAPIKey).Methods("POST")

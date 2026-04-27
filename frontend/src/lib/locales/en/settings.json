@@ -497,5 +497,30 @@
 			"obfuscate_subject_description": "Obfuscate the subject line",
 			"obfuscate_filename_description": "Obfuscate filenames in posts"
 		}
+	},
+	"arr": {
+		"title": "Arr Integration",
+		"description": "Automatically queue files when Radarr, Sonarr, Lidarr, or Readarr imports them.",
+		"add_instance": "Add Instance",
+		"no_instances": "No *arr instances configured yet.",
+		"instance_name": "Instance name",
+		"instance_name_placeholder": "My Radarr",
+		"type": "Application type",
+		"url": "URL",
+		"url_placeholder": "http://localhost:7878",
+		"api_key": "API key",
+		"api_key_placeholder": "Your arr API key",
+		"delete_after_upload": "Delete file from library after upload",
+		"test_connection": "Test",
+		"save_instance": "Setup webhook",
+		"remove_instance": "Remove",
+		"testing": "Testing…",
+		"setting_up": "Setting up…",
+		"connection_ok": "Connection successful",
+		"webhook_created": "Webhook registered successfully",
+		"webhook_removed": "Instance removed",
+		"error_test": "Connection failed",
+		"error_setup": "Webhook setup failed",
+		"error_remove": "Could not remove instance"
 	}
 }
