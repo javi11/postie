@@ -5,6 +5,17 @@ import type { backend, config, processor, watcher } from "$lib/wailsjs/go/models
 
 const API_BASE = "/api";
 
+export interface ArrInstance {
+	id: string;
+	name: string;
+	type: "radarr" | "sonarr" | "lidarr" | "readarr";
+	url: string;
+	api_key: string;
+	enabled: boolean;
+	webhook_id: number;
+	delete_after_upload: boolean;
+}
+
 export class WebClient {
 	private ws: WebSocket | null = null;
 	private wsListeners: Map<string, (data: unknown) => void> = new Map();
@@ -497,6 +508,39 @@ export class WebClient {
 		a.click();
 		window.URL.revokeObjectURL(url);
 		document.body.removeChild(a);
+	}
+
+	// ── Arr webhook integration ─────────────────────────────────────────────
+
+	async getArrInstances(): Promise<ArrInstance[]> {
+		const res = await fetch(`${API_BASE}/arr/instances`);
+		if (!res.ok) throw new Error(await res.text());
+		return res.json();
+	}
+
+	async addArrInstance(instance: ArrInstance): Promise<ArrInstance> {
+		const webhookURL = window.location.origin;
+		const res = await fetch(`${API_BASE}/arr/instances`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ instance, webhook_url: webhookURL }),
+		});
+		if (!res.ok) throw new Error(await res.text());
+		return res.json();
+	}
+
+	async removeArrInstance(id: string): Promise<void> {
+		const res = await fetch(`${API_BASE}/arr/instances/${id}`, { method: "DELETE" });
+		if (!res.ok) throw new Error(await res.text());
+	}
+
+	async testArrConnection(instance: ArrInstance): Promise<void> {
+		const res = await fetch(`${API_BASE}/arr/instances/${instance.id}/test`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(instance),
+		});
+		if (!res.ok) throw new Error(await res.text());
 	}
 }
 
