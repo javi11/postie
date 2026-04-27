@@ -1060,11 +1060,9 @@ func (p *poster) postArticleWithBody(ctx context.Context, art *article.Article, 
 		Subject:    art.Subject,
 		Newsgroups: art.Groups,
 		MessageID:  fmt.Sprintf("<%s>", art.MessageID),
+		Date:       art.Date.UTC(),
 		Extra:      make(map[string][]string),
 	}
-
-	// Add Date header
-	headers.Extra["Date"] = []string{art.Date.UTC().Format(time.RFC1123Z)}
 
 	// Add custom headers
 	if art.CustomHeaders != nil {
