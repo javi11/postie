@@ -15,6 +15,7 @@ import PostUploadScriptSection from "$lib/components/settings/PostUploadScriptSe
 import QueueSection from "$lib/components/settings/QueueSection.svelte";
 import ServerSection from "$lib/components/settings/ServerSection.svelte";
 import WatcherSection from "$lib/components/settings/WatcherSection.svelte";
+import ArrSection from "$lib/components/settings/ArrSection.svelte";
 import { t } from "$lib/i18n";
 import { advancedMode, appStatus, settingsSaveFunction } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
@@ -368,6 +369,9 @@ onDestroy(() => {
               <WatcherSection bind:config={localConfig} />
               <PostUploadScriptSection bind:config={localConfig} />
               <ApiSection bind:config={localConfig} />
+              {#if apiClient.environment !== 'wails'}
+                <ArrSection />
+              {/if}
             </div>
           </div>
         </div>
