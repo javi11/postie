@@ -206,9 +206,13 @@ func (p *NativeExecutor) CreateInDirectory(ctx context.Context, files []fileinfo
 // createPar2ForFile creates PAR2 files for a single input file in the given directory.
 func (p *NativeExecutor) createPar2ForFile(ctx context.Context, file fileinfo.FileInfo, dirPath string) ([]string, error) {
 	var parBlockSize uint64
-	if p.cfg.SliceSize > 0 {
+	if p.cfg.SliceSize > 0 && uint64(p.cfg.SliceSize) <= file.Size {
 		parBlockSize = uint64(p.cfg.SliceSize)
 	} else {
+		// Configured SliceSize exceeds file size (or is unset): fall back to
+		// article-size-based calculation. Clamping SliceSize to ≈file.Size
+		// creates only 1-2 slices with a nearly-zero last slice, which triggers
+		// undefined behavior in the ParPar C SIMD backend on Linux x86_64 (AVX-512).
 		parBlockSize = calculateParBlockSize(file.Size, p.articleSize)
 	}
 	// Guard: block size must not exceed file size AND must be SIMD-aligned.
