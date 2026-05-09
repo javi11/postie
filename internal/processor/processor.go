@@ -468,6 +468,41 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 	}
 	defer jobPostie.Close()
 
+	// Wire the asynchronous post-check callback. The poster's long-lived
+	// checkLoop calls this when articles exhaust MaxRePost retries; we persist
+	// them to the deferred-check queue so PostCheckRetryWorker can recheck
+	// them later. The callback runs after Post() has already returned, so the
+	// processor's main flow no longer blocks on verification.
+	completedItemID := string(msg.ID)
+	deferredDelay := p.config.GetPostCheckConfig().DeferredCheckDelay.ToDuration()
+	jobPostie.SetVerificationCallback(completedItemID, func(cbCtx context.Context, articles []poster.FailedArticleInfo, totalArticles int, itemID string) error {
+		if len(articles) == 0 {
+			return nil
+		}
+		nextRetryAt := time.Now().Add(deferredDelay)
+		pendingChecks := make([]queue.PendingArticleCheck, 0, len(articles))
+		for _, art := range articles {
+			groupsJSON, _ := json.Marshal(art.Groups)
+			pendingChecks = append(pendingChecks, queue.PendingArticleCheck{
+				MessageID:   art.MessageID,
+				Groups:      string(groupsJSON),
+				NextRetryAt: nextRetryAt,
+			})
+		}
+		if addErr := p.queue.AddPendingArticleChecks(cbCtx, itemID, pendingChecks); addErr != nil {
+			slog.ErrorContext(cbCtx, "Failed to store deferred article checks",
+				"error", addErr, "completedItemID", itemID, "count", len(pendingChecks))
+			return addErr
+		}
+		if statusErr := p.queue.UpdateCompletedItemVerificationStatus(cbCtx, itemID, "pending_verification"); statusErr != nil {
+			slog.ErrorContext(cbCtx, "Failed to update verification status",
+				"error", statusErr, "completedItemID", itemID)
+		}
+		slog.InfoContext(cbCtx, "Stored deferred article checks asynchronously",
+			"completedItemID", itemID, "deferred_articles", len(pendingChecks), "total_articles", totalArticles)
+		return nil
+	})
+
 	// Determine the input folder for maintaining folder structure
 	var inputFolder string
 	switch {

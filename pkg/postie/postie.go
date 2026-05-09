@@ -32,6 +32,26 @@ type Postie struct {
 	maintainOriginalExtension bool
 	jobProgress               progress.JobProgress
 	queue                     QueueInterface
+
+	// Verification callback set by the caller (e.g. the processor) before
+	// invoking Post(). Forwarded to poster.PostWithCallback so the long-lived
+	// checkLoop can persist permanent verification failures asynchronously.
+	verifyItemID   string
+	verifyCallback poster.CheckExhaustedCallback
+}
+
+// SetVerificationCallback configures the asynchronous post-check exhaustion
+// callback for this Postie instance. completedItemID identifies the queue
+// item; cb is invoked once per file whose articles cannot be verified after
+// MaxRePost retries. Either parameter may be empty/nil — in that case the
+// poster logs the failure and drops it (same behavior as the legacy CLI).
+//
+// Postie is per-job (constructed and Closed inside processor.processFile),
+// so this setter is normally called once before any Post() call. Concurrent
+// Post() calls on the same Postie are not currently supported.
+func (p *Postie) SetVerificationCallback(completedItemID string, cb poster.CheckExhaustedCallback) {
+	p.verifyItemID = completedItemID
+	p.verifyCallback = cb
 }
 
 // QueueInterface defines the queue methods needed by Postie
@@ -272,7 +292,7 @@ func (p *Postie) postInParallel(
 			return nil
 		}
 
-		if err := p.poster.Post(ctx, createdPar2Paths, rootDir, nzbGen); err != nil {
+		if err := p.poster.PostWithCallback(ctx, createdPar2Paths, rootDir, nzbGen, nil, p.verifyItemID, p.verifyCallback); err != nil {
 			if !errors.Is(err, context.Canceled) {
 				slog.ErrorContext(ctx, fmt.Sprintf("Error during upload of par2 files: %s. Upload will continue without par2.", createdPar2Paths), "error", err)
 			}
@@ -286,7 +306,7 @@ func (p *Postie) postInParallel(
 	var deferredErr *poster.DeferredCheckError
 
 	errg.Go(func() error {
-		if err := p.poster.Post(ctx, []string{f.Path}, rootDir, nzbGen); err != nil {
+		if err := p.poster.PostWithCallback(ctx, []string{f.Path}, rootDir, nzbGen, nil, p.verifyItemID, p.verifyCallback); err != nil {
 			// Check if this is a non-fatal deferred check error
 			var de *poster.DeferredCheckError
 			if errors.As(err, &de) {
@@ -385,7 +405,7 @@ func (p *Postie) post(
 	}
 
 	var deferredErr *poster.DeferredCheckError
-	if err := p.poster.Post(ctx, filesPath, rootDir, nzbGen); err != nil {
+	if err := p.poster.PostWithCallback(ctx, filesPath, rootDir, nzbGen, nil, p.verifyItemID, p.verifyCallback); err != nil {
 		// Check if this is a non-fatal deferred check error
 		if errors.As(err, &deferredErr) {
 			slog.InfoContext(ctx, "Some articles deferred for later verification", "file", f.Path, "deferred", len(deferredErr.FailedArticles))
@@ -517,7 +537,7 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 
 		var deferredErr *poster.DeferredCheckError
 		// Post all files (including PAR2) together with relative paths for subjects
-		if err := p.poster.PostWithRelativePaths(ctx, allFilePaths, rootDir, nzbGen, relativePaths); err != nil {
+		if err := p.poster.PostWithCallback(ctx, allFilePaths, rootDir, nzbGen, relativePaths, p.verifyItemID, p.verifyCallback); err != nil {
 			if errors.As(err, &deferredErr) {
 				slog.InfoContext(ctx, "Some articles deferred for later verification", "folder", folderName, "deferred", len(deferredErr.FailedArticles))
 			} else {
@@ -579,7 +599,7 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 			}
 
 			par2RelPaths := buildPar2RelativePaths(files, createdPar2Paths)
-			if err := p.poster.PostWithRelativePaths(ctx, createdPar2Paths, rootDir, nzbGen, par2RelPaths); err != nil {
+			if err := p.poster.PostWithCallback(ctx, createdPar2Paths, rootDir, nzbGen, par2RelPaths, p.verifyItemID, p.verifyCallback); err != nil {
 				if !errors.Is(err, context.Canceled) {
 					slog.ErrorContext(ctx, "Error during upload of par2 files. Upload will continue without par2.", "error", err)
 				}
@@ -590,7 +610,7 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 
 		// Post main files with relative paths for subjects
 		errg.Go(func() error {
-			if err := p.poster.PostWithRelativePaths(ctx, allFilePaths, rootDir, nzbGen, relativePaths); err != nil {
+			if err := p.poster.PostWithCallback(ctx, allFilePaths, rootDir, nzbGen, relativePaths, p.verifyItemID, p.verifyCallback); err != nil {
 				// Check if this is a non-fatal deferred check error
 				var de *poster.DeferredCheckError
 				if errors.As(err, &de) {

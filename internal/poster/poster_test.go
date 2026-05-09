@@ -371,12 +371,17 @@ func TestPost(t *testing.T) {
 			jobProgress: mockJobProgress,
 		}
 
+		// After Phase 2, verification failures are async and never propagate
+		// to Post() as a synchronous error — the upload itself succeeded.
+		// Permanent verification failures route through onCheckExhausted (when
+		// deferred mode is enabled) or are logged-only (otherwise). This test
+		// keeps deferred disabled so the check failure is logged and dropped;
+		// Post() returns nil because the file did upload.
 		err := p.Post(ctx, []string{testFile}, "", nzbGen)
+		assert.NoError(t, err)
 
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to verify file")
-
-		// Close after test completes
+		// Close after test completes — also drains the checkLoop so the
+		// post-check failure is processed before we return.
 		p.Close()
 
 		// Finish controller after all operations complete
@@ -822,23 +827,23 @@ func TestAddPost(t *testing.T) {
 		p := &poster{
 			cfg:         cfg,
 			jobProgress: mockJobProgress,
+			postQueue:   make(chan *Post, 10),
 		}
 
 		var wg sync.WaitGroup
-		var postsInFlight sync.WaitGroup
 		var failedPosts atomic.Int64
-		postQueue := make(chan *Post, 10)
+		errSink := make(chan error, 4)
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 
 		wg.Add(1)
 		ctx := context.Background()
-		err := p.addPost(ctx, testFile, "", 1, 1, &wg, &failedPosts, postQueue, nzbGen, &postsInFlight)
+		err := p.addPost(ctx, testFile, "", 1, 1, &wg, &failedPosts, nzbGen, errSink, "", nil)
 
 		assert.NoError(t, err)
 
 		// Check that a post was added to the queue
 		select {
-		case post := <-postQueue:
+		case post := <-p.postQueue:
 			assert.Equal(t, testFile, post.FilePath)
 			assert.Equal(t, PostStatusPending, post.Status)
 			assert.Greater(t, len(post.Articles), 1) // Should have multiple articles due to small segment size
@@ -863,13 +868,12 @@ func TestAddPost(t *testing.T) {
 		defer ctrl.Finish()
 
 		var wg sync.WaitGroup
-		var postsInFlight sync.WaitGroup
 		var failedPosts atomic.Int64
-		postQueue := make(chan *Post, 10)
+		errSink := make(chan error, 4)
 		nzbGen := mocks.NewMockNZBGenerator(ctrl)
 
 		ctx := context.Background()
-		err := p.addPost(ctx, "nonexistent.txt", "", 1, 1, &wg, &failedPosts, postQueue, nzbGen, &postsInFlight)
+		err := p.addPost(ctx, "nonexistent.txt", "", 1, 1, &wg, &failedPosts, nzbGen, errSink, "", nil)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "error opening file")
@@ -1034,6 +1038,11 @@ func TestPostIntegration(t *testing.T) {
 		err = p.Post(ctx, []string{testFile}, tmpDir, nzbGen)
 
 		assert.NoError(t, err)
+
+		// Phase 2: Post() returns once uploads complete; verification runs
+		// asynchronously. Close() drains the long-lived loops so we can read
+		// stats deterministically.
+		p.Close()
 
 		// Verify stats were updated
 		stats := p.Stats()

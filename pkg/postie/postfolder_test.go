@@ -22,6 +22,10 @@ func (m *mockPoster) Post(_ context.Context, files []string, _ string, nzbGen nz
 	return nil
 }
 
+func (m *mockPoster) PostWithCallback(_ context.Context, files []string, _ string, nzbGen nzb.NZBGenerator, _ map[string]string, _ string, _ poster.CheckExhaustedCallback) error {
+	return m.PostWithRelativePaths(context.Background(), files, "", nzbGen, nil)
+}
+
 func (m *mockPoster) PostWithRelativePaths(_ context.Context, files []string, _ string, nzbGen nzb.NZBGenerator, _ map[string]string) error {
 	addFakeArticles(nzbGen, files)
 	return nil
