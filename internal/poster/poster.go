@@ -81,6 +81,10 @@ type Post struct {
 	wg       *sync.WaitGroup
 	failed   *atomic.Int64
 	progress progress.Progress
+	// postedAt records when this file's upload finished. Used by checkLoop to
+	// apply the propagation delay per-file with credit for time already elapsed,
+	// rather than only sleeping before the first file.
+	postedAt time.Time
 }
 
 // FailedArticleInfo contains information about an article that failed verification
@@ -493,6 +497,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 
 			post.mu.Lock()
 			post.Status = PostStatusPosted
+			post.postedAt = time.Now()
 			post.mu.Unlock()
 
 			if p.checkCfg.Enabled != nil && *p.checkCfg.Enabled {
@@ -532,8 +537,6 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 
 	deferredEnabled := p.checkCfg.DeferredCheckDelay.ToDuration() > 0
 
-	firstPost := true
-
 	for post := range checkQueue {
 		select {
 		case <-ctx.Done():
@@ -550,19 +553,33 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 			// during the RetryDelay wait, preventing the queue item from appearing stuck.
 			post.progress = p.jobProgress.AddProgress(uuid.New(), fmt.Sprintf("%s (check)", filepath.Base(post.FilePath)), progress.ProgressTypeChecking, post.filesize)
 
-			// Wait for articles to propagate to the verify server before checking.
-			// Only needed for the first file: subsequent files are posted after enough
-			// time has already elapsed during the first file's posting and checking.
-			if firstPost {
-				firstPost = false
-				if delay := p.checkCfg.RetryDelay.ToDuration(); delay > 0 {
-					post.progress.SetWaitDeadline(time.Now().Add(delay))
+			// Wait for this file's articles to propagate to the verify server before
+			// checking. We sleep only the remainder of RetryDelay that hasn't already
+			// elapsed since this file finished posting — files that sat in the queue
+			// long enough incur no extra wait, while files checked right after upload
+			// still get the full propagation grace period.
+			if delay := p.checkCfg.RetryDelay.ToDuration(); delay > 0 {
+				post.mu.Lock()
+				postedAt := post.postedAt
+				post.mu.Unlock()
+
+				var remaining time.Duration
+				if postedAt.IsZero() {
+					// Defensive: postedAt should always be set by postLoop, but if
+					// it isn't (e.g. unusual code paths) wait the full delay.
+					remaining = delay
+				} else {
+					remaining = delay - time.Since(postedAt)
+				}
+
+				if remaining > 0 {
+					post.progress.SetWaitDeadline(time.Now().Add(remaining))
 					select {
 					case <-ctx.Done():
 						post.progress.SetWaitDeadline(time.Time{})
 						errChan <- ctx.Err()
 						return
-					case <-time.After(delay):
+					case <-time.After(remaining):
 					}
 					post.progress.SetWaitDeadline(time.Time{})
 				}
