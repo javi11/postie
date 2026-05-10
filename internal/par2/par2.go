@@ -30,6 +30,11 @@ const maxPar2Blocks = 32768
 type Par2Executor interface {
 	Create(ctx context.Context, files []fileinfo.FileInfo) ([]string, error)
 	CreateInDirectory(ctx context.Context, files []fileinfo.FileInfo, outputDir string) ([]string, error)
+	// CreateSet bundles all input files into a single par2 set named setName,
+	// embedding each file's RelativePath (or basename when empty) in the
+	// FileDesc packet so downloaders such as SABnzbd can reconstruct the
+	// folder tree on disk after par2 verification.
+	CreateSet(ctx context.Context, files []fileinfo.FileInfo, outputDir, setName string) ([]string, error)
 }
 
 // NativeExecutor implements Par2Executor using the built-in Go PAR2 creator.
@@ -201,6 +206,206 @@ func (p *NativeExecutor) CreateInDirectory(ctx context.Context, files []fileinfo
 	}
 
 	return createdPar2Paths, nil
+}
+
+// CreateSet bundles all input files into a single par2 set named setName.
+// Each FileDesc packet records the file's RelativePath (or filepath.Base
+// when empty) so SABnzbd / NZBGet can recreate the folder tree on disk.
+func (p *NativeExecutor) CreateSet(ctx context.Context, files []fileinfo.FileInfo, outputDir, setName string) ([]string, error) {
+	if len(files) == 0 {
+		return nil, fmt.Errorf("par2: no input files for set %q", setName)
+	}
+	if setName == "" {
+		return nil, fmt.Errorf("par2: empty set name")
+	}
+
+	// Filter out any par2 files defensively — callers should not include them.
+	inputs := make([]fileinfo.FileInfo, 0, len(files))
+	for _, f := range files {
+		if filepath.Ext(f.Path) == ".par2" {
+			continue
+		}
+		inputs = append(inputs, f)
+	}
+	if len(inputs) == 0 {
+		return nil, fmt.Errorf("par2: no non-par2 input files for set %q", setName)
+	}
+
+	dirPath := outputDir
+	if dirPath == "" {
+		if p.cfg.TempDir != "" {
+			dirPath = p.cfg.TempDir
+		} else {
+			dirPath = filepath.Dir(inputs[0].Path)
+		}
+	}
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		return nil, fmt.Errorf("par2: create output dir %s: %w", dirPath, err)
+	}
+
+	// Reuse existing set if already on disk.
+	if existing, ok := checkExistingPar2SetInPath(ctx, setName, dirPath); ok {
+		return existing, nil
+	}
+
+	// Slice size: smallest size that yields ≤ maxPar2Blocks slices across all
+	// inputs while respecting SliceSize config and SIMD alignment.
+	totalSize := uint64(0)
+	maxFileSize := uint64(0)
+	for _, f := range inputs {
+		totalSize += f.Size
+		if f.Size > maxFileSize {
+			maxFileSize = f.Size
+		}
+	}
+	parBlockSize := p.computeSetBlockSize(totalSize, maxFileSize)
+	if parBlockSize < 4 {
+		slog.WarnContext(ctx, "Block size too small for PAR2 set creation, skipping",
+			"setName", setName, "totalSize", totalSize)
+		return nil, nil
+	}
+
+	// Total input slices and recovery blocks
+	totalSlices := 0
+	for _, f := range inputs {
+		n := int(math.Ceil(float64(f.Size) / float64(parBlockSize)))
+		if n == 0 {
+			n = 1
+		}
+		totalSlices += n
+	}
+	redundancyPct := parseRedundancyPercentage(p.cfg.Redundancy, totalSize, parBlockSize)
+	numRecovery := max(int(math.Ceil(float64(totalSlices)*redundancyPct/100.0)), 1)
+
+	par2Path := filepath.Join(dirPath, setName+".par2")
+
+	progressID := uuid.New()
+	progressName := fmt.Sprintf("PAR2: %s", setName)
+	var pg progress.Progress
+	if p.jobProgress != nil {
+		pg = p.jobProgress.AddProgress(progressID, progressName, progress.ProgressTypePar2Generation, 100)
+	}
+
+	par2Inputs := make([]par2go.InputFile, len(inputs))
+	for i, f := range inputs {
+		name := f.RelativePath
+		if name == "" {
+			name = filepath.Base(f.Path)
+		}
+		// Forward slashes only — par2go validates this and downloaders rely on it.
+		name = filepath.ToSlash(name)
+		par2Inputs[i] = par2go.InputFile{Path: f.Path, Name: name}
+	}
+
+	opts := par2go.Options{
+		SliceSize:     int(parBlockSize),
+		NumRecovery:   numRecovery,
+		NumGoroutines: p.cfg.NumGoroutines,
+		MemoryLimit:   p.cfg.MemoryLimit,
+		Creator:       "Postie",
+		OnProgress: func(phase string, pct float64) {
+			if pg == nil {
+				return
+			}
+			var overallPct float64
+			switch phase {
+			case "hashing":
+				overallPct = pct * 20
+			case "encoding":
+				overallPct = 20 + pct*75
+			case "writing":
+				overallPct = 95 + pct*5
+			}
+			delta := int64(overallPct) - pg.GetCurrent()
+			if delta > 0 {
+				pg.UpdateProgress(delta)
+			}
+		},
+	}
+
+	slog.InfoContext(ctx, "Creating PAR2 set",
+		"setName", setName,
+		"files", len(par2Inputs),
+		"blockSize", parBlockSize,
+		"inputSlices", totalSlices,
+		"recoveryBlocks", numRecovery,
+		"redundancy", redundancyPct)
+
+	if err := par2go.CreateWithNames(ctx, par2Path, par2Inputs, opts); err != nil {
+		if ctx.Err() == context.Canceled {
+			slog.InfoContext(ctx, "Par2 set creation cancelled", "setName", setName)
+			return nil, ctx.Err()
+		}
+		return nil, fmt.Errorf("failed to create par2 set %s: %w", setName, err)
+	}
+
+	if p.jobProgress != nil {
+		p.jobProgress.FinishProgress(progressID)
+	}
+
+	return collectPar2SetFiles(ctx, dirPath, setName, par2Path), nil
+}
+
+// computeSetBlockSize picks a slice size for a multi-file par2 set such that
+// the total slice count stays under maxPar2Blocks and SIMD alignment is
+// preserved. Honors p.cfg.SliceSize when sane.
+func (p *NativeExecutor) computeSetBlockSize(totalSize, maxFileSize uint64) uint64 {
+	var parBlockSize uint64
+	if p.cfg.SliceSize > 0 && uint64(p.cfg.SliceSize) <= maxFileSize {
+		parBlockSize = uint64(p.cfg.SliceSize)
+	} else {
+		parBlockSize = calculateParBlockSize(totalSize, p.articleSize)
+	}
+	// Ensure block size yields ≤ maxPar2Blocks total slices.
+	if parBlockSize > 0 {
+		approxSlices := totalSize / parBlockSize
+		if approxSlices >= maxPar2Blocks {
+			parBlockSize = (totalSize / (maxPar2Blocks - 1)) + 1
+		}
+	}
+	// SIMD-safe alignment when a single file is smaller than the block size.
+	if maxFileSize > 0 && parBlockSize > maxFileSize {
+		const simdSafeAlignment = uint64(128)
+		if maxFileSize < simdSafeAlignment {
+			return 0
+		}
+		parBlockSize = (maxFileSize / simdSafeAlignment) * simdSafeAlignment
+	}
+	return alignDown(parBlockSize, 4)
+}
+
+// checkExistingPar2SetInPath looks for an already-generated par2 set in
+// dirPath named "<setName>.par2" plus any companion volume files.
+func checkExistingPar2SetInPath(ctx context.Context, setName, dirPath string) ([]string, bool) {
+	main := filepath.Join(dirPath, setName+".par2")
+	if _, err := os.Stat(main); os.IsNotExist(err) {
+		return nil, false
+	}
+	paths := collectPar2SetFiles(ctx, dirPath, setName, main)
+	slog.InfoContext(ctx, "Found existing PAR2 set, skipping generation",
+		"setName", setName, "par2Files", len(paths))
+	return paths, true
+}
+
+// collectPar2SetFiles returns the main par2 path plus all companion volume
+// files matching "<setName>.vol*.par2" in dirPath.
+func collectPar2SetFiles(ctx context.Context, dirPath, setName, mainPath string) []string {
+	out := []string{mainPath}
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to read directory for par2 volumes", "error", err)
+		return out
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasPrefix(name, setName) && strings.Contains(name, ".vol") && strings.HasSuffix(name, ".par2") {
+			out = append(out, filepath.Join(dirPath, name))
+		}
+	}
+	return out
 }
 
 // createPar2ForFile creates PAR2 files for a single input file in the given directory.

@@ -498,9 +498,9 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 					slog.DebugContext(ctx, "Generating PAR2 files directly in output directory",
 						"folder", folderName, "outputDir", par2OutputDir)
 				}
-				// If par2OutputDir is empty, CreateInDirectory will use default behavior (temp/source dir)
+				// If par2OutputDir is empty, CreateSet will use default behavior (temp/source dir)
 
-				createdPar2Paths, err = p.par2runner.CreateInDirectory(ctx, files, par2OutputDir)
+				createdPar2Paths, err = p.par2runner.CreateSet(ctx, files, par2OutputDir, folderName)
 				if err != nil {
 					if !errors.Is(err, context.Canceled) {
 						slog.ErrorContext(ctx, "Error during par2 creation. Upload will continue without par2.", "error", err)
@@ -508,9 +508,7 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 					// Continue without PAR2 files
 				} else {
 					allFilePaths = append(allFilePaths, createdPar2Paths...)
-					for k, v := range buildPar2RelativePaths(files, createdPar2Paths) {
-						relativePaths[k] = v
-					}
+					// par2 set files live at the folder root — basenames in NZB subjects.
 				}
 			}
 		}
@@ -570,7 +568,7 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 					"folder", folderName, "outputDir", par2OutputDir)
 			}
 
-			createdPar2Paths, err = p.par2runner.CreateInDirectory(ctx, files, par2OutputDir)
+			createdPar2Paths, err = p.par2runner.CreateSet(ctx, files, par2OutputDir, folderName)
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
 					slog.ErrorContext(ctx, "Error during par2 creation. Upload will continue without par2.", "error", err)
@@ -578,7 +576,8 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 				return nil
 			}
 
-			par2RelPaths := buildPar2RelativePaths(files, createdPar2Paths)
+			// par2 set files live at the folder root — basenames in NZB subjects.
+			par2RelPaths := map[string]string{}
 			if err := p.poster.PostWithRelativePaths(ctx, createdPar2Paths, rootDir, nzbGen, par2RelPaths); err != nil {
 				if !errors.Is(err, context.Canceled) {
 					slog.ErrorContext(ctx, "Error during upload of par2 files. Upload will continue without par2.", "error", err)
