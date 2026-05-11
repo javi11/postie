@@ -499,8 +499,10 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 						"folder", folderName, "outputDir", par2OutputDir)
 				}
 				// If par2OutputDir is empty, CreateSet will use default behavior (temp/source dir)
-
-				createdPar2Paths, err = p.par2runner.CreateSet(ctx, files, par2OutputDir, folderName)
+				// folderDir is the on-disk root of the folder; FileDesc paths are computed
+				// relative to it so SABnzbd recreates the tree inside the job folder.
+				folderDir := filepath.Join(rootDir, folderName)
+				createdPar2Paths, err = p.par2runner.CreateSet(ctx, files, par2OutputDir, folderName, folderDir)
 				if err != nil {
 					if !errors.Is(err, context.Canceled) {
 						slog.ErrorContext(ctx, "Error during par2 creation. Upload will continue without par2.", "error", err)
@@ -568,7 +570,8 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 					"folder", folderName, "outputDir", par2OutputDir)
 			}
 
-			createdPar2Paths, err = p.par2runner.CreateSet(ctx, files, par2OutputDir, folderName)
+			folderDir := filepath.Join(rootDir, folderName)
+			createdPar2Paths, err = p.par2runner.CreateSet(ctx, files, par2OutputDir, folderName, folderDir)
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
 					slog.ErrorContext(ctx, "Error during par2 creation. Upload will continue without par2.", "error", err)

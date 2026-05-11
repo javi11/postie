@@ -43,9 +43,10 @@ func (b *BinaryExecutor) Create(ctx context.Context, files []fileinfo.FileInfo) 
 
 // CreateSet bundles all input files into a single par2 set named setName,
 // using parpar's --filepath-format=common so each FileDesc carries the
-// file's relative path (within the common ancestor of the inputs). This
-// is what lets SABnzbd / NZBGet recreate the folder tree on disk.
-func (b *BinaryExecutor) CreateSet(ctx context.Context, files []fileinfo.FileInfo, outputDir, setName string) ([]string, error) {
+// folderDir as --filepath-base so parpar records each file's path relative
+// to folderDir in the FileDesc packet, letting SABnzbd / NZBGet recreate
+// the folder tree inside the job directory on disk.
+func (b *BinaryExecutor) CreateSet(ctx context.Context, files []fileinfo.FileInfo, outputDir, setName, folderDir string) ([]string, error) {
 	if len(files) == 0 {
 		return nil, fmt.Errorf("par2: no input files for set %q", setName)
 	}
@@ -110,15 +111,15 @@ func (b *BinaryExecutor) CreateSet(ctx context.Context, files []fileinfo.FileInf
 
 	outputBase := filepath.Join(dirPath, setName)
 
-	// Common ancestor of all input paths — used as parpar --filepath-base so
-	// the recorded display name is the relative path from that ancestor.
-	rootDir := commonParentDir(inputs)
-
+	// Use folderDir as --filepath-base so parpar records each file's path
+	// relative to the folder root (e.g. "extras/bonus.mkv").  This is the
+	// explicit folder root passed by the caller, which is always correct
+	// regardless of whether all input files happen to share a subdirectory.
 	args := []string{
 		"-s", fmt.Sprintf("%db", blockSize),
 		"-r", fmt.Sprintf("%d", numRecovery),
 		"-o", outputBase,
-		"--filepath-base", rootDir,
+		"--filepath-base", folderDir,
 		"--filepath-format", "outrel",
 	}
 	args = append(args, b.cfg.ParparExtraArgs...)
@@ -135,7 +136,7 @@ func (b *BinaryExecutor) CreateSet(ctx context.Context, files []fileinfo.FileInf
 
 	slog.InfoContext(ctx, "Invoking parpar binary for set",
 		"binary", b.cfg.ParparBinaryPath, "setName", setName, "files", len(inputs),
-		"outputBase", outputBase, "filepathBase", rootDir,
+		"outputBase", outputBase, "filepathBase", folderDir,
 		"blockSize", blockSize, "recoverySlices", numRecovery)
 
 	cmd := exec.CommandContext(ctx, b.cfg.ParparBinaryPath, args...)
@@ -192,40 +193,6 @@ func (b *BinaryExecutor) CreateSet(ctx context.Context, files []fileinfo.FileInf
 	}
 
 	return collectPar2SetFiles(ctx, dirPath, setName, outputBase+".par2"), nil
-}
-
-// commonParentDir returns the deepest directory that contains every input.
-// Used as parpar's --filepath-base so the embedded display name is the
-// relative path of each file beneath that directory.
-func commonParentDir(files []fileinfo.FileInfo) string {
-	if len(files) == 0 {
-		return ""
-	}
-	dir := filepath.Dir(files[0].Path)
-	for _, f := range files[1:] {
-		dir = commonPrefixDir(dir, filepath.Dir(f.Path))
-	}
-	return dir
-}
-
-func commonPrefixDir(a, b string) string {
-	if a == b {
-		return a
-	}
-	aParts := strings.Split(filepath.Clean(a), string(filepath.Separator))
-	bParts := strings.Split(filepath.Clean(b), string(filepath.Separator))
-	n := len(aParts)
-	if len(bParts) < n {
-		n = len(bParts)
-	}
-	i := 0
-	for i < n && aParts[i] == bParts[i] {
-		i++
-	}
-	if i == 0 {
-		return string(filepath.Separator)
-	}
-	return strings.Join(aParts[:i], string(filepath.Separator))
 }
 
 // CreateInDirectory creates PAR2 files in the specified output directory using the parpar binary.

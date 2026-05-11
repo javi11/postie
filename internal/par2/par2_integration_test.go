@@ -446,7 +446,10 @@ func TestIntegration_NativeExecutor_CreateSet_EmbedsRelativePaths(t *testing.T) 
 	executor := New(750_000, cfg, nil)
 
 	outDir := filepath.Join(root, "out")
-	created, err := executor.CreateSet(context.Background(), files, outDir, "folder1-testpkg")
+	// folderDir is the on-disk root of the folder being posted.
+	// FileDesc names must be relative to this dir (no top-level prefix).
+	folderDir := pkgDir
+	created, err := executor.CreateSet(context.Background(), files, outDir, "folder1-testpkg", folderDir)
 	if err != nil {
 		t.Fatalf("CreateSet: %v", err)
 	}
@@ -459,15 +462,47 @@ func TestIntegration_NativeExecutor_CreateSet_EmbedsRelativePaths(t *testing.T) 
 		t.Fatalf("expected main par2 %s: %v", mainPar2, err)
 	}
 
-	got := extractFileDescNames(t, mainPar2)
+	got := dedupe(extractFileDescNames(t, mainPar2))
 	sort.Strings(got)
+	// SABnzbd already creates a job folder named "folder1-testpkg" from the
+	// NZB title; FileDesc paths must be relative to that folder root so files
+	// land at the correct depth (no double-nesting).
 	want := []string{
-		"folder1-testpkg/file1.txt",
-		"folder1-testpkg/folder2/file2.txt",
-		"folder1-testpkg/folder2/folder3/file3.txt",
+		"file1.txt",
+		"folder2/file2.txt",
+		"folder2/folder3/file3.txt",
 	}
-	// FileDesc packets repeat across volume files; dedupe on read.
-	got = dedupe(got)
+	if !equalStrings(got, want) {
+		t.Errorf("FileDesc names: got %v, want %v", got, want)
+	}
+}
+
+// TestIntegration_NativeExecutor_CreateSet_AllFilesInSubdir verifies that when
+// all input files happen to live in one subdirectory (not spread across the
+// folder root), the FileDesc still carries the subdir prefix — not bare basenames.
+func TestIntegration_NativeExecutor_CreateSet_AllFilesInSubdir(t *testing.T) {
+	root := t.TempDir()
+	pkgDir := filepath.Join(root, "ShowS01")
+	mustMkdir(t, filepath.Join(pkgDir, "extras"))
+	fileA := createIntegrationTestFile(t, filepath.Join(pkgDir, "extras"), "bonus.mkv", 4096)
+	fileB := createIntegrationTestFile(t, filepath.Join(pkgDir, "extras"), "deleted.mkv", 4096)
+
+	files := []fileinfo.FileInfo{
+		{Path: fileA, Size: 4096, RelativePath: "ShowS01/extras/bonus.mkv"},
+		{Path: fileB, Size: 4096, RelativePath: "ShowS01/extras/deleted.mkv"},
+	}
+	cfg := &config.Par2Config{Redundancy: "10", MemoryLimit: 4 * 1024 * 1024 * 1024}
+	executor := New(750_000, cfg, nil)
+
+	outDir := filepath.Join(root, "out")
+	folderDir := pkgDir // <root>/ShowS01
+	if _, err := executor.CreateSet(context.Background(), files, outDir, "ShowS01", folderDir); err != nil {
+		t.Fatalf("CreateSet: %v", err)
+	}
+	got := dedupe(extractFileDescNames(t, filepath.Join(outDir, "ShowS01.par2")))
+	sort.Strings(got)
+	// Both files are in extras/ — FileDesc must preserve the subdir prefix.
+	want := []string{"extras/bonus.mkv", "extras/deleted.mkv"}
 	if !equalStrings(got, want) {
 		t.Errorf("FileDesc names: got %v, want %v", got, want)
 	}
@@ -484,7 +519,8 @@ func TestIntegration_NativeExecutor_CreateSet_FallsBackToBasename(t *testing.T) 
 	executor := New(750_000, cfg, nil)
 
 	outDir := filepath.Join(root, "out")
-	if _, err := executor.CreateSet(context.Background(), files, outDir, "loose"); err != nil {
+	// folderDir == root: filepath.Rel(root, file) == "loose.bin"
+	if _, err := executor.CreateSet(context.Background(), files, outDir, "loose", root); err != nil {
 		t.Fatalf("CreateSet: %v", err)
 	}
 	got := dedupe(extractFileDescNames(t, filepath.Join(outDir, "loose.par2")))

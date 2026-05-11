@@ -81,7 +81,7 @@ func (m *mockPar2Executor) CreateInDirectory(_ context.Context, _ []fileinfo.Fil
 	return created, nil
 }
 
-func (m *mockPar2Executor) CreateSet(ctx context.Context, files []fileinfo.FileInfo, outputDir, _ string) ([]string, error) {
+func (m *mockPar2Executor) CreateSet(ctx context.Context, files []fileinfo.FileInfo, outputDir, _, _ string) ([]string, error) {
 	return m.CreateInDirectory(ctx, files, outputDir)
 }
 

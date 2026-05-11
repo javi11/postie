@@ -30,11 +30,12 @@ const maxPar2Blocks = 32768
 type Par2Executor interface {
 	Create(ctx context.Context, files []fileinfo.FileInfo) ([]string, error)
 	CreateInDirectory(ctx context.Context, files []fileinfo.FileInfo, outputDir string) ([]string, error)
-	// CreateSet bundles all input files into a single par2 set named setName,
-	// embedding each file's RelativePath (or basename when empty) in the
-	// FileDesc packet so downloaders such as SABnzbd can reconstruct the
-	// folder tree on disk after par2 verification.
-	CreateSet(ctx context.Context, files []fileinfo.FileInfo, outputDir, setName string) ([]string, error)
+	// CreateSet bundles all input files into a single par2 set named setName.
+	// folderDir is the on-disk root of the folder being posted (e.g.
+	// "<watchRoot>/ShowS01"). Each FileDesc packet records the path of the
+	// file relative to folderDir (e.g. "extras/bonus.mkv") so downloaders
+	// such as SABnzbd can recreate the folder tree inside the job directory.
+	CreateSet(ctx context.Context, files []fileinfo.FileInfo, outputDir, setName, folderDir string) ([]string, error)
 }
 
 // NativeExecutor implements Par2Executor using the built-in Go PAR2 creator.
@@ -209,9 +210,10 @@ func (p *NativeExecutor) CreateInDirectory(ctx context.Context, files []fileinfo
 }
 
 // CreateSet bundles all input files into a single par2 set named setName.
-// Each FileDesc packet records the file's RelativePath (or filepath.Base
-// when empty) so SABnzbd / NZBGet can recreate the folder tree on disk.
-func (p *NativeExecutor) CreateSet(ctx context.Context, files []fileinfo.FileInfo, outputDir, setName string) ([]string, error) {
+// folderDir is the on-disk root of the folder being posted.  Each FileDesc
+// packet records filepath.Rel(folderDir, file.Path) so SABnzbd / NZBGet
+// can recreate the exact folder tree inside the job directory on disk.
+func (p *NativeExecutor) CreateSet(ctx context.Context, files []fileinfo.FileInfo, outputDir, setName, folderDir string) ([]string, error) {
 	if len(files) == 0 {
 		return nil, fmt.Errorf("par2: no input files for set %q", setName)
 	}
@@ -288,8 +290,11 @@ func (p *NativeExecutor) CreateSet(ctx context.Context, files []fileinfo.FileInf
 
 	par2Inputs := make([]par2go.InputFile, len(inputs))
 	for i, f := range inputs {
-		name := f.RelativePath
-		if name == "" {
+		// Compute the path relative to folderDir (e.g. "extras/bonus.mkv").
+		// SABnzbd already creates a job folder named after the NZB title, so
+		// FileDesc must NOT include the top-level folder name as a prefix.
+		name, relErr := filepath.Rel(folderDir, f.Path)
+		if relErr != nil || name == "" || name == "." {
 			name = filepath.Base(f.Path)
 		}
 		// Forward slashes only — par2go validates this and downloaders rely on it.
