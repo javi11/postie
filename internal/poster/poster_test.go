@@ -1251,7 +1251,7 @@ func TestPostLoop_Basic(t *testing.T) {
 		assert.Contains(t, err.Error(), "error posting article")
 	})
 
-	t.Run("postArticleWithBody fails when both attempts return broken pipe", func(t *testing.T) {
+	t.Run("postArticleWithBody fails when all attempts return broken pipe", func(t *testing.T) {
 		ctx := context.Background()
 		content := "test content"
 
@@ -1260,7 +1260,7 @@ func TestPostLoop_Basic(t *testing.T) {
 
 		mockPool := mocks.NewMockNNTPClient(ctrl)
 		mockPool.EXPECT().PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(nil, fmt.Errorf("write tcp: %w", syscall.EPIPE)).Times(2)
+			Return(nil, fmt.Errorf("write tcp: %w", syscall.EPIPE)).Times(3)
 
 		p := &poster{
 			uploadPool: mockPool,

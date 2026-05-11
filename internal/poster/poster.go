@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1090,15 +1091,20 @@ func (p *poster) postArticleWithBody(ctx context.Context, art *article.Article, 
 	postCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
-	// Retry once on broken pipe: the pool may have returned a stale connection that
-	// the server silently closed. After the broken pipe error, the pool discards that
-	// connection; the retry picks a fresh one. bytes.NewReader(body) is cheap to
-	// recreate so the body is fully re-readable on each attempt.
+	// Retry on stale pooled connection: the pool may hand back a connection the
+	// server silently closed (broken pipe / connection reset) or that has gone
+	// half-open and stops responding (read i/o timeout). After such errors the
+	// pool discards the bad connection; the retry picks a fresh one.
+	// bytes.NewReader(body) is cheap to recreate so the body is fully re-readable
+	// on each attempt. Cap at 3 attempts to avoid masking real server problems
+	// while tolerating a second stale pick after a long throttle pause.
 	var lastErr error
-	for attempt := range 2 {
+	for attempt := range 3 {
 		if attempt > 0 {
-			slog.WarnContext(ctx, "Retrying article post after broken pipe (stale pooled connection)",
-				"messageID", art.MessageID)
+			slog.WarnContext(ctx, "Retrying article post after stale pooled connection",
+				"messageID", art.MessageID,
+				"attempt", attempt,
+				"prevErr", lastErr.Error())
 		}
 
 		_, lastErr = p.uploadPool.PostYenc(postCtx, headers, bytes.NewReader(body), meta)
@@ -1110,7 +1116,7 @@ func (p *poster) postArticleWithBody(ctx context.Context, art *article.Article, 
 			return context.Canceled
 		}
 
-		if !isBrokenPipe(lastErr) {
+		if !isStaleConnError(lastErr) {
 			break
 		}
 	}
@@ -1133,15 +1139,31 @@ func (p *poster) postArticleWithBody(ctx context.Context, art *article.Article, 
 	return nil
 }
 
-// isBrokenPipe reports whether err represents a broken-pipe / connection-reset
-// condition, indicating that the remote server closed the TCP connection before
-// the client finished writing (typically a stale idle pooled connection).
-func isBrokenPipe(err error) bool {
+// isStaleConnError reports whether err looks like a stale pooled connection:
+// the remote server silently closed the TCP socket (broken pipe / connection
+// reset) or the connection went half-open and the read deadline fired before
+// any response arrived (i/o timeout). In all of these cases the pool discards
+// the bad connection, so retrying picks a fresh one.
+//
+// True context cancellation / deadline exceeded on the caller's postCtx is
+// short-circuited at the call site before this is invoked, so any net.Error
+// timeout reaching here is a per-socket read deadline rather than the
+// per-article envelope.
+func isStaleConnError(err error) bool {
+	if err == nil {
+		return false
+	}
 	if errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET) {
 		return true
 	}
+	var ne net.Error
+	if errors.As(err, &ne) && ne.Timeout() {
+		return true
+	}
 	msg := err.Error()
-	return strings.Contains(msg, "broken pipe") || strings.Contains(msg, "connection reset by peer")
+	return strings.Contains(msg, "broken pipe") ||
+		strings.Contains(msg, "connection reset by peer") ||
+		strings.Contains(msg, "i/o timeout")
 }
 
 // checkArticle checks if an article exists using the check pool
