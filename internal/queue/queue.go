@@ -1606,6 +1606,18 @@ func (q *Queue) ReaddJob(ctx context.Context, job *FileJob) error {
 	})
 }
 
+// ClearInProgress removes the in-progress tracking row for the given message ID.
+// Call this when a retry is about to be re-queued under a new ID, otherwise the
+// old in_progress row leaks and the same path appears as duplicate UI entries
+// across the pending goqite row and the stale in_progress row.
+func (q *Queue) ClearInProgress(ctx context.Context, msgID goqite.ID) error {
+	_, err := q.db.ExecContext(ctx, "DELETE FROM in_progress_items WHERE id = ?", string(msgID))
+	if err != nil {
+		return fmt.Errorf("failed to clear in-progress item %s: %w", string(msgID), err)
+	}
+	return nil
+}
+
 // SetQueueItemPriority updates the priority of a pending queue item by id
 func (q *Queue) SetQueueItemPriority(id string, priority int) error {
 	// Get the job body for the given id
