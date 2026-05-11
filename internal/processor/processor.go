@@ -533,7 +533,8 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 
 func (p *Processor) handleProcessingError(ctx context.Context, msg *goqite.Message, job *queue.FileJob, jobID string, err error) error {
 	slog.ErrorContext(ctx, "Error processing file",
-		"error", err,
+		"error", err.Error(),
+		"errorType", fmt.Sprintf("%T", err),
 		"path", job.Path,
 		"retryCount", job.RetryCount,
 		"maxRetries", maxRetries,
@@ -558,16 +559,26 @@ func (p *Processor) handleProcessingError(ctx context.Context, msg *goqite.Messa
 
 		if markErr := p.queue.MarkAsError(ctx, msg.ID, job, err.Error()); markErr != nil {
 			slog.ErrorContext(ctx, "Failed to mark job as error", "error", markErr, "path", job.Path)
-			// Re-add to queue as a fallback
+			// Re-add to queue as a fallback. Clear the in_progress row first so the
+			// new goqite entry doesn't appear alongside a stale tracking row.
+			if clearErr := p.queue.ClearInProgress(ctx, msg.ID); clearErr != nil {
+				slog.WarnContext(ctx, "Failed to clear in-progress row before re-add", "error", clearErr, "path", job.Path)
+			}
 			if readdErr := p.queue.ReaddJob(ctx, job); readdErr != nil {
 				slog.ErrorContext(ctx, "Failed to re-add job to queue", "error", readdErr, "path", job.Path)
 			}
 		}
-	} else {
-		// Re-add the job to the queue for retry
-		if readdErr := p.queue.ReaddJob(ctx, job); readdErr != nil {
-			slog.ErrorContext(ctx, "Failed to re-add job to queue for retry", "error", readdErr, "path", job.Path)
-		}
+		return nil
+	}
+
+	// Retry path: clear the in_progress tracking row for the old msg.ID before
+	// re-adding, otherwise the same path is visible as two entries (the new
+	// pending goqite row + the stale in_progress row keyed by the old ID).
+	if clearErr := p.queue.ClearInProgress(ctx, msg.ID); clearErr != nil {
+		slog.WarnContext(ctx, "Failed to clear in-progress row before retry", "error", clearErr, "path", job.Path)
+	}
+	if readdErr := p.queue.ReaddJob(ctx, job); readdErr != nil {
+		slog.ErrorContext(ctx, "Failed to re-add job to queue for retry", "error", readdErr, "path", job.Path)
 	}
 
 	return nil
