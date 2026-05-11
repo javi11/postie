@@ -6,9 +6,12 @@ package par2
 // Run with: go test ./internal/par2/... -run "Integration" -v -timeout 120s
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -384,4 +387,176 @@ func TestIntegration_NativeExecutor_SkipsInputPar2Files(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create: unexpected error: %v", err)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// CreateSet — folder mode, FileDesc relative paths (issue #219)
+// ---------------------------------------------------------------------------
+
+// extractFileDescNames parses a par2 file and returns the list of filenames
+// embedded in FileDesc packets, in the order they appear.
+func extractFileDescNames(t *testing.T, path string) []string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read par2 %s: %v", path, err)
+	}
+	magic := []byte{'P', 'A', 'R', '2', 0, 'P', 'K', 'T'}
+	fdType := []byte{'P', 'A', 'R', ' ', '2', '.', '0', 0, 'F', 'i', 'l', 'e', 'D', 'e', 's', 'c'}
+	var names []string
+	for off := 0; off+64 <= len(data); {
+		if !bytes.Equal(data[off:off+8], magic) {
+			off++
+			continue
+		}
+		length := binary.LittleEndian.Uint64(data[off+8 : off+16])
+		if length < 64 || off+int(length) > len(data) {
+			break
+		}
+		typ := data[off+48 : off+64]
+		if bytes.Equal(typ, fdType) {
+			// Body layout: fileID(16) hashFull(16) hash16k(16) fileSize(8) name(N)
+			body := data[off+64 : off+int(length)]
+			if len(body) > 56 {
+				name := strings.TrimRight(string(body[56:]), "\x00")
+				names = append(names, name)
+			}
+		}
+		off += int(length)
+	}
+	return names
+}
+
+func TestIntegration_NativeExecutor_CreateSet_EmbedsRelativePaths(t *testing.T) {
+	root := t.TempDir()
+	// Build folder1-testpkg/{file1.txt, folder2/file2.txt, folder2/folder3/file3.txt}
+	pkgDir := filepath.Join(root, "folder1-testpkg")
+	mustMkdir(t, filepath.Join(pkgDir, "folder2", "folder3"))
+	file1 := createIntegrationTestFile(t, pkgDir, "file1.txt", 4096)
+	file2 := createIntegrationTestFile(t, filepath.Join(pkgDir, "folder2"), "file2.txt", 4096)
+	file3 := createIntegrationTestFile(t, filepath.Join(pkgDir, "folder2", "folder3"), "file3.txt", 4096)
+
+	files := []fileinfo.FileInfo{
+		{Path: file1, Size: 4096, RelativePath: "folder1-testpkg/file1.txt"},
+		{Path: file2, Size: 4096, RelativePath: "folder1-testpkg/folder2/file2.txt"},
+		{Path: file3, Size: 4096, RelativePath: "folder1-testpkg/folder2/folder3/file3.txt"},
+	}
+
+	cfg := &config.Par2Config{Redundancy: "10", SliceSize: 0, MemoryLimit: 4 * 1024 * 1024 * 1024}
+	executor := New(750_000, cfg, nil)
+
+	outDir := filepath.Join(root, "out")
+	// folderDir is the on-disk root of the folder being posted.
+	// FileDesc names must be relative to this dir (no top-level prefix).
+	folderDir := pkgDir
+	created, err := executor.CreateSet(context.Background(), files, outDir, "folder1-testpkg", folderDir)
+	if err != nil {
+		t.Fatalf("CreateSet: %v", err)
+	}
+	if len(created) == 0 {
+		t.Fatal("CreateSet returned no files")
+	}
+
+	mainPar2 := filepath.Join(outDir, "folder1-testpkg.par2")
+	if _, err := os.Stat(mainPar2); err != nil {
+		t.Fatalf("expected main par2 %s: %v", mainPar2, err)
+	}
+
+	got := dedupe(extractFileDescNames(t, mainPar2))
+	sort.Strings(got)
+	// SABnzbd already creates a job folder named "folder1-testpkg" from the
+	// NZB title; FileDesc paths must be relative to that folder root so files
+	// land at the correct depth (no double-nesting).
+	want := []string{
+		"file1.txt",
+		"folder2/file2.txt",
+		"folder2/folder3/file3.txt",
+	}
+	if !equalStrings(got, want) {
+		t.Errorf("FileDesc names: got %v, want %v", got, want)
+	}
+}
+
+// TestIntegration_NativeExecutor_CreateSet_AllFilesInSubdir verifies that when
+// all input files happen to live in one subdirectory (not spread across the
+// folder root), the FileDesc still carries the subdir prefix — not bare basenames.
+func TestIntegration_NativeExecutor_CreateSet_AllFilesInSubdir(t *testing.T) {
+	root := t.TempDir()
+	pkgDir := filepath.Join(root, "ShowS01")
+	mustMkdir(t, filepath.Join(pkgDir, "extras"))
+	fileA := createIntegrationTestFile(t, filepath.Join(pkgDir, "extras"), "bonus.mkv", 4096)
+	fileB := createIntegrationTestFile(t, filepath.Join(pkgDir, "extras"), "deleted.mkv", 4096)
+
+	files := []fileinfo.FileInfo{
+		{Path: fileA, Size: 4096, RelativePath: "ShowS01/extras/bonus.mkv"},
+		{Path: fileB, Size: 4096, RelativePath: "ShowS01/extras/deleted.mkv"},
+	}
+	cfg := &config.Par2Config{Redundancy: "10", MemoryLimit: 4 * 1024 * 1024 * 1024}
+	executor := New(750_000, cfg, nil)
+
+	outDir := filepath.Join(root, "out")
+	folderDir := pkgDir // <root>/ShowS01
+	if _, err := executor.CreateSet(context.Background(), files, outDir, "ShowS01", folderDir); err != nil {
+		t.Fatalf("CreateSet: %v", err)
+	}
+	got := dedupe(extractFileDescNames(t, filepath.Join(outDir, "ShowS01.par2")))
+	sort.Strings(got)
+	// Both files are in extras/ — FileDesc must preserve the subdir prefix.
+	want := []string{"extras/bonus.mkv", "extras/deleted.mkv"}
+	if !equalStrings(got, want) {
+		t.Errorf("FileDesc names: got %v, want %v", got, want)
+	}
+}
+
+func TestIntegration_NativeExecutor_CreateSet_FallsBackToBasename(t *testing.T) {
+	root := t.TempDir()
+	file := createIntegrationTestFile(t, root, "loose.bin", 4096)
+
+	files := []fileinfo.FileInfo{
+		{Path: file, Size: 4096}, // no RelativePath
+	}
+	cfg := &config.Par2Config{Redundancy: "10", MemoryLimit: 4 * 1024 * 1024 * 1024}
+	executor := New(750_000, cfg, nil)
+
+	outDir := filepath.Join(root, "out")
+	// folderDir == root: filepath.Rel(root, file) == "loose.bin"
+	if _, err := executor.CreateSet(context.Background(), files, outDir, "loose", root); err != nil {
+		t.Fatalf("CreateSet: %v", err)
+	}
+	got := dedupe(extractFileDescNames(t, filepath.Join(outDir, "loose.par2")))
+	if !equalStrings(got, []string{"loose.bin"}) {
+		t.Errorf("FileDesc names: got %v, want [loose.bin]", got)
+	}
+}
+
+func mustMkdir(t *testing.T, p string) {
+	t.Helper()
+	if err := os.MkdirAll(p, 0755); err != nil {
+		t.Fatalf("mkdir %s: %v", p, err)
+	}
+}
+
+func dedupe(in []string) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	for _, s := range in {
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

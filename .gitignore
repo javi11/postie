@@ -29,3 +29,5 @@ postie-cli
 # ClaudPoint checkpoint system
 .checkpoints/
 example/
+# CocoIndex Code (ccc)
+/.cocoindex_code/
