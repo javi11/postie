@@ -206,6 +206,52 @@ func (a *App) processorConfigChanged(newConfig *config.ConfigData) bool {
 		return true
 	}
 
+	if a.par2ConfigChanged(newConfig) {
+		return true
+	}
+
+	return false
+}
+
+func equalBoolPtr(a, b *bool) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+// par2ConfigChanged reports whether any Par2Config field has changed. Par2
+// settings are captured by Postie when each job starts, so flipping any of
+// them (in particular ParparBinaryPath, which selects the native vs. external
+// par2 executor) requires reinitializing the processor.
+func (a *App) par2ConfigChanged(newConfig *config.ConfigData) bool {
+	if a.config == nil {
+		return true
+	}
+	oldP := a.config.Par2
+	newP := newConfig.Par2
+
+	if !equalBoolPtr(oldP.Enabled, newP.Enabled) ||
+		!equalBoolPtr(oldP.MaintainPar2Files, newP.MaintainPar2Files) ||
+		!equalBoolPtr(oldP.SkipIfPar2Exists, newP.SkipIfPar2Exists) {
+		return true
+	}
+	if oldP.Redundancy != newP.Redundancy ||
+		oldP.TempDir != newP.TempDir ||
+		oldP.ParparBinaryPath != newP.ParparBinaryPath ||
+		oldP.NumGoroutines != newP.NumGoroutines ||
+		oldP.MemoryLimit != newP.MemoryLimit ||
+		oldP.SliceSize != newP.SliceSize {
+		return true
+	}
+	if len(oldP.ParparExtraArgs) != len(newP.ParparExtraArgs) {
+		return true
+	}
+	for i := range newP.ParparExtraArgs {
+		if oldP.ParparExtraArgs[i] != newP.ParparExtraArgs[i] {
+			return true
+		}
+	}
 	return false
 }
 
