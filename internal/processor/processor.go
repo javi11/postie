@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -140,6 +141,12 @@ func (p *Processor) Start(ctx context.Context) error {
 	processTicker := time.NewTicker(time.Second * 2) // Process queue frequently
 	defer processTicker.Stop()
 
+	// Diagnostic watchdog: periodically log goroutine count and heap usage at
+	// debug level so silent OOM-kills (e.g. on memory-constrained NAS hosts)
+	// leave a trend line in the logs before the process dies. See issue #184.
+	watchdogTicker := time.NewTicker(10 * time.Second)
+	defer watchdogTicker.Stop()
+
 	// Main processing loop
 	for {
 		select {
@@ -149,6 +156,15 @@ func (p *Processor) Start(ctx context.Context) error {
 			if err := p.processQueueItems(ctx); err != nil {
 				slog.ErrorContext(ctx, "Error processing queue", "error", err)
 			}
+		case <-watchdogTicker.C:
+			var ms runtime.MemStats
+			runtime.ReadMemStats(&ms)
+			slog.DebugContext(ctx, "Runtime watchdog",
+				"goroutines", runtime.NumGoroutine(),
+				"heap_alloc_bytes", ms.HeapAlloc,
+				"heap_inuse_bytes", ms.HeapInuse,
+				"sys_bytes", ms.Sys,
+			)
 		}
 	}
 }

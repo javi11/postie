@@ -1348,6 +1348,153 @@ func TestCheckLoop_Basic(t *testing.T) {
 
 // Test helper functions
 
+// TestSharedUploadPool verifies that the global poster worker pool introduced
+// for issue #184 (https://github.com/javi11/postie/issues/184) actually caps
+// concurrent in-flight article posts at numOfConnections regardless of how
+// many concurrent Post() calls are happening, and that Close() drains cleanly.
+func TestSharedUploadPool(t *testing.T) {
+	t.Run("concurrent posts share workers and stay bounded", func(t *testing.T) {
+		ctx := context.Background()
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		const maxConnections = 4
+		const concurrentPosts = 8
+
+		// Track simultaneously-active article posts. The mock blocks briefly so
+		// many articles overlap; the in-flight peak must not exceed
+		// maxConnections.
+		var inflight atomic.Int32
+		var peak atomic.Int32
+
+		mockPool := mocks.NewMockNNTPClient(ctrl)
+		mockPool.EXPECT().Stats().Return(nntppool.ClientStats{
+			Providers: []nntppool.ProviderStats{{MaxConnections: maxConnections}},
+		}).AnyTimes()
+		mockPool.EXPECT().
+			PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ any, _ any, _ any) (*nntppool.PostResult, error) {
+				cur := inflight.Add(1)
+				for {
+					p := peak.Load()
+					if cur <= p || peak.CompareAndSwap(p, cur) {
+						break
+					}
+				}
+				time.Sleep(5 * time.Millisecond)
+				inflight.Add(-1)
+				return &nntppool.PostResult{}, nil
+			}).
+			AnyTimes()
+
+		nzbGen := mocks.NewMockNZBGenerator(ctrl)
+		nzbGen.EXPECT().AddArticle(gomock.Any()).Return().AnyTimes()
+
+		mockJobProgress := mocks.NewMockJobProgress(ctrl)
+		mockProgress := mocks.NewMockProgress(ctrl)
+		mockJobProgress.EXPECT().AddProgress(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(mockProgress).AnyTimes()
+		mockJobProgress.EXPECT().FinishProgress(gomock.Any()).AnyTimes()
+		mockProgress.EXPECT().UpdateProgress(gomock.Any()).AnyTimes()
+		mockProgress.EXPECT().Finish().AnyTimes()
+		mockProgress.EXPECT().GetID().Return(uuid.New()).AnyTimes()
+
+		checkCfg := createTestPostCheckConfig()
+		disabled := false
+		checkCfg.Enabled = &disabled
+
+		p := &poster{
+			cfg:         createTestConfig(),
+			checkCfg:    checkCfg,
+			uploadPool:  mockPool,
+			stats:       &Stats{StartTime: time.Now()},
+			throttle:    NewThrottle(1024*1024, time.Second),
+			jobProgress: mockJobProgress,
+		}
+
+		// Build a content blob large enough to produce several articles per
+		// Post() so workers actually contend for slots.
+		content := strings.Repeat("test data ", 500)
+
+		var wg sync.WaitGroup
+		errCh := make(chan error, concurrentPosts)
+		for range concurrentPosts {
+			testFile := createTestFile(t, content)
+			defer func() { _ = os.Remove(testFile) }()
+			wg.Add(1)
+			go func(f string) {
+				defer wg.Done()
+				errCh <- p.Post(ctx, []string{f}, "", nzbGen)
+			}(testFile)
+		}
+		wg.Wait()
+		close(errCh)
+		for err := range errCh {
+			assert.NoError(t, err)
+		}
+
+		assert.LessOrEqual(t, int(peak.Load()), maxConnections,
+			"peak concurrent in-flight article posts should not exceed numOfConnections")
+		assert.Equal(t, int32(0), inflight.Load(),
+			"all in-flight posts should have completed before Wait() returned")
+
+		p.Close()
+	})
+
+	t.Run("Close drains workers and rejects new Post calls", func(t *testing.T) {
+		ctx := context.Background()
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockPool := createMockNNTPClient(ctrl)
+		mockPool.EXPECT().PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&nntppool.PostResult{}, nil).AnyTimes()
+
+		nzbGen := mocks.NewMockNZBGenerator(ctrl)
+		nzbGen.EXPECT().AddArticle(gomock.Any()).Return().AnyTimes()
+
+		mockJobProgress := mocks.NewMockJobProgress(ctrl)
+		mockProgress := mocks.NewMockProgress(ctrl)
+		mockJobProgress.EXPECT().AddProgress(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(mockProgress).AnyTimes()
+		mockJobProgress.EXPECT().FinishProgress(gomock.Any()).AnyTimes()
+		mockProgress.EXPECT().UpdateProgress(gomock.Any()).AnyTimes()
+		mockProgress.EXPECT().Finish().AnyTimes()
+		mockProgress.EXPECT().GetID().Return(uuid.New()).AnyTimes()
+
+		checkCfg := createTestPostCheckConfig()
+		disabled := false
+		checkCfg.Enabled = &disabled
+
+		p := &poster{
+			cfg:         createTestConfig(),
+			checkCfg:    checkCfg,
+			uploadPool:  mockPool,
+			stats:       &Stats{StartTime: time.Now()},
+			throttle:    NewThrottle(1024*1024, time.Second),
+			jobProgress: mockJobProgress,
+		}
+
+		testFile := createTestFile(t, strings.Repeat("test data ", 100))
+		defer func() { _ = os.Remove(testFile) }()
+
+		require.NoError(t, p.Post(ctx, []string{testFile}, "", nzbGen))
+
+		// Close must drain workers (no goroutine leak) and short-circuit
+		// subsequent Post() calls with ErrPosterClosed.
+		closed := make(chan struct{})
+		go func() {
+			p.Close()
+			close(closed)
+		}()
+		select {
+		case <-closed:
+		case <-time.After(2 * time.Second):
+			t.Fatal("Close did not drain workers within 2s")
+		}
+
+		err := p.Post(ctx, []string{testFile}, "", nzbGen)
+		assert.ErrorIs(t, err, ErrPosterClosed)
+	})
+}
+
 func createTestConfig() config.PostingConfig {
 	enabled := true
 	return config.PostingConfig{

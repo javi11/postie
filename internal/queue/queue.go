@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/javi11/postie/internal/database"
@@ -62,6 +63,14 @@ type Queue struct {
 	db        *sql.DB
 	runCtx    context.Context
 	runCancel context.CancelFunc
+
+	// addMu serializes check-then-insert in the duplicate-checking Add* methods.
+	// goqite.Send uses its own *sql.DB handle so a SQL transaction cannot span
+	// IsPathInQueue + Send; we close the TOCTOU window at the application level.
+	// See issue #184: under MaxConcurrentUploads > 1 the watcher and processor
+	// can both race to add the same path between the IsPathInQueue check and
+	// the Send call.
+	addMu sync.Mutex
 }
 
 type QueueItem struct {
@@ -209,6 +218,9 @@ func (q *Queue) recoverInProgressItems(ctx context.Context) {
 
 // AddFile adds a file to the queue for processing
 func (q *Queue) AddFile(ctx context.Context, path string, size int64) error {
+	q.addMu.Lock()
+	defer q.addMu.Unlock()
+
 	// Check if the path already exists in pending queue, completed items, or errored items
 	exists, err := q.IsPathInQueue(path)
 	if err != nil {
@@ -266,6 +278,9 @@ func (q *Queue) AddFileWithoutDuplicateCheck(ctx context.Context, path string, s
 
 // AddFileWithPriority adds a file to the queue with a specific priority
 func (q *Queue) AddFileWithPriority(ctx context.Context, path string, size int64, priority int) error {
+	q.addMu.Lock()
+	defer q.addMu.Unlock()
+
 	// Check if the path already exists in pending queue, completed items, or errored items
 	exists, err := q.IsPathInQueue(path)
 	if err != nil {
@@ -325,6 +340,9 @@ func (q *Queue) AddFileWithPriorityWithoutDuplicateCheck(ctx context.Context, pa
 // (priority, input folder for relative-path output, delete-original flag).
 // Skips the add if the path is already tracked anywhere in the queue.
 func (q *Queue) AddFileWithOptions(ctx context.Context, path string, size int64, opts AddOptions) error {
+	q.addMu.Lock()
+	defer q.addMu.Unlock()
+
 	exists, err := q.IsPathInQueue(path)
 	if err != nil {
 		return fmt.Errorf("failed to check if path exists: %w", err)
