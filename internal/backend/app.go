@@ -122,6 +122,7 @@ type App struct {
 	pendingConfigMux     sync.RWMutex
 	isApplyingConfig     atomic.Bool
 	postCheckWorker      *processor.PostCheckRetryWorker
+	broadcaster          *eventBroadcaster
 }
 
 // getCrashLogPath returns the path for crash logs
@@ -390,6 +391,10 @@ func (a *App) Startup(ctx context.Context) {
 		}
 	}
 
+	// Start the event broadcaster. It runs in both web and desktop modes and
+	// drives push events that replace per-client polling.
+	a.broadcaster = newEventBroadcaster(a)
+	a.broadcaster.start()
 }
 
 // Shutdown gracefully shuts down the application and closes all resources
@@ -397,6 +402,12 @@ func (a *App) Shutdown() {
 	defer a.recoverPanic("Shutdown")
 
 	slog.Info("Application shutdown initiated")
+
+	// Stop the event broadcaster before tearing down the components it reads from.
+	if a.broadcaster != nil {
+		a.broadcaster.stop()
+		a.broadcaster = nil
+	}
 
 	// Stop post check retry worker if running
 	if a.postCheckWorker != nil {
@@ -982,6 +993,37 @@ func (a *App) TestProviderConnectivity(serverData ServerData) ValidationResult {
 	}
 }
 
+// ProcessingPauseState is the payload broadcast with pause-related events. A
+// full snapshot lets the UI render the header without follow-up RPCs.
+type ProcessingPauseState struct {
+	Paused     bool   `json:"paused"`
+	AutoPaused bool   `json:"autoPaused"`
+	Reason     string `json:"reason"`
+}
+
+// pauseState returns a snapshot of the current pause/auto-pause state.
+func (a *App) pauseState() ProcessingPauseState {
+	return ProcessingPauseState{
+		Paused:     a.IsProcessingPaused(),
+		AutoPaused: a.IsProcessingAutoPaused(),
+		Reason:     a.GetAutoPauseReason(),
+	}
+}
+
+// emit dispatches an event through the active transport (Wails runtime in
+// desktop mode, the WebSocket hub in web mode).
+func (a *App) emit(eventType string, payload any) {
+	if a.isWebMode {
+		if a.webEventEmitter != nil {
+			a.webEventEmitter(eventType, payload)
+		}
+		return
+	}
+	if a.ctx != nil {
+		wailsruntime.EventsEmit(a.ctx, eventType, payload)
+	}
+}
+
 // PauseProcessing pauses the processor to prevent new jobs from starting
 func (a *App) PauseProcessing() error {
 	defer a.recoverPanic("PauseProcessing")
@@ -993,12 +1035,7 @@ func (a *App) PauseProcessing() error {
 	a.processor.PauseProcessing()
 	slog.Info("Processing paused via API")
 
-	// Emit events for both desktop and web modes
-	if !a.isWebMode {
-		wailsruntime.EventsEmit(a.ctx, "processing:paused")
-	} else if a.webEventEmitter != nil {
-		a.webEventEmitter("processing:paused", nil)
-	}
+	a.emit("processing:paused", a.pauseState())
 
 	return nil
 }
@@ -1014,12 +1051,7 @@ func (a *App) ResumeProcessing() error {
 	a.processor.ResumeProcessing()
 	slog.Info("Processing resumed via API")
 
-	// Emit events for both desktop and web modes
-	if !a.isWebMode {
-		wailsruntime.EventsEmit(a.ctx, "processing:resumed")
-	} else if a.webEventEmitter != nil {
-		a.webEventEmitter("processing:resumed", nil)
-	}
+	a.emit("processing:resumed", a.pauseState())
 
 	return nil
 }

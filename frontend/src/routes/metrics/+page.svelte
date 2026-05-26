@@ -1,5 +1,9 @@
 <script lang="ts">
 import apiClient from "$lib/api/client";
+import {
+	EVENT_NNTP_POOL_METRICS_UPDATED,
+	type NntpPoolMetricsEvent,
+} from "$lib/api/events";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import { onMount, onDestroy } from "svelte";
@@ -10,31 +14,20 @@ import { formatElapsed } from "$lib/utils";
 let metrics = $state<backend.NntpPoolMetrics | null>(null);
 let loading = $state(true);
 let error = $state<string | null>(null);
-let refreshInterval = $state<NodeJS.Timeout | null>(null);
-
-// Auto-refresh every 5 seconds
-const REFRESH_INTERVAL = 5000;
 
 onMount(async () => {
 	await loadMetrics();
-	startAutoRefresh();
+	await apiClient.on(EVENT_NNTP_POOL_METRICS_UPDATED, applyMetricsEvent);
 });
 
 onDestroy(() => {
-	stopAutoRefresh();
+	apiClient.off(EVENT_NNTP_POOL_METRICS_UPDATED, applyMetricsEvent);
 });
 
-function startAutoRefresh() {
-	refreshInterval = setInterval(async () => {
-		await loadMetrics(false); // Don't show loading state on auto-refresh
-	}, REFRESH_INTERVAL);
-}
-
-function stopAutoRefresh() {
-	if (refreshInterval) {
-		clearInterval(refreshInterval);
-		refreshInterval = null;
-	}
+function applyMetricsEvent(data: unknown) {
+	if (!data) return;
+	metrics = data as NntpPoolMetricsEvent;
+	error = null;
 }
 
 async function loadMetrics(showLoading = true) {
@@ -85,7 +78,7 @@ function formatNumber(num: number): string {
 		<div class="flex items-center gap-3">
 			<!-- Auto-refresh indicator -->
 			<div class="flex items-center gap-2 text-sm text-base-content/60">
-				<Activity class="w-4 h-4 {refreshInterval ? 'animate-pulse text-primary' : ''}" />
+				<Activity class="w-4 h-4 animate-pulse text-primary" />
 				<span>{$t('metrics.auto_refresh')}</span>
 			</div>
 
