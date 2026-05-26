@@ -261,9 +261,9 @@ func (p *NativeExecutor) CreateSet(ctx context.Context, files []fileinfo.FileInf
 		}
 	}
 	parBlockSize := p.computeSetBlockSize(totalSize, maxFileSize)
-	if parBlockSize < 4 {
-		slog.WarnContext(ctx, "Block size too small for PAR2 set creation, skipping",
-			"setName", setName, "totalSize", totalSize)
+	if parBlockSize < 128 {
+		slog.WarnContext(ctx, "Block size too small for SIMD-safe PAR2 set creation, skipping",
+			"setName", setName, "totalSize", totalSize, "blockSize", parBlockSize)
 		return nil, nil
 	}
 
@@ -369,14 +369,18 @@ func (p *NativeExecutor) computeSetBlockSize(totalSize, maxFileSize uint64) uint
 		}
 	}
 	// SIMD-safe alignment when a single file is smaller than the block size.
+	const simdSafeAlignment = uint64(128)
 	if maxFileSize > 0 && parBlockSize > maxFileSize {
-		const simdSafeAlignment = uint64(128)
 		if maxFileSize < simdSafeAlignment {
 			return 0
 		}
 		parBlockSize = (maxFileSize / simdSafeAlignment) * simdSafeAlignment
 	}
-	return alignDown(parBlockSize, 4)
+	// Every slice size handed to par2go must be SIMD-aligned. The ParPar C
+	// backend reads in vector lanes up to 64 bytes wide; a non-aligned size
+	// causes overreads past the slice buffer and intermittent segfaults on
+	// Linux x86_64 / AVX-512. 128 covers all current strides.
+	return alignDown(parBlockSize, simdSafeAlignment)
 }
 
 // checkExistingPar2SetInPath looks for an already-generated par2 set in
@@ -413,39 +417,44 @@ func collectPar2SetFiles(ctx context.Context, dirPath, setName, mainPath string)
 	return out
 }
 
-// createPar2ForFile creates PAR2 files for a single input file in the given directory.
-func (p *NativeExecutor) createPar2ForFile(ctx context.Context, file fileinfo.FileInfo, dirPath string) ([]string, error) {
+// computeFileBlockSize picks a SIMD-safe slice size for a single file. Returns
+// 0 when no safe block size exists (file smaller than the SIMD alignment).
+// Exposed at package level so tests can assert the invariant directly.
+func computeFileBlockSize(fileSize, articleSize uint64, configuredSliceSize int64) uint64 {
+	const simdSafeAlignment = uint64(128)
+
 	var parBlockSize uint64
-	if p.cfg.SliceSize > 0 && uint64(p.cfg.SliceSize) <= file.Size {
-		parBlockSize = uint64(p.cfg.SliceSize)
+	if configuredSliceSize > 0 && uint64(configuredSliceSize) <= fileSize {
+		parBlockSize = uint64(configuredSliceSize)
 	} else {
 		// Configured SliceSize exceeds file size (or is unset): fall back to
 		// article-size-based calculation. Clamping SliceSize to ≈file.Size
 		// creates only 1-2 slices with a nearly-zero last slice, which triggers
 		// undefined behavior in the ParPar C SIMD backend on Linux x86_64 (AVX-512).
-		parBlockSize = calculateParBlockSize(file.Size, p.articleSize)
+		parBlockSize = calculateParBlockSize(fileSize, articleSize)
 	}
-	// Guard: block size must not exceed file size AND must be SIMD-aligned.
-	// The underlying ParPar C library may read up to (stride-1) bytes past the buffer
-	// end when sliceSize is not a multiple of the SIMD stride (e.g. 64 bytes for
-	// AVX-512 on Linux x86_64). Round DOWN to nearest 128-byte boundary after
-	// clamping to prevent buffer overreads and segfaults.
-	if file.Size > 0 && parBlockSize > file.Size {
-		const simdSafeAlignment = uint64(128)
-		if file.Size < simdSafeAlignment {
-			// File smaller than SIMD-safe alignment — par2go's C backend may read
-			// past the buffer end with sub-stride slice sizes, causing a segfault
-			// on AVX-512 hardware. Skip PAR2 creation for such tiny files.
-			slog.WarnContext(ctx, "File too small for SIMD-safe PAR2 creation, skipping",
-				"path", file.Path, "size", file.Size)
-			return nil, nil
+	if fileSize > 0 && parBlockSize > fileSize {
+		if fileSize < simdSafeAlignment {
+			return 0
 		}
-		parBlockSize = (file.Size / simdSafeAlignment) * simdSafeAlignment
+		parBlockSize = (fileSize / simdSafeAlignment) * simdSafeAlignment
 	}
-	// PAR2 spec requires slice size to be a multiple of 4
-	parBlockSize = alignDown(parBlockSize, 4)
-	if parBlockSize < 4 {
-		slog.WarnContext(ctx, "Block size too small for PAR2 creation, skipping",
+	parBlockSize = alignDown(parBlockSize, simdSafeAlignment)
+	if parBlockSize < simdSafeAlignment {
+		return 0
+	}
+	return parBlockSize
+}
+
+// createPar2ForFile creates PAR2 files for a single input file in the given directory.
+func (p *NativeExecutor) createPar2ForFile(ctx context.Context, file fileinfo.FileInfo, dirPath string) ([]string, error) {
+	// Slice size handed to par2go MUST be a multiple of 128 (SIMD-safe). Otherwise
+	// the ParPar C backend overreads past the slice on the last vector lane and
+	// randomly segfaults when the over-read crosses an unmapped page (AVX-512 on
+	// Linux x86_64). See computeFileBlockSize for the alignment policy.
+	parBlockSize := computeFileBlockSize(file.Size, p.articleSize, p.cfg.SliceSize)
+	if parBlockSize == 0 {
+		slog.WarnContext(ctx, "Block size too small for SIMD-safe PAR2 creation, skipping",
 			"path", file.Path, "size", file.Size)
 		return nil, nil
 	}

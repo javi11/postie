@@ -207,6 +207,49 @@ func TestIsPar2File(t *testing.T) {
 	}
 }
 
+// TestComputeFileBlockSize_SIMDAligned is a regression test for the random
+// segfault in CI (run 26437870974). The previous code path produced a
+// 10_000-byte slice size for {articleSize=10_000, file=100 KB, SliceSize=10 MiB},
+// which is not a multiple of the AVX-512 stride (64 bytes) and caused the
+// ParPar C backend to overread past the slice buffer.
+func TestComputeFileBlockSize_SIMDAligned(t *testing.T) {
+	const simdAlignment = uint64(128)
+	cases := []struct {
+		name                string
+		fileSize            uint64
+		articleSize         uint64
+		configuredSliceSize int64
+		wantZero            bool
+	}{
+		{"CI repro: 100KB file, 10K article, 10MiB cfg", 100_000, 10_000, 10 * 1024 * 1024, false},
+		{"100KB file, default article (750K), no cfg", 100_000, 750_000, 0, false},
+		{"10MB file, 512K article", 10 * 1024 * 1024, 512 * 1024, 0, false},
+		{"127-byte file too small", 127, 750_000, 0, true},
+		{"128-byte file is minimum", 128, 750_000, 0, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := computeFileBlockSize(tc.fileSize, tc.articleSize, tc.configuredSliceSize)
+			if tc.wantZero {
+				if got != 0 {
+					t.Errorf("expected 0 (skip), got %d", got)
+				}
+				return
+			}
+			if got == 0 {
+				t.Fatal("expected non-zero block size, got 0")
+			}
+			if got%simdAlignment != 0 {
+				t.Errorf("block size %d is not a multiple of %d — would crash ParPar SIMD backend", got, simdAlignment)
+			}
+			if got > tc.fileSize {
+				t.Errorf("block size %d exceeds file size %d", got, tc.fileSize)
+			}
+		})
+	}
+}
+
 func TestCalculateParBlockSize(t *testing.T) {
 	testCases := []struct {
 		fileSize    uint64
