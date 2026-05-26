@@ -1,5 +1,11 @@
 <script lang="ts">
 import apiClient from "$lib/api/client";
+import {
+  EVENT_PROCESSING_AUTO_PAUSED,
+  EVENT_PROCESSING_PAUSED,
+  EVENT_PROCESSING_RESUMED,
+  type ProcessingPauseEvent,
+} from "$lib/api/events";
 import { t } from "$lib/i18n";
 import { toastStore } from "$lib/stores/toast";
 import { uploadActions, uploadStore } from "$lib/stores/upload";
@@ -17,40 +23,47 @@ let { needsConfiguration, criticalConfigError, handleUpload }: {
 let isPaused = $state(false);
 let isAutoPaused = $state(false);
 let autoPauseReason = $state("");
-let pauseCheckInterval: NodeJS.Timeout | null = null;
 let showFileExplorer = $state(false);
 let isWebMode = $state(false);
 
-// Check pause status and auto-pause status (only update if changed to prevent unnecessary re-renders)
-async function checkPauseStatus() {
-  try {
-    const newPaused = await apiClient.isProcessingPaused();
-    const newAutoPaused = await apiClient.isProcessingAutoPaused();
-    const newReason = await apiClient.getAutoPauseReason();
+function applyPauseEvent(data: unknown) {
+  const event = data as Partial<ProcessingPauseEvent> | undefined;
+  if (!event) return;
+  if (typeof event.paused === "boolean") isPaused = event.paused;
+  if (typeof event.autoPaused === "boolean") isAutoPaused = event.autoPaused;
+  if (typeof event.reason === "string") autoPauseReason = event.reason;
+}
 
-    if (isPaused !== newPaused) isPaused = newPaused;
-    if (isAutoPaused !== newAutoPaused) isAutoPaused = newAutoPaused;
-    if (autoPauseReason !== newReason) autoPauseReason = newReason;
+async function fetchInitialPauseStatus() {
+  try {
+    const [paused, autoPaused, reason] = await Promise.all([
+      apiClient.isProcessingPaused(),
+      apiClient.isProcessingAutoPaused(),
+      apiClient.getAutoPauseReason(),
+    ]);
+    isPaused = paused;
+    isAutoPaused = autoPaused;
+    autoPauseReason = reason;
   } catch (error) {
-    console.error("Failed to check pause status:", error);
+    console.error("Failed to fetch initial pause status:", error);
   }
 }
 
-// Check environment and setup periodic pause status checks
 onMount(async () => {
-  checkPauseStatus();
-  pauseCheckInterval = setInterval(checkPauseStatus, 1000);
-  
-  // Check if we're in web mode
   await apiClient.initialize();
   isWebMode = apiClient.environment === "web";
+
+  await fetchInitialPauseStatus();
+
+  await apiClient.on(EVENT_PROCESSING_PAUSED, applyPauseEvent);
+  await apiClient.on(EVENT_PROCESSING_RESUMED, applyPauseEvent);
+  await apiClient.on(EVENT_PROCESSING_AUTO_PAUSED, applyPauseEvent);
 });
 
 onDestroy(() => {
-  if (pauseCheckInterval) {
-    clearInterval(pauseCheckInterval);
-    pauseCheckInterval = null;
-  }
+  apiClient.off(EVENT_PROCESSING_PAUSED, applyPauseEvent);
+  apiClient.off(EVENT_PROCESSING_RESUMED, applyPauseEvent);
+  apiClient.off(EVENT_PROCESSING_AUTO_PAUSED, applyPauseEvent);
 });
 
 function formatFileSize(bytes: number): string {

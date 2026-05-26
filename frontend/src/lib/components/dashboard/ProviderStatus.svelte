@@ -1,5 +1,9 @@
 <script lang="ts">
 import apiClient from "$lib/api/client";
+import {
+	EVENT_NNTP_POOL_METRICS_UPDATED,
+	type NntpPoolMetricsEvent,
+} from "$lib/api/events";
 import { t } from "$lib/i18n";
 import { backend } from "$lib/wailsjs/go/models";
 import { CheckCircle, Clock, AlertCircle, Server, WifiOff } from "lucide-svelte";
@@ -9,10 +13,12 @@ import { onDestroy, onMount } from "svelte";
 let poolMetrics = $state<backend.NntpPoolMetrics | null>(null);
 let initialLoad = $state(true);
 let error = $state("");
-let refreshInterval: NodeJS.Timeout | null = null;
 
-// Refresh every 5 seconds
-const REFRESH_INTERVAL = 5000;
+function applyPoolMetrics(data: unknown) {
+	if (!data) return;
+	poolMetrics = data as NntpPoolMetricsEvent;
+	error = "";
+}
 
 async function fetchProviderStatus() {
 	try {
@@ -70,38 +76,13 @@ function formatSpeed(bytesPerSec: number): string {
 	return formatBytes(bytesPerSec) + "/s";
 }
 
-function startPolling() {
-	if (refreshInterval) return;
-	refreshInterval = setInterval(fetchProviderStatus, REFRESH_INTERVAL);
-}
-
-function stopPolling() {
-	if (refreshInterval) {
-		clearInterval(refreshInterval);
-		refreshInterval = null;
-	}
-}
-
-function handleVisibilityChange() {
-	if (document.hidden) {
-		stopPolling();
-	} else {
-		fetchProviderStatus();
-		startPolling();
-	}
-}
-
-onMount(() => {
-	fetchProviderStatus();
-
-	// Set up auto-refresh (pauses when tab inactive)
-	startPolling();
-	document.addEventListener("visibilitychange", handleVisibilityChange);
+onMount(async () => {
+	await fetchProviderStatus();
+	await apiClient.on(EVENT_NNTP_POOL_METRICS_UPDATED, applyPoolMetrics);
 });
 
 onDestroy(() => {
-	stopPolling();
-	document.removeEventListener("visibilitychange", handleVisibilityChange);
+	apiClient.off(EVENT_NNTP_POOL_METRICS_UPDATED, applyPoolMetrics);
 });
 </script>
 

@@ -1,5 +1,13 @@
 <script lang="ts">
 import apiClient from "$lib/api/client";
+import {
+  EVENT_PROCESSING_AUTO_PAUSED,
+  EVENT_PROCESSING_PAUSED,
+  EVENT_PROCESSING_RESUMED,
+  EVENT_RUNNING_JOBS_UPDATED,
+  type ProcessingPauseEvent,
+  type RunningJobsEvent,
+} from "$lib/api/events";
 import { t } from "$lib/i18n";
 import { isUploading, runningJobs } from "$lib/stores/app";
 import { toastStore } from "$lib/stores/toast";
@@ -7,61 +15,51 @@ import { formatSpeed, formatTime, formatFileSize } from "$lib/utils";
 import { ChartPie, CheckCircle, Play, X, Upload, Package, Check } from "lucide-svelte";
 import { onMount, onDestroy } from "svelte";
 
-// Use the generated types from Wails
-let progressUpdateInterval: NodeJS.Timeout | null = null;
 let isPaused = $state(false);
 let destroyed = false;
 
-// Fetch progress data from API
-async function fetchProgressData() {
+function applyRunningJobs(data: unknown) {
+  if (destroyed) return;
+  const jobs = (data ?? []) as RunningJobsEvent;
+  runningJobs.set(jobs);
+}
+
+function applyPauseEvent(data: unknown) {
+  const event = data as Partial<ProcessingPauseEvent> | undefined;
+  if (event && typeof event.paused === "boolean") {
+    isPaused = event.paused;
+  }
+}
+
+async function fetchInitialState() {
   try {
-    const [jobDetails, pausedStatus] = await Promise.all([
+    const [jobs, paused] = await Promise.all([
       apiClient.getRunningJobDetails(),
-      apiClient.isProcessingPaused()
+      apiClient.isProcessingPaused(),
     ]);
     if (destroyed) return;
-    runningJobs.set(jobDetails);
-    isPaused = pausedStatus;
+    runningJobs.set(jobs);
+    isPaused = paused;
   } catch (error) {
-    console.error("Failed to fetch progress data:", error);
+    console.error("Failed to fetch initial progress state:", error);
   }
 }
 
-function startPolling() {
-  if (progressUpdateInterval) return;
-  progressUpdateInterval = setInterval(fetchProgressData, 500);
-}
+onMount(async () => {
+  await fetchInitialState();
 
-function stopPolling() {
-  if (progressUpdateInterval) {
-    clearInterval(progressUpdateInterval);
-    progressUpdateInterval = null;
-  }
-}
-
-function handleVisibilityChange() {
-  if (document.hidden) {
-    stopPolling();
-  } else {
-    fetchProgressData();
-    startPolling();
-  }
-}
-
-// Setup periodic progress updates
-onMount(() => {
-  // Initial fetch
-  fetchProgressData();
-
-  // Update every 500ms for real-time progress (pauses when tab inactive)
-  startPolling();
-  document.addEventListener("visibilitychange", handleVisibilityChange);
+  await apiClient.on(EVENT_RUNNING_JOBS_UPDATED, applyRunningJobs);
+  await apiClient.on(EVENT_PROCESSING_PAUSED, applyPauseEvent);
+  await apiClient.on(EVENT_PROCESSING_RESUMED, applyPauseEvent);
+  await apiClient.on(EVENT_PROCESSING_AUTO_PAUSED, applyPauseEvent);
 });
 
 onDestroy(() => {
   destroyed = true;
-  stopPolling();
-  document.removeEventListener("visibilitychange", handleVisibilityChange);
+  apiClient.off(EVENT_RUNNING_JOBS_UPDATED, applyRunningJobs);
+  apiClient.off(EVENT_PROCESSING_PAUSED, applyPauseEvent);
+  apiClient.off(EVENT_PROCESSING_RESUMED, applyPauseEvent);
+  apiClient.off(EVENT_PROCESSING_AUTO_PAUSED, applyPauseEvent);
 });
 
 // Function to get icon for progress type
