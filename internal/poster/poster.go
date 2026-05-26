@@ -40,6 +40,16 @@ var (
 // (slightly larger than the default article size of 750KB).
 const defaultBodyBufferSize = 768 * 1024
 
+// readAtStallTimeout bounds a single ReadAt call. *os.File.ReadAt is not
+// cancellable via context (Go limitation on regular files), so when the
+// underlying mount stalls — NFS, sleeping external drive, FUSE backend —
+// the read-ahead goroutine would otherwise hang forever, holding a buffer
+// and blocking the upload pipeline. We surface a clean error after this
+// deadline so the post fails instead of deadlocking. The OS-level read
+// goroutine itself still leaks until the kernel returns, but the upload
+// pipeline keeps moving and operators get a clear log line.
+const readAtStallTimeout = 60 * time.Second
+
 // maxBodyBufferPoolSize is the upper bound on buffers we accept back into the
 // pool. Anything larger came from an anomalously large article and would
 // permanently inflate the pool's working set if reused, so we drop it.
@@ -50,6 +60,32 @@ var bodyBufferPool = sync.Pool{
 	New: func() any {
 		return make([]byte, defaultBodyBufferSize)
 	},
+}
+
+// readAtWithStallGuard performs file.ReadAt under a wall-clock deadline. If
+// ReadAt does not return within readAtStallTimeout (e.g. the backing mount is
+// unresponsive), it returns a stall error so the caller can fail the post
+// cleanly instead of blocking the upload pipeline forever. The inner
+// goroutine still blocks until the OS releases ReadAt; this is a fundamental
+// Go limitation for regular files.
+func readAtWithStallGuard(ctx context.Context, file *os.File, buf []byte, off int64) (int, error) {
+	type result struct {
+		n   int
+		err error
+	}
+	resCh := make(chan result, 1)
+	go func() {
+		n, err := file.ReadAt(buf, off)
+		resCh <- result{n: n, err: err}
+	}()
+	select {
+	case r := <-resCh:
+		return r.n, r.err
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	case <-time.After(readAtStallTimeout):
+		return 0, fmt.Errorf("read stalled after %s at offset %d (filesystem unresponsive?)", readAtStallTimeout, off)
+	}
 }
 
 // putBodyBuffer returns a buffer to the pool, dropping it if it grew beyond
@@ -499,7 +535,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 						}
 						body := poolBuf[:art.Size]
 
-						if _, err := post.file.ReadAt(body, art.Offset); err != nil {
+						if _, err := readAtWithStallGuard(postCtx, post.file, body, art.Offset); err != nil {
 							putBodyBuffer(poolBuf)
 							slog.ErrorContext(ctx, "Error pre-reading article", "error", err, "offset", art.Offset)
 							return
@@ -630,7 +666,20 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			post.mu.Unlock()
 
 			if p.checkCfg.Enabled != nil && *p.checkCfg.Enabled {
-				checkQueue <- post
+				// Guard the send: if checkLoop has already exited (e.g. on a
+				// verify error) the buffered checkQueue can fill and this send
+				// would block forever, leaking postLoop and every queued post.
+				select {
+				case checkQueue <- post:
+				case <-ctx.Done():
+					if post.file != nil {
+						if cerr := post.file.Close(); cerr != nil {
+							slog.WarnContext(ctx, "Error closing file after ctx canceled during check enqueue", "error", cerr, "file", post.FilePath)
+						}
+					}
+					postsInFlight.Done()
+					post.wg.Done()
+				}
 
 				continue
 			}
@@ -981,6 +1030,10 @@ func (p *poster) addPost(ctx context.Context, filePath string, displayName strin
 
 	switch p.cfg.GroupPolicy {
 	case config.GroupPolicyEachFile:
+		if len(p.cfg.Groups) == 0 {
+			_ = file.Close()
+			return fmt.Errorf("group policy is %q but no newsgroups are configured", config.GroupPolicyEachFile)
+		}
 		randomGroup := p.cfg.Groups[rand.Intn(len(p.cfg.Groups))]
 		groups = append(groups, randomGroup.Name)
 	case config.GroupPolicyAll:

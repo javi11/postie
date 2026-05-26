@@ -1,18 +1,22 @@
 package poster
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 )
 
-// Throttle handles rate limiting using lock-free atomic operations
-// for better performance under high concurrency.
+// Throttle handles rate limiting using a token-bucket algorithm. Token-bucket
+// state is protected by a mutex: the previous lock-free implementation allowed
+// concurrent consumers to overdraw the bucket past zero, silently bypassing
+// the configured rate under contention.
 type Throttle struct {
 	rate     int64         // bytes per second (immutable after creation)
 	interval time.Duration // (immutable after creation)
-	lastTime atomic.Int64  // last check time in nanoseconds
-	tokens   atomic.Int64  // available tokens (bytes)
-	disabled atomic.Bool   // fast-path check
+	mu       sync.Mutex
+	lastTime atomic.Int64 // last check time in nanoseconds (atomic for test inspection)
+	tokens   atomic.Int64 // available tokens (bytes) (atomic for test inspection)
+	disabled atomic.Bool  // fast-path check
 	sleepFn  func(time.Duration)
 }
 
@@ -35,51 +39,34 @@ func NewThrottle(rate int64, interval time.Duration) *Throttle {
 }
 
 // Wait waits until enough tokens are available for the given bytes.
-// Uses a token bucket algorithm with atomic operations for lock-free rate limiting.
+// The mutex serialises bucket math so concurrent callers cannot both pass the
+// availability check and double-spend the same tokens.
 func (t *Throttle) Wait(bytes int64) {
 	// Fast path: throttling disabled
 	if t.disabled.Load() {
 		return
 	}
 
-	for {
-		now := time.Now().UnixNano()
-		last := t.lastTime.Load()
-		elapsed := now - last
+	t.mu.Lock()
+	now := time.Now().UnixNano()
+	last := t.lastTime.Load()
+	elapsed := now - last
 
-		// Calculate tokens to add based on elapsed time
-		tokensToAdd := (elapsed * t.rate) / int64(time.Second)
+	tokensToAdd := (elapsed * t.rate) / int64(time.Second)
+	t.lastTime.Store(now)
 
-		// Try to update the last time atomically
-		if !t.lastTime.CompareAndSwap(last, now) {
-			// Another goroutine updated it, retry
-			continue
-		}
+	current := min(t.tokens.Load()+tokensToAdd, t.rate)
 
-		// Add new tokens (capped at 1 second worth to prevent burst)
-		newTokens := t.tokens.Add(tokensToAdd)
-		if newTokens > t.rate {
-			t.tokens.Store(t.rate)
-			newTokens = t.rate
-		}
+	var waitNs int64
+	if current < bytes {
+		deficit := bytes - current
+		waitNs = (deficit * int64(time.Second)) / t.rate
+	}
 
-		// Try to consume tokens
-		if newTokens >= bytes {
-			t.tokens.Add(-bytes)
-			return
-		}
+	t.tokens.Store(current - bytes)
+	t.mu.Unlock()
 
-		// Not enough tokens, calculate wait time
-		deficit := bytes - newTokens
-		waitNs := (deficit * int64(time.Second)) / t.rate
-
-		if waitNs > 0 {
-			t.sleepFn(time.Duration(waitNs))
-		}
-
-		// After sleeping, consume the tokens
-		t.tokens.Add(-bytes)
-		t.lastTime.Store(time.Now().UnixNano())
-		return
+	if waitNs > 0 {
+		t.sleepFn(time.Duration(waitNs))
 	}
 }
