@@ -881,6 +881,13 @@ func (p *Processor) Close() error {
 	return nil
 }
 
+// TransferRuntimeMetrics returns a snapshot of process-wide upload/PAR2
+// resource usage for observability. Returns the zero value when no transfer
+// runtime is configured.
+func (p *Processor) TransferRuntimeMetrics() postie.RuntimeMetrics {
+	return p.transferRuntime.Metrics()
+}
+
 // setAutoBlock enables or disables blocking of new jobs due to provider unavailability.
 // Unlike PauseProcessing(), this does NOT pause jobs that are already running.
 func (p *Processor) setAutoBlock(blocking bool) {

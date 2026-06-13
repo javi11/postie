@@ -94,6 +94,44 @@ func (r *Runtime) UploadEngine() *poster.Engine {
 	return r.uploadEngine
 }
 
+// RuntimeMetrics is a point-in-time snapshot of process-wide transfer resource
+// usage, suitable for surfacing in the UI or logs so memory growth can be
+// attributed to a subsystem.
+type RuntimeMetrics struct {
+	UploadActiveWorkers int64 `json:"uploadActiveWorkers"`
+	UploadQueuedWorkers int64 `json:"uploadQueuedWorkers"`
+	UploadWorkerCount   int64 `json:"uploadWorkerCount"`
+	UploadReservedBytes int64 `json:"uploadReservedBytes"`
+	UploadBudgetBytes   int64 `json:"uploadBudgetBytes"`
+	Par2ActiveJobs      int64 `json:"par2ActiveJobs"`
+	Par2QueuedJobs      int64 `json:"par2QueuedJobs"`
+	Par2Capacity        int   `json:"par2Capacity"`
+}
+
+// Metrics returns a snapshot of current runtime resource usage. Safe on a nil
+// Runtime (returns the zero value).
+func (r *Runtime) Metrics() RuntimeMetrics {
+	if r == nil {
+		return RuntimeMetrics{}
+	}
+
+	var m RuntimeMetrics
+	if r.uploadEngine != nil {
+		em := r.uploadEngine.Metrics()
+		m.UploadActiveWorkers = em.ActiveWorkers
+		m.UploadQueuedWorkers = em.QueuedWorkers
+		m.UploadWorkerCount = em.WorkerCount
+		m.UploadReservedBytes = em.ReservedBytes
+		m.UploadBudgetBytes = em.BudgetBytes
+	}
+	if r.par2Scheduler != nil {
+		m.Par2ActiveJobs = r.par2Scheduler.Active()
+		m.Par2QueuedJobs = r.par2Scheduler.Queued()
+		m.Par2Capacity = r.par2Scheduler.Capacity()
+	}
+	return m
+}
+
 // Close releases runtime-owned resources. It is safe to call on a nil Runtime
 // and safe to call more than once.
 func (r *Runtime) Close() error {
