@@ -40,12 +40,30 @@ type QueueInterface interface {
 	MarkScriptCompleted(ctx context.Context, itemID string) error
 }
 
+// New creates a Postie that owns a private transfer runtime. It is retained as
+// a compatibility entry point for the CLI and external package users; the
+// processor path uses NewWithRuntime to share one process-wide runtime across
+// all jobs.
 func New(
 	ctx context.Context,
 	cfg config.Config,
 	poolManager *pool.Manager,
 	jobProgress progress.JobProgress,
 	queue QueueInterface,
+) (*Postie, error) {
+	return NewWithRuntime(ctx, cfg, poolManager, jobProgress, queue, nil)
+}
+
+// NewWithRuntime creates a Postie that borrows shared resources from rt. When
+// rt is nil a private PAR2 scheduler is created honouring the configured
+// par2.max_concurrent_jobs, preserving standalone behaviour.
+func NewWithRuntime(
+	ctx context.Context,
+	cfg config.Config,
+	poolManager *pool.Manager,
+	jobProgress progress.JobProgress,
+	queue QueueInterface,
+	rt *Runtime,
 ) (*Postie, error) {
 	// Get PAR2 configuration
 	par2Cfg, err := cfg.GetPar2Config(ctx)
@@ -58,8 +76,20 @@ func New(
 	postUploadScriptConfig := cfg.GetPostUploadScriptConfig()
 	maintainOriginalExtension := cfg.GetMaintainOriginalExtension()
 
-	// Create par2 runner with progress manager
-	par2runner := par2.NewExecutor(postingConfig.ArticleSizeInBytes, par2Cfg, jobProgress)
+	// Create the per-job PAR2 executor (carries this job's progress + config),
+	// then gate its execution through the shared, process-wide PAR2 scheduler so
+	// the configured memory limit applies per active job rather than per queue
+	// job. Falls back to a private scheduler when no runtime is supplied.
+	par2Executor := par2.NewExecutor(postingConfig.ArticleSizeInBytes, par2Cfg, jobProgress)
+	par2Scheduler := rt.Par2Scheduler()
+	if par2Scheduler == nil {
+		maxJobs := 1
+		if par2Cfg != nil && par2Cfg.MaxConcurrentJobs > 0 {
+			maxJobs = par2Cfg.MaxConcurrentJobs
+		}
+		par2Scheduler = par2.NewScheduler(maxJobs)
+	}
+	par2runner := par2.NewScheduledExecutor(par2Executor, par2Scheduler)
 
 	// Create poster with progress manager
 	p, err := poster.New(ctx, cfg, poolManager, jobProgress)

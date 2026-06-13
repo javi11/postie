@@ -67,6 +67,10 @@ type Processor struct {
 	onJobComplete func()
 	// Shutdown flag to prevent new operations during close
 	isShuttingDown bool
+	// transferRuntime owns process-wide upload resources (currently the PAR2
+	// scheduler) shared by every job, so limits hold regardless of queue
+	// concurrency. May be nil, in which case each Postie uses private resources.
+	transferRuntime *postie.Runtime
 }
 
 type ProcessorOptions struct {
@@ -126,6 +130,18 @@ func New(opts ProcessorOptions) *Processor {
 		canProcessNextItem:        opts.CanProcessNextItem,
 		onJobError:                opts.OnJobError,
 		onJobComplete:             opts.OnJobComplete,
+	}
+
+	// Create the process-wide transfer runtime so resource limits (PAR2
+	// concurrency today, upload engine and verification later) hold regardless
+	// of queue concurrency. On failure, fall back to per-job resources so the
+	// processor still functions.
+	if opts.Config != nil {
+		if rt, err := postie.NewRuntime(providerCtx, opts.Config); err != nil {
+			slog.Error("Failed to create transfer runtime; falling back to per-job PAR2 scheduling", "error", err)
+		} else {
+			processor.transferRuntime = rt
+		}
 	}
 
 	// Start provider availability monitoring if we have a pool manager
@@ -477,8 +493,10 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 		return "", nil, fmt.Errorf("pool manager is not available for job %s", jobID)
 	}
 
-	// Create a postie instance for this job with progress manager
-	jobPostie, err := postie.New(jobCtx, p.config, poolManager, progressJob, p.queue)
+	// Create a postie instance for this job, sharing the process-wide transfer
+	// runtime so PAR2 (and later upload/verification) limits are enforced
+	// globally rather than per queue job.
+	jobPostie, err := postie.NewWithRuntime(jobCtx, p.config, poolManager, progressJob, p.queue, p.transferRuntime)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to create postie instance for job %s: %w", jobID, err)
 	}
@@ -850,6 +868,14 @@ func (p *Processor) Close() error {
 	p.reservedMux.Lock()
 	p.reservedPaths = make(map[string]time.Time)
 	p.reservedMux.Unlock()
+
+	// Close the transfer runtime after all jobs have stopped. The shared NNTP
+	// pool manager is owned elsewhere and intentionally not closed here.
+	if p.transferRuntime != nil {
+		if err := p.transferRuntime.Close(); err != nil {
+			slog.Warn("Error closing transfer runtime", "error", err)
+		}
+	}
 
 	slog.Info("Processor shutdown completed")
 	return nil
