@@ -1,0 +1,415 @@
+// Package transferstore is the durable persistence layer for the process-wide
+// upload architecture (issue 184). It manages the transfer_files table (one row
+// per source/PAR2 file, pointing at an immutable manifest) and the
+// verification_failures table (only articles that failed a STAT check, with
+// database leases so verification survives crashes).
+//
+// Successful articles are deliberately never stored: a large upload can contain
+// millions, and per-article rows would overwhelm SQLite.
+package transferstore
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"strings"
+	"time"
+)
+
+// Upload / verification states for a transfer file.
+const (
+	StatePlanned            = "planned"
+	StateUploading          = "uploading"
+	StateUploaded           = "uploaded"
+	StateVerifying          = "verifying"
+	StateVerified           = "verified"
+	StateVerificationFailed = "verification_failed"
+)
+
+// Verification-failure states.
+const (
+	FailurePending  = "pending"
+	FailureReposted = "reposted"
+	FailureResolved = "resolved"
+	FailureFailed   = "failed"
+)
+
+// TransferFile is one row of the transfer_files table.
+type TransferFile struct {
+	TransferID        string
+	FileID            string
+	CompletedItemID   string
+	ManifestPath      string
+	ManifestVersion   int
+	SourcePath        string
+	FileRole          string
+	ArticleCount      int
+	UploadState       string
+	VerificationState string
+	PostedAt          *time.Time
+	NextCheckAt       *time.Time
+	CleanupPolicy     string
+	LastError         string
+}
+
+// VerificationFailure is one row of the verification_failures table.
+type VerificationFailure struct {
+	ID             int64
+	TransferID     string
+	FileID         string
+	ArticleIndex   int
+	MessageID      string
+	Groups         []string
+	RepostCount    int
+	DeferredCount  int
+	State          string
+	NextAttemptAt  time.Time
+	LeaseOwner     string
+	LeaseExpiresAt *time.Time
+	LastError      string
+	LastCheckedAt  *time.Time
+}
+
+// Store provides durable access to transfer files and verification failures.
+type Store struct {
+	db *sql.DB
+}
+
+// New returns a Store backed by db. The transfer_files and verification_failures
+// tables must already exist (migration 007).
+func New(db *sql.DB) *Store {
+	return &Store{db: db}
+}
+
+const tsLayout = time.RFC3339Nano
+
+func fmtTime(t time.Time) string { return t.UTC().Format(tsLayout) }
+
+func fmtTimePtr(t *time.Time) sql.NullString {
+	if t == nil {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: fmtTime(*t), Valid: true}
+}
+
+// parseTime parses a timestamp written by Go (RFC3339Nano) or by SQLite's
+// strftime default ("2006-01-02T15:04:05.000Z" / without fraction).
+func parseTime(s string) (time.Time, error) {
+	for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999Z07:00", "2006-01-02T15:04:05Z07:00", "2006-01-02T15:04:05.999Z", "2006-01-02T15:04:05Z"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.UTC(), nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unparseable timestamp %q", s)
+}
+
+func parseTimePtr(ns sql.NullString) (*time.Time, error) {
+	if !ns.Valid || ns.String == "" {
+		return nil, nil
+	}
+	t, err := parseTime(ns.String)
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+func encodeGroups(groups []string) string { return strings.Join(groups, ",") }
+
+func decodeGroups(s string) []string {
+	if s == "" {
+		return nil
+	}
+	return strings.Split(s, ",")
+}
+
+// UpsertFile inserts or replaces a transfer_files row, refreshing updated_at.
+func (s *Store) UpsertFile(ctx context.Context, f TransferFile) error {
+	if f.ManifestVersion == 0 {
+		f.ManifestVersion = 1
+	}
+	if f.UploadState == "" {
+		f.UploadState = StatePlanned
+	}
+	if f.VerificationState == "" {
+		f.VerificationState = StatePlanned
+	}
+	now := fmtTime(time.Now())
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO transfer_files (
+			transfer_id, file_id, completed_item_id, manifest_path, manifest_version,
+			source_path, file_role, article_count, upload_state, verification_state,
+			posted_at, next_check_at, cleanup_policy, last_error, updated_at
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		ON CONFLICT(transfer_id, file_id) DO UPDATE SET
+			completed_item_id = excluded.completed_item_id,
+			manifest_path     = excluded.manifest_path,
+			manifest_version  = excluded.manifest_version,
+			source_path       = excluded.source_path,
+			file_role         = excluded.file_role,
+			article_count     = excluded.article_count,
+			upload_state      = excluded.upload_state,
+			verification_state= excluded.verification_state,
+			posted_at         = excluded.posted_at,
+			next_check_at     = excluded.next_check_at,
+			cleanup_policy    = excluded.cleanup_policy,
+			last_error        = excluded.last_error,
+			updated_at        = excluded.updated_at
+	`,
+		f.TransferID, f.FileID, nullStr(f.CompletedItemID), f.ManifestPath, f.ManifestVersion,
+		f.SourcePath, f.FileRole, f.ArticleCount, f.UploadState, f.VerificationState,
+		fmtTimePtr(f.PostedAt), fmtTimePtr(f.NextCheckAt), f.CleanupPolicy, f.LastError, now,
+	)
+	if err != nil {
+		return fmt.Errorf("upsert transfer file: %w", err)
+	}
+	return nil
+}
+
+func nullStr(s string) sql.NullString {
+	if s == "" {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: s, Valid: true}
+}
+
+const transferFileCols = `transfer_id, file_id, completed_item_id, manifest_path, manifest_version,
+	source_path, file_role, article_count, upload_state, verification_state,
+	posted_at, next_check_at, cleanup_policy, last_error`
+
+func scanTransferFile(sc interface{ Scan(...any) error }) (TransferFile, error) {
+	var (
+		f         TransferFile
+		completed sql.NullString
+		postedAt  sql.NullString
+		nextCheck sql.NullString
+	)
+	if err := sc.Scan(
+		&f.TransferID, &f.FileID, &completed, &f.ManifestPath, &f.ManifestVersion,
+		&f.SourcePath, &f.FileRole, &f.ArticleCount, &f.UploadState, &f.VerificationState,
+		&postedAt, &nextCheck, &f.CleanupPolicy, &f.LastError,
+	); err != nil {
+		return f, err
+	}
+	f.CompletedItemID = completed.String
+	var err error
+	if f.PostedAt, err = parseTimePtr(postedAt); err != nil {
+		return f, err
+	}
+	if f.NextCheckAt, err = parseTimePtr(nextCheck); err != nil {
+		return f, err
+	}
+	return f, nil
+}
+
+// GetFile returns a single transfer file, or sql.ErrNoRows if absent.
+func (s *Store) GetFile(ctx context.Context, transferID, fileID string) (TransferFile, error) {
+	row := s.db.QueryRowContext(ctx,
+		"SELECT "+transferFileCols+" FROM transfer_files WHERE transfer_id = ? AND file_id = ?",
+		transferID, fileID)
+	return scanTransferFile(row)
+}
+
+// ListFilesByTransfer returns all files for a transfer.
+func (s *Store) ListFilesByTransfer(ctx context.Context, transferID string) ([]TransferFile, error) {
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT "+transferFileCols+" FROM transfer_files WHERE transfer_id = ? ORDER BY file_id", transferID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []TransferFile
+	for rows.Next() {
+		f, err := scanTransferFile(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// SetVerificationState updates a file's verification state, next check time and
+// last error in one statement.
+func (s *Store) SetVerificationState(ctx context.Context, transferID, fileID, state string, nextCheckAt *time.Time, lastErr string) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE transfer_files
+		SET verification_state = ?, next_check_at = ?, last_error = ?,
+		    updated_at = ?
+		WHERE transfer_id = ? AND file_id = ?`,
+		state, fmtTimePtr(nextCheckAt), lastErr, fmtTime(time.Now()), transferID, fileID)
+	return err
+}
+
+// SetUploadState updates a file's upload state and (optionally) posted_at.
+func (s *Store) SetUploadState(ctx context.Context, transferID, fileID, state string, postedAt *time.Time) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE transfer_files
+		SET upload_state = ?, posted_at = COALESCE(?, posted_at), updated_at = ?
+		WHERE transfer_id = ? AND file_id = ?`,
+		state, fmtTimePtr(postedAt), fmtTime(time.Now()), transferID, fileID)
+	return err
+}
+
+// AddFailure records a failed article for later re-posting/re-checking. Records
+// are unique per (transfer_id, file_id, message_id); duplicates are ignored.
+func (s *Store) AddFailure(ctx context.Context, f VerificationFailure) error {
+	if f.State == "" {
+		f.State = FailurePending
+	}
+	if f.NextAttemptAt.IsZero() {
+		f.NextAttemptAt = time.Now()
+	}
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO verification_failures (
+			transfer_id, file_id, article_index, message_id, groups,
+			repost_count, deferred_count, state, next_attempt_at, last_error
+		) VALUES (?,?,?,?,?,?,?,?,?,?)
+		ON CONFLICT(transfer_id, file_id, message_id) DO NOTHING`,
+		f.TransferID, f.FileID, f.ArticleIndex, f.MessageID, encodeGroups(f.Groups),
+		f.RepostCount, f.DeferredCount, f.State, fmtTime(f.NextAttemptAt), f.LastError,
+	)
+	if err != nil {
+		return fmt.Errorf("add verification failure: %w", err)
+	}
+	return nil
+}
+
+const failureCols = `id, transfer_id, file_id, article_index, message_id, groups,
+	repost_count, deferred_count, state, next_attempt_at, lease_owner, lease_expires_at,
+	last_error, last_checked_at`
+
+func scanFailure(sc interface{ Scan(...any) error }) (VerificationFailure, error) {
+	var (
+		f         VerificationFailure
+		groups    string
+		leaseExp  sql.NullString
+		lastCheck sql.NullString
+		nextAt    string
+	)
+	if err := sc.Scan(
+		&f.ID, &f.TransferID, &f.FileID, &f.ArticleIndex, &f.MessageID, &groups,
+		&f.RepostCount, &f.DeferredCount, &f.State, &nextAt, &f.LeaseOwner, &leaseExp,
+		&f.LastError, &lastCheck,
+	); err != nil {
+		return f, err
+	}
+	f.Groups = decodeGroups(groups)
+	var err error
+	if f.NextAttemptAt, err = parseTime(nextAt); err != nil {
+		return f, err
+	}
+	if f.LeaseExpiresAt, err = parseTimePtr(leaseExp); err != nil {
+		return f, err
+	}
+	if f.LastCheckedAt, err = parseTimePtr(lastCheck); err != nil {
+		return f, err
+	}
+	return f, nil
+}
+
+// ClaimDueFailures atomically leases up to limit pending failures whose
+// next_attempt_at has passed and whose lease is free or expired, marking them
+// owned by owner until now+leaseDur. The claimed rows are returned. Using a
+// transaction makes the select-then-update atomic so concurrent workers (or
+// instances) never claim the same row.
+func (s *Store) ClaimDueFailures(ctx context.Context, owner string, leaseDur time.Duration, limit int, now time.Time) ([]VerificationFailure, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	nowStr := fmtTime(now)
+	rows, err := tx.QueryContext(ctx, `
+		SELECT `+failureCols+`
+		FROM verification_failures
+		WHERE state = ?
+		  AND next_attempt_at <= ?
+		  AND (lease_owner = '' OR lease_expires_at IS NULL OR lease_expires_at <= ?)
+		ORDER BY next_attempt_at
+		LIMIT ?`,
+		FailurePending, nowStr, nowStr, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	var claimed []VerificationFailure
+	for rows.Next() {
+		f, scanErr := scanFailure(rows)
+		if scanErr != nil {
+			_ = rows.Close()
+			return nil, scanErr
+		}
+		claimed = append(claimed, f)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, err
+	}
+	_ = rows.Close()
+
+	if len(claimed) == 0 {
+		return nil, tx.Commit()
+	}
+
+	expires := fmtTime(now.Add(leaseDur))
+	for i := range claimed {
+		if _, err := tx.ExecContext(ctx,
+			"UPDATE verification_failures SET lease_owner = ?, lease_expires_at = ? WHERE id = ?",
+			owner, expires, claimed[i].ID); err != nil {
+			return nil, err
+		}
+		claimed[i].LeaseOwner = owner
+		exp, _ := parseTime(expires)
+		claimed[i].LeaseExpiresAt = &exp
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return claimed, nil
+}
+
+// UpdateFailureAfterCheck records the outcome of a check/re-post attempt:
+// the new state, counts, next attempt time and last error, and releases the
+// lease.
+func (s *Store) UpdateFailureAfterCheck(ctx context.Context, f VerificationFailure) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE verification_failures
+		SET state = ?, repost_count = ?, deferred_count = ?, next_attempt_at = ?,
+		    last_error = ?, last_checked_at = ?, lease_owner = '', lease_expires_at = NULL
+		WHERE id = ?`,
+		f.State, f.RepostCount, f.DeferredCount, fmtTime(f.NextAttemptAt),
+		f.LastError, fmtTime(time.Now()), f.ID)
+	return err
+}
+
+// ReclaimExpiredLeases clears leases whose expiry has passed so the work can be
+// picked up again after a crash. Returns the number of rows reclaimed.
+func (s *Store) ReclaimExpiredLeases(ctx context.Context, now time.Time) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE verification_failures
+		SET lease_owner = '', lease_expires_at = NULL
+		WHERE lease_owner != '' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?`,
+		fmtTime(now))
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// CountFailures returns the number of failure rows for a transfer file in the
+// given state ("" = any state).
+func (s *Store) CountFailures(ctx context.Context, transferID, fileID, state string) (int, error) {
+	q := "SELECT COUNT(*) FROM verification_failures WHERE transfer_id = ? AND file_id = ?"
+	args := []any{transferID, fileID}
+	if state != "" {
+		q += " AND state = ?"
+		args = append(args, state)
+	}
+	var n int
+	err := s.db.QueryRowContext(ctx, q, args...).Scan(&n)
+	return n, err
+}

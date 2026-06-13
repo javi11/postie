@@ -10,12 +10,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/javi11/postie/internal/database"
 	_ "github.com/mattn/go-sqlite3"
 	"maragu.dev/goqite"
 )
 
 var _ QueueInterface = (*Queue)(nil)
+
+// genTransferID returns a new stable transfer identifier for a queue job.
+func genTransferID() string {
+	return uuid.NewString()
+}
 
 // PaginationParams defines parameters for paginated queries
 type PaginationParams struct {
@@ -101,6 +107,11 @@ type FileJob struct {
 	Priority   int       `json:"priority"`
 	CreatedAt  time.Time `json:"createdAt"`
 	RetryCount int       `json:"retryCount"`
+	// TransferID is a stable identifier assigned when the job is first created.
+	// It is carried through the persisted job body so it survives queue retries
+	// and crash recovery, letting the durable upload architecture reuse the same
+	// manifest and Message-IDs across attempts.
+	TransferID string `json:"transferId,omitempty"`
 	// InputFolder is the root directory used to derive the relative path
 	// for NZB output. When empty, the processor falls back to its existing
 	// inference (FOLDER: prefix → parent, watch folder match, or file dir).
@@ -237,6 +248,7 @@ func (q *Queue) AddFile(ctx context.Context, path string, size int64) error {
 		Priority:   0,
 		CreatedAt:  time.Now().UTC(),
 		RetryCount: 0,
+		TransferID: genTransferID(),
 	}
 
 	jobData, err := json.Marshal(job)
@@ -261,6 +273,7 @@ func (q *Queue) AddFileWithoutDuplicateCheck(ctx context.Context, path string, s
 		Priority:   0,
 		CreatedAt:  time.Now().UTC(),
 		RetryCount: 0,
+		TransferID: genTransferID(),
 	}
 
 	jobData, err := json.Marshal(job)
@@ -297,6 +310,7 @@ func (q *Queue) AddFileWithPriority(ctx context.Context, path string, size int64
 		Priority:   priority,
 		CreatedAt:  time.Now().UTC(),
 		RetryCount: 0,
+		TransferID: genTransferID(),
 	}
 
 	jobData, err := json.Marshal(job)
@@ -321,6 +335,7 @@ func (q *Queue) AddFileWithPriorityWithoutDuplicateCheck(ctx context.Context, pa
 		Priority:   priority,
 		CreatedAt:  time.Now().UTC(),
 		RetryCount: 0,
+		TransferID: genTransferID(),
 	}
 
 	jobData, err := json.Marshal(job)
@@ -358,6 +373,7 @@ func (q *Queue) AddFileWithOptions(ctx context.Context, path string, size int64,
 		Priority:       opts.Priority,
 		CreatedAt:      time.Now().UTC(),
 		RetryCount:     0,
+		TransferID:     genTransferID(),
 		InputFolder:    opts.InputFolder,
 		DeleteOriginal: opts.DeleteOriginal,
 	}
