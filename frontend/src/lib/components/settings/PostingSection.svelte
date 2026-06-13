@@ -42,6 +42,7 @@ let addNgxHeader = $state(config.posting.post_headers?.add_nxg_header ?? false);
 let throttleRateMB = $state(
 	Math.round((config.posting.throttle_rate || 0) / 1048576),
 );
+let uploadBufferMemoryLimit = $state(config.posting.upload_buffer_memory_limit ?? 0);
 
 // Initialize defaults (following initialization pattern)
 function initializeDefaults() {
@@ -74,6 +75,7 @@ $effect(() => {
 	config.posting.message_id_format = messageIdFormat;
 	config.posting.group_policy = groupPolicy;
 	config.posting.throttle_rate = throttleRateMB * 1048576;
+	config.posting.upload_buffer_memory_limit = uploadBufferMemoryLimit;
 });
 
 $effect(() => {
@@ -222,7 +224,16 @@ function updateThrottleRate() {
           id="throttle-rate"
         />
 
-        
+        <!-- Upload Buffer Memory Limit -->
+        <SizeInput
+          bind:value={uploadBufferMemoryLimit}
+          label={$t('settings.posting.upload_buffer_memory_limit')}
+          description={$t('settings.posting.upload_buffer_memory_limit_description')}
+          minValue={0}
+          id="upload-buffer-memory-limit"
+        />
+
+
         <!-- Obfuscation Policy -->
         <div>
           <label for="obfuscation" class="label">

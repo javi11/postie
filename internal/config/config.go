@@ -204,6 +204,11 @@ type Par2Config struct {
 	NumGoroutines     int      `yaml:"num_goroutines" json:"num_goroutines"`
 	MemoryLimit       int64  `yaml:"memory_limit" json:"memory_limit"`
 	SliceSize         int64  `yaml:"slice_size" json:"slice_size"`
+	// MaxConcurrentJobs caps how many PAR2 operations the process-wide PAR2
+	// scheduler runs at once. Additional work is queued rather than run
+	// concurrently, so MemoryLimit applies per active job instead of per queue
+	// job. Default value is `1`.
+	MaxConcurrentJobs int `yaml:"max_concurrent_jobs" json:"max_concurrent_jobs"`
 }
 
 // ServerConfig represents a Usenet server configuration
@@ -263,6 +268,12 @@ type PostCheck struct {
 	DeferredCheckInterval Duration `yaml:"deferred_check_interval" json:"deferred_check_interval"`
 	// Number of articles processed per deferred check cycle. Default value is 500.
 	DeferredBatchSize int `yaml:"deferred_batch_size" json:"deferred_batch_size"`
+	// MaxConcurrentChecks caps the number of concurrent STAT verification checks
+	// across the whole process. A value of 0 enables automatic sizing: the
+	// durable verification service uses a dedicated verification pool capped at
+	// 16, or a shared upload pool capped at 2, never exceeding pool capacity.
+	// Default value is `0` (auto).
+	MaxConcurrentChecks int `yaml:"max_concurrent_checks" json:"max_concurrent_checks"`
 }
 
 // NewsgroupConfig represents a single newsgroup configuration
@@ -286,6 +297,11 @@ type PostingConfig struct {
 	Par2ObfuscationPolicy ObfuscationPolicy `yaml:"par2_obfuscation_policy" json:"par2_obfuscation_policy"`
 	//  If you give several Groups you've 3 policy when posting
 	GroupPolicy GroupPolicy `yaml:"group_policy" json:"group_policy"`
+	// UploadBufferMemoryLimit caps the total bytes the process-wide upload engine
+	// may reserve for in-flight raw + encoded article buffers, independent of
+	// queue concurrency. A value of 0 enables automatic sizing based on connection
+	// capacity and article size. Default value is `0` (auto).
+	UploadBufferMemoryLimit int64 `yaml:"upload_buffer_memory_limit" json:"upload_buffer_memory_limit"`
 }
 
 type WatcherConfig struct {
@@ -576,6 +592,12 @@ func Load(path string) (*ConfigData, error) {
 		cfg.Par2.SliceSize = 10 * 1024 * 1024 // 10 MiB
 	}
 
+	// Process-wide PAR2 scheduler: default to a single concurrent job so the
+	// configured MemoryLimit is not multiplied across simultaneous queue jobs.
+	if cfg.Par2.MaxConcurrentJobs <= 0 {
+		cfg.Par2.MaxConcurrentJobs = 1
+	}
+
 	// Set default for maintain par2 files (default to false to preserve current behavior)
 	if cfg.Par2.MaintainPar2Files == nil {
 		maintainPar2Files := false
@@ -717,6 +739,17 @@ func (c *ConfigData) Validate() error {
 	// Validate queue configuration
 	if c.Queue.MaxConcurrentUploads <= 0 {
 		return fmt.Errorf("queue max concurrent uploads must be positive")
+	}
+
+	// Validate process-wide resource limits (0 means automatic sizing).
+	if c.Posting.UploadBufferMemoryLimit < 0 {
+		return fmt.Errorf("posting upload_buffer_memory_limit must be >= 0 (0 = auto)")
+	}
+	if c.Par2.MaxConcurrentJobs < 0 {
+		return fmt.Errorf("par2 max_concurrent_jobs must be >= 0 (0 = auto)")
+	}
+	if c.PostCheck.MaxConcurrentChecks < 0 {
+		return fmt.Errorf("post_check max_concurrent_checks must be >= 0 (0 = auto)")
 	}
 
 	// Validate DefaultFrom is a valid RFC 2822 address if set
@@ -1037,6 +1070,7 @@ func GetDefaultConfig() ConfigData {
 			MaintainPar2Files: &disabled, // Default to false to preserve current behavior
 			MemoryLimit:       4 * 1024 * 1024 * 1024,
 			SliceSize:         10 * 1024 * 1024,
+			MaxConcurrentJobs: 1,
 		},
 		Watchers: []WatcherConfig{
 			{
