@@ -161,9 +161,10 @@ func (e *DeferredCheckError) Error() string {
 
 // articleWithBody holds an article with its pre-read body data for read-ahead buffering
 type articleWithBody struct {
-	article *article.Article
-	body    []byte
-	poolBuf []byte // original pooled buffer (may be larger than body)
+	article  *article.Article
+	body     []byte
+	poolBuf  []byte // original pooled buffer (may be larger than body)
+	reserved int64  // bytes reserved from the engine buffer budget (0 if no engine)
 }
 
 // uploadJob is submitted to the shared poster worker pool. Each job posts one
@@ -171,11 +172,12 @@ type articleWithBody struct {
 // so the submitter can track per-Post completion and capture the first error.
 // The worker is responsible for returning poolBuf to the body buffer pool.
 type uploadJob struct {
-	ctx     context.Context
-	art     *article.Article
-	body    []byte
-	poolBuf []byte
-	done    func(err error)
+	ctx      context.Context
+	art      *article.Article
+	body     []byte
+	poolBuf  []byte
+	reserved int64 // engine buffer-budget bytes to release when the job ends
+	done     func(err error)
 }
 
 // Stats tracks posting statistics
@@ -210,6 +212,14 @@ type poster struct {
 	uploadJobs       chan uploadJob
 	shutdown         chan struct{}
 	workerWG         sync.WaitGroup
+
+	// engine, when non-nil, bounds effective upload concurrency and in-flight
+	// buffer memory across ALL jobs process-wide. The per-poster worker pool
+	// above still pumps articles, but each post acquires a global engine worker
+	// slot and each read-ahead buffer is reserved against the global byte
+	// budget, so concurrent jobs no longer multiply workers or memory. Nil =
+	// standalone behaviour (no global gate).
+	engine *Engine
 }
 
 // ensureWorkersStarted spins up the shared upload worker pool exactly once.
@@ -243,6 +253,13 @@ func (p *poster) ensureWorkersStarted() {
 
 // New creates a new poster using dependency injection for the connection pool manager
 func New(ctx context.Context, cfg config.Config, poolManager pool.PoolManager, jobProgress progress.JobProgress) (Poster, error) {
+	return NewWithEngine(ctx, cfg, poolManager, jobProgress, nil)
+}
+
+// NewWithEngine creates a poster that routes upload work through the supplied
+// process-wide Engine, so effective concurrency and in-flight buffer memory are
+// bounded across all jobs. A nil engine preserves standalone behaviour.
+func NewWithEngine(ctx context.Context, cfg config.Config, poolManager pool.PoolManager, jobProgress progress.JobProgress, engine *Engine) (Poster, error) {
 	if poolManager == nil {
 		return nil, fmt.Errorf("pool manager cannot be nil")
 	}
@@ -272,6 +289,7 @@ func New(ctx context.Context, cfg config.Config, poolManager pool.PoolManager, j
 		verifyPool:  verifyPool,
 		stats:       stats,
 		jobProgress: jobProgress,
+		engine:      engine,
 	}
 
 	// Size the shared upload worker pool to the total number of upload-pool
@@ -331,7 +349,11 @@ func (p *poster) uploadWorker() {
 // job.done. The job's body buffer is always returned to the pool, even on
 // error or cancellation.
 func (p *poster) runUploadJob(job uploadJob) {
-	defer putBodyBuffer(job.poolBuf)
+	defer func() {
+		putBodyBuffer(job.poolBuf)
+		// Release the global buffer-budget reservation for this article.
+		p.engine.ReleaseBuffer(job.reserved)
+	}()
 
 	if err := job.ctx.Err(); err != nil {
 		job.done(err)
@@ -341,6 +363,14 @@ func (p *poster) runUploadJob(job uploadJob) {
 		job.done(err)
 		return
 	}
+	// Acquire a process-wide worker slot so effective posting concurrency across
+	// all jobs stays within the engine's worker_count (nil engine = no gate).
+	if err := p.engine.AcquireWorker(job.ctx); err != nil {
+		job.done(err)
+		return
+	}
+	defer p.engine.ReleaseWorker()
+
 	job.done(p.postArticleWithBody(job.ctx, job.art, job.body))
 }
 
@@ -519,6 +549,10 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			// Create read-ahead channel (buffer 50 articles ahead to overlap I/O with network)
 			readAheadChan := make(chan articleWithBody, 50)
 
+			// Per-article reservation against the process-wide buffer budget; 0
+			// when no engine is configured (reservation is then a no-op).
+			reserveBytes := p.engine.PerArticleBytes()
+
 			// Start read-ahead goroutine to pre-read article bodies
 			go func() {
 				defer close(readAheadChan)
@@ -527,6 +561,13 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 					case <-postCtx.Done():
 						return
 					default:
+						// Reserve global buffer budget before allocating/reading.
+						// This blocks (and so bounds total in-flight memory across
+						// all jobs) when the budget is exhausted.
+						if err := p.engine.ReserveBuffer(postCtx, reserveBytes); err != nil {
+							return
+						}
+
 						// Get buffer from pool, resize if needed. Outliers are dropped
 						// on Put (see putBodyBuffer) so they cannot inflate the pool.
 						poolBuf := bodyBufferPool.Get().([]byte)
@@ -537,14 +578,16 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 
 						if _, err := readAtWithStallGuard(postCtx, post.file, body, art.Offset); err != nil {
 							putBodyBuffer(poolBuf)
+							p.engine.ReleaseBuffer(reserveBytes)
 							slog.ErrorContext(ctx, "Error pre-reading article", "error", err, "offset", art.Offset)
 							return
 						}
 
 						select {
-						case readAheadChan <- articleWithBody{article: art, body: body, poolBuf: poolBuf}:
+						case readAheadChan <- articleWithBody{article: art, body: body, poolBuf: poolBuf, reserved: reserveBytes}:
 						case <-postCtx.Done():
 							putBodyBuffer(poolBuf)
+							p.engine.ReleaseBuffer(reserveBytes)
 							return
 						}
 					}
@@ -576,13 +619,15 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 				art := artWithBody.article
 				body := artWithBody.body
 				poolBuf := artWithBody.poolBuf
+				reserved := artWithBody.reserved
 
 				articleWG.Add(1)
 				job := uploadJob{
-					ctx:     postCtx,
-					art:     art,
-					body:    body,
-					poolBuf: poolBuf,
+					ctx:      postCtx,
+					art:      art,
+					body:     body,
+					poolBuf:  poolBuf,
+					reserved: reserved,
 					done: func(err error) {
 						defer articleWG.Done()
 						if err != nil {
@@ -600,10 +645,12 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 				case p.uploadJobs <- job:
 				case <-p.shutdown:
 					putBodyBuffer(poolBuf)
+					p.engine.ReleaseBuffer(reserved)
 					recordErr(ErrPosterClosed)
 					articleWG.Done()
 				case <-postCtx.Done():
 					putBodyBuffer(poolBuf)
+					p.engine.ReleaseBuffer(reserved)
 					recordErr(postCtx.Err())
 					articleWG.Done()
 				}

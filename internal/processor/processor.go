@@ -137,7 +137,7 @@ func New(opts ProcessorOptions) *Processor {
 	// of queue concurrency. On failure, fall back to per-job resources so the
 	// processor still functions.
 	if opts.Config != nil {
-		if rt, err := postie.NewRuntime(providerCtx, opts.Config); err != nil {
+		if rt, err := postie.NewRuntime(providerCtx, opts.Config, opts.PoolManager); err != nil {
 			slog.Error("Failed to create transfer runtime; falling back to per-job PAR2 scheduling", "error", err)
 		} else {
 			processor.transferRuntime = rt

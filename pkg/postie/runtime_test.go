@@ -16,7 +16,7 @@ func TestNewRuntime_Par2SchedulerCapacityFromConfig(t *testing.T) {
 	cfg := mocks.NewMockConfig(ctrl)
 	cfg.EXPECT().GetPar2Config(gomock.Any()).Return(&config.Par2Config{MaxConcurrentJobs: 3}, nil)
 
-	rt, err := NewRuntime(context.Background(), cfg)
+	rt, err := NewRuntime(context.Background(), cfg, nil)
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestNewRuntime_DefaultsToOneWhenUnset(t *testing.T) {
 	cfg := mocks.NewMockConfig(ctrl)
 	cfg.EXPECT().GetPar2Config(gomock.Any()).Return(&config.Par2Config{MaxConcurrentJobs: 0}, nil)
 
-	rt, err := NewRuntime(context.Background(), cfg)
+	rt, err := NewRuntime(context.Background(), cfg, nil)
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)
 	}

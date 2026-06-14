@@ -5,6 +5,8 @@ import (
 
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/par2"
+	"github.com/javi11/postie/internal/pool"
+	"github.com/javi11/postie/internal/poster"
 )
 
 // Runtime owns the process-wide transfer resources shared across all upload
@@ -18,13 +20,18 @@ import (
 // process-wide rather than per queue job.
 type Runtime struct {
 	par2Scheduler *par2.Scheduler
+	uploadEngine  *poster.Engine
 }
 
-// NewRuntime builds the shared transfer runtime from cfg. It is safe to call
-// with a cfg whose PAR2 settings are unset; the PAR2 scheduler then defaults to
-// a single concurrent job.
-func NewRuntime(ctx context.Context, cfg config.Config) (*Runtime, error) {
+// NewRuntime builds the shared transfer runtime from cfg. poolManager may be
+// nil; when it is (or when no upload connections are advertised) the upload
+// engine is left unset and jobs fall back to standalone, unbounded behaviour.
+// It is safe to call with a cfg whose PAR2 settings are unset; the PAR2
+// scheduler then defaults to a single concurrent job.
+func NewRuntime(ctx context.Context, cfg config.Config, poolManager *pool.Manager) (*Runtime, error) {
 	maxJobs := 1
+	var uploadEngine *poster.Engine
+
 	if cfg != nil {
 		par2Cfg, err := cfg.GetPar2Config(ctx)
 		if err != nil {
@@ -33,11 +40,41 @@ func NewRuntime(ctx context.Context, cfg config.Config) (*Runtime, error) {
 		if par2Cfg != nil && par2Cfg.MaxConcurrentJobs > 0 {
 			maxJobs = par2Cfg.MaxConcurrentJobs
 		}
+
+		// Build the process-wide upload engine sized from article size, the
+		// configured buffer limit (0 = auto), and the total upload connection
+		// capacity reported by the pool.
+		if connCapacity := uploadConnectionCapacity(poolManager); connCapacity > 0 {
+			postingCfg := cfg.GetPostingConfig()
+			uploadEngine = poster.NewEngine(
+				postingCfg.ArticleSizeInBytes,
+				postingCfg.UploadBufferMemoryLimit,
+				connCapacity,
+			)
+		}
 	}
 
 	return &Runtime{
 		par2Scheduler: par2.NewScheduler(maxJobs),
+		uploadEngine:  uploadEngine,
 	}, nil
+}
+
+// uploadConnectionCapacity sums the configured connection slots across all
+// upload providers, which bounds how many articles can be in flight at once.
+func uploadConnectionCapacity(poolManager *pool.Manager) int {
+	if poolManager == nil {
+		return 0
+	}
+	uploadPool := poolManager.GetUploadPool()
+	if uploadPool == nil {
+		return 0
+	}
+	capacity := 0
+	for _, pr := range uploadPool.Stats().Providers {
+		capacity += pr.MaxConnections
+	}
+	return capacity
 }
 
 // Par2Scheduler returns the shared PAR2 scheduler, or nil if r is nil.
@@ -46,6 +83,15 @@ func (r *Runtime) Par2Scheduler() *par2.Scheduler {
 		return nil
 	}
 	return r.par2Scheduler
+}
+
+// UploadEngine returns the shared upload engine, or nil if r is nil or no
+// engine was created.
+func (r *Runtime) UploadEngine() *poster.Engine {
+	if r == nil {
+		return nil
+	}
+	return r.uploadEngine
 }
 
 // Close releases runtime-owned resources. It is safe to call on a nil Runtime

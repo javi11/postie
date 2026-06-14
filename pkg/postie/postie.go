@@ -91,8 +91,9 @@ func NewWithRuntime(
 	}
 	par2runner := par2.NewScheduledExecutor(par2Executor, par2Scheduler)
 
-	// Create poster with progress manager
-	p, err := poster.New(ctx, cfg, poolManager, jobProgress)
+	// Create poster with progress manager, sharing the process-wide upload
+	// engine (worker + buffer-budget limits) when a runtime is supplied.
+	p, err := poster.NewWithEngine(ctx, cfg, poolManager, jobProgress, rt.UploadEngine())
 	if err != nil {
 		slog.ErrorContext(ctx, "Error creating poster", "error", err)
 
