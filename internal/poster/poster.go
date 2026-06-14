@@ -98,6 +98,13 @@ func putBodyBuffer(buf []byte) {
 	bodyBufferPool.Put(full) //nolint:staticcheck // SA6002: slices have pointer semantics, no wrapper needed
 }
 
+// ManifestSink records a durable manifest for a file's articles before they are
+// posted. It is implemented outside the poster (by the transfer runtime) and
+// injected per job; a nil sink disables manifest recording (standalone mode).
+type ManifestSink interface {
+	RecordFile(ctx context.Context, filePath string, articles []*article.Article) error
+}
+
 // Poster defines the interface for posting articles to Usenet
 type Poster interface {
 	// Post posts files from a directory to Usenet
@@ -217,6 +224,10 @@ type poster struct {
 	// budget, so concurrent jobs no longer multiply workers or memory. Nil =
 	// standalone behaviour (no global gate).
 	engine *Engine
+
+	// manifestSink, when non-nil, records a durable manifest for each file
+	// before its articles are posted. Nil = standalone (no manifest recording).
+	manifestSink ManifestSink
 }
 
 // ensureWorkersStarted spins up the shared upload worker pool exactly once.
@@ -250,13 +261,15 @@ func (p *poster) ensureWorkersStarted() {
 
 // New creates a new poster using dependency injection for the connection pool manager
 func New(ctx context.Context, cfg config.Config, poolManager pool.PoolManager, jobProgress progress.JobProgress) (Poster, error) {
-	return NewWithEngine(ctx, cfg, poolManager, jobProgress, nil)
+	return NewWithEngine(ctx, cfg, poolManager, jobProgress, nil, nil)
 }
 
 // NewWithEngine creates a poster that routes upload work through the supplied
 // process-wide Engine, so effective concurrency and in-flight buffer memory are
-// bounded across all jobs. A nil engine preserves standalone behaviour.
-func NewWithEngine(ctx context.Context, cfg config.Config, poolManager pool.PoolManager, jobProgress progress.JobProgress, engine *Engine) (Poster, error) {
+// bounded across all jobs. A nil engine preserves standalone behaviour. The
+// optional manifestSink records a durable manifest per file before posting; a
+// nil sink disables manifest recording.
+func NewWithEngine(ctx context.Context, cfg config.Config, poolManager pool.PoolManager, jobProgress progress.JobProgress, engine *Engine, manifestSink ManifestSink) (Poster, error) {
 	if poolManager == nil {
 		return nil, fmt.Errorf("pool manager cannot be nil")
 	}
@@ -280,13 +293,14 @@ func NewWithEngine(ctx context.Context, cfg config.Config, poolManager pool.Pool
 	postCheckCfg := cfg.GetPostCheckConfig()
 
 	p := &poster{
-		cfg:         cfg.GetPostingConfig(),
-		checkCfg:    postCheckCfg,
-		uploadPool:  uploadPool,
-		verifyPool:  verifyPool,
-		stats:       stats,
-		jobProgress: jobProgress,
-		engine:      engine,
+		cfg:          cfg.GetPostingConfig(),
+		checkCfg:     postCheckCfg,
+		uploadPool:   uploadPool,
+		verifyPool:   verifyPool,
+		stats:        stats,
+		jobProgress:  jobProgress,
+		engine:       engine,
+		manifestSink: manifestSink,
 	}
 
 	// Size the shared upload worker pool to the total number of upload-pool
@@ -1230,6 +1244,17 @@ func (p *poster) addPost(ctx context.Context, filePath string, displayName strin
 		art.Size = uint64(size)
 
 		articles = append(articles, art)
+	}
+
+	// Record a durable manifest of this file's articles BEFORE any network
+	// posting, so an interrupted upload can be resumed/verified with the exact
+	// Message-IDs that will be posted. If the manifest cannot be written we fail
+	// the file rather than posting without durable recovery data.
+	if p.manifestSink != nil {
+		if err := p.manifestSink.RecordFile(ctx, filePath, articles); err != nil {
+			_ = file.Close()
+			return fmt.Errorf("recording manifest for %s: %w", filePath, err)
+		}
 	}
 
 	post := &Post{
