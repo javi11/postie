@@ -262,3 +262,36 @@ func TestProcessDueFailures_NothingDue(t *testing.T) {
 		t.Errorf("processed = %d, want 0", n)
 	}
 }
+
+func TestVerifyDueFiles_VerifiesOnlyDueUploadedFiles(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	writeManifest(t, store, "t", "due", 3)
+	writeManifest(t, store, "t", "notdue", 3)
+	if err := store.MarkUploaded(ctx, "t", "due", now.Add(-time.Hour), now.Add(-time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MarkUploaded(ctx, "t", "notdue", now.Add(-time.Hour), now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := New(store, newFakeStater(), &fakeReposter{}, Config{}, "w")
+	n, err := svc.VerifyDueFiles(ctx, now, 10)
+	if err != nil {
+		t.Fatalf("VerifyDueFiles: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("verified %d files, want 1 (only the due one)", n)
+	}
+
+	dueFile, _ := store.GetFile(ctx, "t", "due")
+	if dueFile.VerificationState != transferstore.StateVerified {
+		t.Errorf("due file state = %q, want verified", dueFile.VerificationState)
+	}
+	notDue, _ := store.GetFile(ctx, "t", "notdue")
+	if notDue.VerificationState != transferstore.StateUploaded {
+		t.Errorf("not-due file state = %q, want still uploaded", notDue.VerificationState)
+	}
+}

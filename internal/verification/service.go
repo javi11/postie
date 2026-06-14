@@ -60,6 +60,8 @@ type Config struct {
 	LeaseDuration time.Duration
 	// BatchSize is the maximum number of failures claimed per cycle.
 	BatchSize int
+	// PollInterval is how often the Run loop checks for due files/failures.
+	PollInterval time.Duration
 }
 
 func (c Config) withDefaults() Config {
@@ -87,6 +89,9 @@ func (c Config) withDefaults() Config {
 	if c.BatchSize <= 0 {
 		c.BatchSize = 500
 	}
+	if c.PollInterval <= 0 {
+		c.PollInterval = 15 * time.Second
+	}
 	return c
 }
 
@@ -111,6 +116,62 @@ func New(store *transferstore.Store, stater Stater, reposter Reposter, cfg Confi
 		owner:    owner,
 		now:      time.Now,
 	}
+}
+
+// Run drives verification until ctx is cancelled: on each tick it reclaims
+// expired leases, runs the first verification check for any due files, then
+// processes due verification failures (re-posts/rechecks). It is intended to be
+// started once as a background goroutine, owned by the processor.
+func (s *Service) Run(ctx context.Context) {
+	ticker := time.NewTicker(s.cfg.PollInterval)
+	defer ticker.Stop()
+
+	for {
+		s.runOnce(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+// runOnce performs a single verification cycle.
+func (s *Service) runOnce(ctx context.Context) {
+	now := s.now()
+	if _, err := s.store.ReclaimExpiredLeases(ctx, now); err != nil {
+		slog.WarnContext(ctx, "verification: reclaim leases failed", "error", err)
+	}
+	if _, err := s.VerifyDueFiles(ctx, now, s.cfg.BatchSize); err != nil {
+		slog.WarnContext(ctx, "verification: verify due files failed", "error", err)
+	}
+	if _, err := s.ProcessDueFailures(ctx, now); err != nil {
+		slog.WarnContext(ctx, "verification: process due failures failed", "error", err)
+	}
+}
+
+// VerifyDueFiles runs the first verification check for every file whose check is
+// due (verification_state=uploaded, next_check_at<=now), up to limit. A failure
+// verifying one file is logged and does not abort the batch. Returns the number
+// of files verified.
+func (s *Service) VerifyDueFiles(ctx context.Context, now time.Time, limit int) (int, error) {
+	due, err := s.store.ListDueFiles(ctx, now, limit)
+	if err != nil {
+		return 0, err
+	}
+	processed := 0
+	for _, tf := range due {
+		if err := ctx.Err(); err != nil {
+			return processed, err
+		}
+		if err := s.VerifyFile(ctx, tf); err != nil {
+			slog.WarnContext(ctx, "verification: verify file failed",
+				"transfer", tf.TransferID, "file", tf.FileID, "error", err)
+			continue
+		}
+		processed++
+	}
+	return processed, nil
 }
 
 // VerifyFile streams a transfer file's manifest, STATs every article with
