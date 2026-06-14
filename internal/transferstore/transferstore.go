@@ -242,6 +242,43 @@ func (s *Store) SetVerificationState(ctx context.Context, transferID, fileID, st
 	return err
 }
 
+// MarkUploaded records that a file finished uploading: upload_state and
+// verification_state both become "uploaded", posted_at is set, and next_check_at
+// is when the first verification check is due (posted_at + post_check.delay).
+func (s *Store) MarkUploaded(ctx context.Context, transferID, fileID string, postedAt, nextCheckAt time.Time) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE transfer_files
+		SET upload_state = ?, verification_state = ?, posted_at = ?, next_check_at = ?, updated_at = ?
+		WHERE transfer_id = ? AND file_id = ?`,
+		StateUploaded, StateUploaded, fmtTime(postedAt), fmtTime(nextCheckAt), fmtTime(time.Now()),
+		transferID, fileID)
+	return err
+}
+
+// ListDueFiles returns files awaiting their first verification check
+// (verification_state = uploaded, next_check_at <= now), oldest first.
+func (s *Store) ListDueFiles(ctx context.Context, now time.Time, limit int) ([]TransferFile, error) {
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT "+transferFileCols+` FROM transfer_files
+		 WHERE verification_state = ? AND next_check_at IS NOT NULL AND next_check_at <= ?
+		 ORDER BY next_check_at LIMIT ?`,
+		StateUploaded, fmtTime(now), limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []TransferFile
+	for rows.Next() {
+		f, err := scanTransferFile(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
 // SetUploadState updates a file's upload state and (optionally) posted_at.
 func (s *Store) SetUploadState(ctx context.Context, transferID, fileID, state string, postedAt *time.Time) error {
 	_, err := s.db.ExecContext(ctx, `

@@ -201,3 +201,49 @@ func TestUpdateFailureAfterCheckResolves(t *testing.T) {
 		t.Errorf("resolved = %d, want 1", resolved)
 	}
 }
+
+func TestMarkUploadedAndListDueFiles(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	for _, fid := range []string{"f-past", "f-future"} {
+		if err := s.UpsertFile(ctx, TransferFile{
+			TransferID: "t", FileID: fid, ManifestPath: "m", SourcePath: "s", FileRole: "original", ArticleCount: 1,
+		}); err != nil {
+			t.Fatalf("UpsertFile %s: %v", fid, err)
+		}
+	}
+
+	posted := now.Add(-time.Hour)
+	if err := s.MarkUploaded(ctx, "t", "f-past", posted, now.Add(-time.Minute)); err != nil {
+		t.Fatalf("MarkUploaded past: %v", err)
+	}
+	if err := s.MarkUploaded(ctx, "t", "f-future", posted, now.Add(time.Hour)); err != nil {
+		t.Fatalf("MarkUploaded future: %v", err)
+	}
+
+	// Both should be in the uploaded state with posted_at set.
+	pastFile, _ := s.GetFile(ctx, "t", "f-past")
+	if pastFile.UploadState != StateUploaded || pastFile.VerificationState != StateUploaded {
+		t.Errorf("f-past states = %q/%q, want uploaded/uploaded", pastFile.UploadState, pastFile.VerificationState)
+	}
+	if pastFile.PostedAt == nil || !pastFile.PostedAt.Equal(posted) {
+		t.Errorf("f-past PostedAt = %v, want %v", pastFile.PostedAt, posted)
+	}
+
+	// Only the past-due file is returned by ListDueFiles.
+	due, err := s.ListDueFiles(ctx, now, 10)
+	if err != nil {
+		t.Fatalf("ListDueFiles: %v", err)
+	}
+	if len(due) != 1 || due[0].FileID != "f-past" {
+		t.Errorf("ListDueFiles returned %d files (want 1=f-past): %+v", len(due), due)
+	}
+
+	// After the future file becomes due, it is returned too.
+	dueLater, _ := s.ListDueFiles(ctx, now.Add(2*time.Hour), 10)
+	if len(dueLater) != 2 {
+		t.Errorf("ListDueFiles later returned %d, want 2", len(dueLater))
+	}
+}
