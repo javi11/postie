@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/javi11/postie/internal/article"
 	"github.com/javi11/postie/internal/config"
@@ -118,5 +119,37 @@ func TestRecorder_DeterministicFileIDUpdatesInPlace(t *testing.T) {
 	files, _ := store.ListFilesByTransfer(ctx, "tid-3")
 	if len(files) != 1 {
 		t.Errorf("re-record created %d rows, want 1 (stable file id)", len(files))
+	}
+}
+
+func TestRecorder_CompleteUploadMarksFilesUploaded(t *testing.T) {
+	store := newTestStore(t)
+	rec := New("tid-up", t.TempDir(), store)
+	ctx := context.Background()
+
+	if err := rec.RecordFile(ctx, "/data/a.mkv", []*article.Article{{MessageID: "a", Offset: 0, Size: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := rec.RecordFile(ctx, "/data/a.par2", []*article.Article{{MessageID: "p", Offset: 0, Size: 1}}); err != nil {
+		t.Fatal(err)
+	}
+
+	posted := time.Unix(1700000000, 0).UTC()
+	nextCheck := posted.Add(10 * time.Second)
+	if err := rec.CompleteUpload(ctx, posted, nextCheck); err != nil {
+		t.Fatalf("CompleteUpload: %v", err)
+	}
+
+	files, _ := store.ListFilesByTransfer(ctx, "tid-up")
+	if len(files) != 2 {
+		t.Fatalf("files = %d, want 2", len(files))
+	}
+	for _, f := range files {
+		if f.UploadState != transferstore.StateUploaded || f.VerificationState != transferstore.StateUploaded {
+			t.Errorf("file %s states = %q/%q, want uploaded/uploaded", f.FileID, f.UploadState, f.VerificationState)
+		}
+		if f.NextCheckAt == nil || !f.NextCheckAt.Equal(nextCheck) {
+			t.Errorf("file %s NextCheckAt = %v, want %v", f.FileID, f.NextCheckAt, nextCheck)
+		}
 	}
 }

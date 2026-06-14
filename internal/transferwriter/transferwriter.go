@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"time"
 
 	"github.com/javi11/postie/internal/article"
 	"github.com/javi11/postie/internal/manifest"
@@ -79,4 +80,23 @@ func (r *Recorder) RecordFile(ctx context.Context, sourcePath string, articles [
 		UploadState:       transferstore.StatePlanned,
 		VerificationState: transferstore.StatePlanned,
 	})
+}
+
+// CompleteUpload marks every file of this transfer as uploaded, recording
+// postedAt and the first verification-check due time (nextCheckAt). It is
+// called after all of the transfer's articles have been posted, so the durable
+// verification service can pick the files up. The queue upload slot can be
+// released once this returns; propagation delay is then borne by the background
+// service, not the queue.
+func (r *Recorder) CompleteUpload(ctx context.Context, postedAt, nextCheckAt time.Time) error {
+	files, err := r.store.ListFilesByTransfer(ctx, r.transferID)
+	if err != nil {
+		return err
+	}
+	for _, f := range files {
+		if err := r.store.MarkUploaded(ctx, r.transferID, f.FileID, postedAt, nextCheckAt); err != nil {
+			return err
+		}
+	}
+	return nil
 }

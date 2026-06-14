@@ -18,6 +18,7 @@ import (
 	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/poster"
 	"github.com/javi11/postie/internal/progress"
+	"github.com/javi11/postie/internal/transferwriter"
 	"github.com/javi11/postie/pkg/fileinfo"
 	"golang.org/x/sync/errgroup"
 )
@@ -30,8 +31,14 @@ type Postie struct {
 	compressionCfg            config.NzbCompressionConfig
 	postUploadScriptCfg       config.PostUploadScriptConfig
 	maintainOriginalExtension bool
+	postCheckCfg              config.PostCheck
 	jobProgress               progress.JobProgress
 	queue                     QueueInterface
+	// recorder is the per-job durable manifest recorder, or nil in standalone
+	// mode. When set, the poster writes manifests during upload and Postie marks
+	// the transfer's files uploaded (for the durable verification service) once
+	// posting completes.
+	recorder *transferwriter.Recorder
 }
 
 // QueueInterface defines the queue methods needed by Postie
@@ -94,10 +101,18 @@ func NewWithRuntime(
 	}
 	par2runner := par2.NewScheduledExecutor(par2Executor, par2Scheduler)
 
+	// Build the per-job durable manifest recorder (nil in standalone mode). It
+	// doubles as the poster's manifest sink; pass an untyped-nil sink when
+	// absent to avoid a non-nil interface wrapping a nil pointer.
+	recorder := rt.NewManifestRecorder(transferID)
+	var sink poster.ManifestSink
+	if recorder != nil {
+		sink = recorder
+	}
+
 	// Create poster with progress manager, sharing the process-wide upload
-	// engine (worker + buffer-budget limits) and a per-job manifest sink (bound
-	// to transferID) when a runtime with a store is supplied.
-	p, err := poster.NewWithEngine(ctx, cfg, poolManager, jobProgress, rt.UploadEngine(), rt.NewManifestRecorder(transferID))
+	// engine (worker + buffer-budget limits) and the per-job manifest sink.
+	p, err := poster.NewWithEngine(ctx, cfg, poolManager, jobProgress, rt.UploadEngine(), sink)
 	if err != nil {
 		slog.ErrorContext(ctx, "Error creating poster", "error", err)
 
@@ -112,9 +127,25 @@ func NewWithRuntime(
 		compressionCfg:            compressionConfig,
 		postUploadScriptCfg:       postUploadScriptConfig,
 		maintainOriginalExtension: maintainOriginalExtension,
+		postCheckCfg:              cfg.GetPostCheckConfig(),
 		jobProgress:               jobProgress,
 		queue:                     queue,
+		recorder:                  recorder,
 	}, nil
+}
+
+// completeTransferUpload marks the transfer's files uploaded so the durable
+// verification service can verify them, scheduling the first check after the
+// configured propagation delay. No-op in standalone mode (no recorder).
+func (p *Postie) completeTransferUpload(ctx context.Context) {
+	if p.recorder == nil {
+		return
+	}
+	delay := p.postCheckCfg.RetryDelay.ToDuration()
+	now := time.Now().UTC()
+	if err := p.recorder.CompleteUpload(ctx, now, now.Add(delay)); err != nil {
+		slog.WarnContext(ctx, "Failed to mark transfer uploaded for verification", "error", err)
+	}
 }
 
 func (p *Postie) Close() {
@@ -194,10 +225,21 @@ func safeRemoveFile(ctx context.Context, filePath string) {
 	_ = os.Remove(filePath)
 }
 
-func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir string, outputDir string, forceFolderMode bool) (string, error) {
+func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir string, outputDir string, forceFolderMode bool) (nzbPath string, retErr error) {
 	if len(files) == 0 {
 		return "", fmt.Errorf("no files to post")
 	}
+
+	// On a successful upload, mark the transfer's files uploaded so the durable
+	// verification service picks them up and the queue slot can be released.
+	// In durable mode the in-poster checkLoop is skipped, so a nil error here
+	// means posting succeeded with nothing left to verify inline. No-op in
+	// standalone mode (no recorder).
+	defer func() {
+		if retErr == nil {
+			p.completeTransferUpload(ctx)
+		}
+	}()
 
 	// Use folder mode (single NZB) if explicitly requested via forceFolderMode
 	// This is set to true for:

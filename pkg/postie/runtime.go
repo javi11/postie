@@ -9,7 +9,33 @@ import (
 	"github.com/javi11/postie/internal/poster"
 	"github.com/javi11/postie/internal/transferstore"
 	"github.com/javi11/postie/internal/transferwriter"
+	"github.com/javi11/postie/internal/verification"
 )
+
+// poolStater adapts an NNTP client to the verification.Stater interface (a STAT
+// that returns only an error: nil = article exists).
+type poolStater struct {
+	pool pool.NNTPClient
+}
+
+func (s poolStater) Stat(ctx context.Context, messageID string) error {
+	_, err := s.pool.Stat(ctx, messageID)
+	return err
+}
+
+// verificationConfig maps the post-check config to the verification service's
+// config; zero/auto values are normalised inside the service.
+func verificationConfig(pc config.PostCheck) verification.Config {
+	return verification.Config{
+		MaxConcurrentChecks: pc.MaxConcurrentChecks,
+		PropagationDelay:    pc.RetryDelay.ToDuration(),
+		MaxReposts:          int(pc.MaxRePost),
+		DeferredBackoff:     pc.DeferredCheckDelay.ToDuration(),
+		MaxBackoff:          pc.DeferredMaxBackoff.ToDuration(),
+		MaxDeferredChecks:   pc.DeferredMaxRetries,
+		BatchSize:           pc.DeferredBatchSize,
+	}
+}
 
 // Runtime owns the process-wide transfer resources shared across all upload
 // jobs. Today it holds the PAR2 scheduler; later phases extend it with the
@@ -25,6 +51,7 @@ type Runtime struct {
 	uploadEngine  *poster.Engine
 	store         *transferstore.Store
 	manifestDir   string
+	verifyService *verification.Service
 }
 
 // NewRuntime builds the shared transfer runtime from cfg. poolManager may be
@@ -36,6 +63,7 @@ type Runtime struct {
 func NewRuntime(ctx context.Context, cfg config.Config, poolManager *pool.Manager, store *transferstore.Store, manifestDir string) (*Runtime, error) {
 	maxJobs := 1
 	var uploadEngine *poster.Engine
+	var verifyService *verification.Service
 
 	if cfg != nil {
 		par2Cfg, err := cfg.GetPar2Config(ctx)
@@ -57,6 +85,27 @@ func NewRuntime(ctx context.Context, cfg config.Config, poolManager *pool.Manage
 				connCapacity,
 			)
 		}
+
+		// Build the durable verification service when a store + pool are present.
+		// It re-posts through the shared engine and STATs through the verify pool.
+		if store != nil && poolManager != nil {
+			uploadPool := poolManager.GetUploadPool()
+			verifyPool := poolManager.GetVerifyPool()
+			if verifyPool == nil {
+				verifyPool = uploadPool
+			}
+			if uploadPool != nil && verifyPool != nil {
+				postingCfg := cfg.GetPostingConfig()
+				reposter := poster.NewReposter(uploadPool, uploadEngine, postingCfg.ThrottleRate)
+				verifyService = verification.New(
+					store,
+					poolStater{pool: verifyPool},
+					reposter,
+					verificationConfig(cfg.GetPostCheckConfig()),
+					"postie",
+				)
+			}
+		}
 	}
 
 	return &Runtime{
@@ -64,6 +113,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, poolManager *pool.Manage
 		uploadEngine:  uploadEngine,
 		store:         store,
 		manifestDir:   manifestDir,
+		verifyService: verifyService,
 	}, nil
 }
 
@@ -101,6 +151,16 @@ func (r *Runtime) UploadEngine() *poster.Engine {
 	return r.uploadEngine
 }
 
+// RunVerification runs the durable verification service until ctx is cancelled.
+// It is a no-op (returns immediately) when no service was created (standalone
+// mode or missing store/pool). Intended to be started once as a goroutine.
+func (r *Runtime) RunVerification(ctx context.Context) {
+	if r == nil || r.verifyService == nil {
+		return
+	}
+	r.verifyService.Run(ctx)
+}
+
 // TransferStore returns the shared durable transfer store, or nil if none.
 func (r *Runtime) TransferStore() *transferstore.Store {
 	if r == nil {
@@ -111,9 +171,9 @@ func (r *Runtime) TransferStore() *transferstore.Store {
 
 // NewManifestRecorder returns a per-job manifest recorder bound to transferID,
 // or nil when the runtime has no store or transferID is empty (so the poster
-// runs without manifest recording). Returns an untyped nil so the result
-// compares equal to nil as a poster.ManifestSink.
-func (r *Runtime) NewManifestRecorder(transferID string) poster.ManifestSink {
+// runs without manifest recording). The concrete type lets the caller both use
+// it as a poster.ManifestSink and call CompleteUpload after posting.
+func (r *Runtime) NewManifestRecorder(transferID string) *transferwriter.Recorder {
 	if r == nil || r.store == nil || transferID == "" {
 		return nil
 	}

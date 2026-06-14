@@ -72,6 +72,8 @@ type Processor struct {
 	// scheduler) shared by every job, so limits hold regardless of queue
 	// concurrency. May be nil, in which case each Postie uses private resources.
 	transferRuntime *postie.Runtime
+	// startVerificationOnce guards starting the durable verification service.
+	startVerificationOnce sync.Once
 }
 
 type ProcessorOptions struct {
@@ -165,6 +167,15 @@ func New(opts ProcessorOptions) *Processor {
 
 // Start begins processing files from the queue
 func (p *Processor) Start(ctx context.Context) error {
+	// Start the durable verification service once. It runs independently of the
+	// queue processing loop (and of pause), verifying completed transfers and
+	// re-posting missing articles in the background. No-op when no runtime/store.
+	p.startVerificationOnce.Do(func() {
+		if p.transferRuntime != nil {
+			go p.transferRuntime.RunVerification(ctx)
+		}
+	})
+
 	processTicker := time.NewTicker(time.Second * 2) // Process queue frequently
 	defer processTicker.Stop()
 

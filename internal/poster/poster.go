@@ -327,6 +327,14 @@ func NewWithEngine(ctx context.Context, cfg config.Config, poolManager pool.Pool
 	return p, nil
 }
 
+// immediateCheckEnabled reports whether the legacy in-poster checkLoop runs.
+// It is disabled in durable mode (a manifest sink is set): verification then
+// happens in the background durable verification service, which lets the upload
+// slot be released before propagation delay.
+func (p *poster) immediateCheckEnabled() bool {
+	return p.manifestSink == nil && p.checkCfg.Enabled != nil && *p.checkCfg.Enabled
+}
+
 func (p *poster) Close() {
 	p.closeOnce.Do(func() {
 		p.closed.Store(true)
@@ -438,12 +446,15 @@ func (p *poster) PostWithRelativePaths(
 	// Start a goroutine to process posts
 	go p.postLoop(ctx, postQueue, checkQueue, errChan, nzbGen, &postsInFlight)
 
-	// Start a goroutine to process checks only if post check is enabled
-	if p.checkCfg.Enabled != nil && *p.checkCfg.Enabled {
+	// Start a goroutine to process checks only if the in-poster check is enabled.
+	// In durable mode (manifest sink set) verification is handled by the
+	// background durable verification service instead, so the legacy checkLoop is
+	// skipped and the upload slot is released as soon as posting finishes.
+	if p.immediateCheckEnabled() {
 		go p.checkLoop(ctx, checkQueue, postQueue, errChan, nzbGen, &postsInFlight)
 		slog.DebugContext(ctx, "Post check enabled - started checkLoop goroutine")
 	} else {
-		slog.InfoContext(ctx, "Post check disabled - skipping article verification")
+		slog.InfoContext(ctx, "In-poster check disabled - verification deferred to durable service or skipped")
 	}
 
 	wg.Add(len(files))
@@ -723,7 +734,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			post.Status = PostStatusPosted
 			post.mu.Unlock()
 
-			if p.checkCfg.Enabled != nil && *p.checkCfg.Enabled {
+			if p.immediateCheckEnabled() {
 				// Guard the send: if checkLoop has already exited (e.g. on a
 				// verify error) the buffered checkQueue can fill and this send
 				// would block forever, leaking postLoop and every queued post.
