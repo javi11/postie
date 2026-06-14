@@ -1,7 +1,6 @@
 package poster
 
 import (
-	"bytes"
 	"context"
 	"crypto/md5"
 	"errors"
@@ -18,7 +17,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/javi11/nntppool/v4"
 	"github.com/javi11/nxg"
 	"github.com/javi11/postie/internal/article"
 	"github.com/javi11/postie/internal/config"
@@ -27,7 +25,6 @@ import (
 	"github.com/javi11/postie/internal/pausable"
 	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/progress"
-	"github.com/mnightingale/rapidyenc"
 	concpool "github.com/sourcegraph/conc/pool"
 )
 
@@ -1288,88 +1285,10 @@ func (p *poster) postArticleWithBody(ctx context.Context, art *article.Article, 
 		return err
 	}
 
-	// Build PostHeaders for nntppool v4
-	headers := nntppool.PostHeaders{
-		From:       art.From,
-		Subject:    art.Subject,
-		Newsgroups: art.Groups,
-		MessageID:  fmt.Sprintf("<%s>", art.MessageID),
-		Date:       art.Date.UTC(),
-		Extra:      make(map[string][]string),
-	}
-
-	// Add custom headers
-	if art.CustomHeaders != nil {
-		for k, v := range art.CustomHeaders {
-			headers.Extra[k] = []string{v}
-		}
-	}
-
-	// Add X-Nxg header if present
-	if art.XNxgHeader != "" {
-		headers.Extra["X-Nxg"] = []string{art.XNxgHeader}
-	}
-
-	// Build yEnc metadata
-	meta := rapidyenc.Meta{
-		FileName:   art.FileName,
-		FileSize:   art.FileSize,
-		PartNumber: int64(art.PartNumber),
-		TotalParts: int64(art.TotalParts),
-		Offset:     int64(art.Offset),
-		PartSize:   int64(art.Size),
-	}
-
-	// Post article with timeout to prevent indefinite TLS hangs
-	postCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
-
-	// Retry on stale pooled connection: the pool may hand back a connection the
-	// server silently closed (broken pipe / connection reset) or that has gone
-	// half-open and stops responding (read i/o timeout). After such errors the
-	// pool discards the bad connection; the retry picks a fresh one.
-	// bytes.NewReader(body) is cheap to recreate so the body is fully re-readable
-	// on each attempt. Cap at 3 attempts to avoid masking real server problems
-	// while tolerating a second stale pick after a long throttle pause.
-	var lastErr error
-	for attempt := range 3 {
-		if attempt > 0 {
-			slog.WarnContext(ctx, "Retrying article post after stale pooled connection",
-				"messageID", art.MessageID,
-				"attempt", attempt,
-				"prevErr", lastErr.Error())
-		}
-
-		_, lastErr = p.uploadPool.PostYenc(postCtx, headers, bytes.NewReader(body), meta)
-		if lastErr == nil {
-			break
-		}
-
-		if errors.Is(lastErr, context.Canceled) || errors.Is(lastErr, context.DeadlineExceeded) {
-			return context.Canceled
-		}
-
-		if !isStaleConnError(lastErr) {
-			break
-		}
-	}
-
-	if lastErr != nil {
-		return fmt.Errorf("error posting article: %w", lastErr)
-	}
-
-	// Apply throttling after posting
-	if p.throttle != nil {
-		p.throttle.Wait(int64(art.Size))
-	}
-
-	// Update stats
-	p.stats.mu.Lock()
-	p.stats.ArticlesPosted++
-	p.stats.BytesPosted += int64(art.Size)
-	p.stats.mu.Unlock()
-
-	return nil
+	// Delegate to the shared posting primitive so the normal and durable
+	// re-post paths build identical headers and apply the same stale-connection
+	// retry, throttle and stats accounting.
+	return postYenc(ctx, p.uploadPool, p.throttle, p.stats, art, body)
 }
 
 // isStaleConnError reports whether err looks like a stale pooled connection:
