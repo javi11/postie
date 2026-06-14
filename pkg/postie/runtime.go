@@ -7,6 +7,8 @@ import (
 	"github.com/javi11/postie/internal/par2"
 	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/poster"
+	"github.com/javi11/postie/internal/transferstore"
+	"github.com/javi11/postie/internal/transferwriter"
 )
 
 // Runtime owns the process-wide transfer resources shared across all upload
@@ -21,14 +23,17 @@ import (
 type Runtime struct {
 	par2Scheduler *par2.Scheduler
 	uploadEngine  *poster.Engine
+	store         *transferstore.Store
+	manifestDir   string
 }
 
 // NewRuntime builds the shared transfer runtime from cfg. poolManager may be
 // nil; when it is (or when no upload connections are advertised) the upload
 // engine is left unset and jobs fall back to standalone, unbounded behaviour.
-// It is safe to call with a cfg whose PAR2 settings are unset; the PAR2
-// scheduler then defaults to a single concurrent job.
-func NewRuntime(ctx context.Context, cfg config.Config, poolManager *pool.Manager) (*Runtime, error) {
+// store and manifestDir enable durable manifest recording; when store is nil
+// jobs run without manifests (standalone). It is safe to call with a cfg whose
+// PAR2 settings are unset; the PAR2 scheduler then defaults to a single job.
+func NewRuntime(ctx context.Context, cfg config.Config, poolManager *pool.Manager, store *transferstore.Store, manifestDir string) (*Runtime, error) {
 	maxJobs := 1
 	var uploadEngine *poster.Engine
 
@@ -57,6 +62,8 @@ func NewRuntime(ctx context.Context, cfg config.Config, poolManager *pool.Manage
 	return &Runtime{
 		par2Scheduler: par2.NewScheduler(maxJobs),
 		uploadEngine:  uploadEngine,
+		store:         store,
+		manifestDir:   manifestDir,
 	}, nil
 }
 
@@ -92,6 +99,25 @@ func (r *Runtime) UploadEngine() *poster.Engine {
 		return nil
 	}
 	return r.uploadEngine
+}
+
+// TransferStore returns the shared durable transfer store, or nil if none.
+func (r *Runtime) TransferStore() *transferstore.Store {
+	if r == nil {
+		return nil
+	}
+	return r.store
+}
+
+// NewManifestRecorder returns a per-job manifest recorder bound to transferID,
+// or nil when the runtime has no store or transferID is empty (so the poster
+// runs without manifest recording). Returns an untyped nil so the result
+// compares equal to nil as a poster.ManifestSink.
+func (r *Runtime) NewManifestRecorder(transferID string) poster.ManifestSink {
+	if r == nil || r.store == nil || transferID == "" {
+		return nil
+	}
+	return transferwriter.New(transferID, r.manifestDir, r.store)
 }
 
 // RuntimeMetrics is a point-in-time snapshot of process-wide transfer resource

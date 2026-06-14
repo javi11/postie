@@ -168,6 +168,12 @@ func New(ctx context.Context, database *database.Database) (*Queue, error) {
 	return q, nil
 }
 
+// DB returns the underlying database handle so adjacent stores (e.g. the
+// durable transfer store) can share the same connection.
+func (q *Queue) DB() *sql.DB {
+	return q.db
+}
+
 // recoverInProgressItems re-queues any items that were being processed when the app crashed.
 // These items exist in in_progress_items but not in goqite, completed_items, or errored_items.
 func (q *Queue) recoverInProgressItems(ctx context.Context) {

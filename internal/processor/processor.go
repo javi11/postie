@@ -20,6 +20,7 @@ import (
 	"github.com/javi11/postie/internal/poster"
 	"github.com/javi11/postie/internal/progress"
 	"github.com/javi11/postie/internal/queue"
+	"github.com/javi11/postie/internal/transferstore"
 	"github.com/javi11/postie/pkg/fileinfo"
 	"github.com/javi11/postie/pkg/postie"
 	"maragu.dev/goqite"
@@ -52,13 +53,13 @@ type Processor struct {
 	isPaused  bool
 	pausedMux sync.RWMutex
 	// Auto-pause functionality
-	isAutoPaused         bool
-	autoPauseReason      string
+	isAutoPaused          bool
+	autoPauseReason       string
 	isAutoBlockingNewJobs bool // blocks new jobs without pausing running ones
-	autoPausedMux        sync.RWMutex
-	providerCheckTicker *time.Ticker
-	providerCheckCtx    context.Context
-	providerCheckCancel context.CancelFunc
+	autoPausedMux         sync.RWMutex
+	providerCheckTicker   *time.Ticker
+	providerCheckCtx      context.Context
+	providerCheckCancel   context.CancelFunc
 	// Callback to check if processor can start new items
 	canProcessNextItem func() bool
 	// Callback when job fails permanently
@@ -86,7 +87,7 @@ type ProcessorOptions struct {
 	FollowSymlinks            bool                                // Control whether to follow symlinks when collecting folder files
 	CanProcessNextItem        func() bool                         // Callback to check if processor can start new items
 	OnJobError                func(fileName, errorMessage string) // Callback when job fails permanently
-	OnJobComplete             func()                             // Callback when any job finishes (success or deferred)
+	OnJobComplete             func()                              // Callback when any job finishes (success or deferred)
 }
 type RunningJobDetails struct {
 	ID       string                   `json:"id"`
@@ -137,7 +138,17 @@ func New(opts ProcessorOptions) *Processor {
 	// of queue concurrency. On failure, fall back to per-job resources so the
 	// processor still functions.
 	if opts.Config != nil {
-		if rt, err := postie.NewRuntime(providerCtx, opts.Config, opts.PoolManager); err != nil {
+		// Durable transfer store + manifest dir enable manifest recording and
+		// crash-safe verification. Manifests live alongside the database file.
+		var transferStore *transferstore.Store
+		var manifestDir string
+		if opts.Queue != nil {
+			if db := opts.Queue.DB(); db != nil {
+				transferStore = transferstore.New(db)
+				manifestDir = filepath.Join(filepath.Dir(opts.Config.GetDatabaseConfig().DatabasePath), "transfer-manifests")
+			}
+		}
+		if rt, err := postie.NewRuntime(providerCtx, opts.Config, opts.PoolManager, transferStore, manifestDir); err != nil {
 			slog.Error("Failed to create transfer runtime; falling back to per-job PAR2 scheduling", "error", err)
 		} else {
 			processor.transferRuntime = rt
@@ -496,7 +507,7 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 	// Create a postie instance for this job, sharing the process-wide transfer
 	// runtime so PAR2 (and later upload/verification) limits are enforced
 	// globally rather than per queue job.
-	jobPostie, err := postie.NewWithRuntime(jobCtx, p.config, poolManager, progressJob, p.queue, p.transferRuntime)
+	jobPostie, err := postie.NewWithRuntime(jobCtx, p.config, poolManager, progressJob, p.queue, p.transferRuntime, job.TransferID)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to create postie instance for job %s: %w", jobID, err)
 	}

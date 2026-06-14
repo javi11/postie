@@ -51,12 +51,14 @@ func New(
 	jobProgress progress.JobProgress,
 	queue QueueInterface,
 ) (*Postie, error) {
-	return NewWithRuntime(ctx, cfg, poolManager, jobProgress, queue, nil)
+	return NewWithRuntime(ctx, cfg, poolManager, jobProgress, queue, nil, "")
 }
 
 // NewWithRuntime creates a Postie that borrows shared resources from rt. When
 // rt is nil a private PAR2 scheduler is created honouring the configured
-// par2.max_concurrent_jobs, preserving standalone behaviour.
+// par2.max_concurrent_jobs, preserving standalone behaviour. transferID binds
+// this job's durable manifests; when empty (or rt has no store) manifest
+// recording is disabled.
 func NewWithRuntime(
 	ctx context.Context,
 	cfg config.Config,
@@ -64,6 +66,7 @@ func NewWithRuntime(
 	jobProgress progress.JobProgress,
 	queue QueueInterface,
 	rt *Runtime,
+	transferID string,
 ) (*Postie, error) {
 	// Get PAR2 configuration
 	par2Cfg, err := cfg.GetPar2Config(ctx)
@@ -92,9 +95,9 @@ func NewWithRuntime(
 	par2runner := par2.NewScheduledExecutor(par2Executor, par2Scheduler)
 
 	// Create poster with progress manager, sharing the process-wide upload
-	// engine (worker + buffer-budget limits) when a runtime is supplied. The
-	// per-job manifest sink is wired in a later step (transfer_id + store).
-	p, err := poster.NewWithEngine(ctx, cfg, poolManager, jobProgress, rt.UploadEngine(), nil)
+	// engine (worker + buffer-budget limits) and a per-job manifest sink (bound
+	// to transferID) when a runtime with a store is supplied.
+	p, err := poster.NewWithEngine(ctx, cfg, poolManager, jobProgress, rt.UploadEngine(), rt.NewManifestRecorder(transferID))
 	if err != nil {
 		slog.ErrorContext(ctx, "Error creating poster", "error", err)
 
