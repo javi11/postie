@@ -157,7 +157,7 @@ func New(opts ProcessorOptions) *Processor {
 				}
 			}
 		}
-		if rt, err := postie.NewRuntime(providerCtx, opts.Config, opts.PoolManager, transferStore, manifestDir); err != nil {
+		if rt, err := postie.NewRuntime(providerCtx, opts.Config, opts.PoolManager, transferStore, manifestDir, opts.Queue); err != nil {
 			slog.Error("Failed to create transfer runtime; falling back to per-job PAR2 scheduling", "error", err)
 		} else {
 			processor.transferRuntime = rt
@@ -427,12 +427,16 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 		}
 	}
 
-	// Execute post upload script if configured
-	// Note: We don't return the error here to avoid failing the completion if the script fails
-	// The script failure will be tracked in the database for retry
-	sourcePath := strings.TrimPrefix(job.Path, "FOLDER:")
-	if scriptErr := jobPostie.ExecutePostUploadScript(ctx, actualNzbPath, sourcePath, string(msg.ID)); scriptErr != nil {
-		slog.ErrorContext(ctx, "Post upload script execution failed", "error", scriptErr, "nzbPath", actualNzbPath)
+	// Execute post upload script if configured. In durable mode the script is
+	// deferred until verification succeeds (run by the transfer cleaner), so it
+	// only fires here in standalone mode.
+	// Note: We don't return the error here to avoid failing the completion if the script fails;
+	// the failure is tracked in the database for retry.
+	if !p.durableMode() {
+		sourcePath := strings.TrimPrefix(job.Path, "FOLDER:")
+		if scriptErr := jobPostie.ExecutePostUploadScript(ctx, actualNzbPath, sourcePath, string(msg.ID)); scriptErr != nil {
+			slog.ErrorContext(ctx, "Post upload script execution failed", "error", scriptErr, "nzbPath", actualNzbPath)
+		}
 	}
 
 	if p.onJobComplete != nil {

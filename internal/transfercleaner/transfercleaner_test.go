@@ -173,3 +173,45 @@ func TestCleanup_NotAllVerified_NoOp(t *testing.T) {
 		t.Error("nothing should be deleted while verification is in progress")
 	}
 }
+
+func TestCleanup_RunsScriptOnceWhenAllVerified(t *testing.T) {
+	store := newTestStore(t)
+	dir := t.TempDir()
+	ctx := context.Background()
+	seedFile(t, store, dir, "t", "f1", "original", transferstore.StateVerified, "")
+	seedFile(t, store, dir, "t", "f2", "original", transferstore.StateVerified, "")
+
+	var calls []string
+	runScript := func(_ context.Context, transferID string, files []transferstore.TransferFile) error {
+		calls = append(calls, transferID)
+		return nil
+	}
+
+	c := New(store, true, runScript)
+	if _, err := c.CleanupTransfer(ctx, "t"); err != nil {
+		t.Fatalf("CleanupTransfer: %v", err)
+	}
+	if len(calls) != 1 || calls[0] != "t" {
+		t.Errorf("script runner called %v, want [t] (once)", calls)
+	}
+}
+
+func TestCleanup_DoesNotRunScriptOnFailure(t *testing.T) {
+	store := newTestStore(t)
+	dir := t.TempDir()
+	ctx := context.Background()
+	seedFile(t, store, dir, "t", "ok", "original", transferstore.StateVerified, "")
+	seedFile(t, store, dir, "t", "bad", "original", transferstore.StateVerificationFailed, "")
+
+	called := false
+	c := New(store, true, func(_ context.Context, _ string, _ []transferstore.TransferFile) error {
+		called = true
+		return nil
+	})
+	if _, err := c.CleanupTransfer(ctx, "t"); err != nil {
+		t.Fatalf("CleanupTransfer: %v", err)
+	}
+	if called {
+		t.Error("post-upload script must not run when verification failed")
+	}
+}

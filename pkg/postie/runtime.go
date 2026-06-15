@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/javi11/postie/internal/config"
+	"github.com/javi11/postie/internal/manifest"
 	"github.com/javi11/postie/internal/par2"
 	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/poster"
@@ -22,6 +23,35 @@ type poolStater struct {
 func (s poolStater) Stat(ctx context.Context, messageID string) error {
 	_, err := s.pool.Stat(ctx, messageID)
 	return err
+}
+
+// newPostVerifyScriptRunner returns a transfercleaner.ScriptRunner that runs
+// the post-upload script once a transfer is verified, resolving the NZB path
+// from the completed item and the source path from the transfer's files. Returns
+// nil when the script is disabled, so cleanup skips it entirely.
+func newPostVerifyScriptRunner(store *transferstore.Store, cfg config.PostUploadScriptConfig, q QueueInterface) func(ctx context.Context, transferID string, files []transferstore.TransferFile) error {
+	if !cfg.Enabled || cfg.Command == "" {
+		return nil
+	}
+	return func(ctx context.Context, transferID string, files []transferstore.TransferFile) error {
+		var itemID, sourcePath string
+		for _, f := range files {
+			if f.CompletedItemID != "" {
+				itemID = f.CompletedItemID
+			}
+			if sourcePath == "" && f.FileRole == string(manifest.RoleOriginal) {
+				sourcePath = f.SourcePath
+			}
+		}
+		if sourcePath == "" && len(files) > 0 {
+			sourcePath = files[0].SourcePath
+		}
+		nzbPath, err := store.GetCompletedItemNZBPath(ctx, itemID)
+		if err != nil {
+			return err
+		}
+		return runPostUploadScript(ctx, cfg, q, nzbPath, sourcePath, itemID)
+	}
 }
 
 // verificationConfig maps the post-check config to the verification service's
@@ -61,7 +91,7 @@ type Runtime struct {
 // store and manifestDir enable durable manifest recording; when store is nil
 // jobs run without manifests (standalone). It is safe to call with a cfg whose
 // PAR2 settings are unset; the PAR2 scheduler then defaults to a single job.
-func NewRuntime(ctx context.Context, cfg config.Config, poolManager *pool.Manager, store *transferstore.Store, manifestDir string) (*Runtime, error) {
+func NewRuntime(ctx context.Context, cfg config.Config, poolManager *pool.Manager, store *transferstore.Store, manifestDir string, scriptQueue QueueInterface) (*Runtime, error) {
 	maxJobs := 1
 	var uploadEngine *poster.Engine
 	var verifyService *verification.Service
@@ -105,10 +135,13 @@ func NewRuntime(ctx context.Context, cfg config.Config, poolManager *pool.Manage
 					verificationConfig(cfg.GetPostCheckConfig()),
 					"postie",
 				)
-				// Post-verification cleanup: delete originals per policy, remove
-				// generated PAR2 (unless maintained) and manifests once verified.
+				// Post-verification cleanup: run the post-upload script, delete
+				// originals per policy, remove generated PAR2 (unless maintained)
+				// and manifests — only once the transfer is verified.
 				maintainPar2 := par2Cfg != nil && par2Cfg.MaintainPar2Files != nil && *par2Cfg.MaintainPar2Files
-				verifyService.SetCleaner(transfercleaner.New(store, maintainPar2, nil))
+				scriptCfg := cfg.GetPostUploadScriptConfig()
+				runScript := newPostVerifyScriptRunner(store, scriptCfg, scriptQueue)
+				verifyService.SetCleaner(transfercleaner.New(store, maintainPar2, runScript))
 			}
 		}
 	}

@@ -731,22 +731,28 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 // ExecutePostUploadScript executes the post-upload script for a completed item
 // This should be called after the file has been marked as completed in the database
 func (p *Postie) ExecutePostUploadScript(ctx context.Context, nzbPath string, sourcePath string, itemID string) error {
-	if !p.postUploadScriptCfg.Enabled || p.postUploadScriptCfg.Command == "" {
+	return runPostUploadScript(ctx, p.postUploadScriptCfg, p.queue, nzbPath, sourcePath, itemID)
+}
+
+// runPostUploadScript runs the configured post-upload script and tracks its
+// retry status in the queue. Extracted from ExecutePostUploadScript so the
+// durable verification cleanup path can run the script (after verification) too,
+// not just the upload path. A nil queue skips status tracking; a disabled or
+// empty command is a no-op.
+func runPostUploadScript(ctx context.Context, cfg config.PostUploadScriptConfig, q QueueInterface, nzbPath, sourcePath, itemID string) error {
+	if !cfg.Enabled || cfg.Command == "" {
 		return nil
 	}
 
-	slog.InfoContext(ctx, "Executing post upload script", "command", p.postUploadScriptCfg.Command, "nzb_path", nzbPath, "source_path", sourcePath, "item_id", itemID)
+	slog.InfoContext(ctx, "Executing post upload script", "command", cfg.Command, "nzb_path", nzbPath, "source_path", sourcePath, "item_id", itemID)
 
-	// Create timeout context
-	timeoutCtx, cancel := context.WithTimeout(ctx, p.postUploadScriptCfg.Timeout.ToDuration())
+	timeoutCtx, cancel := context.WithTimeout(ctx, cfg.Timeout.ToDuration())
 	defer cancel()
 
-	// Replace placeholders with actual values
-	command := strings.ReplaceAll(p.postUploadScriptCfg.Command, "{nzb_path}", nzbPath)
+	command := strings.ReplaceAll(cfg.Command, "{nzb_path}", nzbPath)
 	command = strings.ReplaceAll(command, "{source_path}", sourcePath)
 	command = strings.ReplaceAll(command, "{source_dir}", filepath.Dir(sourcePath))
 
-	// Parse command using appropriate shell for the OS
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
 		cmd = exec.CommandContext(timeoutCtx, "cmd", "/C", command)
@@ -760,15 +766,11 @@ func (p *Postie) ExecutePostUploadScript(ctx context.Context, nzbPath string, so
 		errorMsg := fmt.Sprintf("script failed: %v, output: %s", err, string(output))
 		slog.ErrorContext(ctx, "Error executing post upload script", "error", err, "output", string(output), "command", command)
 
-		// Track failure in database for retry if queue is available
-		if p.queue != nil {
-			// Calculate next retry time with exponential backoff
-			baseDelay := p.postUploadScriptCfg.RetryDelay.ToDuration()
+		if q != nil {
+			baseDelay := cfg.RetryDelay.ToDuration()
 			now := time.Now()
 			nextRetry := now.Add(baseDelay)
-
-			// This is the first failure, so set firstFailureAt to now
-			if updateErr := p.queue.UpdateScriptStatus(ctx, itemID, "pending_retry", 0, errorMsg, &nextRetry, &now); updateErr != nil {
+			if updateErr := q.UpdateScriptStatus(ctx, itemID, "pending_retry", 0, errorMsg, &nextRetry, &now); updateErr != nil {
 				slog.ErrorContext(ctx, "Failed to track script failure", "error", updateErr)
 			}
 		}
@@ -776,9 +778,8 @@ func (p *Postie) ExecutePostUploadScript(ctx context.Context, nzbPath string, so
 		return fmt.Errorf("post upload script failed: %w", err)
 	}
 
-	// Mark script as completed in database if queue is available
-	if p.queue != nil {
-		if updateErr := p.queue.MarkScriptCompleted(ctx, itemID); updateErr != nil {
+	if q != nil {
+		if updateErr := q.MarkScriptCompleted(ctx, itemID); updateErr != nil {
 			slog.ErrorContext(ctx, "Failed to mark script as completed", "error", updateErr)
 		}
 	}

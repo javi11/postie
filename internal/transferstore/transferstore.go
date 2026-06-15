@@ -358,6 +358,20 @@ func (s *Store) MigrateLegacyPendingChecks(ctx context.Context) (int, error) {
 	return len(pending), nil
 }
 
+// GetCompletedItemNZBPath returns the NZB path recorded for a completed item,
+// used by post-verification cleanup to run the post-upload script.
+func (s *Store) GetCompletedItemNZBPath(ctx context.Context, completedItemID string) (string, error) {
+	if completedItemID == "" {
+		return "", nil
+	}
+	var nzbPath string
+	err := s.db.QueryRowContext(ctx, "SELECT nzb_path FROM completed_items WHERE id = ?", completedItemID).Scan(&nzbPath)
+	if err != nil {
+		return "", err
+	}
+	return nzbPath, nil
+}
+
 // DeleteFilesByTransfer removes all transfer_files rows for a transfer, used
 // after post-verification cleanup completes.
 func (s *Store) DeleteFilesByTransfer(ctx context.Context, transferID string) error {
