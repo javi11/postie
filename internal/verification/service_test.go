@@ -2,6 +2,7 @@ package verification
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"sync"
@@ -74,6 +75,12 @@ func (f *fakeReposter) count() int {
 
 func newTestStore(t *testing.T) *transferstore.Store {
 	t.Helper()
+	store, _ := newTestStoreWithDB(t)
+	return store
+}
+
+func newTestStoreWithDB(t *testing.T) (*transferstore.Store, *sql.DB) {
+	t.Helper()
 	ctx := context.Background()
 	db, err := database.New(ctx, config.DatabaseConfig{
 		DatabaseType: "sqlite",
@@ -86,7 +93,7 @@ func newTestStore(t *testing.T) *transferstore.Store {
 	if err := db.GetMigrationRunner().MigrateUp(); err != nil {
 		t.Fatalf("MigrateUp: %v", err)
 	}
-	return transferstore.New(db.DB)
+	return transferstore.New(db.DB), db.DB
 }
 
 // writeManifest creates a manifest with n articles "<m0>".."<m{n-1}>" and
@@ -337,5 +344,35 @@ func TestVerifyFile_NoCleanupWhenMissesRemain(t *testing.T) {
 	}
 	if len(cleaner.called) != 0 {
 		t.Errorf("cleanup must not run while misses remain, got %v", cleaner.called)
+	}
+}
+
+func TestVerifyFile_UpdatesCompletedItemStatusOnVerified(t *testing.T) {
+	store, db := newTestStoreWithDB(t)
+	ctx := context.Background()
+	writeManifest(t, store, "t", "f", 2)
+	// Link the transfer to a completed item that starts pending_verification.
+	if err := store.SetCompletedItemForTransfer(ctx, "t", "ci-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO completed_items
+		(id, path, size, nzb_path, created_at, job_data, verification_status)
+		VALUES (?,?,?,?,?,?,?)`,
+		"ci-1", "/d/a", 1, "/o/a.nzb", "2026-01-01T00:00:00Z", []byte("{}"), "pending_verification"); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := New(store, newFakeStater(), &fakeReposter{}, Config{}, "w")
+	tf, _ := store.GetFile(ctx, "t", "f")
+	if err := svc.VerifyFile(ctx, tf); err != nil {
+		t.Fatalf("VerifyFile: %v", err)
+	}
+
+	var status string
+	if err := db.QueryRowContext(ctx, "SELECT verification_status FROM completed_items WHERE id=?", "ci-1").Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "verified" {
+		t.Errorf("completed item status = %q, want verified", status)
 	}
 }

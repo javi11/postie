@@ -247,3 +247,45 @@ func TestMarkUploadedAndListDueFiles(t *testing.T) {
 		t.Errorf("ListDueFiles later returned %d, want 2", len(dueLater))
 	}
 }
+
+func TestSetCompletedItemForTransfer(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	for _, fid := range []string{"f1", "f2"} {
+		_ = s.UpsertFile(ctx, TransferFile{TransferID: "t", FileID: fid, ManifestPath: "m", SourcePath: "s", FileRole: "original"})
+	}
+	if err := s.SetCompletedItemForTransfer(ctx, "t", "ci-1"); err != nil {
+		t.Fatalf("SetCompletedItemForTransfer: %v", err)
+	}
+	files, _ := s.ListFilesByTransfer(ctx, "t")
+	for _, f := range files {
+		if f.CompletedItemID != "ci-1" {
+			t.Errorf("file %s completed_item_id = %q, want ci-1", f.FileID, f.CompletedItemID)
+		}
+	}
+}
+
+func TestSetCompletedItemVerificationStatus(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	// Insert a completed_items row directly (created by the queue in production).
+	_, err := s.db.ExecContext(ctx, `INSERT INTO completed_items
+		(id, path, size, nzb_path, created_at, job_data, verification_status)
+		VALUES (?,?,?,?,?,?,?)`,
+		"ci-1", "/data/a.mkv", 100, "/out/a.nzb", "2026-01-01T00:00:00Z", []byte("{}"), "pending_verification")
+	if err != nil {
+		t.Fatalf("insert completed_items: %v", err)
+	}
+
+	if err := s.SetCompletedItemVerificationStatus(ctx, "ci-1", "verified"); err != nil {
+		t.Fatalf("SetCompletedItemVerificationStatus: %v", err)
+	}
+
+	var status string
+	if err := s.db.QueryRowContext(ctx, "SELECT verification_status FROM completed_items WHERE id = ?", "ci-1").Scan(&status); err != nil {
+		t.Fatalf("read status: %v", err)
+	}
+	if status != "verified" {
+		t.Errorf("verification_status = %q, want verified", status)
+	}
+}

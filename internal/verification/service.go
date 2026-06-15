@@ -118,10 +118,52 @@ type Service struct {
 // becomes fully verified. Optional; nil disables cleanup.
 func (s *Service) SetCleaner(c Cleaner) { s.cleaner = c }
 
-// maybeCleanup attempts cleanup for a transfer (no-op if no cleaner or not yet
-// fully verified).
-func (s *Service) maybeCleanup(ctx context.Context, transferID string) {
-	if s.cleaner == nil {
+// Completed-item verification statuses surfaced to the queue UI.
+const (
+	statusVerified = "verified"
+	statusFailed   = "verification_failed"
+)
+
+// finalizeTransfer reflects a transfer's terminal verification outcome onto its
+// completed item and, on full success, runs cleanup. It is a no-op until every
+// file of the transfer is terminal (verified or verification_failed). On any
+// failure it marks the item verification_failed and retains all recovery data;
+// on full success it marks the item verified and triggers cleanup.
+func (s *Service) finalizeTransfer(ctx context.Context, transferID string) {
+	files, err := s.store.ListFilesByTransfer(ctx, transferID)
+	if err != nil {
+		slog.WarnContext(ctx, "verification: list files for finalize failed", "transfer", transferID, "error", err)
+		return
+	}
+	if len(files) == 0 {
+		return
+	}
+
+	anyFailed := false
+	var completedItemID string
+	for _, f := range files {
+		if f.CompletedItemID != "" {
+			completedItemID = f.CompletedItemID
+		}
+		switch f.VerificationState {
+		case transferstore.StateVerified:
+		case transferstore.StateVerificationFailed:
+			anyFailed = true
+		default:
+			return // not terminal yet
+		}
+	}
+
+	status := statusVerified
+	if anyFailed {
+		status = statusFailed
+	}
+	if err := s.store.SetCompletedItemVerificationStatus(ctx, completedItemID, status); err != nil {
+		slog.WarnContext(ctx, "verification: update completed item status failed", "transfer", transferID, "error", err)
+	}
+
+	// Retain everything on failure; only clean up a fully verified transfer.
+	if anyFailed || s.cleaner == nil {
 		return
 	}
 	if _, err := s.cleaner.CleanupTransfer(ctx, transferID); err != nil {
@@ -255,7 +297,7 @@ func (s *Service) VerifyFile(ctx context.Context, tf transferstore.TransferFile)
 		if err := s.store.SetVerificationState(ctx, tf.TransferID, tf.FileID, transferstore.StateVerified, nil, ""); err != nil {
 			return err
 		}
-		s.maybeCleanup(ctx, tf.TransferID)
+		s.finalizeTransfer(ctx, tf.TransferID)
 		return nil
 	}
 
@@ -391,7 +433,7 @@ func (s *Service) reconcileFileState(ctx context.Context, transferID, fileID str
 		return
 	}
 	_ = s.store.SetVerificationState(ctx, transferID, fileID, transferstore.StateVerified, nil, "")
-	s.maybeCleanup(ctx, transferID)
+	s.finalizeTransfer(ctx, transferID)
 }
 
 type recordKey struct {

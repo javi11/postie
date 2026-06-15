@@ -409,9 +409,14 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 
 	// In durable mode the upload is complete but verification runs in the
 	// background, so the item is pending verification rather than verified.
+	// Link the transfer's files to this completed item so the verification
+	// service can reflect the final verified/failed status back onto it.
 	if p.durableMode() {
 		if statusErr := p.queue.UpdateCompletedItemVerificationStatus(ctx, string(msg.ID), "pending_verification"); statusErr != nil {
 			slog.ErrorContext(ctx, "Failed to set pending_verification status", "error", statusErr, "path", job.Path)
+		}
+		if linkErr := p.transferRuntime.TransferStore().SetCompletedItemForTransfer(ctx, job.TransferID, string(msg.ID)); linkErr != nil {
+			slog.ErrorContext(ctx, "Failed to link completed item to transfer", "error", linkErr, "transfer", job.TransferID)
 		}
 	}
 

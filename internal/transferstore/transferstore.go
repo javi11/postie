@@ -270,6 +270,26 @@ func (s *Store) SetCleanupPolicy(ctx context.Context, transferID, fileID, policy
 	return err
 }
 
+// SetCompletedItemForTransfer links a transfer's files to the completed_items
+// row created for the upload, so verification status can be reflected back.
+func (s *Store) SetCompletedItemForTransfer(ctx context.Context, transferID, completedItemID string) error {
+	_, err := s.db.ExecContext(ctx,
+		"UPDATE transfer_files SET completed_item_id = ?, updated_at = ? WHERE transfer_id = ?",
+		completedItemID, fmtTime(time.Now()), transferID)
+	return err
+}
+
+// SetCompletedItemVerificationStatus updates the verification_status of a
+// completed item (the user-facing queue row) to reflect durable verification.
+func (s *Store) SetCompletedItemVerificationStatus(ctx context.Context, completedItemID, status string) error {
+	if completedItemID == "" {
+		return nil
+	}
+	_, err := s.db.ExecContext(ctx,
+		"UPDATE completed_items SET verification_status = ? WHERE id = ?", status, completedItemID)
+	return err
+}
+
 // DeleteFilesByTransfer removes all transfer_files rows for a transfer, used
 // after post-verification cleanup completes.
 func (s *Store) DeleteFilesByTransfer(ctx context.Context, transferID string) error {
