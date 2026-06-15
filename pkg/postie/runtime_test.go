@@ -20,7 +20,7 @@ func TestNewRuntime_Par2SchedulerCapacityFromConfig(t *testing.T) {
 	cfg := mocks.NewMockConfig(ctrl)
 	cfg.EXPECT().GetPar2Config(gomock.Any()).Return(&config.Par2Config{MaxConcurrentJobs: 3}, nil)
 
-	rt, err := NewRuntime(context.Background(), cfg, nil, nil, "")
+	rt, err := NewRuntime(context.Background(), cfg, nil, nil, "", nil)
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)
 	}
@@ -38,7 +38,7 @@ func TestNewRuntime_DefaultsToOneWhenUnset(t *testing.T) {
 	cfg := mocks.NewMockConfig(ctrl)
 	cfg.EXPECT().GetPar2Config(gomock.Any()).Return(&config.Par2Config{MaxConcurrentJobs: 0}, nil)
 
-	rt, err := NewRuntime(context.Background(), cfg, nil, nil, "")
+	rt, err := NewRuntime(context.Background(), cfg, nil, nil, "", nil)
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestRuntime_MetricsReflectsPar2Capacity(t *testing.T) {
 	cfg.EXPECT().GetPar2Config(gomock.Any()).Return(&config.Par2Config{MaxConcurrentJobs: 4}, nil)
 
 	// nil poolManager => no upload engine; PAR2 scheduler still present.
-	rt, err := NewRuntime(context.Background(), cfg, nil, nil, "")
+	rt, err := NewRuntime(context.Background(), cfg, nil, nil, "", nil)
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)
 	}
