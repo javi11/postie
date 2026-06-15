@@ -20,6 +20,7 @@ import (
 	"github.com/javi11/nxg"
 	"github.com/javi11/postie/internal/article"
 	"github.com/javi11/postie/internal/config"
+	"github.com/javi11/postie/internal/manifest"
 	"github.com/javi11/postie/internal/nzb"
 	"github.com/javi11/postie/internal/par2"
 	"github.com/javi11/postie/internal/pausable"
@@ -103,6 +104,10 @@ func putBodyBuffer(buf []byte) {
 // injected per job; a nil sink disables manifest recording (standalone mode).
 type ManifestSink interface {
 	RecordFile(ctx context.Context, filePath string, articles []*article.Article) error
+	// ExistingArticles returns a previously recorded manifest's article records
+	// for filePath (ok=false if none), used for crash recovery to reuse the
+	// exact Message-IDs rather than regenerating them.
+	ExistingArticles(ctx context.Context, filePath string) ([]manifest.ArticleRecord, bool, error)
 }
 
 // Poster defines the interface for posting articles to Usenet
@@ -1071,6 +1076,77 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 // addPost adds a file to the posting queue
 // displayName is the name to use in the subject (e.g., "Folder/subfolder/file.mp4")
 // If displayName is empty, the filename is used
+// addRecoveredPost re-posts a file from its existing manifest after a crash:
+// it reconstructs the articles (preserving their original Message-IDs/offsets),
+// STATs each to skip those already present on the server, and enqueues only the
+// missing ones. It never rewrites the manifest. If every article is already
+// present the post is enqueued with no articles and completes immediately.
+func (p *poster) addRecoveredPost(ctx context.Context, filePath string, file *os.File, fileInfo os.FileInfo, recs []manifest.ArticleRecord, wg *sync.WaitGroup, failedPosts *atomic.Int64, postQueue chan<- *Post, postsInFlight *sync.WaitGroup) error {
+	all := make([]*article.Article, 0, len(recs))
+	for _, r := range recs {
+		all = append(all, articleFromRecord(r))
+	}
+	missing := p.filterMissing(ctx, all)
+
+	slog.InfoContext(ctx, "Recovered manifest; re-posting only missing articles",
+		"file", filePath, "total", len(all), "missing", len(missing))
+
+	post := &Post{
+		FilePath: filePath,
+		Articles: missing,
+		Status:   PostStatusPending,
+		file:     file,
+		filesize: fileInfo.Size(),
+		wg:       wg,
+		failed:   failedPosts,
+		progress: p.jobProgress.AddProgress(uuid.New(), filepath.Base(filePath), progress.ProgressTypeUploading, fileInfo.Size()),
+	}
+
+	postsInFlight.Add(1)
+	select {
+	case postQueue <- post:
+		return nil
+	case <-ctx.Done():
+		postsInFlight.Done()
+		_ = file.Close()
+		return ctx.Err()
+	}
+}
+
+// filterMissing STATs each article (bounded concurrency) and returns those that
+// are NOT already present on the server, preserving order. On a STAT error the
+// article is treated as missing (re-posting an already-present article is
+// idempotent). If no verify pool is available, all articles are returned.
+func (p *poster) filterMissing(ctx context.Context, articles []*article.Article) []*article.Article {
+	if p.verifyPool == nil || len(articles) == 0 {
+		return articles
+	}
+
+	keep := make([]bool, len(articles))
+	sem := make(chan struct{}, 16)
+	var wg sync.WaitGroup
+	for i, art := range articles {
+		sem <- struct{}{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			if _, err := p.verifyPool.Stat(ctx, art.MessageID); err != nil {
+				keep[i] = true // missing (or unknown) -> re-post
+			}
+		}()
+	}
+	wg.Wait()
+
+	missing := make([]*article.Article, 0, len(articles))
+	for i, art := range articles {
+		if keep[i] {
+			missing = append(missing, art)
+		}
+	}
+	return missing
+}
+
 func (p *poster) addPost(ctx context.Context, filePath string, displayName string, fileNumber int, totalFiles int, wg *sync.WaitGroup, failedPosts *atomic.Int64, postQueue chan<- *Post, nzbGen nzb.NZBGenerator, postsInFlight *sync.WaitGroup) error {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -1088,6 +1164,18 @@ func (p *poster) addPost(ctx context.Context, filePath string, displayName strin
 		_ = file.Close()
 		slog.WarnContext(ctx, "Skipping empty file", "path", filePath)
 		return nil
+	}
+
+	// Crash recovery: if a manifest already exists for this file, reuse its exact
+	// Message-IDs/offsets instead of regenerating (which would orphan the already
+	// posted articles and create duplicate NZB segments). We STAT each planned
+	// article and re-post only the ones still missing.
+	if p.manifestSink != nil {
+		if recs, ok, err := p.manifestSink.ExistingArticles(ctx, filePath); err != nil {
+			slog.WarnContext(ctx, "Failed to read existing manifest; regenerating", "file", filePath, "error", err)
+		} else if ok {
+			return p.addRecoveredPost(ctx, filePath, file, fileInfo, recs, wg, failedPosts, postQueue, postsInFlight)
+		}
 	}
 
 	// Calculate number of segments

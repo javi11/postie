@@ -9,6 +9,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"io"
+	"os"
 	"time"
 
 	"github.com/javi11/postie/internal/article"
@@ -80,6 +83,43 @@ func (r *Recorder) RecordFile(ctx context.Context, sourcePath string, articles [
 		UploadState:       transferstore.StatePlanned,
 		VerificationState: transferstore.StatePlanned,
 	})
+}
+
+// ExistingArticles returns the article records of a previously written manifest
+// for sourcePath, if one exists. On crash recovery this lets the poster reuse
+// the exact Message-IDs/offsets that were already planned (and possibly partly
+// posted) instead of regenerating them, which would create duplicate NZB
+// segments. ok is false when no manifest exists yet (a fresh upload).
+func (r *Recorder) ExistingArticles(ctx context.Context, sourcePath string) ([]manifest.ArticleRecord, bool, error) {
+	path := manifest.FilePath(r.baseDir, r.transferID, fileID(sourcePath))
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+
+	reader, err := manifest.OpenReader(path)
+	if err != nil {
+		return nil, false, err
+	}
+	defer func() { _ = reader.Close() }()
+
+	var recs []manifest.ArticleRecord
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, false, err
+		}
+		rec, err := reader.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, false, err
+		}
+		recs = append(recs, rec)
+	}
+	return recs, len(recs) > 0, nil
 }
 
 // CompleteUpload marks every file of this transfer as uploaded, recording

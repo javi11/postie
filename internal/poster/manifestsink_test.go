@@ -14,6 +14,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/javi11/postie/internal/article"
+	"github.com/javi11/postie/internal/manifest"
 	"github.com/javi11/postie/internal/mocks"
 )
 
@@ -35,6 +36,12 @@ func (s *recordingSink) RecordFile(_ context.Context, filePath string, articles 
 	defer s.mu.Unlock()
 	s.calls = append(s.calls, sinkCall{path: filePath, articles: len(articles)})
 	return s.err
+}
+
+// ExistingArticles always reports "no manifest" so these tests exercise the
+// fresh-upload path (recovery is covered in the transferwriter package).
+func (s *recordingSink) ExistingArticles(_ context.Context, _ string) ([]manifest.ArticleRecord, bool, error) {
+	return nil, false, nil
 }
 
 func TestPost_RecordsManifestBeforePosting(t *testing.T) {

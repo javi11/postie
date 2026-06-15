@@ -161,3 +161,34 @@ func TestRecorder_CompleteUploadMarksFilesUploaded(t *testing.T) {
 		}
 	}
 }
+
+func TestRecorder_ExistingArticles(t *testing.T) {
+	store := newTestStore(t)
+	dir := t.TempDir()
+	rec := New("tid-rec", dir, store)
+	ctx := context.Background()
+
+	// No manifest yet -> not found.
+	if _, ok, err := rec.ExistingArticles(ctx, "/data/a.mkv"); err != nil || ok {
+		t.Fatalf("ExistingArticles before record: ok=%v err=%v, want false,nil", ok, err)
+	}
+
+	arts := []*article.Article{
+		{MessageID: "a@p", Offset: 0, Size: 10, PartNumber: 1, TotalParts: 2, Subject: "s0"},
+		{MessageID: "b@p", Offset: 10, Size: 10, PartNumber: 2, TotalParts: 2, Subject: "s1"},
+	}
+	if err := rec.RecordFile(ctx, "/data/a.mkv", arts); err != nil {
+		t.Fatal(err)
+	}
+
+	recs, ok, err := rec.ExistingArticles(ctx, "/data/a.mkv")
+	if err != nil || !ok {
+		t.Fatalf("ExistingArticles after record: ok=%v err=%v, want true,nil", ok, err)
+	}
+	if len(recs) != 2 || recs[0].MessageID != "a@p" || recs[1].MessageID != "b@p" {
+		t.Errorf("records = %+v, want the 2 recorded message ids in order", recs)
+	}
+	if recs[1].Offset != 10 || recs[1].BodySize != 10 {
+		t.Errorf("record offsets/size not preserved: %+v", recs[1])
+	}
+}
