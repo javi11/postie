@@ -894,6 +894,22 @@ export class UnifiedClient {
 		throw new Error("No client available");
 	}
 
+	async getTransferRuntimeMetrics(): Promise<backend.TransferRuntimeMetrics> {
+		await this.initialize();
+
+		if (this._environment === "wails") {
+			const client = await getWailsClient();
+			return client.App.GetTransferRuntimeMetrics();
+		}
+
+		if (this._environment === "web") {
+			const client = await getWebClient();
+			return client.getTransferRuntimeMetrics();
+		}
+
+		throw new Error("No client available");
+	}
+
 	// Filesystem operations (web-only)
 	async browseFilesystem(path: string): Promise<{
 		path: string;

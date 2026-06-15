@@ -6,6 +6,13 @@
 		"refresh": "Actualizar",
 		"error_loading": "Error al cargar métricas",
 		"error_title": "No se pueden cargar las métricas",
+		"transfer_runtime": {
+			"title": "Runtime de Transferencia",
+			"upload_workers": "Trabajadores de Subida",
+			"buffer_memory": "Memoria de Búfer",
+			"par2_jobs": "Trabajos PAR2",
+			"queued": "en cola"
+		},
 		
 		"time_period": "Período de Tiempo",
 		"compressed_data": "Datos Comprimidos",

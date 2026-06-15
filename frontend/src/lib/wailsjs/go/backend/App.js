@@ -90,6 +90,10 @@ export function GetNntpPoolMetrics() {
   return window['go']['backend']['App']['GetNntpPoolMetrics']();
 }
 
+export function GetTransferRuntimeMetrics() {
+  return window['go']['backend']['App']['GetTransferRuntimeMetrics']();
+}
+
 export function GetOutputDirectory() {
   return window['go']['backend']['App']['GetOutputDirectory']();
 }

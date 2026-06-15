@@ -295,6 +295,32 @@ export namespace backend {
 	        this.verificationFailed = source["verificationFailed"];
 	    }
 	}
+	export class TransferRuntimeMetrics {
+	    uploadActiveWorkers: number;
+	    uploadQueuedWorkers: number;
+	    uploadWorkerCount: number;
+	    uploadReservedBytes: number;
+	    uploadBudgetBytes: number;
+	    par2ActiveJobs: number;
+	    par2QueuedJobs: number;
+	    par2Capacity: number;
+
+	    static createFrom(source: any = {}) {
+	        return new TransferRuntimeMetrics(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.uploadActiveWorkers = source["uploadActiveWorkers"];
+	        this.uploadQueuedWorkers = source["uploadQueuedWorkers"];
+	        this.uploadWorkerCount = source["uploadWorkerCount"];
+	        this.uploadReservedBytes = source["uploadReservedBytes"];
+	        this.uploadBudgetBytes = source["uploadBudgetBytes"];
+	        this.par2ActiveJobs = source["par2ActiveJobs"];
+	        this.par2QueuedJobs = source["par2QueuedJobs"];
+	        this.par2Capacity = source["par2Capacity"];
+	    }
+	}
 	export class ServerData {
 	    host: string;
 	    port: number;
