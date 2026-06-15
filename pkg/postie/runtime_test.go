@@ -9,6 +9,7 @@ import (
 	"github.com/javi11/postie/internal/database"
 	"github.com/javi11/postie/internal/mocks"
 	"github.com/javi11/postie/internal/transferstore"
+	"github.com/javi11/postie/internal/verification"
 	"go.uber.org/mock/gomock"
 )
 
@@ -121,5 +122,20 @@ func TestRuntime_NewManifestRecorder(t *testing.T) {
 	}
 	if (&Runtime{}).NewManifestRecorder("tid-1") != nil {
 		t.Error("Runtime without a store should return nil recorder")
+	}
+}
+
+func TestRuntime_DurableVerificationEnabled(t *testing.T) {
+	if (&Runtime{}).DurableVerificationEnabled() {
+		t.Error("Runtime without a verify service should report durable verification disabled")
+	}
+	var none *Runtime
+	if none.DurableVerificationEnabled() {
+		t.Error("nil Runtime should report durable verification disabled")
+	}
+	store := newTestTransferStore(t)
+	rt := &Runtime{store: store, verifyService: verification.New(store, nil, nil, verification.Config{}, "w")}
+	if !rt.DurableVerificationEnabled() {
+		t.Error("Runtime with a verify service should report durable verification enabled")
 	}
 }

@@ -407,6 +407,14 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 		return err
 	}
 
+	// In durable mode the upload is complete but verification runs in the
+	// background, so the item is pending verification rather than verified.
+	if p.durableMode() {
+		if statusErr := p.queue.UpdateCompletedItemVerificationStatus(ctx, string(msg.ID), "pending_verification"); statusErr != nil {
+			slog.ErrorContext(ctx, "Failed to set pending_verification status", "error", statusErr, "path", job.Path)
+		}
+	}
+
 	// Execute post upload script if configured
 	// Note: We don't return the error here to avoid failing the completion if the script fails
 	// The script failure will be tracked in the database for retry
@@ -566,6 +574,15 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 	deleteOriginal := p.deleteOriginalFile
 	if job.DeleteOriginal != nil {
 		deleteOriginal = *job.DeleteOriginal
+	}
+	// In durable mode, the upload is complete but NOT yet verified. Deleting the
+	// original here would destroy the only recovery source before verification
+	// confirms the articles propagated. Retain originals; deferred cleanup after
+	// successful verification is handled by the durable transfer lifecycle.
+	if deleteOriginal && p.durableMode() {
+		slog.InfoContext(ctx, "Durable mode: retaining original files until verification succeeds",
+			"path", job.Path)
+		deleteOriginal = false
 	}
 	if deleteOriginal {
 		if p.deleteDelay > 0 {
@@ -908,6 +925,13 @@ func (p *Processor) Close() error {
 // runtime is configured.
 func (p *Processor) TransferRuntimeMetrics() postie.RuntimeMetrics {
 	return p.transferRuntime.Metrics()
+}
+
+// durableMode reports whether the durable verification path is active, in which
+// case verification (and the destructive cleanup that depends on it) happens in
+// the background service rather than inline at upload completion.
+func (p *Processor) durableMode() bool {
+	return p.transferRuntime.DurableVerificationEnabled()
 }
 
 // setAutoBlock enables or disables blocking of new jobs due to provider unavailability.

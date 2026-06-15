@@ -151,6 +151,14 @@ func (r *Runtime) UploadEngine() *poster.Engine {
 	return r.uploadEngine
 }
 
+// DurableVerificationEnabled reports whether durable verification is active
+// (a verification service was created). When true, callers should defer
+// destructive cleanup (delete_original, post-upload script) until the durable
+// service marks the transfer verified, rather than acting at upload completion.
+func (r *Runtime) DurableVerificationEnabled() bool {
+	return r != nil && r.verifyService != nil
+}
+
 // RunVerification runs the durable verification service until ctx is cancelled.
 // It is a no-op (returns immediately) when no service was created (standalone
 // mode or missing store/pool). Intended to be started once as a goroutine.
