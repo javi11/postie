@@ -32,6 +32,11 @@ const (
 	CleanupDeleteOriginal = "delete_original"
 )
 
+// LegacyFileID is the synthetic file id used for verification_failures migrated
+// from the pre-durable pending_article_checks table. These records have no
+// manifest, so they are STAT-only (article_index = -1, never re-posted).
+const LegacyFileID = "legacy"
+
 // Verification-failure states.
 const (
 	FailurePending  = "pending"
@@ -288,6 +293,69 @@ func (s *Store) SetCompletedItemVerificationStatus(ctx context.Context, complete
 	_, err := s.db.ExecContext(ctx,
 		"UPDATE completed_items SET verification_status = ? WHERE id = ?", status, completedItemID)
 	return err
+}
+
+// MigrateLegacyPendingChecks moves any rows from the pre-durable
+// pending_article_checks table into verification_failures as STAT-only records
+// (keyed by transfer_id=completed_item_id, file_id=legacy, article_index=-1),
+// so the durable verification service continues checking them. The legacy rows
+// are deleted in the same transaction. Idempotent (returns 0 once empty), and a
+// no-op when the legacy table does not exist.
+func (s *Store) MigrateLegacyPendingChecks(ctx context.Context) (int, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	rows, err := tx.QueryContext(ctx,
+		"SELECT completed_item_id, message_id, groups, next_retry_at, retry_count FROM pending_article_checks")
+	if err != nil {
+		// Legacy table absent (fresh install) — nothing to migrate.
+		return 0, nil
+	}
+
+	type legacy struct {
+		completedItemID, messageID, groups, nextRetryAt string
+		retryCount                                      int
+	}
+	var pending []legacy
+	for rows.Next() {
+		var l legacy
+		if err := rows.Scan(&l.completedItemID, &l.messageID, &l.groups, &l.nextRetryAt, &l.retryCount); err != nil {
+			_ = rows.Close()
+			return 0, err
+		}
+		pending = append(pending, l)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return 0, err
+	}
+	_ = rows.Close()
+
+	for _, l := range pending {
+		nextAt, perr := parseTime(l.nextRetryAt)
+		if perr != nil {
+			nextAt = time.Now()
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO verification_failures
+				(transfer_id, file_id, article_index, message_id, groups, deferred_count, state, next_attempt_at)
+			VALUES (?,?,?,?,?,?,?,?)
+			ON CONFLICT(transfer_id, file_id, message_id) DO NOTHING`,
+			l.completedItemID, LegacyFileID, -1, l.messageID, l.groups, l.retryCount, FailurePending, fmtTime(nextAt)); err != nil {
+			return 0, fmt.Errorf("migrate legacy check: %w", err)
+		}
+	}
+
+	if _, err := tx.ExecContext(ctx, "DELETE FROM pending_article_checks"); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return len(pending), nil
 }
 
 // DeleteFilesByTransfer removes all transfer_files rows for a transfer, used

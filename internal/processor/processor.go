@@ -148,6 +148,13 @@ func New(opts ProcessorOptions) *Processor {
 			if db := opts.Queue.DB(); db != nil {
 				transferStore = transferstore.New(db)
 				manifestDir = filepath.Join(filepath.Dir(opts.Config.GetDatabaseConfig().DatabasePath), "transfer-manifests")
+				// One-time migration of pre-durable deferred checks into the
+				// durable verification_failures table (STAT-only).
+				if migrated, err := transferStore.MigrateLegacyPendingChecks(providerCtx); err != nil {
+					slog.Warn("Failed to migrate legacy pending article checks", "error", err)
+				} else if migrated > 0 {
+					slog.Info("Migrated legacy pending article checks to durable verification", "count", migrated)
+				}
 			}
 		}
 		if rt, err := postie.NewRuntime(providerCtx, opts.Config, opts.PoolManager, transferStore, manifestDir); err != nil {

@@ -289,3 +289,59 @@ func TestSetCompletedItemVerificationStatus(t *testing.T) {
 		t.Errorf("verification_status = %q, want verified", status)
 	}
 }
+
+func TestMigrateLegacyPendingChecks(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	// The completed item must exist (FK target of pending_article_checks).
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO completed_items
+		(id, path, size, nzb_path, created_at, job_data, verification_status)
+		VALUES (?,?,?,?,?,?,?)`,
+		"ci-1", "/d/a", 1, "/o/a.nzb", "2026-01-01T00:00:00Z", []byte("{}"), "pending_verification"); err != nil {
+		t.Fatalf("seed completed item: %v", err)
+	}
+
+	// Seed two legacy pending_article_checks rows.
+	for _, r := range []struct{ ci, mid string }{{"ci-1", "<a@p>"}, {"ci-1", "<b@p>"}} {
+		if _, err := s.db.ExecContext(ctx, `INSERT INTO pending_article_checks
+			(completed_item_id, message_id, groups, next_retry_at, retry_count)
+			VALUES (?,?,?,?,?)`, r.ci, r.mid, "alt.binaries.test", "2026-01-01T00:00:00Z", 2); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+
+	n, err := s.MigrateLegacyPendingChecks(ctx)
+	if err != nil {
+		t.Fatalf("MigrateLegacyPendingChecks: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("migrated = %d, want 2", n)
+	}
+
+	// Legacy table emptied.
+	var remaining int
+	_ = s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM pending_article_checks").Scan(&remaining)
+	if remaining != 0 {
+		t.Errorf("pending_article_checks remaining = %d, want 0", remaining)
+	}
+
+	// Rows became STAT-only failures (transfer_id=completed_item_id, legacy file, no manifest index).
+	failures, err := s.ClaimDueFailures(ctx, "w", time.Minute, 10, time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("ClaimDueFailures: %v", err)
+	}
+	if len(failures) != 2 {
+		t.Fatalf("claimed %d legacy failures, want 2", len(failures))
+	}
+	for _, f := range failures {
+		if f.TransferID != "ci-1" || f.FileID != LegacyFileID || f.ArticleIndex != -1 {
+			t.Errorf("legacy failure mapped wrong: %+v", f)
+		}
+	}
+
+	// Idempotent: a second run finds nothing.
+	if n2, err := s.MigrateLegacyPendingChecks(ctx); err != nil || n2 != 0 {
+		t.Errorf("second migration = %d,%v, want 0,nil", n2, err)
+	}
+}
