@@ -88,7 +88,7 @@ func (r *Recorder) RecordFile(ctx context.Context, sourcePath string, articles [
 // verification service can pick the files up. The queue upload slot can be
 // released once this returns; propagation delay is then borne by the background
 // service, not the queue.
-func (r *Recorder) CompleteUpload(ctx context.Context, postedAt, nextCheckAt time.Time) error {
+func (r *Recorder) CompleteUpload(ctx context.Context, postedAt, nextCheckAt time.Time, deleteOriginal bool) error {
 	files, err := r.store.ListFilesByTransfer(ctx, r.transferID)
 	if err != nil {
 		return err
@@ -96,6 +96,15 @@ func (r *Recorder) CompleteUpload(ctx context.Context, postedAt, nextCheckAt tim
 	for _, f := range files {
 		if err := r.store.MarkUploaded(ctx, r.transferID, f.FileID, postedAt, nextCheckAt); err != nil {
 			return err
+		}
+		// Persist the delete-original intent on original files so the
+		// post-verification cleanup can act on it later, in a different process
+		// context (e.g. after a restart). PAR2 cleanup is governed by the
+		// maintain_par2 config at cleanup time, not a per-file policy.
+		if deleteOriginal && f.FileRole == string(manifest.RoleOriginal) {
+			if err := r.store.SetCleanupPolicy(ctx, r.transferID, f.FileID, transferstore.CleanupDeleteOriginal); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

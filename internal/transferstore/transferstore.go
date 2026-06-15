@@ -26,6 +26,12 @@ const (
 	StateVerificationFailed = "verification_failed"
 )
 
+// Cleanup policy markers stored on transfer_files.cleanup_policy. Empty means
+// retain the source. They drive the post-verification cleanup.
+const (
+	CleanupDeleteOriginal = "delete_original"
+)
+
 // Verification-failure states.
 const (
 	FailurePending  = "pending"
@@ -252,6 +258,22 @@ func (s *Store) MarkUploaded(ctx context.Context, transferID, fileID string, pos
 		WHERE transfer_id = ? AND file_id = ?`,
 		StateUploaded, StateUploaded, fmtTime(postedAt), fmtTime(nextCheckAt), fmtTime(time.Now()),
 		transferID, fileID)
+	return err
+}
+
+// SetCleanupPolicy records the cleanup policy for a file (e.g. delete_original),
+// read by the post-verification cleanup.
+func (s *Store) SetCleanupPolicy(ctx context.Context, transferID, fileID, policy string) error {
+	_, err := s.db.ExecContext(ctx,
+		"UPDATE transfer_files SET cleanup_policy = ?, updated_at = ? WHERE transfer_id = ? AND file_id = ?",
+		policy, fmtTime(time.Now()), transferID, fileID)
+	return err
+}
+
+// DeleteFilesByTransfer removes all transfer_files rows for a transfer, used
+// after post-verification cleanup completes.
+func (s *Store) DeleteFilesByTransfer(ctx context.Context, transferID string) error {
+	_, err := s.db.ExecContext(ctx, "DELETE FROM transfer_files WHERE transfer_id = ?", transferID)
 	return err
 }
 

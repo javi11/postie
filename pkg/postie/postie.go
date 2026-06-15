@@ -39,6 +39,17 @@ type Postie struct {
 	// the transfer's files uploaded (for the durable verification service) once
 	// posting completes.
 	recorder *transferwriter.Recorder
+	// deleteOriginal records whether this job's originals should be deleted
+	// after successful verification (persisted into the transfer's cleanup
+	// policy at completion). Set by the caller before Post.
+	deleteOriginal bool
+}
+
+// SetDeleteOriginal records whether the job's original files should be deleted
+// after the durable verification service confirms the upload. Must be called
+// before Post. No effect in standalone mode (deletion is handled inline there).
+func (p *Postie) SetDeleteOriginal(v bool) {
+	p.deleteOriginal = v
 }
 
 // QueueInterface defines the queue methods needed by Postie
@@ -143,7 +154,7 @@ func (p *Postie) completeTransferUpload(ctx context.Context) {
 	}
 	delay := p.postCheckCfg.RetryDelay.ToDuration()
 	now := time.Now().UTC()
-	if err := p.recorder.CompleteUpload(ctx, now, now.Add(delay)); err != nil {
+	if err := p.recorder.CompleteUpload(ctx, now, now.Add(delay), p.deleteOriginal); err != nil {
 		slog.WarnContext(ctx, "Failed to mark transfer uploaded for verification", "error", err)
 	}
 }

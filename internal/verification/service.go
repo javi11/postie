@@ -38,6 +38,14 @@ type Reposter interface {
 	Repost(ctx context.Context, rec manifest.ArticleRecord) error
 }
 
+// Cleaner runs post-verification cleanup for a transfer once it is fully
+// verified (deletes originals per policy, removes PAR2 and manifests). It is a
+// no-op while the transfer is not yet terminal, and retains everything on
+// failure.
+type Cleaner interface {
+	CleanupTransfer(ctx context.Context, transferID string) (bool, error)
+}
+
 // Config controls verification timing and concurrency. Zero values fall back to
 // conservative defaults via withDefaults.
 type Config struct {
@@ -103,6 +111,22 @@ type Service struct {
 	cfg      Config
 	owner    string
 	now      func() time.Time
+	cleaner  Cleaner
+}
+
+// SetCleaner installs the post-verification cleaner invoked when a transfer
+// becomes fully verified. Optional; nil disables cleanup.
+func (s *Service) SetCleaner(c Cleaner) { s.cleaner = c }
+
+// maybeCleanup attempts cleanup for a transfer (no-op if no cleaner or not yet
+// fully verified).
+func (s *Service) maybeCleanup(ctx context.Context, transferID string) {
+	if s.cleaner == nil {
+		return
+	}
+	if _, err := s.cleaner.CleanupTransfer(ctx, transferID); err != nil {
+		slog.WarnContext(ctx, "verification: cleanup failed", "transfer", transferID, "error", err)
+	}
 }
 
 // New creates a verification service. owner identifies this worker for lease
@@ -228,7 +252,11 @@ func (s *Service) VerifyFile(ctx context.Context, tf transferstore.TransferFile)
 	}
 
 	if len(missing) == 0 {
-		return s.store.SetVerificationState(ctx, tf.TransferID, tf.FileID, transferstore.StateVerified, nil, "")
+		if err := s.store.SetVerificationState(ctx, tf.TransferID, tf.FileID, transferstore.StateVerified, nil, ""); err != nil {
+			return err
+		}
+		s.maybeCleanup(ctx, tf.TransferID)
+		return nil
 	}
 
 	// Persist misses for durable re-posting/rechecking.
@@ -363,6 +391,7 @@ func (s *Service) reconcileFileState(ctx context.Context, transferID, fileID str
 		return
 	}
 	_ = s.store.SetVerificationState(ctx, transferID, fileID, transferstore.StateVerified, nil, "")
+	s.maybeCleanup(ctx, transferID)
 }
 
 type recordKey struct {

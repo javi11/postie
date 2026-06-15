@@ -7,6 +7,7 @@ import (
 	"github.com/javi11/postie/internal/par2"
 	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/poster"
+	"github.com/javi11/postie/internal/transfercleaner"
 	"github.com/javi11/postie/internal/transferstore"
 	"github.com/javi11/postie/internal/transferwriter"
 	"github.com/javi11/postie/internal/verification"
@@ -104,6 +105,10 @@ func NewRuntime(ctx context.Context, cfg config.Config, poolManager *pool.Manage
 					verificationConfig(cfg.GetPostCheckConfig()),
 					"postie",
 				)
+				// Post-verification cleanup: delete originals per policy, remove
+				// generated PAR2 (unless maintained) and manifests once verified.
+				maintainPar2 := par2Cfg != nil && par2Cfg.MaintainPar2Files != nil && *par2Cfg.MaintainPar2Files
+				verifyService.SetCleaner(transfercleaner.New(store, maintainPar2, nil))
 			}
 		}
 	}

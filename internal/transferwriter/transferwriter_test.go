@@ -136,7 +136,7 @@ func TestRecorder_CompleteUploadMarksFilesUploaded(t *testing.T) {
 
 	posted := time.Unix(1700000000, 0).UTC()
 	nextCheck := posted.Add(10 * time.Second)
-	if err := rec.CompleteUpload(ctx, posted, nextCheck); err != nil {
+	if err := rec.CompleteUpload(ctx, posted, nextCheck, true); err != nil {
 		t.Fatalf("CompleteUpload: %v", err)
 	}
 
@@ -150,6 +150,14 @@ func TestRecorder_CompleteUploadMarksFilesUploaded(t *testing.T) {
 		}
 		if f.NextCheckAt == nil || !f.NextCheckAt.Equal(nextCheck) {
 			t.Errorf("file %s NextCheckAt = %v, want %v", f.FileID, f.NextCheckAt, nextCheck)
+		}
+		// delete_original requested: the original file carries the policy, the
+		// par2 file does not (par2 cleanup is governed by maintain_par2 config).
+		if f.FileRole == string(manifest.RoleOriginal) && f.CleanupPolicy != transferstore.CleanupDeleteOriginal {
+			t.Errorf("original file cleanup policy = %q, want %q", f.CleanupPolicy, transferstore.CleanupDeleteOriginal)
+		}
+		if f.FileRole == string(manifest.RoleGeneratedPar2) && f.CleanupPolicy == transferstore.CleanupDeleteOriginal {
+			t.Errorf("par2 file should not carry delete_original policy")
 		}
 	}
 }

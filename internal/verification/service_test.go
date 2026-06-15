@@ -295,3 +295,47 @@ func TestVerifyDueFiles_VerifiesOnlyDueUploadedFiles(t *testing.T) {
 		t.Errorf("not-due file state = %q, want still uploaded", notDue.VerificationState)
 	}
 }
+
+// fakeCleaner records which transfers cleanup was attempted for.
+type fakeCleaner struct{ called []string }
+
+func (c *fakeCleaner) CleanupTransfer(_ context.Context, transferID string) (bool, error) {
+	c.called = append(c.called, transferID)
+	return true, nil
+}
+
+func TestVerifyFile_TriggersCleanupWhenVerified(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	writeManifest(t, store, "t", "f", 3)
+
+	cleaner := &fakeCleaner{}
+	svc := New(store, newFakeStater(), &fakeReposter{}, Config{}, "w")
+	svc.SetCleaner(cleaner)
+
+	tf, _ := store.GetFile(ctx, "t", "f")
+	if err := svc.VerifyFile(ctx, tf); err != nil {
+		t.Fatalf("VerifyFile: %v", err)
+	}
+	if len(cleaner.called) != 1 || cleaner.called[0] != "t" {
+		t.Errorf("cleanup called for %v, want [t]", cleaner.called)
+	}
+}
+
+func TestVerifyFile_NoCleanupWhenMissesRemain(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	writeManifest(t, store, "t", "f", 3)
+
+	cleaner := &fakeCleaner{}
+	svc := New(store, newFakeStater(mid(1)), &fakeReposter{}, Config{}, "w")
+	svc.SetCleaner(cleaner)
+
+	tf, _ := store.GetFile(ctx, "t", "f")
+	if err := svc.VerifyFile(ctx, tf); err != nil {
+		t.Fatalf("VerifyFile: %v", err)
+	}
+	if len(cleaner.called) != 0 {
+		t.Errorf("cleanup must not run while misses remain, got %v", cleaner.called)
+	}
+}

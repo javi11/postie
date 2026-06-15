@@ -532,6 +532,16 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 	}
 	defer jobPostie.Close()
 
+	// Resolve the delete-original policy (job override wins over the global
+	// setting) and hand it to Postie so it is persisted into the transfer's
+	// cleanup policy at completion. In durable mode the actual deletion happens
+	// only after verification succeeds.
+	deleteOriginal := p.deleteOriginalFile
+	if job.DeleteOriginal != nil {
+		deleteOriginal = *job.DeleteOriginal
+	}
+	jobPostie.SetDeleteOriginal(deleteOriginal)
+
 	// Determine the input folder for maintaining folder structure
 	var inputFolder string
 	switch {
@@ -569,12 +579,7 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 		return "", nil, err
 	}
 
-	// Delete the original files if configured. A job-level override (set by the
-	// HTTP API) takes precedence over the processor's global setting.
-	deleteOriginal := p.deleteOriginalFile
-	if job.DeleteOriginal != nil {
-		deleteOriginal = *job.DeleteOriginal
-	}
+	// Delete the original files if configured (deleteOriginal resolved above).
 	// In durable mode, the upload is complete but NOT yet verified. Deleting the
 	// original here would destroy the only recovery source before verification
 	// confirms the articles propagated. Retain originals; deferred cleanup after
