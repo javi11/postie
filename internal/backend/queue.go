@@ -33,11 +33,13 @@ type QueueItem struct {
 
 // QueueStats represents queue statistics
 type QueueStats struct {
-	Total    int `json:"total"`
-	Pending  int `json:"pending"`
-	Running  int `json:"running"`
-	Complete int `json:"complete"`
-	Error    int `json:"error"`
+	Total               int `json:"total"`
+	Pending             int `json:"pending"`
+	Running             int `json:"running"`
+	Complete            int `json:"complete"`
+	Error               int `json:"error"`
+	PendingVerification int `json:"pendingVerification"`
+	VerificationFailed  int `json:"verificationFailed"`
 }
 
 // PaginationParams defines parameters for paginated queries
@@ -319,6 +321,12 @@ func (a *App) GetQueueStats() (QueueStats, error) {
 	}
 	if errorCount, ok := stats["error"].(int); ok {
 		queueStats.Error = errorCount
+	}
+	if pv, ok := stats["pendingVerification"].(int); ok {
+		queueStats.PendingVerification = pv
+	}
+	if vf, ok := stats["verificationFailed"].(int); ok {
+		queueStats.VerificationFailed = vf
 	}
 
 	return queueStats, nil

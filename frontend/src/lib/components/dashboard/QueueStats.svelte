@@ -9,6 +9,8 @@ import {
 	Clock,
 	List,
 	Play,
+	ShieldAlert,
+	ShieldCheck,
 } from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
 
@@ -18,6 +20,8 @@ let queueStats: backend.QueueStats = {
 	running: 0,
 	complete: 0,
 	error: 0,
+	pendingVerification: 0,
+	verificationFailed: 0,
 };
 
 let intervalId: ReturnType<typeof setInterval> | undefined;
@@ -167,4 +171,39 @@ async function loadQueueStats() {
       {/if}
     </div>
   </div>
+
+  <!-- Durable verification (only shown when there is verification activity) -->
+  {#if queueStats.pendingVerification > 0 || queueStats.verificationFailed > 0}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <!-- Pending verification -->
+      <div class="card bg-base-100 p-6 shadow-sm hover:shadow-md transition-all duration-200">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-base-content/70">{$t('dashboard.stats.queue_stats.pending_verification')}</p>
+            <p class="text-2xl font-bold text-info mt-1">{queueStats.pendingVerification}</p>
+          </div>
+          <div class="p-3 rounded-full bg-info/10">
+            <ShieldCheck class="w-6 h-6 text-info" />
+          </div>
+        </div>
+        <p class="mt-3 text-xs text-base-content/60">{$t('dashboard.stats.queue_stats.pending_verification_hint')}</p>
+      </div>
+
+      <!-- Verification failed -->
+      <div class="card bg-base-100 p-6 shadow-sm hover:shadow-md transition-all duration-200">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-base-content/70">{$t('dashboard.stats.queue_stats.verification_failed')}</p>
+            <p class="text-2xl font-bold text-error mt-1">{queueStats.verificationFailed}</p>
+          </div>
+          <div class="p-3 rounded-full bg-error/10">
+            <ShieldAlert class="w-6 h-6 text-error" />
+          </div>
+        </div>
+        {#if queueStats.verificationFailed > 0}
+          <p class="mt-3 text-xs text-error">{$t('dashboard.stats.queue_stats.verification_failed_hint')}</p>
+        {/if}
+      </div>
+    </div>
+  {/if}
 </div>

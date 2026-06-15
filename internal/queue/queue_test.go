@@ -169,3 +169,32 @@ func TestIsPathInQueueDuringReceive(t *testing.T) {
 		t.Fatalf("after clear: IsPathInQueue=%v err=%v, want false,nil", ok, err)
 	}
 }
+
+func TestGetQueueStats_VerificationCounts(t *testing.T) {
+	q := newTestQueue(t)
+	ctx := context.Background()
+
+	insert := func(id, status string) {
+		if _, err := q.db.ExecContext(ctx, `INSERT INTO completed_items
+			(id, path, size, nzb_path, created_at, job_data, verification_status)
+			VALUES (?,?,?,?,?,?,?)`,
+			id, "/d/"+id, 1, "/o/"+id+".nzb", "2026-01-01T00:00:00Z", []byte("{}"), status); err != nil {
+			t.Fatalf("insert %s: %v", id, err)
+		}
+	}
+	insert("a", "verified")
+	insert("b", "pending_verification")
+	insert("c", "pending_verification")
+	insert("d", "verification_failed")
+
+	stats, err := q.GetQueueStats()
+	if err != nil {
+		t.Fatalf("GetQueueStats: %v", err)
+	}
+	if got := stats["pendingVerification"]; got != 2 {
+		t.Errorf("pendingVerification = %v, want 2", got)
+	}
+	if got := stats["verificationFailed"]; got != 1 {
+		t.Errorf("verificationFailed = %v, want 1", got)
+	}
+}

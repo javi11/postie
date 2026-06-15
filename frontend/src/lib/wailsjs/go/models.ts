@@ -277,11 +277,13 @@ export namespace backend {
 	    running: number;
 	    complete: number;
 	    error: number;
-	
+	    pendingVerification: number;
+	    verificationFailed: number;
+
 	    static createFrom(source: any = {}) {
 	        return new QueueStats(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.total = source["total"];
@@ -289,6 +291,8 @@ export namespace backend {
 	        this.running = source["running"];
 	        this.complete = source["complete"];
 	        this.error = source["error"];
+	        this.pendingVerification = source["pendingVerification"];
+	        this.verificationFailed = source["verificationFailed"];
 	    }
 	}
 	export class ServerData {

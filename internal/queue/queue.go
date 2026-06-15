@@ -1503,6 +1503,21 @@ func (q *Queue) GetQueueStats() (map[string]any, error) {
 		stats["error"] = 0
 	}
 
+	// Count completed items by durable verification status (issue #184).
+	var pendingVerification int
+	if err := q.db.QueryRow("SELECT COUNT(*) FROM completed_items WHERE verification_status = 'pending_verification'").Scan(&pendingVerification); err == nil {
+		stats["pendingVerification"] = pendingVerification
+	} else {
+		stats["pendingVerification"] = 0
+	}
+
+	var verificationFailed int
+	if err := q.db.QueryRow("SELECT COUNT(*) FROM completed_items WHERE verification_status = 'verification_failed'").Scan(&verificationFailed); err == nil {
+		stats["verificationFailed"] = verificationFailed
+	} else {
+		stats["verificationFailed"] = 0
+	}
+
 	// Update total to include running items
 	if r, ok := stats["running"].(int); ok {
 		stats["total"] = pending + r
