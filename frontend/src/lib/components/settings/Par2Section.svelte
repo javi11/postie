@@ -32,6 +32,7 @@ let parparExtraArgs = $state((config.par2?.parpar_extra_args ?? []).join('\n'));
 let numGoroutines = $state(config.par2?.num_goroutines ?? 0);
 let memoryLimit = $state(config.par2?.memory_limit ?? 0);
 let sliceSize = $state(config.par2?.slice_size ?? 0);
+let maxConcurrentJobs = $state(config.par2?.max_concurrent_jobs ?? 1);
 
 // Sync local state back to config
 $effect(() => {
@@ -72,6 +73,10 @@ $effect(() => {
 
 $effect(() => {
 	config.par2.slice_size = sliceSize;
+});
+
+$effect(() => {
+	config.par2.max_concurrent_jobs = maxConcurrentJobs;
 });
 
 async function selectTempDirectory() {
@@ -247,6 +252,23 @@ let redundancyDisplay = $derived(redundancy || "10%");
               minValue={0}
               id="slice-size"
             />
+
+            <div>
+              <label for="par2-max-concurrent-jobs" class="label">
+                <span class="label-text">{$t('settings.par2.max_concurrent_jobs')}</span>
+              </label>
+              <input
+                id="par2-max-concurrent-jobs"
+                type="number"
+                class="input input-bordered w-full"
+                bind:value={maxConcurrentJobs}
+                min="1"
+                max="16"
+              />
+              <p class="text-sm text-base-content/70 mt-1">
+                {$t('settings.par2.max_concurrent_jobs_description')}
+              </p>
+            </div>
           </div>
 
           <div class="space-y-4">

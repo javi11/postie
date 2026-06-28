@@ -22,6 +22,10 @@ posting:
     - name: 'alt.binaries.test'
       enabled: true
   throttle_rate: 0
+  # Total memory the process-wide upload engine may reserve for in-flight
+  # article buffers, independent of queue.max_concurrent_uploads.
+  # 0 = auto (sized from connection capacity and article size, 64 MiB-512 MiB).
+  upload_buffer_memory_limit: 0
   message_id_format: 'random'
   obfuscation_policy: 'full'
   par2_obfuscation_policy: 'full'
@@ -35,6 +39,9 @@ post_check:
   enabled: true
   delay: 10s
   max_reposts: 1
+  # Max concurrent STAT verification checks across the whole process.
+  # 0 = auto (dedicated verify pool capped at 16, shared upload pool capped at 2).
+  max_concurrent_checks: 0
 
 par2:
   enabled: true
@@ -43,6 +50,9 @@ par2:
   temp_dir: ''
   # Whether to keep PAR2 files after successful upload (false = cleanup after success)
   maintain_par2_files: false
+  # Max concurrent PAR2 operations across the whole process. memory_limit applies
+  # per active job, so keep this low (default 1) to bound total PAR2 memory.
+  max_concurrent_jobs: 1
 
 watcher:
   enabled: false

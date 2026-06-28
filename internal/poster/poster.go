@@ -1,7 +1,6 @@
 package poster
 
 import (
-	"bytes"
 	"context"
 	"crypto/md5"
 	"errors"
@@ -18,16 +17,15 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/javi11/nntppool/v4"
 	"github.com/javi11/nxg"
 	"github.com/javi11/postie/internal/article"
 	"github.com/javi11/postie/internal/config"
+	"github.com/javi11/postie/internal/manifest"
 	"github.com/javi11/postie/internal/nzb"
 	"github.com/javi11/postie/internal/par2"
 	"github.com/javi11/postie/internal/pausable"
 	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/progress"
-	"github.com/mnightingale/rapidyenc"
 	concpool "github.com/sourcegraph/conc/pool"
 )
 
@@ -101,6 +99,17 @@ func putBodyBuffer(buf []byte) {
 	bodyBufferPool.Put(full) //nolint:staticcheck // SA6002: slices have pointer semantics, no wrapper needed
 }
 
+// ManifestSink records a durable manifest for a file's articles before they are
+// posted. It is implemented outside the poster (by the transfer runtime) and
+// injected per job; a nil sink disables manifest recording (standalone mode).
+type ManifestSink interface {
+	RecordFile(ctx context.Context, filePath string, articles []*article.Article) error
+	// ExistingArticles returns a previously recorded manifest's article records
+	// for filePath (ok=false if none), used for crash recovery to reuse the
+	// exact Message-IDs rather than regenerating them.
+	ExistingArticles(ctx context.Context, filePath string) ([]manifest.ArticleRecord, bool, error)
+}
+
 // Poster defines the interface for posting articles to Usenet
 type Poster interface {
 	// Post posts files from a directory to Usenet
@@ -161,9 +170,10 @@ func (e *DeferredCheckError) Error() string {
 
 // articleWithBody holds an article with its pre-read body data for read-ahead buffering
 type articleWithBody struct {
-	article *article.Article
-	body    []byte
-	poolBuf []byte // original pooled buffer (may be larger than body)
+	article  *article.Article
+	body     []byte
+	poolBuf  []byte // original pooled buffer (may be larger than body)
+	reserved int64  // bytes reserved from the engine buffer budget (0 if no engine)
 }
 
 // uploadJob is submitted to the shared poster worker pool. Each job posts one
@@ -171,11 +181,12 @@ type articleWithBody struct {
 // so the submitter can track per-Post completion and capture the first error.
 // The worker is responsible for returning poolBuf to the body buffer pool.
 type uploadJob struct {
-	ctx     context.Context
-	art     *article.Article
-	body    []byte
-	poolBuf []byte
-	done    func(err error)
+	ctx      context.Context
+	art      *article.Article
+	body     []byte
+	poolBuf  []byte
+	reserved int64 // engine buffer-budget bytes to release when the job ends
+	done     func(err error)
 }
 
 // Stats tracks posting statistics
@@ -210,6 +221,18 @@ type poster struct {
 	uploadJobs       chan uploadJob
 	shutdown         chan struct{}
 	workerWG         sync.WaitGroup
+
+	// engine, when non-nil, bounds effective upload concurrency and in-flight
+	// buffer memory across ALL jobs process-wide. The per-poster worker pool
+	// above still pumps articles, but each post acquires a global engine worker
+	// slot and each read-ahead buffer is reserved against the global byte
+	// budget, so concurrent jobs no longer multiply workers or memory. Nil =
+	// standalone behaviour (no global gate).
+	engine *Engine
+
+	// manifestSink, when non-nil, records a durable manifest for each file
+	// before its articles are posted. Nil = standalone (no manifest recording).
+	manifestSink ManifestSink
 }
 
 // ensureWorkersStarted spins up the shared upload worker pool exactly once.
@@ -243,6 +266,15 @@ func (p *poster) ensureWorkersStarted() {
 
 // New creates a new poster using dependency injection for the connection pool manager
 func New(ctx context.Context, cfg config.Config, poolManager pool.PoolManager, jobProgress progress.JobProgress) (Poster, error) {
+	return NewWithEngine(ctx, cfg, poolManager, jobProgress, nil, nil)
+}
+
+// NewWithEngine creates a poster that routes upload work through the supplied
+// process-wide Engine, so effective concurrency and in-flight buffer memory are
+// bounded across all jobs. A nil engine preserves standalone behaviour. The
+// optional manifestSink records a durable manifest per file before posting; a
+// nil sink disables manifest recording.
+func NewWithEngine(ctx context.Context, cfg config.Config, poolManager pool.PoolManager, jobProgress progress.JobProgress, engine *Engine, manifestSink ManifestSink) (Poster, error) {
 	if poolManager == nil {
 		return nil, fmt.Errorf("pool manager cannot be nil")
 	}
@@ -266,12 +298,14 @@ func New(ctx context.Context, cfg config.Config, poolManager pool.PoolManager, j
 	postCheckCfg := cfg.GetPostCheckConfig()
 
 	p := &poster{
-		cfg:         cfg.GetPostingConfig(),
-		checkCfg:    postCheckCfg,
-		uploadPool:  uploadPool,
-		verifyPool:  verifyPool,
-		stats:       stats,
-		jobProgress: jobProgress,
+		cfg:          cfg.GetPostingConfig(),
+		checkCfg:     postCheckCfg,
+		uploadPool:   uploadPool,
+		verifyPool:   verifyPool,
+		stats:        stats,
+		jobProgress:  jobProgress,
+		engine:       engine,
+		manifestSink: manifestSink,
 	}
 
 	// Size the shared upload worker pool to the total number of upload-pool
@@ -296,6 +330,14 @@ func New(ctx context.Context, cfg config.Config, poolManager pool.PoolManager, j
 	}
 
 	return p, nil
+}
+
+// immediateCheckEnabled reports whether the legacy in-poster checkLoop runs.
+// It is disabled in durable mode (a manifest sink is set): verification then
+// happens in the background durable verification service, which lets the upload
+// slot be released before propagation delay.
+func (p *poster) immediateCheckEnabled() bool {
+	return p.manifestSink == nil && p.checkCfg.Enabled != nil && *p.checkCfg.Enabled
 }
 
 func (p *poster) Close() {
@@ -331,7 +373,11 @@ func (p *poster) uploadWorker() {
 // job.done. The job's body buffer is always returned to the pool, even on
 // error or cancellation.
 func (p *poster) runUploadJob(job uploadJob) {
-	defer putBodyBuffer(job.poolBuf)
+	defer func() {
+		putBodyBuffer(job.poolBuf)
+		// Release the global buffer-budget reservation for this article.
+		p.engine.ReleaseBuffer(job.reserved)
+	}()
 
 	if err := job.ctx.Err(); err != nil {
 		job.done(err)
@@ -341,6 +387,14 @@ func (p *poster) runUploadJob(job uploadJob) {
 		job.done(err)
 		return
 	}
+	// Acquire a process-wide worker slot so effective posting concurrency across
+	// all jobs stays within the engine's worker_count (nil engine = no gate).
+	if err := p.engine.AcquireWorker(job.ctx); err != nil {
+		job.done(err)
+		return
+	}
+	defer p.engine.ReleaseWorker()
+
 	job.done(p.postArticleWithBody(job.ctx, job.art, job.body))
 }
 
@@ -397,12 +451,15 @@ func (p *poster) PostWithRelativePaths(
 	// Start a goroutine to process posts
 	go p.postLoop(ctx, postQueue, checkQueue, errChan, nzbGen, &postsInFlight)
 
-	// Start a goroutine to process checks only if post check is enabled
-	if p.checkCfg.Enabled != nil && *p.checkCfg.Enabled {
+	// Start a goroutine to process checks only if the in-poster check is enabled.
+	// In durable mode (manifest sink set) verification is handled by the
+	// background durable verification service instead, so the legacy checkLoop is
+	// skipped and the upload slot is released as soon as posting finishes.
+	if p.immediateCheckEnabled() {
 		go p.checkLoop(ctx, checkQueue, postQueue, errChan, nzbGen, &postsInFlight)
 		slog.DebugContext(ctx, "Post check enabled - started checkLoop goroutine")
 	} else {
-		slog.InfoContext(ctx, "Post check disabled - skipping article verification")
+		slog.InfoContext(ctx, "In-poster check disabled - verification deferred to durable service or skipped")
 	}
 
 	wg.Add(len(files))
@@ -519,6 +576,10 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			// Create read-ahead channel (buffer 50 articles ahead to overlap I/O with network)
 			readAheadChan := make(chan articleWithBody, 50)
 
+			// Per-article reservation against the process-wide buffer budget; 0
+			// when no engine is configured (reservation is then a no-op).
+			reserveBytes := p.engine.PerArticleBytes()
+
 			// Start read-ahead goroutine to pre-read article bodies
 			go func() {
 				defer close(readAheadChan)
@@ -527,6 +588,13 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 					case <-postCtx.Done():
 						return
 					default:
+						// Reserve global buffer budget before allocating/reading.
+						// This blocks (and so bounds total in-flight memory across
+						// all jobs) when the budget is exhausted.
+						if err := p.engine.ReserveBuffer(postCtx, reserveBytes); err != nil {
+							return
+						}
+
 						// Get buffer from pool, resize if needed. Outliers are dropped
 						// on Put (see putBodyBuffer) so they cannot inflate the pool.
 						poolBuf := bodyBufferPool.Get().([]byte)
@@ -537,14 +605,16 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 
 						if _, err := readAtWithStallGuard(postCtx, post.file, body, art.Offset); err != nil {
 							putBodyBuffer(poolBuf)
+							p.engine.ReleaseBuffer(reserveBytes)
 							slog.ErrorContext(ctx, "Error pre-reading article", "error", err, "offset", art.Offset)
 							return
 						}
 
 						select {
-						case readAheadChan <- articleWithBody{article: art, body: body, poolBuf: poolBuf}:
+						case readAheadChan <- articleWithBody{article: art, body: body, poolBuf: poolBuf, reserved: reserveBytes}:
 						case <-postCtx.Done():
 							putBodyBuffer(poolBuf)
+							p.engine.ReleaseBuffer(reserveBytes)
 							return
 						}
 					}
@@ -576,13 +646,15 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 				art := artWithBody.article
 				body := artWithBody.body
 				poolBuf := artWithBody.poolBuf
+				reserved := artWithBody.reserved
 
 				articleWG.Add(1)
 				job := uploadJob{
-					ctx:     postCtx,
-					art:     art,
-					body:    body,
-					poolBuf: poolBuf,
+					ctx:      postCtx,
+					art:      art,
+					body:     body,
+					poolBuf:  poolBuf,
+					reserved: reserved,
 					done: func(err error) {
 						defer articleWG.Done()
 						if err != nil {
@@ -600,10 +672,12 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 				case p.uploadJobs <- job:
 				case <-p.shutdown:
 					putBodyBuffer(poolBuf)
+					p.engine.ReleaseBuffer(reserved)
 					recordErr(ErrPosterClosed)
 					articleWG.Done()
 				case <-postCtx.Done():
 					putBodyBuffer(poolBuf)
+					p.engine.ReleaseBuffer(reserved)
 					recordErr(postCtx.Err())
 					articleWG.Done()
 				}
@@ -665,7 +739,7 @@ func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue 
 			post.Status = PostStatusPosted
 			post.mu.Unlock()
 
-			if p.checkCfg.Enabled != nil && *p.checkCfg.Enabled {
+			if p.immediateCheckEnabled() {
 				// Guard the send: if checkLoop has already exited (e.g. on a
 				// verify error) the buffered checkQueue can fill and this send
 				// would block forever, leaking postLoop and every queued post.
@@ -1002,6 +1076,77 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 // addPost adds a file to the posting queue
 // displayName is the name to use in the subject (e.g., "Folder/subfolder/file.mp4")
 // If displayName is empty, the filename is used
+// addRecoveredPost re-posts a file from its existing manifest after a crash:
+// it reconstructs the articles (preserving their original Message-IDs/offsets),
+// STATs each to skip those already present on the server, and enqueues only the
+// missing ones. It never rewrites the manifest. If every article is already
+// present the post is enqueued with no articles and completes immediately.
+func (p *poster) addRecoveredPost(ctx context.Context, filePath string, file *os.File, fileInfo os.FileInfo, recs []manifest.ArticleRecord, wg *sync.WaitGroup, failedPosts *atomic.Int64, postQueue chan<- *Post, postsInFlight *sync.WaitGroup) error {
+	all := make([]*article.Article, 0, len(recs))
+	for _, r := range recs {
+		all = append(all, articleFromRecord(r))
+	}
+	missing := p.filterMissing(ctx, all)
+
+	slog.InfoContext(ctx, "Recovered manifest; re-posting only missing articles",
+		"file", filePath, "total", len(all), "missing", len(missing))
+
+	post := &Post{
+		FilePath: filePath,
+		Articles: missing,
+		Status:   PostStatusPending,
+		file:     file,
+		filesize: fileInfo.Size(),
+		wg:       wg,
+		failed:   failedPosts,
+		progress: p.jobProgress.AddProgress(uuid.New(), filepath.Base(filePath), progress.ProgressTypeUploading, fileInfo.Size()),
+	}
+
+	postsInFlight.Add(1)
+	select {
+	case postQueue <- post:
+		return nil
+	case <-ctx.Done():
+		postsInFlight.Done()
+		_ = file.Close()
+		return ctx.Err()
+	}
+}
+
+// filterMissing STATs each article (bounded concurrency) and returns those that
+// are NOT already present on the server, preserving order. On a STAT error the
+// article is treated as missing (re-posting an already-present article is
+// idempotent). If no verify pool is available, all articles are returned.
+func (p *poster) filterMissing(ctx context.Context, articles []*article.Article) []*article.Article {
+	if p.verifyPool == nil || len(articles) == 0 {
+		return articles
+	}
+
+	keep := make([]bool, len(articles))
+	sem := make(chan struct{}, 16)
+	var wg sync.WaitGroup
+	for i, art := range articles {
+		sem <- struct{}{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			if _, err := p.verifyPool.Stat(ctx, art.MessageID); err != nil {
+				keep[i] = true // missing (or unknown) -> re-post
+			}
+		}()
+	}
+	wg.Wait()
+
+	missing := make([]*article.Article, 0, len(articles))
+	for i, art := range articles {
+		if keep[i] {
+			missing = append(missing, art)
+		}
+	}
+	return missing
+}
+
 func (p *poster) addPost(ctx context.Context, filePath string, displayName string, fileNumber int, totalFiles int, wg *sync.WaitGroup, failedPosts *atomic.Int64, postQueue chan<- *Post, nzbGen nzb.NZBGenerator, postsInFlight *sync.WaitGroup) error {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -1019,6 +1164,18 @@ func (p *poster) addPost(ctx context.Context, filePath string, displayName strin
 		_ = file.Close()
 		slog.WarnContext(ctx, "Skipping empty file", "path", filePath)
 		return nil
+	}
+
+	// Crash recovery: if a manifest already exists for this file, reuse its exact
+	// Message-IDs/offsets instead of regenerating (which would orphan the already
+	// posted articles and create duplicate NZB segments). We STAT each planned
+	// article and re-post only the ones still missing.
+	if p.manifestSink != nil {
+		if recs, ok, err := p.manifestSink.ExistingArticles(ctx, filePath); err != nil {
+			slog.WarnContext(ctx, "Failed to read existing manifest; regenerating", "file", filePath, "error", err)
+		} else if ok {
+			return p.addRecoveredPost(ctx, filePath, file, fileInfo, recs, wg, failedPosts, postQueue, postsInFlight)
+		}
 	}
 
 	// Calculate number of segments
@@ -1188,6 +1345,17 @@ func (p *poster) addPost(ctx context.Context, filePath string, displayName strin
 		articles = append(articles, art)
 	}
 
+	// Record a durable manifest of this file's articles BEFORE any network
+	// posting, so an interrupted upload can be resumed/verified with the exact
+	// Message-IDs that will be posted. If the manifest cannot be written we fail
+	// the file rather than posting without durable recovery data.
+	if p.manifestSink != nil {
+		if err := p.manifestSink.RecordFile(ctx, filePath, articles); err != nil {
+			_ = file.Close()
+			return fmt.Errorf("recording manifest for %s: %w", filePath, err)
+		}
+	}
+
 	post := &Post{
 		FilePath: filePath,
 		Articles: articles,
@@ -1241,88 +1409,10 @@ func (p *poster) postArticleWithBody(ctx context.Context, art *article.Article, 
 		return err
 	}
 
-	// Build PostHeaders for nntppool v4
-	headers := nntppool.PostHeaders{
-		From:       art.From,
-		Subject:    art.Subject,
-		Newsgroups: art.Groups,
-		MessageID:  fmt.Sprintf("<%s>", art.MessageID),
-		Date:       art.Date.UTC(),
-		Extra:      make(map[string][]string),
-	}
-
-	// Add custom headers
-	if art.CustomHeaders != nil {
-		for k, v := range art.CustomHeaders {
-			headers.Extra[k] = []string{v}
-		}
-	}
-
-	// Add X-Nxg header if present
-	if art.XNxgHeader != "" {
-		headers.Extra["X-Nxg"] = []string{art.XNxgHeader}
-	}
-
-	// Build yEnc metadata
-	meta := rapidyenc.Meta{
-		FileName:   art.FileName,
-		FileSize:   art.FileSize,
-		PartNumber: int64(art.PartNumber),
-		TotalParts: int64(art.TotalParts),
-		Offset:     int64(art.Offset),
-		PartSize:   int64(art.Size),
-	}
-
-	// Post article with timeout to prevent indefinite TLS hangs
-	postCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
-
-	// Retry on stale pooled connection: the pool may hand back a connection the
-	// server silently closed (broken pipe / connection reset) or that has gone
-	// half-open and stops responding (read i/o timeout). After such errors the
-	// pool discards the bad connection; the retry picks a fresh one.
-	// bytes.NewReader(body) is cheap to recreate so the body is fully re-readable
-	// on each attempt. Cap at 3 attempts to avoid masking real server problems
-	// while tolerating a second stale pick after a long throttle pause.
-	var lastErr error
-	for attempt := range 3 {
-		if attempt > 0 {
-			slog.WarnContext(ctx, "Retrying article post after stale pooled connection",
-				"messageID", art.MessageID,
-				"attempt", attempt,
-				"prevErr", lastErr.Error())
-		}
-
-		_, lastErr = p.uploadPool.PostYenc(postCtx, headers, bytes.NewReader(body), meta)
-		if lastErr == nil {
-			break
-		}
-
-		if errors.Is(lastErr, context.Canceled) || errors.Is(lastErr, context.DeadlineExceeded) {
-			return context.Canceled
-		}
-
-		if !isStaleConnError(lastErr) {
-			break
-		}
-	}
-
-	if lastErr != nil {
-		return fmt.Errorf("error posting article: %w", lastErr)
-	}
-
-	// Apply throttling after posting
-	if p.throttle != nil {
-		p.throttle.Wait(int64(art.Size))
-	}
-
-	// Update stats
-	p.stats.mu.Lock()
-	p.stats.ArticlesPosted++
-	p.stats.BytesPosted += int64(art.Size)
-	p.stats.mu.Unlock()
-
-	return nil
+	// Delegate to the shared posting primitive so the normal and durable
+	// re-post paths build identical headers and apply the same stale-connection
+	// retry, throttle and stats accounting.
+	return postYenc(ctx, p.uploadPool, p.throttle, p.stats, art, body)
 }
 
 // isStaleConnError reports whether err looks like a stale pooled connection:

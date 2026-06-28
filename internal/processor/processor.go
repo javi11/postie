@@ -20,6 +20,7 @@ import (
 	"github.com/javi11/postie/internal/poster"
 	"github.com/javi11/postie/internal/progress"
 	"github.com/javi11/postie/internal/queue"
+	"github.com/javi11/postie/internal/transferstore"
 	"github.com/javi11/postie/pkg/fileinfo"
 	"github.com/javi11/postie/pkg/postie"
 	"maragu.dev/goqite"
@@ -52,13 +53,13 @@ type Processor struct {
 	isPaused  bool
 	pausedMux sync.RWMutex
 	// Auto-pause functionality
-	isAutoPaused         bool
-	autoPauseReason      string
+	isAutoPaused          bool
+	autoPauseReason       string
 	isAutoBlockingNewJobs bool // blocks new jobs without pausing running ones
-	autoPausedMux        sync.RWMutex
-	providerCheckTicker *time.Ticker
-	providerCheckCtx    context.Context
-	providerCheckCancel context.CancelFunc
+	autoPausedMux         sync.RWMutex
+	providerCheckTicker   *time.Ticker
+	providerCheckCtx      context.Context
+	providerCheckCancel   context.CancelFunc
 	// Callback to check if processor can start new items
 	canProcessNextItem func() bool
 	// Callback when job fails permanently
@@ -67,6 +68,12 @@ type Processor struct {
 	onJobComplete func()
 	// Shutdown flag to prevent new operations during close
 	isShuttingDown bool
+	// transferRuntime owns process-wide upload resources (currently the PAR2
+	// scheduler) shared by every job, so limits hold regardless of queue
+	// concurrency. May be nil, in which case each Postie uses private resources.
+	transferRuntime *postie.Runtime
+	// startVerificationOnce guards starting the durable verification service.
+	startVerificationOnce sync.Once
 }
 
 type ProcessorOptions struct {
@@ -82,7 +89,7 @@ type ProcessorOptions struct {
 	FollowSymlinks            bool                                // Control whether to follow symlinks when collecting folder files
 	CanProcessNextItem        func() bool                         // Callback to check if processor can start new items
 	OnJobError                func(fileName, errorMessage string) // Callback when job fails permanently
-	OnJobComplete             func()                             // Callback when any job finishes (success or deferred)
+	OnJobComplete             func()                              // Callback when any job finishes (success or deferred)
 }
 type RunningJobDetails struct {
 	ID       string                   `json:"id"`
@@ -128,6 +135,35 @@ func New(opts ProcessorOptions) *Processor {
 		onJobComplete:             opts.OnJobComplete,
 	}
 
+	// Create the process-wide transfer runtime so resource limits (PAR2
+	// concurrency today, upload engine and verification later) hold regardless
+	// of queue concurrency. On failure, fall back to per-job resources so the
+	// processor still functions.
+	if opts.Config != nil {
+		// Durable transfer store + manifest dir enable manifest recording and
+		// crash-safe verification. Manifests live alongside the database file.
+		var transferStore *transferstore.Store
+		var manifestDir string
+		if opts.Queue != nil {
+			if db := opts.Queue.DB(); db != nil {
+				transferStore = transferstore.New(db)
+				manifestDir = filepath.Join(filepath.Dir(opts.Config.GetDatabaseConfig().DatabasePath), "transfer-manifests")
+				// One-time migration of pre-durable deferred checks into the
+				// durable verification_failures table (STAT-only).
+				if migrated, err := transferStore.MigrateLegacyPendingChecks(providerCtx); err != nil {
+					slog.Warn("Failed to migrate legacy pending article checks", "error", err)
+				} else if migrated > 0 {
+					slog.Info("Migrated legacy pending article checks to durable verification", "count", migrated)
+				}
+			}
+		}
+		if rt, err := postie.NewRuntime(providerCtx, opts.Config, opts.PoolManager, transferStore, manifestDir, opts.Queue); err != nil {
+			slog.Error("Failed to create transfer runtime; falling back to per-job PAR2 scheduling", "error", err)
+		} else {
+			processor.transferRuntime = rt
+		}
+	}
+
 	// Start provider availability monitoring if we have a pool manager
 	if opts.PoolManager != nil {
 		go processor.monitorProviderAvailability()
@@ -138,6 +174,15 @@ func New(opts ProcessorOptions) *Processor {
 
 // Start begins processing files from the queue
 func (p *Processor) Start(ctx context.Context) error {
+	// Start the durable verification service once. It runs independently of the
+	// queue processing loop (and of pause), verifying completed transfers and
+	// re-posting missing articles in the background. No-op when no runtime/store.
+	p.startVerificationOnce.Do(func() {
+		if p.transferRuntime != nil {
+			go p.transferRuntime.RunVerification(ctx)
+		}
+	})
+
 	processTicker := time.NewTicker(time.Second * 2) // Process queue frequently
 	defer processTicker.Stop()
 
@@ -369,12 +414,29 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 		return err
 	}
 
-	// Execute post upload script if configured
-	// Note: We don't return the error here to avoid failing the completion if the script fails
-	// The script failure will be tracked in the database for retry
-	sourcePath := strings.TrimPrefix(job.Path, "FOLDER:")
-	if scriptErr := jobPostie.ExecutePostUploadScript(ctx, actualNzbPath, sourcePath, string(msg.ID)); scriptErr != nil {
-		slog.ErrorContext(ctx, "Post upload script execution failed", "error", scriptErr, "nzbPath", actualNzbPath)
+	// In durable mode the upload is complete but verification runs in the
+	// background, so the item is pending verification rather than verified.
+	// Link the transfer's files to this completed item so the verification
+	// service can reflect the final verified/failed status back onto it.
+	if p.durableMode() {
+		if statusErr := p.queue.UpdateCompletedItemVerificationStatus(ctx, string(msg.ID), "pending_verification"); statusErr != nil {
+			slog.ErrorContext(ctx, "Failed to set pending_verification status", "error", statusErr, "path", job.Path)
+		}
+		if linkErr := p.transferRuntime.TransferStore().SetCompletedItemForTransfer(ctx, job.TransferID, string(msg.ID)); linkErr != nil {
+			slog.ErrorContext(ctx, "Failed to link completed item to transfer", "error", linkErr, "transfer", job.TransferID)
+		}
+	}
+
+	// Execute post upload script if configured. In durable mode the script is
+	// deferred until verification succeeds (run by the transfer cleaner), so it
+	// only fires here in standalone mode.
+	// Note: We don't return the error here to avoid failing the completion if the script fails;
+	// the failure is tracked in the database for retry.
+	if !p.durableMode() {
+		sourcePath := strings.TrimPrefix(job.Path, "FOLDER:")
+		if scriptErr := jobPostie.ExecutePostUploadScript(ctx, actualNzbPath, sourcePath, string(msg.ID)); scriptErr != nil {
+			slog.ErrorContext(ctx, "Post upload script execution failed", "error", scriptErr, "nzbPath", actualNzbPath)
+		}
 	}
 
 	if p.onJobComplete != nil {
@@ -477,12 +539,24 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 		return "", nil, fmt.Errorf("pool manager is not available for job %s", jobID)
 	}
 
-	// Create a postie instance for this job with progress manager
-	jobPostie, err := postie.New(jobCtx, p.config, poolManager, progressJob, p.queue)
+	// Create a postie instance for this job, sharing the process-wide transfer
+	// runtime so PAR2 (and later upload/verification) limits are enforced
+	// globally rather than per queue job.
+	jobPostie, err := postie.NewWithRuntime(jobCtx, p.config, poolManager, progressJob, p.queue, p.transferRuntime, job.TransferID)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to create postie instance for job %s: %w", jobID, err)
 	}
 	defer jobPostie.Close()
+
+	// Resolve the delete-original policy (job override wins over the global
+	// setting) and hand it to Postie so it is persisted into the transfer's
+	// cleanup policy at completion. In durable mode the actual deletion happens
+	// only after verification succeeds.
+	deleteOriginal := p.deleteOriginalFile
+	if job.DeleteOriginal != nil {
+		deleteOriginal = *job.DeleteOriginal
+	}
+	jobPostie.SetDeleteOriginal(deleteOriginal)
 
 	// Determine the input folder for maintaining folder structure
 	var inputFolder string
@@ -521,11 +595,15 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 		return "", nil, err
 	}
 
-	// Delete the original files if configured. A job-level override (set by the
-	// HTTP API) takes precedence over the processor's global setting.
-	deleteOriginal := p.deleteOriginalFile
-	if job.DeleteOriginal != nil {
-		deleteOriginal = *job.DeleteOriginal
+	// Delete the original files if configured (deleteOriginal resolved above).
+	// In durable mode, the upload is complete but NOT yet verified. Deleting the
+	// original here would destroy the only recovery source before verification
+	// confirms the articles propagated. Retain originals; deferred cleanup after
+	// successful verification is handled by the durable transfer lifecycle.
+	if deleteOriginal && p.durableMode() {
+		slog.InfoContext(ctx, "Durable mode: retaining original files until verification succeeds",
+			"path", job.Path)
+		deleteOriginal = false
 	}
 	if deleteOriginal {
 		if p.deleteDelay > 0 {
@@ -851,8 +929,30 @@ func (p *Processor) Close() error {
 	p.reservedPaths = make(map[string]time.Time)
 	p.reservedMux.Unlock()
 
+	// Close the transfer runtime after all jobs have stopped. The shared NNTP
+	// pool manager is owned elsewhere and intentionally not closed here.
+	if p.transferRuntime != nil {
+		if err := p.transferRuntime.Close(); err != nil {
+			slog.Warn("Error closing transfer runtime", "error", err)
+		}
+	}
+
 	slog.Info("Processor shutdown completed")
 	return nil
+}
+
+// TransferRuntimeMetrics returns a snapshot of process-wide upload/PAR2
+// resource usage for observability. Returns the zero value when no transfer
+// runtime is configured.
+func (p *Processor) TransferRuntimeMetrics() postie.RuntimeMetrics {
+	return p.transferRuntime.Metrics()
+}
+
+// durableMode reports whether the durable verification path is active, in which
+// case verification (and the destructive cleanup that depends on it) happens in
+// the background service rather than inline at upload completion.
+func (p *Processor) durableMode() bool {
+	return p.transferRuntime.DurableVerificationEnabled()
 }
 
 // setAutoBlock enables or disables blocking of new jobs due to provider unavailability.

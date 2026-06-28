@@ -6,6 +6,13 @@
         "refresh": "Yenile",
         "error_loading": "Metrikler yüklenemedi",
         "error_title": "Metrikler yüklenemiyor",
+        "transfer_runtime": {
+            "title": "Aktarım Çalışma Zamanı",
+            "upload_workers": "Yükleme İşçileri",
+            "buffer_memory": "Tampon Belleği",
+            "par2_jobs": "PAR2 İşleri",
+            "queued": "kuyrukta"
+        },
         "time_period": "Zaman Aralığı",
         "compressed_data": "Sıkıştırılmış Veri",
         "data_source": "Veri Kaynağı",

@@ -462,6 +462,10 @@ export class WebClient {
 		return this.get<backend.NntpPoolMetrics>("/metrics/nntp-pool");
 	}
 
+	async getTransferRuntimeMetrics(): Promise<backend.TransferRuntimeMetrics> {
+		return this.get<backend.TransferRuntimeMetrics>("/metrics/transfer-runtime");
+	}
+
 	// Filesystem operations
 	async browseFilesystem(path: string): Promise<{
 		path: string;

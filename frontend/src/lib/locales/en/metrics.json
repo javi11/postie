@@ -6,7 +6,14 @@
 		"refresh": "Refresh",
 		"error_loading": "Failed to load metrics",
 		"error_title": "Unable to load metrics",
-		
+		"transfer_runtime": {
+			"title": "Transfer Runtime",
+			"upload_workers": "Upload Workers",
+			"buffer_memory": "Buffer Memory",
+			"par2_jobs": "PAR2 Jobs",
+			"queued": "queued"
+		},
+
 		"time_period": "Time Period",
 		"compressed_data": "Compressed Data",
 		"data_source": "Data Source",

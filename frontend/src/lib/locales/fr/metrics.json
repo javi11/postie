@@ -6,6 +6,13 @@
 		"refresh": "Actualiser",
 		"error_loading": "Échec du chargement des métriques",
 		"error_title": "Impossible de charger les métriques",
+		"transfer_runtime": {
+			"title": "Runtime de transfert",
+			"upload_workers": "Workers d'envoi",
+			"buffer_memory": "Mémoire tampon",
+			"par2_jobs": "Tâches PAR2",
+			"queued": "en attente"
+		},
 		
 		"time_period": "Période de Temps",
 		"compressed_data": "Données Compressées",

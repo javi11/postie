@@ -275,6 +275,7 @@ func (ws *WebServer) setupRoutes() {
 	api.HandleFunc("/validate-server", ws.handleValidateServer).Methods("POST")
 	api.HandleFunc("/setup/complete", ws.handleSetupComplete).Methods("POST")
 	api.HandleFunc("/metrics/nntp-pool", ws.handleGetNntpPoolMetrics).Methods("GET")
+	api.HandleFunc("/metrics/transfer-runtime", ws.handleGetTransferRuntimeMetrics).Methods("GET")
 	api.HandleFunc("/filesystem/browse", ws.handleBrowseFilesystem).Methods("GET")
 	api.HandleFunc("/filesystem/import", ws.handleImportFiles).Methods("POST")
 	api.HandleFunc("/watcher/status", ws.handleGetWatcherStatus).Methods("GET")
@@ -1078,6 +1079,11 @@ func (ws *WebServer) handleGetNntpPoolMetrics(w http.ResponseWriter, r *http.Req
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(metrics)
+}
+
+func (ws *WebServer) handleGetTransferRuntimeMetrics(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(ws.app.GetTransferRuntimeMetrics())
 }
 
 // FileSystemItem represents a file or directory in the filesystem

@@ -98,6 +98,45 @@ func TestRetryDoesNotLeakInProgressRows(t *testing.T) {
 	}
 }
 
+// TestTransferIDAssignedAndStableAcrossRetry verifies every queued job gets a
+// stable transfer_id at creation that is preserved across receive→readd retry
+// cycles, so the durable upload architecture can reuse the same manifest.
+func TestTransferIDAssignedAndStableAcrossRetry(t *testing.T) {
+	q := newTestQueue(t)
+	ctx := context.Background()
+
+	const path = "/tmp/transfer.bin"
+	if err := q.AddFile(ctx, path, 1234); err != nil {
+		t.Fatalf("AddFile: %v", err)
+	}
+
+	msg, job, err := q.ReceiveFile(ctx)
+	if err != nil || job == nil {
+		t.Fatalf("ReceiveFile: %v", err)
+	}
+	if job.TransferID == "" {
+		t.Fatal("TransferID empty after AddFile/ReceiveFile")
+	}
+	originalID := job.TransferID
+
+	// Retry cycle preserves the transfer id.
+	if err := q.ClearInProgress(ctx, msg.ID); err != nil {
+		t.Fatalf("ClearInProgress: %v", err)
+	}
+	job.RetryCount++
+	if err := q.ReaddJob(ctx, job); err != nil {
+		t.Fatalf("ReaddJob: %v", err)
+	}
+
+	_, job2, err := q.ReceiveFile(ctx)
+	if err != nil || job2 == nil {
+		t.Fatalf("ReceiveFile after readd: %v", err)
+	}
+	if job2.TransferID != originalID {
+		t.Errorf("TransferID changed across retry: %q -> %q", originalID, job2.TransferID)
+	}
+}
+
 // TestIsPathInQueueDuringReceive verifies the path is always visible to
 // IsPathInQueue during ReceiveFile (insert-then-delete ordering).
 func TestIsPathInQueueDuringReceive(t *testing.T) {
@@ -128,5 +167,34 @@ func TestIsPathInQueueDuringReceive(t *testing.T) {
 
 	if ok, err := q.IsPathInQueue(path); err != nil || ok {
 		t.Fatalf("after clear: IsPathInQueue=%v err=%v, want false,nil", ok, err)
+	}
+}
+
+func TestGetQueueStats_VerificationCounts(t *testing.T) {
+	q := newTestQueue(t)
+	ctx := context.Background()
+
+	insert := func(id, status string) {
+		if _, err := q.db.ExecContext(ctx, `INSERT INTO completed_items
+			(id, path, size, nzb_path, created_at, job_data, verification_status)
+			VALUES (?,?,?,?,?,?,?)`,
+			id, "/d/"+id, 1, "/o/"+id+".nzb", "2026-01-01T00:00:00Z", []byte("{}"), status); err != nil {
+			t.Fatalf("insert %s: %v", id, err)
+		}
+	}
+	insert("a", "verified")
+	insert("b", "pending_verification")
+	insert("c", "pending_verification")
+	insert("d", "verification_failed")
+
+	stats, err := q.GetQueueStats()
+	if err != nil {
+		t.Fatalf("GetQueueStats: %v", err)
+	}
+	if got := stats["pendingVerification"]; got != 2 {
+		t.Errorf("pendingVerification = %v, want 2", got)
+	}
+	if got := stats["verificationFailed"]; got != 1 {
+		t.Errorf("verificationFailed = %v, want 1", got)
 	}
 }

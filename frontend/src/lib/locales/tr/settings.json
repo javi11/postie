@@ -216,6 +216,8 @@
 			"memory_limit_description": "Kurtarma arabellekleri için kullanılan maksimum bellek. 0 = otomatik (RAM'in %75'i veya 4 GiB)",
 			"slice_size": "Dilim Boyutu",
 			"slice_size_description": "PAR2 blok boyutu (bayt cinsinden). 0 = otomatik (makale boyutundan türetilir). Büyük yüklemeler için 10 MiB önerilir.",
+			"max_concurrent_jobs": "Maksimum Eşzamanlı İş",
+			"max_concurrent_jobs_description": "Tüm süreç genelinde aynı anda çalışan maksimum PAR2 işlemi sayısı. Bellek sınırı aktif iş başına uygulanır, bu nedenle toplam PAR2 belleğini sınırlamak için bunu düşük tutun (varsayılan 1).",
 			"save_button": "PAR2 Ayarlarını Kaydet",
 			"saving": "Kaydediliyor...",
 			"saved_success": "PAR2 ayarları kaydedildi",
@@ -247,7 +249,9 @@
 			"deferred_check_interval": "Kontrol Aralığı",
 			"deferred_check_interval_description": "Arka plan çalışanının bekleyen kontrolleri yoklama sıklığı",
 			"deferred_batch_size": "Ertelenmiş Toplu İşlem Boyutu",
-			"deferred_batch_size_description": "Her ertelenmiş kontrol döngüsünde işlenen makale sayısı. Büyük yüklemeler için artırın."
+			"deferred_batch_size_description": "Her ertelenmiş kontrol döngüsünde işlenen makale sayısı. Büyük yüklemeler için artırın.",
+			"max_concurrent_checks": "Maksimum Eşzamanlı Kontrol",
+			"max_concurrent_checks_description": "Tüm süreç genelinde aynı anda çalışan maksimum STAT doğrulama kontrolü sayısı. 0 = otomatik (16 ile sınırlı özel doğrulama havuzu veya 2 ile sınırlı paylaşılan yükleme havuzu)."
 		},
 		"posting": {
 			"title": "Gönderim Yapılandırması",
@@ -259,6 +263,8 @@
 			"article_size_description": "Her makale parçasının boyutu",
 			"throttle_rate": "Hız Sınırı (MB/s)",
 			"throttle_rate_description": "Saniye başına MB cinsinden yükleme hızı sınırı (0 = sınırsız)",
+			"upload_buffer_memory_limit": "Yükleme Tamponu Bellek Sınırı",
+			"upload_buffer_memory_limit_description": "Yükleme motorunun, kuyruk eşzamanlılığından bağımsız olarak, devam eden makale tamponları için ayırabileceği toplam bellek. 0 = otomatik (bağlantı kapasitesi ve makale boyutuna göre, 64 MiB ile 512 MiB arasında boyutlandırılır).",
 			"obfuscation_policy": "Gizleme Politikası",
 			"par2_obfuscation_policy": "PAR2 Gizleme Politikası",
 			"message_id_format": "Mesaj ID Formatı",

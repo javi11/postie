@@ -14,15 +14,29 @@ import { formatElapsed } from "$lib/utils";
 let metrics = $state<backend.NntpPoolMetrics | null>(null);
 let loading = $state(true);
 let error = $state<string | null>(null);
+let transferMetrics = $state<backend.TransferRuntimeMetrics | null>(null);
+let transferInterval: ReturnType<typeof setInterval> | undefined;
 
 onMount(async () => {
 	await loadMetrics();
 	await apiClient.on(EVENT_NNTP_POOL_METRICS_UPDATED, applyMetricsEvent);
+	// Transfer-runtime metrics have no push event; poll them every 5s.
+	await loadTransferMetrics();
+	transferInterval = setInterval(loadTransferMetrics, 5000);
 });
 
 onDestroy(() => {
 	apiClient.off(EVENT_NNTP_POOL_METRICS_UPDATED, applyMetricsEvent);
+	if (transferInterval) clearInterval(transferInterval);
 });
+
+async function loadTransferMetrics() {
+	try {
+		transferMetrics = await apiClient.getTransferRuntimeMetrics();
+	} catch (err) {
+		console.error("Failed to load transfer runtime metrics:", err);
+	}
+}
 
 function applyMetricsEvent(data: unknown) {
 	if (!data) return;
@@ -91,6 +105,33 @@ function formatNumber(num: number): string {
 			</button>
 		</div>
 	</div>
+
+	<!-- Transfer runtime (process-wide upload engine + PAR2 scheduler) -->
+	{#if transferMetrics && (transferMetrics.uploadWorkerCount > 0 || transferMetrics.par2Capacity > 0)}
+		<div>
+			<h2 class="text-xl font-semibold text-base-content mb-3 flex items-center gap-2">
+				<Gauge class="w-5 h-5 text-primary" />
+				{$t('metrics.transfer_runtime.title')}
+			</h2>
+			<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+				<div class="stat bg-base-100 rounded-lg shadow-sm">
+					<div class="stat-title text-xs">{$t('metrics.transfer_runtime.upload_workers')}</div>
+					<div class="stat-value text-2xl">{transferMetrics.uploadActiveWorkers}/{transferMetrics.uploadWorkerCount}</div>
+					<div class="stat-desc">{transferMetrics.uploadQueuedWorkers} {$t('metrics.transfer_runtime.queued')}</div>
+				</div>
+				<div class="stat bg-base-100 rounded-lg shadow-sm">
+					<div class="stat-title text-xs">{$t('metrics.transfer_runtime.buffer_memory')}</div>
+					<div class="stat-value text-2xl">{formatBytes(transferMetrics.uploadReservedBytes)}</div>
+					<div class="stat-desc">/ {formatBytes(transferMetrics.uploadBudgetBytes)}</div>
+				</div>
+				<div class="stat bg-base-100 rounded-lg shadow-sm">
+					<div class="stat-title text-xs">{$t('metrics.transfer_runtime.par2_jobs')}</div>
+					<div class="stat-value text-2xl">{transferMetrics.par2ActiveJobs}/{transferMetrics.par2Capacity}</div>
+					<div class="stat-desc">{transferMetrics.par2QueuedJobs} {$t('metrics.transfer_runtime.queued')}</div>
+				</div>
+			</div>
+		</div>
+	{/if}
 
 	{#if loading && !metrics}
 		<div class="flex items-center justify-center py-12">

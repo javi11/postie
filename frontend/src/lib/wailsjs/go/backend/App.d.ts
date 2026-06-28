@@ -50,6 +50,8 @@ export function GetNZB(arg1:string):Promise<string>;
 
 export function GetNntpPoolMetrics():Promise<backend.NntpPoolMetrics>;
 
+export function GetTransferRuntimeMetrics():Promise<backend.TransferRuntimeMetrics>;
+
 export function GetOutputDirectory():Promise<string>;
 
 export function GetPendingConfigStatus():Promise<Record<string, any>>;

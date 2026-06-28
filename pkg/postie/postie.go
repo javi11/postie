@@ -18,6 +18,7 @@ import (
 	"github.com/javi11/postie/internal/pool"
 	"github.com/javi11/postie/internal/poster"
 	"github.com/javi11/postie/internal/progress"
+	"github.com/javi11/postie/internal/transferwriter"
 	"github.com/javi11/postie/pkg/fileinfo"
 	"golang.org/x/sync/errgroup"
 )
@@ -30,8 +31,25 @@ type Postie struct {
 	compressionCfg            config.NzbCompressionConfig
 	postUploadScriptCfg       config.PostUploadScriptConfig
 	maintainOriginalExtension bool
+	postCheckCfg              config.PostCheck
 	jobProgress               progress.JobProgress
 	queue                     QueueInterface
+	// recorder is the per-job durable manifest recorder, or nil in standalone
+	// mode. When set, the poster writes manifests during upload and Postie marks
+	// the transfer's files uploaded (for the durable verification service) once
+	// posting completes.
+	recorder *transferwriter.Recorder
+	// deleteOriginal records whether this job's originals should be deleted
+	// after successful verification (persisted into the transfer's cleanup
+	// policy at completion). Set by the caller before Post.
+	deleteOriginal bool
+}
+
+// SetDeleteOriginal records whether the job's original files should be deleted
+// after the durable verification service confirms the upload. Must be called
+// before Post. No effect in standalone mode (deletion is handled inline there).
+func (p *Postie) SetDeleteOriginal(v bool) {
+	p.deleteOriginal = v
 }
 
 // QueueInterface defines the queue methods needed by Postie
@@ -40,12 +58,33 @@ type QueueInterface interface {
 	MarkScriptCompleted(ctx context.Context, itemID string) error
 }
 
+// New creates a Postie that owns a private transfer runtime. It is retained as
+// a compatibility entry point for the CLI and external package users; the
+// processor path uses NewWithRuntime to share one process-wide runtime across
+// all jobs.
 func New(
 	ctx context.Context,
 	cfg config.Config,
 	poolManager *pool.Manager,
 	jobProgress progress.JobProgress,
 	queue QueueInterface,
+) (*Postie, error) {
+	return NewWithRuntime(ctx, cfg, poolManager, jobProgress, queue, nil, "")
+}
+
+// NewWithRuntime creates a Postie that borrows shared resources from rt. When
+// rt is nil a private PAR2 scheduler is created honouring the configured
+// par2.max_concurrent_jobs, preserving standalone behaviour. transferID binds
+// this job's durable manifests; when empty (or rt has no store) manifest
+// recording is disabled.
+func NewWithRuntime(
+	ctx context.Context,
+	cfg config.Config,
+	poolManager *pool.Manager,
+	jobProgress progress.JobProgress,
+	queue QueueInterface,
+	rt *Runtime,
+	transferID string,
 ) (*Postie, error) {
 	// Get PAR2 configuration
 	par2Cfg, err := cfg.GetPar2Config(ctx)
@@ -58,11 +97,33 @@ func New(
 	postUploadScriptConfig := cfg.GetPostUploadScriptConfig()
 	maintainOriginalExtension := cfg.GetMaintainOriginalExtension()
 
-	// Create par2 runner with progress manager
-	par2runner := par2.NewExecutor(postingConfig.ArticleSizeInBytes, par2Cfg, jobProgress)
+	// Create the per-job PAR2 executor (carries this job's progress + config),
+	// then gate its execution through the shared, process-wide PAR2 scheduler so
+	// the configured memory limit applies per active job rather than per queue
+	// job. Falls back to a private scheduler when no runtime is supplied.
+	par2Executor := par2.NewExecutor(postingConfig.ArticleSizeInBytes, par2Cfg, jobProgress)
+	par2Scheduler := rt.Par2Scheduler()
+	if par2Scheduler == nil {
+		maxJobs := 1
+		if par2Cfg != nil && par2Cfg.MaxConcurrentJobs > 0 {
+			maxJobs = par2Cfg.MaxConcurrentJobs
+		}
+		par2Scheduler = par2.NewScheduler(maxJobs)
+	}
+	par2runner := par2.NewScheduledExecutor(par2Executor, par2Scheduler)
 
-	// Create poster with progress manager
-	p, err := poster.New(ctx, cfg, poolManager, jobProgress)
+	// Build the per-job durable manifest recorder (nil in standalone mode). It
+	// doubles as the poster's manifest sink; pass an untyped-nil sink when
+	// absent to avoid a non-nil interface wrapping a nil pointer.
+	recorder := rt.NewManifestRecorder(transferID)
+	var sink poster.ManifestSink
+	if recorder != nil {
+		sink = recorder
+	}
+
+	// Create poster with progress manager, sharing the process-wide upload
+	// engine (worker + buffer-budget limits) and the per-job manifest sink.
+	p, err := poster.NewWithEngine(ctx, cfg, poolManager, jobProgress, rt.UploadEngine(), sink)
 	if err != nil {
 		slog.ErrorContext(ctx, "Error creating poster", "error", err)
 
@@ -77,9 +138,25 @@ func New(
 		compressionCfg:            compressionConfig,
 		postUploadScriptCfg:       postUploadScriptConfig,
 		maintainOriginalExtension: maintainOriginalExtension,
+		postCheckCfg:              cfg.GetPostCheckConfig(),
 		jobProgress:               jobProgress,
 		queue:                     queue,
+		recorder:                  recorder,
 	}, nil
+}
+
+// completeTransferUpload marks the transfer's files uploaded so the durable
+// verification service can verify them, scheduling the first check after the
+// configured propagation delay. No-op in standalone mode (no recorder).
+func (p *Postie) completeTransferUpload(ctx context.Context) {
+	if p.recorder == nil {
+		return
+	}
+	delay := p.postCheckCfg.RetryDelay.ToDuration()
+	now := time.Now().UTC()
+	if err := p.recorder.CompleteUpload(ctx, now, now.Add(delay), p.deleteOriginal); err != nil {
+		slog.WarnContext(ctx, "Failed to mark transfer uploaded for verification", "error", err)
+	}
 }
 
 func (p *Postie) Close() {
@@ -159,10 +236,21 @@ func safeRemoveFile(ctx context.Context, filePath string) {
 	_ = os.Remove(filePath)
 }
 
-func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir string, outputDir string, forceFolderMode bool) (string, error) {
+func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir string, outputDir string, forceFolderMode bool) (nzbPath string, retErr error) {
 	if len(files) == 0 {
 		return "", fmt.Errorf("no files to post")
 	}
+
+	// On a successful upload, mark the transfer's files uploaded so the durable
+	// verification service picks them up and the queue slot can be released.
+	// In durable mode the in-poster checkLoop is skipped, so a nil error here
+	// means posting succeeded with nothing left to verify inline. No-op in
+	// standalone mode (no recorder).
+	defer func() {
+		if retErr == nil {
+			p.completeTransferUpload(ctx)
+		}
+	}()
 
 	// Use folder mode (single NZB) if explicitly requested via forceFolderMode
 	// This is set to true for:
@@ -643,22 +731,28 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 // ExecutePostUploadScript executes the post-upload script for a completed item
 // This should be called after the file has been marked as completed in the database
 func (p *Postie) ExecutePostUploadScript(ctx context.Context, nzbPath string, sourcePath string, itemID string) error {
-	if !p.postUploadScriptCfg.Enabled || p.postUploadScriptCfg.Command == "" {
+	return runPostUploadScript(ctx, p.postUploadScriptCfg, p.queue, nzbPath, sourcePath, itemID)
+}
+
+// runPostUploadScript runs the configured post-upload script and tracks its
+// retry status in the queue. Extracted from ExecutePostUploadScript so the
+// durable verification cleanup path can run the script (after verification) too,
+// not just the upload path. A nil queue skips status tracking; a disabled or
+// empty command is a no-op.
+func runPostUploadScript(ctx context.Context, cfg config.PostUploadScriptConfig, q QueueInterface, nzbPath, sourcePath, itemID string) error {
+	if !cfg.Enabled || cfg.Command == "" {
 		return nil
 	}
 
-	slog.InfoContext(ctx, "Executing post upload script", "command", p.postUploadScriptCfg.Command, "nzb_path", nzbPath, "source_path", sourcePath, "item_id", itemID)
+	slog.InfoContext(ctx, "Executing post upload script", "command", cfg.Command, "nzb_path", nzbPath, "source_path", sourcePath, "item_id", itemID)
 
-	// Create timeout context
-	timeoutCtx, cancel := context.WithTimeout(ctx, p.postUploadScriptCfg.Timeout.ToDuration())
+	timeoutCtx, cancel := context.WithTimeout(ctx, cfg.Timeout.ToDuration())
 	defer cancel()
 
-	// Replace placeholders with actual values
-	command := strings.ReplaceAll(p.postUploadScriptCfg.Command, "{nzb_path}", nzbPath)
+	command := strings.ReplaceAll(cfg.Command, "{nzb_path}", nzbPath)
 	command = strings.ReplaceAll(command, "{source_path}", sourcePath)
 	command = strings.ReplaceAll(command, "{source_dir}", filepath.Dir(sourcePath))
 
-	// Parse command using appropriate shell for the OS
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
 		cmd = exec.CommandContext(timeoutCtx, "cmd", "/C", command)
@@ -672,15 +766,11 @@ func (p *Postie) ExecutePostUploadScript(ctx context.Context, nzbPath string, so
 		errorMsg := fmt.Sprintf("script failed: %v, output: %s", err, string(output))
 		slog.ErrorContext(ctx, "Error executing post upload script", "error", err, "output", string(output), "command", command)
 
-		// Track failure in database for retry if queue is available
-		if p.queue != nil {
-			// Calculate next retry time with exponential backoff
-			baseDelay := p.postUploadScriptCfg.RetryDelay.ToDuration()
+		if q != nil {
+			baseDelay := cfg.RetryDelay.ToDuration()
 			now := time.Now()
 			nextRetry := now.Add(baseDelay)
-
-			// This is the first failure, so set firstFailureAt to now
-			if updateErr := p.queue.UpdateScriptStatus(ctx, itemID, "pending_retry", 0, errorMsg, &nextRetry, &now); updateErr != nil {
+			if updateErr := q.UpdateScriptStatus(ctx, itemID, "pending_retry", 0, errorMsg, &nextRetry, &now); updateErr != nil {
 				slog.ErrorContext(ctx, "Failed to track script failure", "error", updateErr)
 			}
 		}
@@ -688,9 +778,8 @@ func (p *Postie) ExecutePostUploadScript(ctx context.Context, nzbPath string, so
 		return fmt.Errorf("post upload script failed: %w", err)
 	}
 
-	// Mark script as completed in database if queue is available
-	if p.queue != nil {
-		if updateErr := p.queue.MarkScriptCompleted(ctx, itemID); updateErr != nil {
+	if q != nil {
+		if updateErr := q.MarkScriptCompleted(ctx, itemID); updateErr != nil {
 			slog.ErrorContext(ctx, "Failed to mark script as completed", "error", updateErr)
 		}
 	}

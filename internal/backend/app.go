@@ -555,6 +555,39 @@ func (a *App) GetProcessorStatus() ProcessorStatus {
 	return status
 }
 
+// TransferRuntimeMetrics is the backend-facing view of process-wide upload/PAR2
+// scheduler metrics for the diagnostics dashboard.
+type TransferRuntimeMetrics struct {
+	UploadActiveWorkers int64 `json:"uploadActiveWorkers"`
+	UploadQueuedWorkers int64 `json:"uploadQueuedWorkers"`
+	UploadWorkerCount   int64 `json:"uploadWorkerCount"`
+	UploadReservedBytes int64 `json:"uploadReservedBytes"`
+	UploadBudgetBytes   int64 `json:"uploadBudgetBytes"`
+	Par2ActiveJobs      int64 `json:"par2ActiveJobs"`
+	Par2QueuedJobs      int64 `json:"par2QueuedJobs"`
+	Par2Capacity        int   `json:"par2Capacity"`
+}
+
+// GetTransferRuntimeMetrics returns process-wide upload/PAR2 scheduler metrics
+// (active/queued upload workers, reserved/configured buffer bytes, active/queued
+// PAR2 jobs) for the diagnostics dashboard. Zero value when no processor.
+func (a *App) GetTransferRuntimeMetrics() TransferRuntimeMetrics {
+	if a.processor == nil {
+		return TransferRuntimeMetrics{}
+	}
+	m := a.processor.TransferRuntimeMetrics()
+	return TransferRuntimeMetrics{
+		UploadActiveWorkers: m.UploadActiveWorkers,
+		UploadQueuedWorkers: m.UploadQueuedWorkers,
+		UploadWorkerCount:   m.UploadWorkerCount,
+		UploadReservedBytes: m.UploadReservedBytes,
+		UploadBudgetBytes:   m.UploadBudgetBytes,
+		Par2ActiveJobs:      m.Par2ActiveJobs,
+		Par2QueuedJobs:      m.Par2QueuedJobs,
+		Par2Capacity:        m.Par2Capacity,
+	}
+}
+
 // GetRunningJobs returns currently running jobs from the processor
 func (a *App) GetRunningJobs() ([]processor.RunningJobItem, error) {
 	if a.processor == nil {
