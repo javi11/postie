@@ -129,8 +129,22 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
-          install: mingw-w64-x86_64-gcc
+          install: ''
           update: false
+
+      # Pin the MinGW GCC toolchain. MSYS2 is a rolling repo; GCC 16 dropped the
+      # emulated-TLS std::call_once symbols the prebuilt par2go
+      # libparpar_gf16_windows_amd64.a references, breaking the cgo link. Keep in
+      # sync with par2go's build-libs.yml.
+      - name: Pin MinGW GCC toolchain (Windows)
+        if: matrix.goos == 'windows'
+        shell: msys2 {0}
+        run: |
+          GCC_VER=15.2.0-14
+          pacman -U --noconfirm \
+            https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-gcc-${GCC_VER}-any.pkg.tar.zst \
+            https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-gcc-libs-${GCC_VER}-any.pkg.tar.zst
+          gcc --version
 
       # Install Zig for cross-compilation (Linux ARM64)
       - name: Install Zig
@@ -397,9 +411,22 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
-          install: mingw-w64-x86_64-gcc
+          install: ''
           update: false
           path-type: inherit
+
+      # Pin the MinGW GCC toolchain. MSYS2 is a rolling repo; GCC 16 dropped the
+      # emulated-TLS std::call_once symbols the prebuilt par2go
+      # libparpar_gf16_windows_amd64.a references, breaking the cgo link. Keep in
+      # sync with par2go's build-libs.yml.
+      - name: Pin MinGW GCC toolchain
+        shell: msys2 {0}
+        run: |
+          GCC_VER=15.2.0-14
+          pacman -U --noconfirm \
+            https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-gcc-${GCC_VER}-any.pkg.tar.zst \
+            https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-gcc-libs-${GCC_VER}-any.pkg.tar.zst
+          gcc --version
 
       # Install Wails (version from wails.json)
       - name: Install Wails
