@@ -2,9 +2,7 @@ name: Dev Build
 
 on:
   push:
-    # TEMP: fix/ci-windows-cli-static-link added to verify the CLI static-link
-    # fix before merge — remove before merging.
-    branches: [main, fix/ci-windows-cli-static-link]
+    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
