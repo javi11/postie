@@ -212,8 +212,10 @@ func (w *Watcher) scanDirectory(ctx context.Context) error {
 			return nil
 		}
 
-		// Add file to queue - no need for duplicate checking since we already checked above
-		err = w.queue.AddFile(ctx, path, info.Size())
+		// Add file to queue with this watcher's root so the processor derives the
+		// relative output path from the correct watch folder (issue #168: only the
+		// first configured watcher's root was known to the processor).
+		err = w.queue.AddFileWithOptions(ctx, path, info.Size(), queue.AddOptions{InputFolder: w.watchFolder})
 
 		if err != nil {
 			slog.ErrorContext(ctx, "Error adding file to queue", "path", path, "error", err)
@@ -354,7 +356,7 @@ func (w *Watcher) scanDirectoryGroupByFolder(ctx context.Context) error {
 
 		// Add the folder to the queue with a special marker to indicate it's a folder
 		// folderQueuePath was already computed above with "FOLDER:" + folderPath prefix
-		err = w.queue.AddFile(ctx, folderQueuePath, folderSize)
+		err = w.queue.AddFileWithOptions(ctx, folderQueuePath, folderSize, queue.AddOptions{InputFolder: w.watchFolder})
 		if err != nil {
 			slog.ErrorContext(ctx, "Error adding folder to queue", "folder", folderPath, "error", err)
 			continue
@@ -388,7 +390,7 @@ func (w *Watcher) scanDirectoryGroupByFolder(ctx context.Context) error {
 			continue
 		}
 
-		if err := w.queue.AddFile(ctx, path, size); err != nil {
+		if err := w.queue.AddFileWithOptions(ctx, path, size, queue.AddOptions{InputFolder: w.watchFolder}); err != nil {
 			slog.ErrorContext(ctx, "Error adding file to queue", "path", path, "error", err)
 			continue
 		}
