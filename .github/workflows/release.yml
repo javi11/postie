@@ -95,8 +95,8 @@ jobs:
             cc: ''
           - goos: linux
             goarch: arm64
-            runner: ubuntu-latest
-            cc: 'zig cc -target aarch64-linux-musl'
+            runner: ubuntu-24.04-arm
+            cc: ''
           # macOS builds
           - goos: darwin
             goarch: amd64
@@ -147,13 +147,6 @@ jobs:
             https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-gcc-libs-${GCC_VER}-any.pkg.tar.zst
           gcc --version
 
-      # Install Zig for cross-compilation (Linux ARM64)
-      - name: Install Zig
-        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
-        uses: mlugg/setup-zig@v2
-        with:
-          version: 0.15.1
-
       # Extract version info
       - name: Extract version info
         id: version
@@ -180,7 +173,7 @@ jobs:
             -tags=cli \
             -ldflags="-s -w -X 'main.Version=${{ steps.version.outputs.version }}' -X 'main.GitCommit=${{ steps.version.outputs.commit }}' -X 'main.Timestamp=${{ steps.version.outputs.timestamp }}'" \
             -o "postie-cli-${{ matrix.goos }}-${{ matrix.goarch }}" \
-            ./cmd/postie/postie.go
+            ./cmd/postie
 
       # Build inside the MSYS2 shell so the pinned MSYS2 GCC (not the runner's
       # pre-installed MinGW) does the cgo link — its static libs make
@@ -200,7 +193,7 @@ jobs:
             -tags=cli \
             -ldflags="-s -w -linkmode external -extldflags '-static' -X 'main.Version=${{ steps.version.outputs.version }}' -X 'main.GitCommit=${{ steps.version.outputs.commit }}' -X 'main.Timestamp=${{ steps.version.outputs.timestamp }}'" \
             -o "postie-cli-${{ matrix.goos }}-${{ matrix.goarch }}.exe" \
-            ./cmd/postie/postie.go
+            ./cmd/postie
 
       # Catch static-linking regressions in CI instead of at user launch time
       - name: Verify no MinGW runtime DLL dependencies
@@ -386,7 +379,7 @@ jobs:
             -a \
             -ldflags '-linkmode external -extldflags "-static" -s -w -X "main.Version=${{ steps.version.outputs.version }}" -X "main.GitCommit=${{ steps.version.outputs.commit }}" -X "main.Timestamp=${{ steps.version.outputs.timestamp }}"' \
             -o build/postie-web-linux-amd64 \
-            cmd/web/main.go
+            ./cmd/web
         env:
           CC: gcc
 
