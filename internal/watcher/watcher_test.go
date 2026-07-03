@@ -1,6 +1,7 @@
 package watcher
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -26,6 +27,7 @@ func (m *mockProcessor) IsPathBeingProcessed(path string) bool {
 // It implements the queue.QueueInterface
 type mockQueueWithDuplicateCheck struct {
 	addFileCalls []string
+	addFileOpts  map[string]queue.AddOptions
 	mu           sync.Mutex
 }
 
@@ -65,7 +67,16 @@ func (m *mockQueueWithDuplicateCheck) SetQueueItemPriorityWithReorder(ctx contex
 }
 
 func (m *mockQueueWithDuplicateCheck) AddFileWithOptions(ctx context.Context, path string, size int64, opts queue.AddOptions) error {
-	return m.AddFile(ctx, path, size)
+	if err := m.AddFile(ctx, path, size); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.addFileOpts == nil {
+		m.addFileOpts = make(map[string]queue.AddOptions)
+	}
+	m.addFileOpts[path] = opts
+	return nil
 }
 
 func (m *mockQueueWithDuplicateCheck) PendingTotalSize(ctx context.Context) (int64, error) {
@@ -101,6 +112,8 @@ func (m *mockQueueWithDuplicateCheck) EnsureMigrationCompatibility() error {
 }
 
 func (m *mockQueueWithDuplicateCheck) IsPathInQueue(path string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	// Check if this path has already been added to our mock queue
 	if slices.Contains(m.addFileCalls, path) {
 		return true, nil
@@ -1026,4 +1039,94 @@ func TestGroupByFolder_MixedRootAndSubdir(t *testing.T) {
 	if !hasFolder {
 		t.Errorf("Expected folder entry %s in calls %v", expectedFolderEntry, mockQueue.addFileCalls)
 	}
+}
+
+// TestScan_JobsCarryWatcherInputFolder verifies that every enqueued job carries
+// this watcher's own root as InputFolder, so the processor derives relative
+// output paths from the correct watch folder even when multiple watchers are
+// configured (issue #168: only the first watcher's root was known globally).
+func TestScan_JobsCarryWatcherInputFolder(t *testing.T) {
+	t.Run("traditional mode", func(t *testing.T) {
+		watcher, tempDir := createTestWatcher(t)
+
+		// Large enough that two files exceed the watcher's SizeThreshold (100).
+		content := bytes.Repeat([]byte("x"), 128)
+		modTime := time.Now().Add(-10 * time.Second)
+
+		movieDir := filepath.Join(tempDir, "Movie_A")
+		if err := os.MkdirAll(movieDir, 0755); err != nil {
+			t.Fatalf("Failed to create Movie_A dir: %v", err)
+		}
+		filePath := createTestFile(t, movieDir, "movie.rar", content, modTime)
+		createTestFile(t, movieDir, "movie2.rar", content, modTime)
+
+		mockQueue := &mockQueueWithDuplicateCheck{
+			addFileCalls: make([]string, 0),
+		}
+		watcher.queue = mockQueue
+
+		ctx := context.Background()
+		// First scan populates the file-size stability cache; second scan enqueues.
+		if err := watcher.scanDirectory(ctx); err != nil {
+			t.Fatalf("First scan failed: %v", err)
+		}
+		if err := watcher.scanDirectory(ctx); err != nil {
+			t.Fatalf("Second scan failed: %v", err)
+		}
+
+		if len(mockQueue.addFileCalls) == 0 {
+			t.Fatal("Expected files to be enqueued")
+		}
+		opts, ok := mockQueue.addFileOpts[filePath]
+		if !ok {
+			t.Fatalf("Expected %s to be enqueued via AddFileWithOptions, calls: %v", filePath, mockQueue.addFileCalls)
+		}
+		if opts.InputFolder != tempDir {
+			t.Errorf("Expected InputFolder %s, got %q", tempDir, opts.InputFolder)
+		}
+	})
+
+	t.Run("single nzb per folder mode", func(t *testing.T) {
+		watcher, tempDir := createTestWatcher(t)
+
+		content := []byte("test content for input folder check!!")
+		modTime := time.Now().Add(-10 * time.Second)
+
+		movieDir := filepath.Join(tempDir, "Movie_A")
+		if err := os.MkdirAll(movieDir, 0755); err != nil {
+			t.Fatalf("Failed to create Movie_A dir: %v", err)
+		}
+		createTestFile(t, movieDir, "movie.rar", content, modTime)
+		rootFile := createTestFile(t, tempDir, "loose.rar", content, modTime)
+
+		mockQueue := &mockQueueWithDuplicateCheck{
+			addFileCalls: make([]string, 0),
+		}
+		watcher.queue = mockQueue
+
+		ctx := context.Background()
+		if err := watcher.scanDirectoryGroupByFolder(ctx); err != nil {
+			t.Fatalf("First scan failed: %v", err)
+		}
+		if err := watcher.scanDirectoryGroupByFolder(ctx); err != nil {
+			t.Fatalf("Second scan failed: %v", err)
+		}
+
+		folderQueuePath := "FOLDER:" + movieDir
+		opts, ok := mockQueue.addFileOpts[folderQueuePath]
+		if !ok {
+			t.Fatalf("Expected folder job %s to be enqueued via AddFileWithOptions, calls: %v", folderQueuePath, mockQueue.addFileCalls)
+		}
+		if opts.InputFolder != tempDir {
+			t.Errorf("Expected folder job InputFolder %s, got %q", tempDir, opts.InputFolder)
+		}
+
+		opts, ok = mockQueue.addFileOpts[rootFile]
+		if !ok {
+			t.Fatalf("Expected root file %s to be enqueued via AddFileWithOptions, calls: %v", rootFile, mockQueue.addFileCalls)
+		}
+		if opts.InputFolder != tempDir {
+			t.Errorf("Expected root file InputFolder %s, got %q", tempDir, opts.InputFolder)
+		}
+	})
 }
