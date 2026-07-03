@@ -193,6 +193,13 @@ jobs:
             -o "postie-cli-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}" \
             ./cmd/postie/postie.go
 
+      # Catch static-linking regressions in CI instead of at user launch time
+      - name: Verify no MinGW runtime DLL dependencies
+        if: matrix.goos == 'windows'
+        uses: ./.github/actions/verify-windows-gui-dlls
+        with:
+          exe-glob: postie-cli-${{ matrix.goos }}-${{ matrix.goarch }}.exe
+
       # Create archive
       - name: Create archive
         run: |
