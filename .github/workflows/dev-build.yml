@@ -154,6 +154,7 @@ jobs:
           msystem: MINGW64
           install: ''
           update: false
+          path-type: inherit
 
       # Pin the MinGW GCC toolchain (see build-gui-windows for rationale).
       - name: Pin MinGW GCC toolchain
@@ -171,13 +172,17 @@ jobs:
           COMMIT=$(git rev-parse --short HEAD)
           echo "version=dev-$COMMIT" >> $GITHUB_OUTPUT
 
+      # Build inside the MSYS2 shell so the pinned MSYS2 GCC (not the runner's
+      # pre-installed MinGW) does the cgo link — its static libs make
+      # -extldflags '-static' fully effective (same recipe as build-gui-windows).
       - name: Build Windows CLI
+        shell: msys2 {0}
         env:
           GOOS: windows
           GOARCH: amd64
           CGO_ENABLED: 1
           CC: gcc
-          CGO_LDFLAGS: '-static-libgcc -static-libstdc++ -Wl,-Bstatic -lpthread -Wl,-Bdynamic'
+          CGO_LDFLAGS: '-static-libgcc -static-libstdc++'
         run: |
           go build \
             -trimpath \
