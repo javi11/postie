@@ -65,6 +65,20 @@ func (mr *MockNNTPClientMockRecorder) Stat(ctx, messageID any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stat", reflect.TypeOf((*MockNNTPClient)(nil).Stat), ctx, messageID)
 }
 
+// StatMany mocks base method.
+func (m *MockNNTPClient) StatMany(ctx context.Context, messageIDs []string, opts nntppool.StatManyOptions) <-chan nntppool.StatManyResult {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StatMany", ctx, messageIDs, opts)
+	ret0, _ := ret[0].(<-chan nntppool.StatManyResult)
+	return ret0
+}
+
+// StatMany indicates an expected call of StatMany.
+func (mr *MockNNTPClientMockRecorder) StatMany(ctx, messageIDs, opts any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StatMany", reflect.TypeOf((*MockNNTPClient)(nil).StatMany), ctx, messageIDs, opts)
+}
+
 // Stats mocks base method.
 func (m *MockNNTPClient) Stats() nntppool.ClientStats {
 	m.ctrl.T.Helper()

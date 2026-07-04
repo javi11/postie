@@ -244,6 +244,8 @@
 			"deferred_check_interval_description": "How often the background worker checks for articles needing verification",
 			"deferred_batch_size": "Deferred Batch Size",
 			"deferred_batch_size_description": "Number of articles processed per deferred check cycle. Increase for large uploads.",
+			"stat_batch_size": "Stat Batch Size",
+			"stat_batch_size_description": "Number of segments checked per batched STAT request. Default 100.",
 			"max_concurrent_checks": "Max Concurrent Checks",
 			"max_concurrent_checks_description": "Maximum number of STAT verification checks running at once across the whole process. 0 = auto (dedicated verification pool capped at 16, or shared upload pool capped at 2).",
 			"info_title": "Post Check:",

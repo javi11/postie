@@ -190,6 +190,13 @@
 			"total_errors": "Total Errors",
 			"no_providers": "No providers configured",
 			"inflight": "Inflight",
+			"current_speed": "Current Speed",
+			"ttfb": "TTFB",
+			"downloaded": "Downloaded",
+			"free_slots": "free",
+			"quota": "Quota",
+			"quota_exceeded": "Exceeded",
+			"quota_resets": "Resets",
 			"status": {
 				"connected": "Connected",
 				"idle": "Idle",

@@ -147,7 +147,7 @@ function formatNumber(num: number): string {
 		</div>
 	{:else if metrics}
 		<!-- Overview Stats -->
-		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
 			<!-- Active Connections -->
 			<div class="stat bg-base-100 rounded-lg shadow-sm">
 				<div class="stat-figure text-primary">
@@ -164,6 +164,15 @@ function formatNumber(num: number): string {
 				</div>
 				<div class="stat-title">{$t('metrics.avg_speed')}</div>
 				<div class="stat-value text-success text-2xl">{formatSpeed(metrics.avgSpeed)}</div>
+			</div>
+
+			<!-- Total Downloaded -->
+			<div class="stat bg-base-100 rounded-lg shadow-sm">
+				<div class="stat-figure text-secondary">
+					<Upload class="w-8 h-8" />
+				</div>
+				<div class="stat-title">{$t('metrics.downloaded')}</div>
+				<div class="stat-value text-secondary text-2xl">{formatBytes(metrics.bytesConsumed)}</div>
 			</div>
 
 			<!-- Elapsed -->
@@ -199,10 +208,15 @@ function formatNumber(num: number): string {
 							<tr>
 								<th>{$t('metrics.server_host')}</th>
 								<th>{$t('metrics.connections')}</th>
+								<th>{$t('metrics.free_slots')}</th>
+								<th>{$t('metrics.current_speed')}</th>
 								<th>{$t('metrics.avg_speed')}</th>
+								<th>{$t('metrics.downloaded')}</th>
 								<th>{$t('metrics.missing')}</th>
+								<th>{$t('metrics.ttfb')}</th>
 								<th>{$t('metrics.ping_rtt')}</th>
 								<th>{$t('metrics.errors')}</th>
+								<th>{$t('metrics.quota')}</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -217,13 +231,33 @@ function formatNumber(num: number): string {
 										</div>
 									</td>
 									<td>
+										<div class="text-sm">
+											{formatNumber(provider.availableSlots)}
+										</div>
+									</td>
+									<td>
+										<div class="text-sm text-success">
+											{provider.speedEwma > 0 ? formatSpeed(provider.speedEwma) : "—"}
+										</div>
+									</td>
+									<td>
 										<div class="text-sm text-success">
 											{formatSpeed(provider.avgSpeed)}
 										</div>
 									</td>
 									<td>
 										<div class="text-sm">
+											{provider.bytesConsumed > 0 ? formatBytes(provider.bytesConsumed) : "—"}
+										</div>
+									</td>
+									<td>
+										<div class="text-sm">
 											{formatNumber(provider.missing)}
+										</div>
+									</td>
+									<td>
+										<div class="text-sm">
+											{provider.ttfb || "—"}
 										</div>
 									</td>
 									<td>
@@ -235,6 +269,18 @@ function formatNumber(num: number): string {
 										<div class="text-sm font-mono {provider.totalErrors > 0 ? 'text-error' : 'text-success'}">
 											{formatNumber(provider.totalErrors)}
 										</div>
+									</td>
+									<td>
+										{#if provider.quotaBytes > 0}
+											<div class="text-sm {provider.quotaExceeded ? 'text-error' : ''}">
+												{formatBytes(provider.quotaUsed)} / {formatBytes(provider.quotaBytes)}
+												{#if provider.quotaExceeded}
+													<span class="badge badge-error badge-xs ml-1">{$t('metrics.quota_exceeded')}</span>
+												{/if}
+											</div>
+										{:else}
+											<div class="text-sm">—</div>
+										{/if}
 									</td>
 								</tr>
 							{/each}

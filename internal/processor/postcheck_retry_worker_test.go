@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/javi11/nntppool/v4"
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/mocks"
 	"github.com/javi11/postie/internal/queue"
@@ -123,7 +124,7 @@ func TestProcessRetries(t *testing.T) {
 		articles := makeArticles(2, 0)
 		q := &fakeQueue{articles: articles, countPend: 1}
 		mockPool := mocks.NewMockNNTPClient(ctrl)
-		mockPool.EXPECT().Stat(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+		mockPool.EXPECT().StatMany(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(statManyStub(nil)).AnyTimes()
 		w := newWorker(context.Background(), q, mockPool, 3, 5)
 
 		got := w.processRetries()
@@ -139,7 +140,7 @@ func TestProcessRetries(t *testing.T) {
 		articles := makeArticles(2, 0)
 		q := &fakeQueue{articles: articles, countTotal: 2, countPend: 0}
 		mockPool := mocks.NewMockNNTPClient(ctrl)
-		mockPool.EXPECT().Stat(gomock.Any(), gomock.Any()).Return(nil, nil).Times(2)
+		mockPool.EXPECT().StatMany(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(statManyStub(nil)).Times(1)
 		w := newWorker(context.Background(), q, mockPool, 2, 5)
 
 		got := w.processRetries()
@@ -155,7 +156,7 @@ func TestProcessRetries(t *testing.T) {
 		articles := makeArticles(1, 0)
 		q := &fakeQueue{articles: articles, countTotal: 1, countPend: 0}
 		mockPool := mocks.NewMockNNTPClient(ctrl)
-		mockPool.EXPECT().Stat(gomock.Any(), articles[0].MessageID).Return(nil, nil).Times(1)
+		mockPool.EXPECT().StatMany(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(statManyStub(nil)).Times(1)
 		w := newWorker(context.Background(), q, mockPool, 10, 5)
 
 		w.processRetries()
@@ -175,7 +176,7 @@ func TestProcessRetries(t *testing.T) {
 		articles := makeArticles(1, 0) // retryCount=0, maxRetries=3 → newRetryCount=1 < 3
 		q := &fakeQueue{articles: articles, countTotal: 1, countPend: 1}
 		mockPool := mocks.NewMockNNTPClient(ctrl)
-		mockPool.EXPECT().Stat(gomock.Any(), articles[0].MessageID).Return(nil, errors.New("not found")).Times(1)
+		mockPool.EXPECT().StatMany(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(statManyStub(map[string]error{articles[0].MessageID: errors.New("not found")})).Times(1)
 		w := newWorker(context.Background(), q, mockPool, 10, 3)
 
 		w.processRetries()
@@ -196,7 +197,7 @@ func TestProcessRetries(t *testing.T) {
 		articles := makeArticles(1, 2)
 		q := &fakeQueue{articles: articles, countTotal: 1, countPend: 0, countFailed: 1}
 		mockPool := mocks.NewMockNNTPClient(ctrl)
-		mockPool.EXPECT().Stat(gomock.Any(), articles[0].MessageID).Return(nil, errors.New("not found")).Times(1)
+		mockPool.EXPECT().StatMany(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(statManyStub(map[string]error{articles[0].MessageID: errors.New("not found")})).Times(1)
 		w := newWorker(context.Background(), q, mockPool, 10, 3)
 
 		w.processRetries()
@@ -220,8 +221,8 @@ func TestProcessRetries(t *testing.T) {
 		q := &fakeQueue{articles: articles}
 		mockPool := mocks.NewMockNNTPClient(ctrl)
 		// With cancelled ctx, the worker should detect ctx.Err() before processing articles
-		// Stat may or may not be called depending on timing, so allow any calls
-		mockPool.EXPECT().Stat(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+		// StatMany may or may not be called depending on timing, so allow any calls
+		mockPool.EXPECT().StatMany(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(statManyStub(nil)).AnyTimes()
 		w := newWorker(ctx, q, mockPool, 2, 5)
 
 		got := w.processRetries()
@@ -251,7 +252,7 @@ func TestProcessRetries(t *testing.T) {
 		articles := makeArticles(1, 0)
 		q := &fakeQueue{articles: articles, countTotal: 1, countPend: 0, countFailed: 0}
 		mockPool := mocks.NewMockNNTPClient(ctrl)
-		mockPool.EXPECT().Stat(gomock.Any(), articles[0].MessageID).Return(nil, nil).Times(1)
+		mockPool.EXPECT().StatMany(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(statManyStub(nil)).Times(1)
 
 		called := false
 		enabled := makeEnabled(true)
@@ -283,7 +284,7 @@ func TestProcessRetries(t *testing.T) {
 		articles := makeArticles(1, 4)
 		q := &fakeQueue{articles: articles, countTotal: 1, countPend: 0, countFailed: 1}
 		mockPool := mocks.NewMockNNTPClient(ctrl)
-		mockPool.EXPECT().Stat(gomock.Any(), articles[0].MessageID).Return(nil, errors.New("not found")).Times(1)
+		mockPool.EXPECT().StatMany(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(statManyStub(map[string]error{articles[0].MessageID: errors.New("not found")})).Times(1)
 
 		called := false
 		enabled := makeEnabled(true)
@@ -311,10 +312,10 @@ func TestProcessRetries(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		articles := makeArticles(1, 0) // retryCount=0, maxRetries=5 → schedules retry
+		articles := makeArticles(1, 0)                                   // retryCount=0, maxRetries=5 → schedules retry
 		q := &fakeQueue{articles: articles, countTotal: 1, countPend: 1} // still pending
 		mockPool := mocks.NewMockNNTPClient(ctrl)
-		mockPool.EXPECT().Stat(gomock.Any(), articles[0].MessageID).Return(nil, errors.New("not found")).Times(1)
+		mockPool.EXPECT().StatMany(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(statManyStub(map[string]error{articles[0].MessageID: errors.New("not found")})).Times(1)
 
 		called := false
 		w := newWorker(context.Background(), q, mockPool, 10, 5)
@@ -343,7 +344,7 @@ func TestProcessRetries(t *testing.T) {
 			statusErr:   errors.New("db error"),
 		}
 		mockPool := mocks.NewMockNNTPClient(ctrl)
-		mockPool.EXPECT().Stat(gomock.Any(), articles[0].MessageID).Return(nil, nil).Times(1)
+		mockPool.EXPECT().StatMany(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(statManyStub(nil)).Times(1)
 
 		called := false
 		w := newWorker(context.Background(), q, mockPool, 10, 5)
@@ -363,7 +364,7 @@ func TestProcessRetries(t *testing.T) {
 		articles := makeArticles(1, 0)
 		q := &fakeQueue{articles: articles, countTotal: 1, countPend: 0}
 		mockPool := mocks.NewMockNNTPClient(ctrl)
-		mockPool.EXPECT().Stat(gomock.Any(), articles[0].MessageID).Return(nil, nil).Times(1)
+		mockPool.EXPECT().StatMany(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(statManyStub(nil)).Times(1)
 
 		// nil callback — should not panic
 		w := newWorker(context.Background(), q, mockPool, 10, 5)
@@ -399,4 +400,21 @@ func TestProcessRetries(t *testing.T) {
 			t.Errorf("expected no verified marks, got %v", q.verified)
 		}
 	})
+}
+
+// statManyStub builds a StatMany stub that reports each id present unless it
+// has an error in errs.
+func statManyStub(errs map[string]error) func(context.Context, []string, nntppool.StatManyOptions) <-chan nntppool.StatManyResult {
+	return func(_ context.Context, ids []string, _ nntppool.StatManyOptions) <-chan nntppool.StatManyResult {
+		out := make(chan nntppool.StatManyResult, len(ids))
+		for _, id := range ids {
+			res := nntppool.StatManyResult{MessageID: id, Result: &nntppool.StatResult{MessageID: id}}
+			if err, ok := errs[id]; ok {
+				res = nntppool.StatManyResult{MessageID: id, Err: err}
+			}
+			out <- res
+		}
+		close(out)
+		return out
+	}
 }

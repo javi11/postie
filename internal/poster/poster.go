@@ -1113,34 +1113,28 @@ func (p *poster) addRecoveredPost(ctx context.Context, filePath string, file *os
 	}
 }
 
-// filterMissing STATs each article (bounded concurrency) and returns those that
-// are NOT already present on the server, preserving order. On a STAT error the
-// article is treated as missing (re-posting an already-present article is
-// idempotent). If no verify pool is available, all articles are returned.
+// filterMissing STATs the articles in batches and returns those that are NOT
+// already present on the server, preserving order. On a STAT error the article
+// is treated as missing (re-posting an already-present article is idempotent).
+// If no verify pool is available, all articles are returned.
 func (p *poster) filterMissing(ctx context.Context, articles []*article.Article) []*article.Article {
 	if p.verifyPool == nil || len(articles) == 0 {
 		return articles
 	}
 
-	keep := make([]bool, len(articles))
-	sem := make(chan struct{}, 16)
-	var wg sync.WaitGroup
+	ids := make([]string, len(articles))
 	for i, art := range articles {
-		sem <- struct{}{}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			defer func() { <-sem }()
-			if _, err := p.verifyPool.Stat(ctx, art.MessageID); err != nil {
-				keep[i] = true // missing (or unknown) -> re-post
-			}
-		}()
+		ids[i] = art.MessageID
 	}
-	wg.Wait()
+
+	missingIDs, err := pool.StatMissing(ctx, p.verifyPool, ids, p.checkCfg.StatBatchSize)
+	if err != nil {
+		return articles // cancelled sweep: fall back to re-posting everything
+	}
 
 	missing := make([]*article.Article, 0, len(articles))
-	for i, art := range articles {
-		if keep[i] {
+	for _, art := range articles {
+		if _, ok := missingIDs[art.MessageID]; ok {
 			missing = append(missing, art)
 		}
 	}

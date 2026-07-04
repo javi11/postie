@@ -54,6 +54,12 @@
 		"provider_host": "Hôte/Serveur",
 		"status": "Statut",
 		"connections": "Connexions",
+		"current_speed": "Vitesse Actuelle",
+		"ttfb": "TTFB",
+		"downloaded": "Téléchargé",
+		"free_slots": "Emplacements Libres",
+		"quota": "Quota",
+		"quota_exceeded": "Dépassé",
 		"success_rate": "Taux de Réussite",
 		"avg_age": "Âge Moyen des Connexions",
 

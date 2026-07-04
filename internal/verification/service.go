@@ -19,17 +19,19 @@ import (
 	"errors"
 	"io"
 	"log/slog"
-	"sync"
 	"time"
 
 	"github.com/javi11/postie/internal/manifest"
 	"github.com/javi11/postie/internal/transferstore"
 )
 
-// Stater reports whether an article exists on the server. A nil error means the
-// article was found; any error means it is (still) missing.
+// Stater reports whether articles exist on the server. For Stat, a nil error
+// means the article was found; any error means it is (still) missing. For
+// StatBatch, the returned set contains the message-IDs NOT confirmed present
+// (any per-ID error counts as missing).
 type Stater interface {
 	Stat(ctx context.Context, messageID string) error
+	StatBatch(ctx context.Context, messageIDs []string) (missing map[string]struct{}, err error)
 }
 
 // Reposter re-posts a single article described by its manifest record, reusing
@@ -51,6 +53,9 @@ type Cleaner interface {
 type Config struct {
 	// MaxConcurrentChecks bounds simultaneous STAT requests. 0 = auto (16).
 	MaxConcurrentChecks int
+	// StatBatchSize is the number of message-IDs checked per StatBatch call
+	// during file verification. 0 = 100.
+	StatBatchSize int
 	// PropagationDelay is how long to wait after a (re)post before checking.
 	PropagationDelay time.Duration
 	// MaxReposts is the maximum number of times a missing article is re-posted
@@ -75,6 +80,9 @@ type Config struct {
 func (c Config) withDefaults() Config {
 	if c.MaxConcurrentChecks <= 0 {
 		c.MaxConcurrentChecks = 16
+	}
+	if c.StatBatchSize <= 0 {
+		c.StatBatchSize = 100
 	}
 	if c.PropagationDelay <= 0 {
 		c.PropagationDelay = 10 * time.Second
@@ -251,43 +259,54 @@ func (s *Service) VerifyFile(ctx context.Context, tf transferstore.TransferFile)
 	}
 	defer func() { _ = r.Close() }()
 
-	sem := make(chan struct{}, s.cfg.MaxConcurrentChecks)
-	var (
-		wg       sync.WaitGroup
-		mu       sync.Mutex
-		missing  []manifest.ArticleRecord
-		statErrs int
-	)
+	var missing []manifest.ArticleRecord
 
+	// flush STATs a chunk of records in one batched sweep and collects misses.
+	flush := func(chunk []manifest.ArticleRecord) error {
+		if len(chunk) == 0 {
+			return nil
+		}
+		ids := make([]string, len(chunk))
+		for i, rec := range chunk {
+			ids[i] = rec.MessageID
+		}
+		missingIDs, err := s.stater.StatBatch(ctx, ids)
+		if err != nil {
+			return err
+		}
+		for _, rec := range chunk {
+			if _, ok := missingIDs[rec.MessageID]; ok {
+				missing = append(missing, rec)
+			}
+		}
+		return nil
+	}
+
+	chunk := make([]manifest.ArticleRecord, 0, s.cfg.StatBatchSize)
 	for {
 		rec, err := r.Next()
 		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
-			wg.Wait()
 			return err
 		}
 
 		if err := ctx.Err(); err != nil {
-			wg.Wait()
 			return err
 		}
 
-		sem <- struct{}{}
-		wg.Add(1)
-		go func(rec manifest.ArticleRecord) {
-			defer wg.Done()
-			defer func() { <-sem }()
-			if statErr := s.stater.Stat(ctx, rec.MessageID); statErr != nil {
-				mu.Lock()
-				missing = append(missing, rec)
-				statErrs++
-				mu.Unlock()
+		chunk = append(chunk, rec)
+		if len(chunk) >= s.cfg.StatBatchSize {
+			if err := flush(chunk); err != nil {
+				return err
 			}
-		}(rec)
+			chunk = chunk[:0]
+		}
 	}
-	wg.Wait()
+	if err := flush(chunk); err != nil {
+		return err
+	}
 
 	if err := ctx.Err(); err != nil {
 		return err

@@ -81,6 +81,7 @@ type NntpPoolMetrics struct {
 	ActiveConnections int                   `json:"activeConnections"`
 	TotalErrors       int64                 `json:"totalErrors"`
 	AvgSpeed          float64               `json:"avgSpeed"`
+	BytesConsumed     int64                 `json:"bytesConsumed"`
 	Elapsed           string                `json:"elapsed"`
 	ProviderErrors    map[string]int64      `json:"providerErrors"`
 	Providers         []NntpProviderMetrics `json:"providers"`
@@ -92,11 +93,19 @@ type NntpProviderMetrics struct {
 	Host              string  `json:"host"`
 	ActiveConnections int     `json:"activeConnections"`
 	MaxConnections    int     `json:"maxConnections"`
+	AvailableSlots    int     `json:"availableSlots"`
 	TotalErrors       int64   `json:"totalErrors"`
 	AvgSpeed          float64 `json:"avgSpeed"`
+	SpeedEwma         float64 `json:"speedEwma"` // recent throughput estimate (bytes/sec), 0 = no sample
+	BytesConsumed     int64   `json:"bytesConsumed"`
 	Missing           int64   `json:"missing"`
 	PingRTT           string  `json:"pingRTT"`
+	TTFB              string  `json:"ttfb"` // recent time-to-first-byte, "" = no sample
 	Inflight          int     `json:"inflight"`
+	QuotaBytes        int64   `json:"quotaBytes"` // 0 = no quota configured
+	QuotaUsed         int64   `json:"quotaUsed"`
+	QuotaResetAt      string  `json:"quotaResetAt"` // RFC3339, "" = no period
+	QuotaExceeded     bool    `json:"quotaExceeded"`
 }
 
 // App struct for the Wails application
@@ -1169,6 +1178,7 @@ func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 		ActiveConnections: activeConnections,
 		TotalErrors:       totalErrors,
 		AvgSpeed:          stats.AvgSpeed,
+		BytesConsumed:     stats.BytesConsumed,
 		Elapsed:           stats.Elapsed.String(),
 		ProviderErrors:    providerErrors,
 	}
@@ -1198,16 +1208,32 @@ func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 	// Convert provider metrics from v4 ProviderStats
 	providers := make([]NntpProviderMetrics, 0, len(stats.Providers))
 	for _, provider := range stats.Providers {
+		ttfb := ""
+		if provider.TTFB > 0 {
+			ttfb = provider.TTFB.String()
+		}
+		quotaResetAt := ""
+		if !provider.QuotaResetAt.IsZero() {
+			quotaResetAt = provider.QuotaResetAt.Format(time.RFC3339)
+		}
 		providers = append(providers, NntpProviderMetrics{
 			Name:              nameByAddr[provider.Name],
 			Host:              provider.Name,
 			ActiveConnections: provider.ActiveConnections,
 			MaxConnections:    provider.MaxConnections,
+			AvailableSlots:    provider.AvailableSlots,
 			TotalErrors:       provider.Errors,
 			AvgSpeed:          provider.AvgSpeed,
+			SpeedEwma:         provider.SpeedEWMA,
+			BytesConsumed:     provider.BytesConsumed,
 			Missing:           provider.Missing,
 			PingRTT:           provider.Ping.RTT.String(),
+			TTFB:              ttfb,
 			Inflight:          inflightByAddr[provider.Name],
+			QuotaBytes:        provider.QuotaBytes,
+			QuotaUsed:         provider.QuotaUsed,
+			QuotaResetAt:      quotaResetAt,
+			QuotaExceeded:     provider.QuotaExceeded,
 		})
 	}
 	metrics.Providers = providers

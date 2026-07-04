@@ -25,6 +25,12 @@ func (s poolStater) Stat(ctx context.Context, messageID string) error {
 	return err
 }
 
+// StatBatch checks the ids in one batched sweep; the verification service
+// pre-chunks to its configured StatBatchSize, so the whole slice is one chunk.
+func (s poolStater) StatBatch(ctx context.Context, messageIDs []string) (map[string]struct{}, error) {
+	return pool.StatMissing(ctx, s.pool, messageIDs, len(messageIDs))
+}
+
 // newPostVerifyScriptRunner returns a transfercleaner.ScriptRunner that runs
 // the post-upload script once a transfer is verified, resolving the NZB path
 // from the completed item and the source path from the transfer's files. Returns
@@ -59,6 +65,7 @@ func newPostVerifyScriptRunner(store *transferstore.Store, cfg config.PostUpload
 func verificationConfig(pc config.PostCheck) verification.Config {
 	return verification.Config{
 		MaxConcurrentChecks: pc.MaxConcurrentChecks,
+		StatBatchSize:       pc.StatBatchSize,
 		PropagationDelay:    pc.RetryDelay.ToDuration(),
 		MaxReposts:          int(pc.MaxRePost),
 		DeferredBackoff:     pc.DeferredCheckDelay.ToDuration(),

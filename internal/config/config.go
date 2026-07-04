@@ -271,6 +271,8 @@ type PostCheck struct {
 	DeferredCheckInterval Duration `yaml:"deferred_check_interval" json:"deferred_check_interval"`
 	// Number of articles processed per deferred check cycle. Default value is 500.
 	DeferredBatchSize int `yaml:"deferred_batch_size" json:"deferred_batch_size"`
+	// Number of segments checked per batched STAT sweep. Default value is 100.
+	StatBatchSize int `yaml:"stat_batch_size" json:"stat_batch_size"`
 	// MaxConcurrentChecks caps the number of concurrent STAT verification checks
 	// across the whole process. A value of 0 enables automatic sizing: the
 	// durable verification service uses a dedicated verification pool capped at
@@ -581,6 +583,9 @@ func Load(path string) (*ConfigData, error) {
 	}
 	if cfg.PostCheck.DeferredBatchSize <= 0 {
 		cfg.PostCheck.DeferredBatchSize = 500
+	}
+	if cfg.PostCheck.StatBatchSize <= 0 {
+		cfg.PostCheck.StatBatchSize = 100
 	}
 
 	if cfg.Par2.Redundancy == "" {
@@ -1065,6 +1070,8 @@ func GetDefaultConfig() ConfigData {
 			DeferredMaxRetries:    5,
 			DeferredMaxBackoff:    Duration("1h"),
 			DeferredCheckInterval: Duration("2m"),
+			DeferredBatchSize:     500,
+			StatBatchSize:         100,
 		},
 		Par2: Par2Config{
 			Enabled:           &enabled,

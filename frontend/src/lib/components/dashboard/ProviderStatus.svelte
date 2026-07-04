@@ -122,14 +122,29 @@ onDestroy(() => {
 								</div>
 								<div class="text-xs text-base-content/60">
 									{$t("dashboard.provider.connections")}: {provider.activeConnections}/{provider.maxConnections}
+									{#if provider.availableSlots > 0}
+										({provider.availableSlots} {$t("dashboard.provider.free_slots")})
+									{/if}
 								</div>
 							</div>
 						</div>
 
-						<div class="grid grid-cols-4 gap-4 text-sm">
+						<div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+							<div>
+								<span class="text-base-content/70">{$t("dashboard.provider.current_speed")}:</span>
+								<span class="font-medium ml-1">{provider.speedEwma > 0 ? formatSpeed(provider.speedEwma) : "—"}</span>
+							</div>
 							<div>
 								<span class="text-base-content/70">{$t("dashboard.provider.avg_speed")}:</span>
 								<span class="font-medium ml-1">{provider.activeConnections > 0 ? formatSpeed(provider.avgSpeed) : "—"}</span>
+							</div>
+							<div>
+								<span class="text-base-content/70">{$t("dashboard.provider.ttfb")}:</span>
+								<span class="font-medium ml-1">{provider.ttfb || "—"}</span>
+							</div>
+							<div>
+								<span class="text-base-content/70">{$t("dashboard.provider.downloaded")}:</span>
+								<span class="font-medium ml-1">{provider.bytesConsumed > 0 ? formatBytes(provider.bytesConsumed) : "—"}</span>
 							</div>
 							<div>
 								<span class="text-base-content/70">{$t("dashboard.provider.inflight")}:</span>
@@ -144,6 +159,32 @@ onDestroy(() => {
 								<span class="font-medium ml-1 {provider.totalErrors > 0 ? 'text-error' : ''}">{provider.totalErrors.toLocaleString()}</span>
 							</div>
 						</div>
+
+						{#if provider.quotaBytes > 0}
+							<div class="mt-3 pt-3 border-t border-base-300">
+								<div class="flex justify-between items-center text-sm mb-1">
+									<span class="text-base-content/70">
+										{$t("dashboard.provider.quota")}:
+										<span class="font-medium {provider.quotaExceeded ? 'text-error' : ''}">
+											{formatBytes(provider.quotaUsed)} / {formatBytes(provider.quotaBytes)}
+										</span>
+										{#if provider.quotaExceeded}
+											<span class="badge badge-error badge-sm ml-1">{$t("dashboard.provider.quota_exceeded")}</span>
+										{/if}
+									</span>
+									{#if provider.quotaResetAt}
+										<span class="text-xs text-base-content/60">
+											{$t("dashboard.provider.quota_resets")}: {new Date(provider.quotaResetAt).toLocaleString()}
+										</span>
+									{/if}
+								</div>
+								<progress
+									class="progress w-full {provider.quotaExceeded ? 'progress-error' : 'progress-primary'}"
+									value={provider.quotaUsed}
+									max={provider.quotaBytes}
+								></progress>
+							</div>
+						{/if}
 					</div>
 				{/each}
 			</div>
@@ -153,6 +194,10 @@ onDestroy(() => {
 				<div class="flex justify-between items-center text-sm">
 					<span class="text-base-content/70">{$t("dashboard.provider.avg_speed")}:</span>
 					<span class="font-medium">{poolMetrics.activeConnections > 0 ? formatSpeed(poolMetrics.avgSpeed) : "—"}</span>
+				</div>
+				<div class="flex justify-between items-center text-sm mt-1">
+					<span class="text-base-content/70">{$t("dashboard.provider.downloaded")}:</span>
+					<span class="font-medium">{poolMetrics.bytesConsumed > 0 ? formatBytes(poolMetrics.bytesConsumed) : "—"}</span>
 				</div>
 				<div class="flex justify-between items-center text-sm mt-1">
 					<span class="text-base-content/70">{$t("dashboard.provider.elapsed")}:</span>
