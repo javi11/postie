@@ -67,6 +67,7 @@ export namespace backend {
 	    }
 	}
 	export class NntpProviderMetrics {
+	    name: string;
 	    host: string;
 	    activeConnections: number;
 	    maxConnections: number;
@@ -83,13 +84,14 @@ export namespace backend {
 	    quotaUsed: number;
 	    quotaResetAt: string;
 	    quotaExceeded: boolean;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new NntpProviderMetrics(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
 	        this.host = source["host"];
 	        this.activeConnections = source["activeConnections"];
 	        this.maxConnections = source["maxConnections"];
@@ -340,6 +342,7 @@ export namespace backend {
 	    }
 	}
 	export class ServerData {
+	    name: string;
 	    host: string;
 	    port: number;
 	    username: string;
@@ -347,13 +350,14 @@ export namespace backend {
 	    ssl: boolean;
 	    maxConnections: number;
 	    role: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new ServerData(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
 	        this.host = source["host"];
 	        this.port = source["port"];
 	        this.username = source["username"];
@@ -814,6 +818,7 @@ export namespace config {
 	    }
 	}
 	export class ServerConfig {
+	    name?: string;
 	    host: string;
 	    port: number;
 	    username: string;
@@ -835,6 +840,7 @@ export namespace config {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
 	        this.host = source["host"];
 	        this.port = source["port"];
 	        this.username = source["username"];

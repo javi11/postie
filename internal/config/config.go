@@ -213,6 +213,9 @@ type Par2Config struct {
 
 // ServerConfig represents a Usenet server configuration
 type ServerConfig struct {
+	// Name is an optional custom display label shown in place of the auto-numbered
+	// "Provider N" / "Server N" in the UI. Purely cosmetic — never sent to nntppool.
+	Name                           string `yaml:"name,omitempty" json:"name,omitempty"`
 	Host                           string `yaml:"host" json:"host"`
 	Port                           int    `yaml:"port" json:"port"`
 	Username                       string `yaml:"username" json:"username"`

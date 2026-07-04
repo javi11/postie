@@ -431,6 +431,8 @@
 			"enabled_description": "Este proveedor será utilizado para cargas",
 			"disabled_description": "Este proveedor no será utilizado para cargas",
 			"remove": "Eliminar",
+			"name": "Nombre",
+			"name_placeholder": "p. ej. Proveedor Principal",
 			"host": "Host",
 			"host_required": "Host *",
 			"host_placeholder": "news.ejemplo.com",

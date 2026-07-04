@@ -150,7 +150,8 @@ Configure one or more Usenet providers:
 
 ```yaml
 servers:
-  - host: news.example.com # Server hostname
+  - name: "" # Optional display name shown in the UI instead of "Provider N"
+    host: news.example.com # Server hostname
     port: 119 # Server port (typically 119 for non-SSL, 563 for SSL)
     username: user # Your username
     password: pass # Your password

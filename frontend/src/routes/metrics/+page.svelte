@@ -223,7 +223,7 @@ function formatNumber(num: number): string {
 							{#each metrics.providers as provider}
 								<tr>
 									<td>
-										<div class="font-semibold">{provider.host}</div>
+										<div class="font-semibold">{provider.name || provider.host}</div>
 									</td>
 									<td>
 										<div class="text-sm">

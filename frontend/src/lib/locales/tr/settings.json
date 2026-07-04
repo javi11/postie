@@ -394,6 +394,8 @@
 			"disabled_description": "Bu sağlayıcı yükleme için kullanılmayacak",
 			"valid": "Geçerli",
 			"remove": "Kaldır",
+			"name": "Ad",
+			"name_placeholder": "örn. Birincil Sağlayıcı",
 			"host": "Ana Bilgisayar",
 			"host_required": "Ana Bilgisayar *",
 			"host_placeholder": "news.example.com",
