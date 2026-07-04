@@ -40,6 +40,16 @@ func (f *fakeStater) Stat(_ context.Context, messageID string) error {
 	return nil
 }
 
+func (f *fakeStater) StatBatch(ctx context.Context, messageIDs []string) (map[string]struct{}, error) {
+	missing := make(map[string]struct{})
+	for _, id := range messageIDs {
+		if err := f.Stat(ctx, id); err != nil {
+			missing[id] = struct{}{}
+		}
+	}
+	return missing, nil
+}
+
 func (f *fakeStater) markPresent(id string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

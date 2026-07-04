@@ -239,6 +239,8 @@
 			"deferred_check_interval_description": "Con qué frecuencia el worker verifica artículos que necesitan verificación",
 			"deferred_batch_size": "Tamaño de Lote Diferido",
 			"deferred_batch_size_description": "Número de artículos procesados por ciclo de verificación diferida. Aumentar para cargas grandes.",
+			"stat_batch_size": "Tamaño de Lote de STAT",
+			"stat_batch_size_description": "Número de segmentos verificados por solicitud STAT agrupada. Por defecto 100.",
 			"max_concurrent_checks": "Comprobaciones Concurrentes Máximas",
 			"max_concurrent_checks_description": "Número máximo de comprobaciones STAT ejecutándose a la vez en todo el proceso. 0 = automático (pool de verificación dedicado limitado a 16, o pool de carga compartido limitado a 2).",
 			"info_title": "Verificación Post:",

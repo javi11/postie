@@ -37,6 +37,7 @@ type PostCheckRetryWorker struct {
 	maxBackoff      time.Duration
 	maxRetries      int
 	batchSize       int
+	statBatchSize   int
 	onStatusChanged func() // notified when a completed item's verification status is updated
 }
 
@@ -75,6 +76,11 @@ func NewPostCheckRetryWorker(
 		batchSize = 500
 	}
 
+	statBatchSize := cfg.StatBatchSize
+	if statBatchSize <= 0 {
+		statBatchSize = pool.DefaultStatBatchSize
+	}
+
 	return &PostCheckRetryWorker{
 		queue:           q,
 		checkPool:       checkPool,
@@ -86,6 +92,7 @@ func NewPostCheckRetryWorker(
 		maxBackoff:      maxBackoff,
 		maxRetries:      maxRetries,
 		batchSize:       batchSize,
+		statBatchSize:   statBatchSize,
 		onStatusChanged: onStatusChanged,
 	}
 }
@@ -153,14 +160,11 @@ func (w *PostCheckRetryWorker) processRetries() bool {
 	// Track completed items that need status updates
 	completedItems := make(map[string]bool)
 
+	// Parse groups up front so malformed rows are failed before the STAT sweep.
+	checkable := make([]queue.PendingArticleCheck, 0, len(articles))
 	for _, article := range articles {
-		if ctx.Err() != nil {
-			return false
-		}
-
 		completedItems[article.CompletedItemID] = true
 
-		// Parse groups from JSON
 		var groups []string
 		if err := json.Unmarshal([]byte(article.Groups), &groups); err != nil {
 			slog.ErrorContext(ctx, "Failed to parse groups JSON", "error", err, "articleID", article.ID)
@@ -169,11 +173,28 @@ func (w *PostCheckRetryWorker) processRetries() bool {
 			}
 			continue
 		}
+		checkable = append(checkable, article)
+	}
 
-		// Run STAT check
-		verified := w.checkArticle(ctx, article.MessageID, groups)
+	// Run batched STAT checks over all remaining articles.
+	ids := make([]string, len(checkable))
+	for i, article := range checkable {
+		ids[i] = article.MessageID
+	}
+	missing, err := pool.StatMissing(ctx, w.checkPool, ids, w.statBatchSize)
+	if err != nil {
+		slog.WarnContext(ctx, "Deferred STAT sweep interrupted", "error", err)
+		return false
+	}
 
-		if verified {
+	for _, article := range checkable {
+		if ctx.Err() != nil {
+			return false
+		}
+
+		_, isMissing := missing[article.MessageID]
+
+		if !isMissing {
 			if err := w.queue.MarkArticleVerified(ctx, article.ID); err != nil {
 				slog.ErrorContext(ctx, "Failed to mark article as verified", "error", err, "articleID", article.ID)
 			} else {
@@ -218,13 +239,6 @@ func (w *PostCheckRetryWorker) processRetries() bool {
 	}
 
 	return len(articles) == w.batchSize
-}
-
-// checkArticle verifies if an article exists on the server via STAT command
-func (w *PostCheckRetryWorker) checkArticle(ctx context.Context, messageID string, groups []string) bool {
-	// v4 Stat only takes messageID (no groups parameter)
-	_, err := w.checkPool.Stat(ctx, messageID)
-	return err == nil
 }
 
 // calculateBackoff calculates the exponential backoff delay

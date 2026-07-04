@@ -18,9 +18,9 @@ func TestFilterMissing_KeepsOnlyMissingPreservingOrder(t *testing.T) {
 
 	mockPool := mocks.NewMockNNTPClient(ctrl)
 	// m0 and m2 already present; m1 missing.
-	mockPool.EXPECT().Stat(gomock.Any(), "m0").Return(&nntppool.StatResult{}, nil).AnyTimes()
-	mockPool.EXPECT().Stat(gomock.Any(), "m1").Return(nil, errors.New("430 no such article")).AnyTimes()
-	mockPool.EXPECT().Stat(gomock.Any(), "m2").Return(&nntppool.StatResult{}, nil).AnyTimes()
+	mockPool.EXPECT().StatMany(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		statManyStub(map[string]error{"m1": errors.New("430 no such article")}),
+	).AnyTimes()
 
 	p := &poster{verifyPool: mockPool}
 	got := p.filterMissing(context.Background(), []*article.Article{
@@ -36,7 +36,9 @@ func TestFilterMissing_AllPresentReturnsEmpty(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPool := mocks.NewMockNNTPClient(ctrl)
-	mockPool.EXPECT().Stat(gomock.Any(), gomock.Any()).Return(&nntppool.StatResult{}, nil).AnyTimes()
+	mockPool.EXPECT().StatMany(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		statManyStub(nil),
+	).AnyTimes()
 
 	p := &poster{verifyPool: mockPool}
 	got := p.filterMissing(context.Background(), []*article.Article{{MessageID: "a"}, {MessageID: "b"}})
@@ -51,6 +53,23 @@ func TestFilterMissing_NoVerifyPoolRepostsAll(t *testing.T) {
 	got := p.filterMissing(context.Background(), in)
 	if len(got) != 2 {
 		t.Errorf("with no verify pool all articles should be re-posted, got %d", len(got))
+	}
+}
+
+// statManyStub builds a StatMany stub that reports each id present unless it
+// has an error in errs.
+func statManyStub(errs map[string]error) func(context.Context, []string, nntppool.StatManyOptions) <-chan nntppool.StatManyResult {
+	return func(_ context.Context, ids []string, _ nntppool.StatManyOptions) <-chan nntppool.StatManyResult {
+		out := make(chan nntppool.StatManyResult, len(ids))
+		for _, id := range ids {
+			res := nntppool.StatManyResult{MessageID: id, Result: &nntppool.StatResult{MessageID: id}}
+			if err, ok := errs[id]; ok {
+				res = nntppool.StatManyResult{MessageID: id, Err: err}
+			}
+			out <- res
+		}
+		close(out)
+		return out
 	}
 }
 

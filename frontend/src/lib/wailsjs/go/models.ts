@@ -70,11 +70,19 @@ export namespace backend {
 	    host: string;
 	    activeConnections: number;
 	    maxConnections: number;
+	    availableSlots: number;
 	    totalErrors: number;
 	    avgSpeed: number;
+	    speedEwma: number;
+	    bytesConsumed: number;
 	    missing: number;
 	    pingRTT: string;
+	    ttfb: string;
 	    inflight: number;
+	    quotaBytes: number;
+	    quotaUsed: number;
+	    quotaResetAt: string;
+	    quotaExceeded: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new NntpProviderMetrics(source);
@@ -85,11 +93,19 @@ export namespace backend {
 	        this.host = source["host"];
 	        this.activeConnections = source["activeConnections"];
 	        this.maxConnections = source["maxConnections"];
+	        this.availableSlots = source["availableSlots"];
 	        this.totalErrors = source["totalErrors"];
 	        this.avgSpeed = source["avgSpeed"];
+	        this.speedEwma = source["speedEwma"];
+	        this.bytesConsumed = source["bytesConsumed"];
 	        this.missing = source["missing"];
 	        this.pingRTT = source["pingRTT"];
+	        this.ttfb = source["ttfb"];
 	        this.inflight = source["inflight"];
+	        this.quotaBytes = source["quotaBytes"];
+	        this.quotaUsed = source["quotaUsed"];
+	        this.quotaResetAt = source["quotaResetAt"];
+	        this.quotaExceeded = source["quotaExceeded"];
 	    }
 	}
 	export class NntpPoolMetrics {
@@ -97,6 +113,7 @@ export namespace backend {
 	    activeConnections: number;
 	    totalErrors: number;
 	    avgSpeed: number;
+	    bytesConsumed: number;
 	    elapsed: string;
 	    providerErrors: Record<string, number>;
 	    providers: NntpProviderMetrics[];
@@ -111,6 +128,7 @@ export namespace backend {
 	        this.activeConnections = source["activeConnections"];
 	        this.totalErrors = source["totalErrors"];
 	        this.avgSpeed = source["avgSpeed"];
+	        this.bytesConsumed = source["bytesConsumed"];
 	        this.elapsed = source["elapsed"];
 	        this.providerErrors = source["providerErrors"];
 	        this.providers = this.convertValues(source["providers"], NntpProviderMetrics);
@@ -646,6 +664,7 @@ export namespace config {
 	    deferred_max_backoff: string;
 	    deferred_check_interval: string;
 	    deferred_batch_size: number;
+	    stat_batch_size: number;
 	    max_concurrent_checks: number;
 
 	    static createFrom(source: any = {}) {
@@ -662,6 +681,7 @@ export namespace config {
 	        this.deferred_max_backoff = source["deferred_max_backoff"];
 	        this.deferred_check_interval = source["deferred_check_interval"];
 	        this.deferred_batch_size = source["deferred_batch_size"];
+	        this.stat_batch_size = source["stat_batch_size"];
 	        this.max_concurrent_checks = source["max_concurrent_checks"];
 	    }
 	}
