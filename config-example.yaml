@@ -1,6 +1,7 @@
 # Example configuration for nzb-upload with queue settings
 servers:
-  - host: 'news.example.com'
+  - name: 'Primary Provider' # optional display name shown in the UI instead of "Provider 1"
+    host: 'news.example.com'
     port: 563
     username: 'your_username'
     password: 'your_password'

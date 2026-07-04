@@ -112,7 +112,7 @@ onDestroy(() => {
 								<StatusIcon class="w-5 h-5 {getProviderStatusClass(provider)}" />
 								<div>
 									<h3 class="font-semibold text-base-content">
-										{provider.host}
+										{provider.name || provider.host}
 									</h3>
 								</div>
 							</div>

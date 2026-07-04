@@ -32,6 +32,7 @@ let hasMultipleUploadBackbones = $derived(
 // Helper to build a ServerConfig from a plain object
 function toServerConfig(server: any, role: "upload" | "verify"): configType.ServerConfig {
 	const s = new configType.ServerConfig();
+	s.name = server.name || "";
 	s.enabled = server.enabled ?? true;
 	s.host = server.host || "";
 	s.port = server.port || 119;
@@ -53,6 +54,7 @@ let uploadManagedServers = $derived(
 	(config.servers ?? [])
 		.filter(s => s != null && (s.role || "upload") !== "verify")
 		.map(s => ({
+			name: s.name || "",
 			enabled: s.enabled ?? true,
 			host: s.host || "",
 			port: s.port || 119,
@@ -73,6 +75,7 @@ let verifyManagedServers = $derived(
 	(config.servers ?? [])
 		.filter(s => s != null && s.role === "verify")
 		.map(s => ({
+			name: s.name || "",
 			enabled: s.enabled ?? true,
 			host: s.host || "",
 			port: s.port || 119,

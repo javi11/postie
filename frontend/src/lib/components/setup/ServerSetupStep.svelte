@@ -29,6 +29,7 @@ if (servers.length === 0) {
 
 function toNntpFormat(s: backend.ServerData) {
 	return {
+		name: s.name || "",
 		host: s.host,
 		port: s.port,
 		ssl: s.ssl || false,
@@ -45,6 +46,7 @@ function toNntpFormat(s: backend.ServerData) {
 
 function toServerData(s: any, role: string): backend.ServerData {
 	const sd = new backend.ServerData();
+	sd.name = s.name || "";
 	sd.host = s.host || "";
 	sd.port = s.port || 119;
 	sd.ssl = s.ssl || false;
