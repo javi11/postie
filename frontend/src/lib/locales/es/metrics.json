@@ -40,6 +40,12 @@
 		"ping_rtt": "Ping RTT",
 		"errors": "Errores",
 		"connections": "Conexiones",
+		"current_speed": "Velocidad Actual",
+		"ttfb": "TTFB",
+		"downloaded": "Descargado",
+		"free_slots": "Ranuras Libres",
+		"quota": "Cuota",
+		"quota_exceeded": "Excedida",
 
 		"nntp_servers": "Servidores NNTP",
 		"server_host": "Host del Servidor"
