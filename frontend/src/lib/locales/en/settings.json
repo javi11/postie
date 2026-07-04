@@ -392,6 +392,8 @@
 			"disabled_description": "This provider will not be used for uploading",
 			"valid": "Valid",
 			"remove": "Remove",
+			"name": "Name",
+			"name_placeholder": "e.g. Primary Provider",
 			"host": "Host",
 			"host_required": "Host *",
 			"host_placeholder": "news.example.com",

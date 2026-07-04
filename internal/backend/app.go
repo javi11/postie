@@ -29,6 +29,7 @@ import (
 
 // ServerData represents the server configuration data from the frontend
 type ServerData struct {
+	Name           string `json:"name"`
 	Host           string `json:"host"`
 	Port           int    `json:"port"`
 	Username       string `json:"username"`
@@ -87,6 +88,7 @@ type NntpPoolMetrics struct {
 
 // NntpProviderMetrics represents metrics for individual NNTP providers
 type NntpProviderMetrics struct {
+	Name              string  `json:"name"`
 	Host              string  `json:"host"`
 	ActiveConnections int     `json:"activeConnections"`
 	MaxConnections    int     `json:"maxConnections"`
@@ -934,6 +936,7 @@ func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 			role = config.ServerRoleVerify
 		}
 		server := config.ServerConfig{
+			Name:           serverData.Name,
 			Host:           serverData.Host,
 			Port:           serverData.Port,
 			Username:       serverData.Username,
@@ -1170,22 +1173,25 @@ func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 		ProviderErrors:    providerErrors,
 	}
 
-	// Build a map from provider address to inflight config for quick lookup.
+	// Build maps from provider address to config for quick lookup.
 	// Key format matches nntppool's internal provider name: "host:port+username" or "host:port".
+	providerAddrKey := func(host string, port int, username string) string {
+		if username != "" {
+			return fmt.Sprintf("%s:%d+%s", host, port, username)
+		}
+		return fmt.Sprintf("%s:%d", host, port)
+	}
 	inflightByAddr := make(map[string]int)
+	nameByAddr := make(map[string]string)
 	if a.config != nil {
 		for _, srv := range a.config.Servers {
-			var key string
-			if srv.Username != "" {
-				key = fmt.Sprintf("%s:%d+%s", srv.Host, srv.Port, srv.Username)
-			} else {
-				key = fmt.Sprintf("%s:%d", srv.Host, srv.Port)
-			}
+			key := providerAddrKey(srv.Host, srv.Port, srv.Username)
 			inflight := srv.Inflight
 			if inflight <= 0 {
 				inflight = 10
 			}
 			inflightByAddr[key] = inflight
+			nameByAddr[key] = srv.Name
 		}
 	}
 
@@ -1193,6 +1199,7 @@ func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 	providers := make([]NntpProviderMetrics, 0, len(stats.Providers))
 	for _, provider := range stats.Providers {
 		providers = append(providers, NntpProviderMetrics{
+			Name:              nameByAddr[provider.Name],
 			Host:              provider.Name,
 			ActiveConnections: provider.ActiveConnections,
 			MaxConnections:    provider.MaxConnections,

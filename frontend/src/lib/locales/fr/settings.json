@@ -430,6 +430,8 @@
 			"enabled_description": "Ce fournisseur sera utilisé pour les téléchargements",
 			"disabled_description": "Ce fournisseur ne sera pas utilisé pour les téléchargements",
 			"remove": "Supprimer",
+			"name": "Nom",
+			"name_placeholder": "ex. Fournisseur Principal",
 			"host": "Hôte",
 			"host_required": "Hôte *",
 			"host_placeholder": "news.exemple.com",

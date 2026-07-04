@@ -364,7 +364,9 @@
             <div class="flex justify-between items-start mb-4">
               <div class="flex items-center gap-2">
                 <h4 class="font-medium text-base-content">
-                  {#if restrictedRole === "upload"}
+                  {#if server.name}
+                    {server.name}
+                  {:else if restrictedRole === "upload"}
                     {$t("settings.server.account_number", {
                       values: { number: index + 1 },
                     })}
@@ -489,7 +491,22 @@
                 </div>
               {/if}
 
-              <!-- Host / Port / SSL -->
+              <!-- Name / Host / Port / SSL -->
+              <div class="md:col-span-2">
+                <label for="name-{index}" class="label">
+                  <span class="label-text">
+                    {$t("settings.server.name")}
+                  </span>
+                </label>
+                <input
+                  id="name-{index}"
+                  class="input input-bordered w-full"
+                  bind:value={localServers[index].name}
+                  placeholder={$t("settings.server.name_placeholder")}
+                  oninput={() => onServerFieldChange(index)}
+                />
+              </div>
+
               <div>
                 <label for="host-{index}" class="label">
                   <span class="label-text">
