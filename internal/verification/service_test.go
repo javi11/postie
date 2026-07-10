@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -384,5 +385,345 @@ func TestVerifyFile_UpdatesCompletedItemStatusOnVerified(t *testing.T) {
 	}
 	if status != "verified" {
 		t.Errorf("completed item status = %q, want verified", status)
+	}
+}
+
+// insertCompletedItem creates a completed_items row in pending_verification and
+// links it to the transfer, mirroring what the processor does at job completion.
+func insertCompletedItem(t *testing.T, store *transferstore.Store, db *sql.DB, transferID, itemID string) {
+	t.Helper()
+	ctx := context.Background()
+	if err := store.SetCompletedItemForTransfer(ctx, transferID, itemID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO completed_items
+		(id, path, size, nzb_path, created_at, job_data, verification_status)
+		VALUES (?,?,?,?,?,?,?)`,
+		itemID, "/d/a", 1, "/o/a.nzb", "2026-01-01T00:00:00Z", []byte("{}"), "pending_verification"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func completedItemStatus(t *testing.T, db *sql.DB, itemID string) string {
+	t.Helper()
+	var status string
+	if err := db.QueryRowContext(context.Background(),
+		"SELECT verification_status FROM completed_items WHERE id=?", itemID).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	return status
+}
+
+func TestVerifyFile_MissingManifestFailsTerminally(t *testing.T) {
+	store, db := newTestStoreWithDB(t)
+	ctx := context.Background()
+
+	// transfer_files row pointing at a manifest that no longer exists.
+	if err := store.UpsertFile(ctx, transferstore.TransferFile{
+		TransferID:        "t",
+		FileID:            "f",
+		ManifestPath:      filepath.Join(t.TempDir(), "gone.manifest.zst"),
+		SourcePath:        "/data/x.bin",
+		FileRole:          "original",
+		ArticleCount:      3,
+		UploadState:       transferstore.StateUploaded,
+		VerificationState: transferstore.StateUploaded,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	insertCompletedItem(t, store, db, "t", "ci-1")
+
+	svc := New(store, newFakeStater(), &fakeReposter{}, Config{}, "w")
+	tf, _ := store.GetFile(ctx, "t", "f")
+	if err := svc.VerifyFile(ctx, tf); err != nil {
+		t.Fatalf("VerifyFile with missing manifest must handle terminally, got err: %v", err)
+	}
+
+	got, _ := store.GetFile(ctx, "t", "f")
+	if got.VerificationState != transferstore.StateVerificationFailed {
+		t.Errorf("state = %q, want verification_failed", got.VerificationState)
+	}
+	if status := completedItemStatus(t, db, "ci-1"); status != "verification_failed" {
+		t.Errorf("completed item status = %q, want verification_failed", status)
+	}
+}
+
+func TestVerifyFile_CorruptManifestDefersWithBackoff(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	// A manifest file that exists but is garbage (transient/unknown error path).
+	badPath := filepath.Join(t.TempDir(), "bad.manifest.zst")
+	if err := os.WriteFile(badPath, []byte("not a manifest"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpsertFile(ctx, transferstore.TransferFile{
+		TransferID:        "t",
+		FileID:            "f",
+		ManifestPath:      badPath,
+		SourcePath:        "/data/x.bin",
+		FileRole:          "original",
+		ArticleCount:      3,
+		UploadState:       transferstore.StateUploaded,
+		VerificationState: transferstore.StateUploaded,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := Config{DeferredBackoff: time.Minute, MaxDeferredChecks: 3}
+	svc := New(store, newFakeStater(), &fakeReposter{}, cfg, "w")
+	tf, _ := store.GetFile(ctx, "t", "f")
+	before := time.Now()
+	if err := svc.VerifyFile(ctx, tf); err != nil {
+		t.Fatalf("VerifyFile: %v", err)
+	}
+
+	got, _ := store.GetFile(ctx, "t", "f")
+	if got.VerificationState != transferstore.StateUploaded {
+		t.Errorf("state = %q, want uploaded (deferred)", got.VerificationState)
+	}
+	if got.CheckAttempts != 1 {
+		t.Errorf("check_attempts = %d, want 1", got.CheckAttempts)
+	}
+	if got.NextCheckAt == nil || got.NextCheckAt.Before(before.Add(30*time.Second)) {
+		t.Errorf("next_check_at = %v, want pushed out by backoff", got.NextCheckAt)
+	}
+	if got.LastError == "" {
+		t.Error("last_error must record the manifest error")
+	}
+}
+
+func TestVerifyFile_TransientErrorExhaustsToFailed(t *testing.T) {
+	store, db := newTestStoreWithDB(t)
+	ctx := context.Background()
+
+	badPath := filepath.Join(t.TempDir(), "bad.manifest.zst")
+	if err := os.WriteFile(badPath, []byte("still not a manifest"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpsertFile(ctx, transferstore.TransferFile{
+		TransferID:        "t",
+		FileID:            "f",
+		ManifestPath:      badPath,
+		SourcePath:        "/data/x.bin",
+		FileRole:          "original",
+		ArticleCount:      3,
+		UploadState:       transferstore.StateUploaded,
+		VerificationState: transferstore.StateUploaded,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	insertCompletedItem(t, store, db, "t", "ci-1")
+
+	cfg := Config{DeferredBackoff: time.Millisecond, MaxDeferredChecks: 2}
+	svc := New(store, newFakeStater(), &fakeReposter{}, cfg, "w")
+
+	for i := 0; i < 2; i++ {
+		tf, _ := store.GetFile(ctx, "t", "f")
+		if err := svc.VerifyFile(ctx, tf); err != nil {
+			t.Fatalf("VerifyFile #%d: %v", i+1, err)
+		}
+	}
+
+	got, _ := store.GetFile(ctx, "t", "f")
+	if got.VerificationState != transferstore.StateVerificationFailed {
+		t.Errorf("state = %q, want verification_failed after exhausting checks", got.VerificationState)
+	}
+	if status := completedItemStatus(t, db, "ci-1"); status != "verification_failed" {
+		t.Errorf("completed item status = %q, want verification_failed", status)
+	}
+}
+
+func TestRunOnce_DefersWhileUploadsSaturated(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	writeManifest(t, store, "t", "f", 2)
+	now := time.Now().Add(-time.Minute)
+	if err := store.MarkUploaded(ctx, "t", "f", now, now); err != nil {
+		t.Fatal(err)
+	}
+
+	busy := true
+	svc := New(store, newFakeStater(), &fakeReposter{}, Config{}, "w")
+	svc.SetBusyCheck(func() bool { return busy })
+
+	// While uploads saturate the shared pool, the sweep is skipped.
+	svc.runOnce(ctx)
+	got, _ := store.GetFile(ctx, "t", "f")
+	if got.VerificationState != transferstore.StateUploaded {
+		t.Fatalf("state = %q, want uploaded (deferred while busy)", got.VerificationState)
+	}
+
+	// Once the pool has spare capacity the file verifies normally.
+	busy = false
+	svc.runOnce(ctx)
+	got, _ = store.GetFile(ctx, "t", "f")
+	if got.VerificationState != transferstore.StateVerified {
+		t.Fatalf("state = %q, want verified after busy clears", got.VerificationState)
+	}
+}
+
+// insertBareCompletedItem creates a pending_verification completed item WITHOUT
+// linking any transfer_files (an orphan, as left behind by pre-fix crashes or
+// pre-durable upgrades).
+func insertBareCompletedItem(t *testing.T, db *sql.DB, itemID string) {
+	t.Helper()
+	if _, err := db.ExecContext(context.Background(), `INSERT INTO completed_items
+		(id, path, size, nzb_path, created_at, job_data, verification_status)
+		VALUES (?,?,?,?,?,?,?)`,
+		itemID, "/d/a", 1, "/o/a.nzb", "2026-01-01T00:00:00Z", []byte("{}"), "pending_verification"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReconcileStuck_OrphanItemMarkedVerified(t *testing.T) {
+	store, db := newTestStoreWithDB(t)
+	ctx := context.Background()
+	insertBareCompletedItem(t, db, "ci-orphan")
+
+	svc := New(store, newFakeStater(), &fakeReposter{}, Config{}, "w")
+	if err := svc.ReconcileStuck(ctx); err != nil {
+		t.Fatalf("ReconcileStuck: %v", err)
+	}
+
+	if status := completedItemStatus(t, db, "ci-orphan"); status != "verified" {
+		t.Errorf("orphan item status = %q, want verified", status)
+	}
+}
+
+func TestReconcileStuck_LegacyPendingFailureLeftAlone(t *testing.T) {
+	store, db := newTestStoreWithDB(t)
+	ctx := context.Background()
+	insertBareCompletedItem(t, db, "ci-legacy")
+
+	// Legacy STAT-only failure still being worked (transfer_id = item id).
+	if err := store.AddFailure(ctx, transferstore.VerificationFailure{
+		TransferID:    "ci-legacy",
+		FileID:        transferstore.LegacyFileID,
+		ArticleIndex:  -1,
+		MessageID:     "<legacy>",
+		NextAttemptAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := New(store, newFakeStater(), &fakeReposter{}, Config{}, "w")
+	if err := svc.ReconcileStuck(ctx); err != nil {
+		t.Fatalf("ReconcileStuck: %v", err)
+	}
+
+	if status := completedItemStatus(t, db, "ci-legacy"); status != "pending_verification" {
+		t.Errorf("item with pending legacy failure = %q, want pending_verification", status)
+	}
+}
+
+func TestReconcileStuck_LegacyFailedFailureMarksFailed(t *testing.T) {
+	store, db := newTestStoreWithDB(t)
+	ctx := context.Background()
+	insertBareCompletedItem(t, db, "ci-legacy")
+
+	if err := store.AddFailure(ctx, transferstore.VerificationFailure{
+		TransferID:    "ci-legacy",
+		FileID:        transferstore.LegacyFileID,
+		ArticleIndex:  -1,
+		MessageID:     "<legacy>",
+		State:         transferstore.FailureFailed,
+		NextAttemptAt: time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := New(store, newFakeStater(), &fakeReposter{}, Config{}, "w")
+	if err := svc.ReconcileStuck(ctx); err != nil {
+		t.Fatalf("ReconcileStuck: %v", err)
+	}
+
+	if status := completedItemStatus(t, db, "ci-legacy"); status != "verification_failed" {
+		t.Errorf("item with failed legacy failure = %q, want verification_failed", status)
+	}
+}
+
+func TestReconcileStuck_TerminalFilesFinalized(t *testing.T) {
+	store, db := newTestStoreWithDB(t)
+	ctx := context.Background()
+	writeManifest(t, store, "t", "f", 2)
+	insertCompletedItem(t, store, db, "t", "ci-1")
+
+	// The file already reached a terminal state but the item was never
+	// finalized (pre-fix bug).
+	if err := store.SetVerificationState(ctx, "t", "f", transferstore.StateVerified, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := New(store, newFakeStater(), &fakeReposter{}, Config{}, "w")
+	if err := svc.ReconcileStuck(ctx); err != nil {
+		t.Fatalf("ReconcileStuck: %v", err)
+	}
+
+	if status := completedItemStatus(t, db, "ci-1"); status != "verified" {
+		t.Errorf("item with all-verified files = %q, want verified", status)
+	}
+}
+
+func TestReconcileStuck_ActiveVerificationLeftAlone(t *testing.T) {
+	store, db := newTestStoreWithDB(t)
+	ctx := context.Background()
+	writeManifest(t, store, "t", "f", 2)
+	insertCompletedItem(t, store, db, "t", "ci-1")
+
+	now := time.Now()
+	if err := store.MarkUploaded(ctx, "t", "f", now, now); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := New(store, newFakeStater(), &fakeReposter{}, Config{}, "w")
+	if err := svc.ReconcileStuck(ctx); err != nil {
+		t.Fatalf("ReconcileStuck: %v", err)
+	}
+
+	if status := completedItemStatus(t, db, "ci-1"); status != "pending_verification" {
+		t.Errorf("item with due file = %q, want pending_verification (service will verify it)", status)
+	}
+}
+
+func TestProcessDueFailures_ExhaustedArticleFinalizesCompletedItem(t *testing.T) {
+	store, db := newTestStoreWithDB(t)
+	ctx := context.Background()
+	writeManifest(t, store, "t", "f", 2)
+	insertCompletedItem(t, store, db, "t", "ci-1")
+
+	// Mark the file uploaded so it belongs to the verification pipeline, and
+	// seed a failure that is already at the recheck stage.
+	now := time.Now()
+	if err := store.MarkUploaded(ctx, "t", "f", now, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetVerificationState(ctx, "t", "f", transferstore.StateVerifying, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AddFailure(ctx, transferstore.VerificationFailure{
+		TransferID:    "t",
+		FileID:        "f",
+		ArticleIndex:  0,
+		MessageID:     mid(0),
+		NextAttemptAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Article stays missing; no reposts allowed, single deferred check → exhausted.
+	cfg := Config{MaxReposts: 0, MaxDeferredChecks: 1, DeferredBackoff: time.Millisecond}
+	svc := New(store, newFakeStater(mid(0)), &fakeReposter{}, cfg, "w")
+
+	if _, err := svc.ProcessDueFailures(ctx, now.Add(time.Second)); err != nil {
+		t.Fatalf("ProcessDueFailures: %v", err)
+	}
+
+	got, _ := store.GetFile(ctx, "t", "f")
+	if got.VerificationState != transferstore.StateVerificationFailed {
+		t.Fatalf("file state = %q, want verification_failed", got.VerificationState)
+	}
+	if status := completedItemStatus(t, db, "ci-1"); status != "verification_failed" {
+		t.Errorf("completed item status = %q, want verification_failed (stuck pending_verification bug)", status)
 	}
 }

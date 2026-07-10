@@ -36,15 +36,33 @@ func TestComputeEngineBudget_ClampsHugeConnCapacity(t *testing.T) {
 	}
 }
 
-func TestComputeEngineBudget_ExplicitLimitBoundsWorkers(t *testing.T) {
-	// An explicit small limit must bound worker_count via floor(budget/per_article).
+func TestComputeEngineBudget_ExplicitLimitBoundsMemoryNotWorkers(t *testing.T) {
+	// An explicit small limit bounds in-flight buffer memory; worker slots stay
+	// at connection capacity (the memory semaphore throttles effective
+	// concurrency on its own).
 	per := ComputeEngineBudget(768*1024, 0, 1).PerArticleBytes
 	b := ComputeEngineBudget(768*1024, per*3, 100)
-	if b.WorkerCount != 3 {
-		t.Errorf("WorkerCount = %d, want 3 (budget = 3*per_article)", b.WorkerCount)
+	if b.WorkerCount != 100 {
+		t.Errorf("WorkerCount = %d, want 100 (connection capacity)", b.WorkerCount)
 	}
 	if b.BudgetBytes != per*3 {
 		t.Errorf("BudgetBytes = %d, want %d", b.BudgetBytes, per*3)
+	}
+}
+
+func TestComputeEngineBudget_WorkersMatchConnCapacity(t *testing.T) {
+	// Regression for issue #168 (slow uploads since v0.0.30): auto-sizing used
+	// to cap effective concurrency at ~37 articles regardless of connection
+	// capacity. Workers must equal connection capacity, and the auto budget
+	// must be large enough to keep that many articles in flight.
+	const articleSize = 750_000
+	b := ComputeEngineBudget(articleSize, 0, 100)
+	if b.WorkerCount != 100 {
+		t.Errorf("WorkerCount = %d, want 100", b.WorkerCount)
+	}
+	if b.BudgetBytes < b.PerArticleBytes*100 {
+		t.Errorf("BudgetBytes = %d, want >= %d so 100 articles fit in flight",
+			b.BudgetBytes, b.PerArticleBytes*100)
 	}
 }
 
@@ -97,9 +115,8 @@ func TestEngine_BufferBudgetIsBounded(t *testing.T) {
 }
 
 func TestEngine_WorkerSlotsAreBounded(t *testing.T) {
-	per := ComputeEngineBudget(768*1024, 0, 1).PerArticleBytes
-	// Worker count limited to 2 by the explicit budget.
-	e := NewEngine(768*1024, per*2, 100)
+	// Worker count equals connection capacity (2 here).
+	e := NewEngine(768*1024, 0, 2)
 	if e.Budget().WorkerCount != 2 {
 		t.Fatalf("WorkerCount = %d, want 2", e.Budget().WorkerCount)
 	}

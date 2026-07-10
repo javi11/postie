@@ -149,6 +149,15 @@ func NewRuntime(ctx context.Context, cfg config.Config, poolManager *pool.Manage
 				scriptCfg := cfg.GetPostUploadScriptConfig()
 				runScript := newPostVerifyScriptRunner(store, scriptCfg, scriptQueue)
 				verifyService.SetCleaner(transfercleaner.New(store, maintainPar2, runScript))
+
+				// No dedicated verify servers: STAT sweeps would steal upload
+				// connections, so defer verification while uploads saturate the
+				// engine (queued workers waiting for slots).
+				if verifyPool == uploadPool && uploadEngine != nil {
+					verifyService.SetBusyCheck(func() bool {
+						return uploadEngine.Metrics().QueuedWorkers > 0
+					})
+				}
 			}
 		}
 	}

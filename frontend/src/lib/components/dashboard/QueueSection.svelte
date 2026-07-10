@@ -102,7 +102,13 @@ onDestroy(() => {
 	document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
 
+let loadInFlight = false;
+
 async function loadQueue() {
+	// Skip the tick instead of stacking requests while a previous (slow)
+	// request is still pending.
+	if (loadInFlight) return;
+	loadInFlight = true;
 	try {
 		const result = await apiClient.getQueueItems({
 			page: currentPage,
@@ -118,6 +124,7 @@ async function loadQueue() {
 		paginatedResult = null;
 	} finally {
 		initialLoad = false;
+		loadInFlight = false;
 	}
 }
 

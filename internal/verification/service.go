@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"time"
 
@@ -120,11 +121,19 @@ type Service struct {
 	owner    string
 	now      func() time.Time
 	cleaner  Cleaner
+	busy     func() bool
 }
 
 // SetCleaner installs the post-verification cleaner invoked when a transfer
 // becomes fully verified. Optional; nil disables cleanup.
 func (s *Service) SetCleaner(c Cleaner) { s.cleaner = c }
+
+// SetBusyCheck installs a predicate consulted before each verification cycle;
+// while it returns true the sweep is deferred to the next tick. Used when the
+// verify pool is the upload pool, so background STAT sweeps do not steal
+// connections from saturated live uploads (issue #168 slowness). Optional; nil
+// never defers.
+func (s *Service) SetBusyCheck(f func() bool) { s.busy = f }
 
 // Completed-item verification statuses surfaced to the queue UI.
 const (
@@ -197,6 +206,14 @@ func New(store *transferstore.Store, stater Stater, reposter Reposter, cfg Confi
 // processes due verification failures (re-posts/rechecks). It is intended to be
 // started once as a background goroutine, owned by the processor.
 func (s *Service) Run(ctx context.Context) {
+	// One-time repair pass: finalize completed items stuck in
+	// pending_verification that the normal flow can no longer reach (crash
+	// orphans, items whose files went terminal before the finalize fix, and
+	// pre-durable legacy upgrades). See issue #168.
+	if err := s.ReconcileStuck(ctx); err != nil {
+		slog.WarnContext(ctx, "verification: startup reconciliation failed", "error", err)
+	}
+
 	ticker := time.NewTicker(s.cfg.PollInterval)
 	defer ticker.Stop()
 
@@ -215,6 +232,11 @@ func (s *Service) runOnce(ctx context.Context) {
 	now := s.now()
 	if _, err := s.store.ReclaimExpiredLeases(ctx, now); err != nil {
 		slog.WarnContext(ctx, "verification: reclaim leases failed", "error", err)
+	}
+	if s.busy != nil && s.busy() {
+		// Live uploads are saturating the shared NNTP pool; let them keep the
+		// connections and verify on a later tick.
+		return
 	}
 	if _, err := s.VerifyDueFiles(ctx, now, s.cfg.BatchSize); err != nil {
 		slog.WarnContext(ctx, "verification: verify due files failed", "error", err)
@@ -255,7 +277,14 @@ func (s *Service) VerifyDueFiles(ctx context.Context, now time.Time, limit int) 
 func (s *Service) VerifyFile(ctx context.Context, tf transferstore.TransferFile) error {
 	r, err := manifest.OpenReader(tf.ManifestPath)
 	if err != nil {
-		return err
+		if errors.Is(err, fs.ErrNotExist) {
+			// The manifest is gone (deleted, or the data dir moved). It will
+			// never come back, so fail the file terminally instead of retrying
+			// forever — otherwise the completed item stays pending_verification
+			// across restarts (issue #168).
+			return s.failFileTerminally(ctx, tf, "manifest missing: "+err.Error())
+		}
+		return s.deferFileCheck(ctx, tf, err)
 	}
 	defer func() { _ = r.Close() }()
 
@@ -289,7 +318,9 @@ func (s *Service) VerifyFile(ctx context.Context, tf transferstore.TransferFile)
 			break
 		}
 		if err != nil {
-			return err
+			// Unreadable/corrupt manifest content: back off (and eventually
+			// terminalize) rather than retry every cycle.
+			return s.deferFileCheck(ctx, tf, err)
 		}
 
 		if err := ctx.Err(); err != nil {
@@ -299,13 +330,19 @@ func (s *Service) VerifyFile(ctx context.Context, tf transferstore.TransferFile)
 		chunk = append(chunk, rec)
 		if len(chunk) >= s.cfg.StatBatchSize {
 			if err := flush(chunk); err != nil {
-				return err
+				if ctx.Err() != nil {
+					return err
+				}
+				return s.deferFileCheck(ctx, tf, err)
 			}
 			chunk = chunk[:0]
 		}
 	}
 	if err := flush(chunk); err != nil {
-		return err
+		if ctx.Err() != nil {
+			return err
+		}
+		return s.deferFileCheck(ctx, tf, err)
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -336,6 +373,40 @@ func (s *Service) VerifyFile(ctx context.Context, tf transferstore.TransferFile)
 		}
 	}
 	return s.store.SetVerificationState(ctx, tf.TransferID, tf.FileID, transferstore.StateVerifying, &next, "")
+}
+
+// failFileTerminally marks a file verification_failed with reason and
+// finalizes its transfer so the completed item leaves pending_verification.
+func (s *Service) failFileTerminally(ctx context.Context, tf transferstore.TransferFile, reason string) error {
+	slog.WarnContext(ctx, "verification: file failed terminally",
+		"transfer", tf.TransferID, "file", tf.FileID, "reason", reason)
+	if err := s.store.SetVerificationState(ctx, tf.TransferID, tf.FileID, transferstore.StateVerificationFailed, nil, reason); err != nil {
+		return err
+	}
+	s.finalizeTransfer(ctx, tf.TransferID)
+	return nil
+}
+
+// deferFileCheck reschedules a file's first verification check after a
+// transient error, with exponential backoff; once MaxDeferredChecks attempts
+// are exhausted the file is failed terminally instead of retrying forever.
+func (s *Service) deferFileCheck(ctx context.Context, tf transferstore.TransferFile, cause error) error {
+	attempts := tf.CheckAttempts + 1
+	if attempts >= s.cfg.MaxDeferredChecks {
+		return s.failFileTerminally(ctx, tf,
+			"verification check failed "+
+				"after repeated attempts: "+cause.Error())
+	}
+
+	backoff := s.cfg.DeferredBackoff << min(attempts-1, 16)
+	if backoff > s.cfg.MaxBackoff || backoff <= 0 {
+		backoff = s.cfg.MaxBackoff
+	}
+	next := s.now().Add(backoff)
+	slog.WarnContext(ctx, "verification: check deferred",
+		"transfer", tf.TransferID, "file", tf.FileID,
+		"attempt", attempts, "next_check_at", next, "error", cause)
+	return s.store.DeferFileCheck(ctx, tf.TransferID, tf.FileID, next, cause.Error())
 }
 
 // ProcessDueFailures claims a batch of due verification failures and handles
@@ -431,9 +502,91 @@ func (s *Service) statRecheck(ctx context.Context, f transferstore.VerificationF
 	_ = s.store.UpdateFailureAfterCheck(ctx, f)
 }
 
+// ReconcileStuck finalizes completed items stuck in pending_verification that
+// the normal verification flow can no longer reach:
+//
+//   - items whose linked transfer files are all terminal but were never
+//     finalized (pre-fix bug);
+//   - items with no linked transfer files at all — crash orphans and legacy
+//     (pre-durable) items — which are resolved from their remaining legacy
+//     failures, or marked verified when nothing is outstanding.
+//
+// Items with live (non-terminal) files or still-pending legacy failures are
+// left for the regular verification flow. Intended to run once at startup.
+func (s *Service) ReconcileStuck(ctx context.Context) error {
+	ids, err := s.store.ListPendingVerificationItemIDs(ctx)
+	if err != nil {
+		return err
+	}
+	repaired := 0
+	for _, id := range ids {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		files, err := s.store.ListFilesByCompletedItem(ctx, id)
+		if err != nil {
+			slog.WarnContext(ctx, "verification: reconcile list files failed", "item", id, "error", err)
+			continue
+		}
+		if len(files) > 0 {
+			// finalizeTransfer no-ops unless every file is terminal, so live
+			// transfers are untouched.
+			s.finalizeTransfer(ctx, files[0].TransferID)
+			continue
+		}
+		if s.reconcileLegacyItem(ctx, id) {
+			repaired++
+		}
+	}
+	if repaired > 0 {
+		slog.InfoContext(ctx, "verification: repaired stuck pending_verification items", "count", repaired)
+	}
+	return nil
+}
+
+// reconcileLegacyItem resolves a completed item that has no linked transfer
+// files from its legacy (STAT-only) failures: outstanding work leaves it
+// untouched; otherwise it becomes verified, or verification_failed when any
+// legacy failure exhausted its retries. Reports whether the item was updated.
+func (s *Service) reconcileLegacyItem(ctx context.Context, completedItemID string) bool {
+	outstanding := 0
+	for _, state := range []string{transferstore.FailurePending, transferstore.FailureReposted} {
+		n, err := s.store.CountFailures(ctx, completedItemID, transferstore.LegacyFileID, state)
+		if err != nil {
+			slog.WarnContext(ctx, "verification: reconcile count failed", "item", completedItemID, "error", err)
+			return false
+		}
+		outstanding += n
+	}
+	if outstanding > 0 {
+		return false // legacy checks still being worked
+	}
+
+	failed, err := s.store.CountFailures(ctx, completedItemID, transferstore.LegacyFileID, transferstore.FailureFailed)
+	if err != nil {
+		slog.WarnContext(ctx, "verification: reconcile count failed", "item", completedItemID, "error", err)
+		return false
+	}
+	status := statusVerified
+	if failed > 0 {
+		status = statusFailed
+	}
+	if err := s.store.SetCompletedItemVerificationStatus(ctx, completedItemID, status); err != nil {
+		slog.WarnContext(ctx, "verification: reconcile update item failed", "item", completedItemID, "error", err)
+		return false
+	}
+	return true
+}
+
 // reconcileFileState flips a file to verified when no pending/reposted failures
 // remain, or to verification_failed when only permanently-failed ones do.
 func (s *Service) reconcileFileState(ctx context.Context, transferID, fileID string) {
+	if fileID == transferstore.LegacyFileID {
+		// Legacy STAT-only failures have no transfer_files row; resolve the
+		// completed item (keyed by transfer_id) directly.
+		s.reconcileLegacyItem(ctx, transferID)
+		return
+	}
 	outstanding, err := s.store.CountFailures(ctx, transferID, fileID, transferstore.FailurePending)
 	if err != nil {
 		slog.WarnContext(ctx, "verification: count pending failed", "error", err)
@@ -449,6 +602,9 @@ func (s *Service) reconcileFileState(ctx context.Context, transferID, fileID str
 	}
 	if failed > 0 {
 		_ = s.store.SetVerificationState(ctx, transferID, fileID, transferstore.StateVerificationFailed, nil, "verification failed for some articles")
+		// The transfer may now be terminal: propagate the failure to the
+		// completed item, otherwise it stays pending_verification forever.
+		s.finalizeTransfer(ctx, transferID)
 		return
 	}
 	_ = s.store.SetVerificationState(ctx, transferID, fileID, transferstore.StateVerified, nil, "")
