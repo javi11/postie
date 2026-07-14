@@ -70,7 +70,8 @@
 			},
 			"verification": {
 				"pending": "Verificando",
-				"failed": "Verificación fallida"
+				"failed": "Verificación fallida",
+				"progress": "{verified} de {total} verificados"
 			},
 			"duration": "Duración",
 			"processing_time": "Tiempo de procesamiento",

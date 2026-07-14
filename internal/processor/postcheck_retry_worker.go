@@ -58,12 +58,12 @@ func NewPostCheckRetryWorker(
 
 	initialDelay := cfg.DeferredCheckDelay.ToDuration()
 	if initialDelay <= 0 {
-		initialDelay = 5 * time.Minute
+		initialDelay = 30 * time.Second
 	}
 
 	maxBackoff := cfg.DeferredMaxBackoff.ToDuration()
 	if maxBackoff <= 0 {
-		maxBackoff = 1 * time.Hour
+		maxBackoff = 5 * time.Minute
 	}
 
 	maxRetries := cfg.DeferredMaxRetries
@@ -73,7 +73,7 @@ func NewPostCheckRetryWorker(
 
 	batchSize := cfg.DeferredBatchSize
 	if batchSize <= 0 {
-		batchSize = 500
+		batchSize = 10000
 	}
 
 	statBatchSize := cfg.StatBatchSize
@@ -236,6 +236,12 @@ func (w *PostCheckRetryWorker) processRetries() bool {
 	// Update completed item verification statuses
 	for completedItemID := range completedItems {
 		w.updateCompletedItemStatus(ctx, completedItemID)
+	}
+
+	// Notify listeners once per batch so per-item verification progress
+	// advances in the UI even before items reach a final status.
+	if w.onStatusChanged != nil {
+		w.onStatusChanged()
 	}
 
 	return len(articles) == w.batchSize

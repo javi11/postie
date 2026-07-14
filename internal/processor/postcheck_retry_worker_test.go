@@ -308,7 +308,7 @@ func TestProcessRetries(t *testing.T) {
 		}
 	})
 
-	t.Run("onStatusChanged not called when articles still pending", func(t *testing.T) {
+	t.Run("onStatusChanged called once per batch while articles still pending", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -317,21 +317,23 @@ func TestProcessRetries(t *testing.T) {
 		mockPool := mocks.NewMockNNTPClient(ctrl)
 		mockPool.EXPECT().StatMany(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(statManyStub(map[string]error{articles[0].MessageID: errors.New("not found")})).Times(1)
 
-		called := false
+		calls := 0
 		w := newWorker(context.Background(), q, mockPool, 10, 5)
-		w.onStatusChanged = func() { called = true }
+		w.onStatusChanged = func() { calls++ }
 
 		w.processRetries()
 
-		if called {
-			t.Error("expected onStatusChanged NOT to be called when articles are still pending, but it was")
+		// Batch-level notification keeps per-item verification progress fresh
+		// in the UI even though no item reached a final status.
+		if calls != 1 {
+			t.Errorf("expected onStatusChanged to be called once per processed batch, got %d calls", calls)
 		}
 		if q.statusSetCount != 0 {
 			t.Errorf("expected UpdateCompletedItemVerificationStatus not to be called, got %d calls", q.statusSetCount)
 		}
 	})
 
-	t.Run("onStatusChanged not called when status update fails", func(t *testing.T) {
+	t.Run("onStatusChanged still called once per batch when status update fails", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -346,14 +348,16 @@ func TestProcessRetries(t *testing.T) {
 		mockPool := mocks.NewMockNNTPClient(ctrl)
 		mockPool.EXPECT().StatMany(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(statManyStub(nil)).Times(1)
 
-		called := false
+		calls := 0
 		w := newWorker(context.Background(), q, mockPool, 10, 5)
-		w.onStatusChanged = func() { called = true }
+		w.onStatusChanged = func() { calls++ }
 
 		w.processRetries()
 
-		if called {
-			t.Error("expected onStatusChanged NOT to be called when status update fails, but it was")
+		// The per-item notification is skipped on failure, but the batch-level
+		// notification still fires so UI progress stays fresh.
+		if calls != 1 {
+			t.Errorf("expected onStatusChanged to be called once per processed batch, got %d calls", calls)
 		}
 	})
 

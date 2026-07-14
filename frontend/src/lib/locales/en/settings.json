@@ -235,7 +235,7 @@
 			"deferred_title": "Deferred Verification",
 			"deferred_info": "When immediate verification fails after all retries, articles are queued for deferred rechecking. This accounts for Usenet propagation delays where articles may not be immediately findable.",
 			"deferred_check_delay": "Initial Recheck Delay",
-			"deferred_check_delay_description": "How long to wait before the first deferred recheck (e.g., 5m, 10m)",
+			"deferred_check_delay_description": "How long to wait before the first deferred recheck (e.g., 30s, 5m)",
 			"deferred_max_retries": "Max Deferred Retries",
 			"deferred_max_retries_description": "Maximum number of deferred recheck attempts before marking as failed",
 			"deferred_max_backoff": "Max Backoff",

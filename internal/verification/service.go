@@ -92,10 +92,10 @@ func (c Config) withDefaults() Config {
 		c.MaxReposts = 0
 	}
 	if c.DeferredBackoff <= 0 {
-		c.DeferredBackoff = 5 * time.Minute
+		c.DeferredBackoff = 30 * time.Second
 	}
 	if c.MaxBackoff <= 0 {
-		c.MaxBackoff = time.Hour
+		c.MaxBackoff = 5 * time.Minute
 	}
 	if c.MaxDeferredChecks <= 0 {
 		c.MaxDeferredChecks = 5
@@ -104,7 +104,7 @@ func (c Config) withDefaults() Config {
 		c.LeaseDuration = 5 * time.Minute
 	}
 	if c.BatchSize <= 0 {
-		c.BatchSize = 500
+		c.BatchSize = 10000
 	}
 	if c.PollInterval <= 0 {
 		c.PollInterval = 15 * time.Second
@@ -444,37 +444,13 @@ func (s *Service) ProcessDueFailures(ctx context.Context, now time.Time) (int, e
 	return len(claimed), nil
 }
 
-// handleFailure processes a single claimed failure, updating its row.
+// handleFailure processes a single claimed failure, updating its row. It
+// always STATs the article first: a miss recorded during the initial sweep is
+// usually propagation lag, not data loss, and a re-post re-uploads the article
+// body — checking first turns a would-be transfer-wide re-upload into one
+// cheap STAT round. Only articles confirmed missing since the last (re)post
+// spend a repost attempt; the rest defer with backoff until terminal.
 func (s *Service) handleFailure(ctx context.Context, f transferstore.VerificationFailure, records map[recordKey]manifest.ArticleRecord, now time.Time) {
-	if f.RepostCount < s.cfg.MaxReposts {
-		rec, ok := records[recordKey{f.TransferID, f.FileID, f.ArticleIndex}]
-		if !ok {
-			// No manifest record (e.g. legacy STAT-only failure): fall through
-			// to a STAT recheck instead.
-			s.statRecheck(ctx, f, now)
-			return
-		}
-		if err := s.reposter.Repost(ctx, rec); err != nil {
-			// Re-post failed: keep pending, short backoff, record error.
-			f.NextAttemptAt = now.Add(s.cfg.PropagationDelay)
-			f.LastError = "repost failed: " + err.Error()
-			_ = s.store.UpdateFailureAfterCheck(ctx, f)
-			return
-		}
-		// Re-posted: schedule a recheck after propagation delay.
-		f.RepostCount++
-		f.State = transferstore.FailurePending
-		f.NextAttemptAt = now.Add(s.cfg.PropagationDelay)
-		f.LastError = ""
-		_ = s.store.UpdateFailureAfterCheck(ctx, f)
-		return
-	}
-	s.statRecheck(ctx, f, now)
-}
-
-// statRecheck issues a STAT and either resolves the failure, marks it
-// permanently failed, or defers it with exponential backoff.
-func (s *Service) statRecheck(ctx context.Context, f transferstore.VerificationFailure, now time.Time) {
 	if statErr := s.stater.Stat(ctx, f.MessageID); statErr == nil {
 		f.State = transferstore.FailureResolved
 		f.LastError = ""
@@ -483,6 +459,43 @@ func (s *Service) statRecheck(ctx context.Context, f transferstore.VerificationF
 		return
 	}
 
+	// Confirmed missing: re-post while budget remains and a source exists.
+	if f.RepostCount < s.cfg.MaxReposts {
+		if rec, ok := records[recordKey{f.TransferID, f.FileID, f.ArticleIndex}]; ok {
+			if err := s.reposter.Repost(ctx, rec); err == nil {
+				// Re-posted: schedule a recheck after propagation delay.
+				f.RepostCount++
+				f.State = transferstore.FailurePending
+				f.NextAttemptAt = now.Add(s.cfg.PropagationDelay)
+				f.LastError = ""
+				_ = s.store.UpdateFailureAfterCheck(ctx, f)
+				return
+			} else if !errors.Is(err, fs.ErrNotExist) {
+				// Re-post failed: consume an attempt so persistent errors stay
+				// bounded by MaxReposts, keep pending with a short backoff.
+				f.RepostCount++
+				f.NextAttemptAt = now.Add(s.cfg.PropagationDelay)
+				f.LastError = "repost failed: " + err.Error()
+				_ = s.store.UpdateFailureAfterCheck(ctx, f)
+				return
+			} else {
+				// Source file gone (e.g. a temp PAR2 already cleaned up) —
+				// re-posting can never succeed; fall through to the bounded
+				// deferred-recheck path.
+				slog.WarnContext(ctx, "verification: repost source missing, falling back to STAT rechecks",
+					"messageID", f.MessageID, "error", err)
+			}
+		}
+		// No manifest record (e.g. legacy STAT-only failure) or unusable
+		// source: deferred rechecks below.
+	}
+
+	s.deferOrFail(ctx, f, now)
+}
+
+// deferOrFail schedules the next STAT-only recheck with exponential backoff,
+// or marks the failure permanently failed once rechecks are exhausted.
+func (s *Service) deferOrFail(ctx context.Context, f transferstore.VerificationFailure, now time.Time) {
 	f.DeferredCount++
 	if f.DeferredCount >= s.cfg.MaxDeferredChecks {
 		f.State = transferstore.FailureFailed

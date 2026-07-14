@@ -2,8 +2,10 @@ package queue
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/database"
@@ -170,6 +172,46 @@ func TestIsPathInQueueDuringReceive(t *testing.T) {
 	}
 }
 
+// TestAddManualFilePinsDeleteOriginalFalse verifies that a manual (user-initiated)
+// upload pins the per-job DeleteOriginal override to false so the original file is
+// preserved regardless of the watcher's delete_original_file policy. A plain
+// AddFile (used by the watcher path) must leave the override unset (nil) so it
+// keeps honouring the global setting.
+func TestAddManualFilePinsDeleteOriginalFalse(t *testing.T) {
+	q := newTestQueue(t)
+	ctx := context.Background()
+
+	const manualPath = "/tmp/manual.bin"
+	if err := q.AddManualFile(ctx, manualPath, 100); err != nil {
+		t.Fatalf("AddManualFile: %v", err)
+	}
+
+	_, job, err := q.ReceiveFile(ctx)
+	if err != nil || job == nil {
+		t.Fatalf("ReceiveFile: job=%v err=%v", job, err)
+	}
+	if job.DeleteOriginal == nil {
+		t.Fatal("manual upload: DeleteOriginal override is nil, want non-nil false")
+	}
+	if *job.DeleteOriginal {
+		t.Errorf("manual upload: DeleteOriginal = true, want false")
+	}
+
+	// Contrast: the plain AddFile path (watcher/automatic) leaves the override
+	// unset so the processor falls back to the global config value.
+	const autoPath = "/tmp/auto.bin"
+	if err := q.AddFile(ctx, autoPath, 100); err != nil {
+		t.Fatalf("AddFile: %v", err)
+	}
+	_, autoJob, err := q.ReceiveFile(ctx)
+	if err != nil || autoJob == nil {
+		t.Fatalf("ReceiveFile auto: job=%v err=%v", autoJob, err)
+	}
+	if autoJob.DeleteOriginal != nil {
+		t.Errorf("automatic upload: DeleteOriginal override = %v, want nil", *autoJob.DeleteOriginal)
+	}
+}
+
 func TestGetQueueStats_VerificationCounts(t *testing.T) {
 	q := newTestQueue(t)
 	ctx := context.Background()
@@ -196,5 +238,132 @@ func TestGetQueueStats_VerificationCounts(t *testing.T) {
 	}
 	if got := stats["verificationFailed"]; got != 1 {
 		t.Errorf("verificationFailed = %v, want 1", got)
+	}
+}
+
+func TestAttachVerificationProgress(t *testing.T) {
+	q := newTestQueue(t)
+	ctx := context.Background()
+
+	insertItem := func(id, status string) {
+		if _, err := q.db.ExecContext(ctx, `INSERT INTO completed_items
+			(id, path, size, nzb_path, created_at, job_data, verification_status)
+			VALUES (?,?,?,?,?,?,?)`,
+			id, "/d/"+id, 1, "/o/"+id+".nzb", "2026-01-01T00:00:00Z", []byte("{}"), status); err != nil {
+			t.Fatalf("insert %s: %v", id, err)
+		}
+	}
+	addChecks := func(itemID string, count int) {
+		checks := make([]PendingArticleCheck, count)
+		for i := range checks {
+			checks[i] = PendingArticleCheck{
+				MessageID:   fmt.Sprintf("<%s-%d@test>", itemID, i),
+				Groups:      `["alt.test"]`,
+				NextRetryAt: time.Now(),
+			}
+		}
+		if err := q.AddPendingArticleChecks(ctx, itemID, checks); err != nil {
+			t.Fatalf("AddPendingArticleChecks %s: %v", itemID, err)
+		}
+	}
+
+	insertTransferFile := func(itemID, fileID, state string, articleCount int) {
+		if _, err := q.db.ExecContext(ctx, `INSERT INTO transfer_files
+			(transfer_id, file_id, completed_item_id, manifest_path, source_path, article_count, upload_state, verification_state)
+			VALUES (?,?,?,?,?,?,?,?)`,
+			"tr-"+itemID, fileID, itemID, "/m/"+fileID, "/s/"+fileID, articleCount, "uploaded", state); err != nil {
+			t.Fatalf("insert transfer_file %s/%s: %v", itemID, fileID, err)
+		}
+	}
+
+	insertFailure := func(itemID, fileID string, n int, state string) {
+		for i := 0; i < n; i++ {
+			if _, err := q.db.ExecContext(ctx, `INSERT INTO verification_failures
+				(transfer_id, file_id, message_id, state)
+				VALUES (?,?,?,?)`,
+				"tr-"+itemID, fileID, fmt.Sprintf("<vf-%s-%s-%s-%d@test>", itemID, fileID, state, i), state); err != nil {
+				t.Fatalf("insert failure %s/%s: %v", itemID, fileID, err)
+			}
+		}
+	}
+
+	// Item "a": legacy path — 4 articles in pending_article_checks, 3 verified.
+	// Item "b": legacy path — 2 articles, all pending.
+	// Item "c": pending_verification but no rows anywhere (edge case).
+	// Item "d": already verified — must not be touched.
+	// Item "f": durable path — f1 fully verified (10), f2 verifying with 30
+	// articles of which 25 are still open failures and 5 resolved → 15/40.
+	insertItem("a", "pending_verification")
+	insertItem("b", "pending_verification")
+	insertItem("c", "pending_verification")
+	insertItem("d", "verified")
+	insertItem("f", "pending_verification")
+	addChecks("a", 4)
+	addChecks("b", 2)
+	insertTransferFile("f", "f1", "verified", 10)
+	insertTransferFile("f", "f2", "verifying", 30)
+	insertFailure("f", "f2", 25, "pending")
+	insertFailure("f", "f2", 5, "resolved")
+	if _, err := q.db.ExecContext(ctx, `UPDATE pending_article_checks
+		SET status = 'verified'
+		WHERE completed_item_id = 'a' AND id IN (
+			SELECT id FROM pending_article_checks WHERE completed_item_id = 'a' LIMIT 3
+		)`); err != nil {
+		t.Fatalf("mark verified: %v", err)
+	}
+
+	pending := "pending_verification"
+	verified := "verified"
+	items := []QueueItem{
+		{ID: "a", VerificationStatus: &pending},
+		{ID: "b", VerificationStatus: &pending},
+		{ID: "c", VerificationStatus: &pending},
+		{ID: "d", VerificationStatus: &verified},
+		{ID: "e"}, // no verification status at all
+		{ID: "f", VerificationStatus: &pending},
+	}
+
+	q.attachVerificationProgress(items)
+
+	check := func(idx int, wantVerified, wantTotal int) {
+		t.Helper()
+		item := items[idx]
+		if item.TotalArticles == nil || item.VerifiedArticles == nil {
+			t.Fatalf("item %s: progress not attached", item.ID)
+		}
+		if *item.VerifiedArticles != wantVerified || *item.TotalArticles != wantTotal {
+			t.Errorf("item %s: progress = %d/%d, want %d/%d",
+				item.ID, *item.VerifiedArticles, *item.TotalArticles, wantVerified, wantTotal)
+		}
+	}
+	check(0, 3, 4)
+	check(1, 0, 2)
+	check(5, 15, 40)
+	for _, idx := range []int{2, 3, 4} {
+		if items[idx].TotalArticles != nil || items[idx].VerifiedArticles != nil {
+			t.Errorf("item %s: expected no progress attached", items[idx].ID)
+		}
+	}
+
+	// Empty slice must be a no-op.
+	q.attachVerificationProgress(nil)
+
+	// End-to-end: GetQueueItems must return items with progress attached.
+	result, err := q.GetQueueItems(PaginationParams{Status: "complete", Page: 1, Limit: 25})
+	if err != nil {
+		t.Fatalf("GetQueueItems: %v", err)
+	}
+	found := false
+	for _, item := range result.Items {
+		if item.ID == "a" {
+			found = true
+			if item.TotalArticles == nil || *item.TotalArticles != 4 ||
+				item.VerifiedArticles == nil || *item.VerifiedArticles != 3 {
+				t.Errorf("GetQueueItems item a: progress not attached correctly: %+v", item)
+			}
+		}
+	}
+	if !found {
+		t.Error("GetQueueItems did not return completed item a")
 	}
 }

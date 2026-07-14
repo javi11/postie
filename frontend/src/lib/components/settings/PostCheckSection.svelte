@@ -12,16 +12,17 @@ const presets = [
 ];
 
 const deferredDelayPresets = [
-	{ label: "2m", value: 2, unit: "m" },
+	{ label: "30s", value: 30, unit: "s" },
+	{ label: "1m", value: 1, unit: "m" },
 	{ label: "5m", value: 5, unit: "m" },
 	{ label: "10m", value: 10, unit: "m" },
-	{ label: "30m", value: 30, unit: "m" },
 ];
 
 const deferredBackoffPresets = [
+	{ label: "5m", value: 5, unit: "m" },
+	{ label: "15m", value: 15, unit: "m" },
 	{ label: "30m", value: 30, unit: "m" },
 	{ label: "1h", value: 1, unit: "h" },
-	{ label: "2h", value: 2, unit: "h" },
 ];
 
 const deferredIntervalPresets = [
@@ -40,11 +41,11 @@ let { config = $bindable() }: Props = $props();
 let enabled = $state(config.post_check?.enabled ?? true);
 let delay = $state(config.post_check?.delay || "10s");
 let maxReposts = $state(config.post_check?.max_reposts || 1);
-let deferredCheckDelay = $state(config.post_check?.deferred_check_delay || "5m");
+let deferredCheckDelay = $state(config.post_check?.deferred_check_delay || "30s");
 let deferredMaxRetries = $state(config.post_check?.deferred_max_retries || 5);
-let deferredMaxBackoff = $state(config.post_check?.deferred_max_backoff || "1h");
+let deferredMaxBackoff = $state(config.post_check?.deferred_max_backoff || "5m");
 let deferredCheckInterval = $state(config.post_check?.deferred_check_interval || "2m");
-let deferredBatchSize = $state(config.post_check?.deferred_batch_size || 500);
+let deferredBatchSize = $state(config.post_check?.deferred_batch_size || 10000);
 let statBatchSize = $state(config.post_check?.stat_batch_size || 100);
 let maxConcurrentChecks = $state(config.post_check?.max_concurrent_checks ?? 0);
 
@@ -54,11 +55,11 @@ if (!config.post_check) {
 		enabled: true,
 		delay: "10s",
 		max_reposts: 1,
-		deferred_check_delay: "5m",
+		deferred_check_delay: "30s",
 		deferred_max_retries: 5,
-		deferred_max_backoff: "1h",
+		deferred_max_backoff: "5m",
 		deferred_check_interval: "2m",
-		deferred_batch_size: 500,
+		deferred_batch_size: 10000,
 		stat_batch_size: 100,
 		max_concurrent_checks: 0,
 	};

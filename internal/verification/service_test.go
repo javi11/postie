@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
@@ -227,6 +229,133 @@ func TestProcessDueFailures_RepostThenResolve(t *testing.T) {
 	got, _ := store.GetFile(ctx, "t", "f")
 	if got.VerificationState != transferstore.StateVerified {
 		t.Errorf("state = %q, want verified", got.VerificationState)
+	}
+}
+
+// TestProcessDueFailures_PropagationLagResolvesWithoutRepost ensures that an
+// article recorded missing during the initial sweep but present by the time
+// its failure is processed (provider propagation lag) is resolved by the
+// confirming STAT and never re-posted. Without the STAT-first rule, a slow
+// provider caused the entire upload to be re-posted.
+func TestProcessDueFailures_PropagationLagResolvesWithoutRepost(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	writeManifest(t, store, "t", "f", 3)
+
+	stater := newFakeStater(mid(0), mid(1), mid(2)) // everything "missing" at sweep time
+	reposter := &fakeReposter{}
+
+	cfg := Config{MaxReposts: 3, PropagationDelay: time.Millisecond, DeferredBackoff: time.Millisecond}
+	svc := New(store, stater, reposter, cfg, "w")
+
+	tf, _ := store.GetFile(ctx, "t", "f")
+	if err := svc.VerifyFile(ctx, tf); err != nil {
+		t.Fatalf("VerifyFile: %v", err)
+	}
+	if n, _ := store.CountFailures(ctx, "t", "f", transferstore.FailurePending); n != 3 {
+		t.Fatalf("pending after sweep = %d, want 3", n)
+	}
+
+	// Articles propagate before the failures are processed.
+	for i := 0; i < 3; i++ {
+		stater.markPresent(mid(i))
+	}
+
+	if _, err := svc.ProcessDueFailures(ctx, time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("ProcessDueFailures: %v", err)
+	}
+
+	if reposter.count() != 0 {
+		t.Errorf("reposts = %d, want 0 (propagation lag must not trigger re-uploads)", reposter.count())
+	}
+	got, _ := store.GetFile(ctx, "t", "f")
+	if got.VerificationState != transferstore.StateVerified {
+		t.Errorf("file state = %q, want verified", got.VerificationState)
+	}
+}
+
+// TestProcessDueFailures_RepostSourceGoneFallsBackToStat reproduces the
+// "stuck verifying forever" bug: when the source file for a re-post has been
+// deleted (e.g. temp PAR2 cleaned up), the repost error must not be retried
+// unboundedly — the failure must fall through to the bounded STAT-recheck
+// path and eventually terminate.
+func TestProcessDueFailures_RepostSourceGoneFallsBackToStat(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	writeManifest(t, store, "t", "f", 2)
+
+	stater := newFakeStater(mid(1)) // m1 permanently missing
+	reposter := &fakeReposter{failWith: fmt.Errorf("repost: open source %q: %w", "/tmp/gone.par2", fs.ErrNotExist)}
+
+	cfg := Config{
+		MaxReposts:        3,
+		PropagationDelay:  time.Millisecond,
+		DeferredBackoff:   time.Millisecond,
+		MaxDeferredChecks: 2,
+	}
+	svc := New(store, stater, reposter, cfg, "w")
+
+	tf, _ := store.GetFile(ctx, "t", "f")
+	if err := svc.VerifyFile(ctx, tf); err != nil {
+		t.Fatalf("VerifyFile: %v", err)
+	}
+
+	// Each pass must consume a deferred check instead of looping on repost.
+	now := time.Now().Add(time.Second)
+	for i := 0; i < cfg.MaxDeferredChecks; i++ {
+		if _, err := svc.ProcessDueFailures(ctx, now); err != nil {
+			t.Fatalf("ProcessDueFailures #%d: %v", i+1, err)
+		}
+		now = now.Add(time.Hour)
+	}
+
+	if n, _ := store.CountFailures(ctx, "t", "f", transferstore.FailureFailed); n != 1 {
+		t.Errorf("failed failures = %d, want 1 (must terminate, not loop)", n)
+	}
+	if n, _ := store.CountFailures(ctx, "t", "f", transferstore.FailurePending); n != 0 {
+		t.Errorf("pending failures = %d, want 0", n)
+	}
+	got, _ := store.GetFile(ctx, "t", "f")
+	if got.VerificationState != transferstore.StateVerificationFailed {
+		t.Errorf("file state = %q, want verification_failed", got.VerificationState)
+	}
+}
+
+// TestProcessDueFailures_TransientRepostErrorConsumesAttempt ensures that a
+// persistent (but non-ErrNotExist) repost error is bounded by MaxReposts
+// instead of retrying forever without advancing any counter.
+func TestProcessDueFailures_TransientRepostErrorConsumesAttempt(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	writeManifest(t, store, "t", "f", 2)
+
+	stater := newFakeStater(mid(1))
+	reposter := &fakeReposter{failWith: errors.New("upload pool unavailable")}
+
+	cfg := Config{
+		MaxReposts:        2,
+		PropagationDelay:  time.Millisecond,
+		DeferredBackoff:   time.Millisecond,
+		MaxDeferredChecks: 1,
+	}
+	svc := New(store, stater, reposter, cfg, "w")
+
+	tf, _ := store.GetFile(ctx, "t", "f")
+	if err := svc.VerifyFile(ctx, tf); err != nil {
+		t.Fatalf("VerifyFile: %v", err)
+	}
+
+	// Passes 1-2 consume repost attempts; pass 3 STAT-rechecks and exhausts.
+	now := time.Now().Add(time.Second)
+	for i := 0; i < cfg.MaxReposts+1; i++ {
+		if _, err := svc.ProcessDueFailures(ctx, now); err != nil {
+			t.Fatalf("ProcessDueFailures #%d: %v", i+1, err)
+		}
+		now = now.Add(time.Hour)
+	}
+
+	if n, _ := store.CountFailures(ctx, "t", "f", transferstore.FailureFailed); n != 1 {
+		t.Errorf("failed failures = %d, want 1 (must terminate, not loop)", n)
 	}
 }
 

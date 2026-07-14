@@ -850,7 +850,7 @@ func (a *App) HandleDroppedFiles(filePaths []string) error {
 
 				// Add the root folder to the queue with FOLDER: prefix (processor will collect all nested files)
 				folderQueuePath := "FOLDER:" + filePath
-				if err := a.queue.AddFile(context.Background(), folderQueuePath, totalSize); err != nil {
+				if err := a.queue.AddManualFile(context.Background(), folderQueuePath, totalSize); err != nil {
 					slog.Warn("Could not add folder to queue, skipping", "folder", filePath, "error", err)
 					continue
 				}
@@ -862,7 +862,7 @@ func (a *App) HandleDroppedFiles(filePaths []string) error {
 			}
 
 			// Handle individual files (existing logic)
-			if err := a.queue.AddFile(context.Background(), filePath, info.Size()); err != nil {
+			if err := a.queue.AddManualFile(context.Background(), filePath, info.Size()); err != nil {
 				slog.Warn("Could not add dropped file to queue, skipping", "file", filePath, "error", err)
 				continue
 			}

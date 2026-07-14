@@ -224,6 +224,31 @@
 	}
 }
 
+/*
+ * daisyUI v5 compatibility: v5 removed the `label-text`/`label-text-alt`
+ * classes and turned `.label` into an inline-flex, `white-space: nowrap`
+ * element meant for wrapping form controls. This app still uses the v4 pattern
+ * `<div class="label"><span class="label-text-alt">…</span></div>` for field
+ * descriptions, which under v5 rendered as a single non-wrapping line and
+ * overflowed the window horizontally. Restore wrapping, full-width, muted
+ * descriptions. Declared unlayered so it wins over daisyUI's `@layer utilities`
+ * `.label` rule. Scoped to `:has(> .label-text-alt)` so checkbox/toggle rows
+ * and field-title labels (which use `.label-text`) are untouched.
+ */
+.label:has(> .label-text-alt) {
+	display: block;
+	white-space: normal;
+	padding-top: 0.25rem;
+}
+.label-text-alt {
+	display: block;
+	white-space: normal;
+	overflow-wrap: break-word;
+	font-size: 0.875rem;
+	line-height: 1.25rem;
+	color: color-mix(in oklab, currentColor 70%, transparent);
+}
+
 @layer utilities {
 	/* Animation delays for staggered effects */
 	.delay-100 {

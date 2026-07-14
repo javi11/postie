@@ -489,9 +489,34 @@ let CreatedIcon = $derived(getSortIcon("created"));
   {:else}
     {#snippet verificationBadge(item: backend.QueueItem)}
       {#if item.status === "complete" && item.verificationStatus === "pending_verification"}
-        <div class="badge badge-warning badge-sm gap-1 shrink-0">
-          <span class="loading loading-spinner loading-xs"></span>
-          {$t("dashboard.queue.verification.pending")}
+        <div class="flex flex-col items-end gap-1 shrink-0">
+          <div class="badge badge-warning badge-sm gap-1">
+            <span class="loading loading-spinner loading-xs"></span>
+            {$t("dashboard.queue.verification.pending")}
+          </div>
+          {#if item.totalArticles && item.totalArticles > 0}
+            {@const pct = Math.round(((item.verifiedArticles ?? 0) / item.totalArticles) * 100)}
+            <div
+              class="w-24 bg-base-300 rounded-full h-1.5"
+              role="progressbar"
+              aria-valuenow={pct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div
+                class="bg-warning h-1.5 rounded-full transition-all duration-300"
+                style="width: {pct}%"
+              ></div>
+            </div>
+            <span class="text-xs text-base-content/60">
+              {$t("dashboard.queue.verification.progress", {
+                values: {
+                  verified: item.verifiedArticles ?? 0,
+                  total: item.totalArticles,
+                },
+              })}
+            </span>
+          {/if}
         </div>
       {:else if item.status === "complete" && item.verificationStatus === "verification_failed"}
         <div class="badge badge-error badge-sm shrink-0">
@@ -518,7 +543,9 @@ let CreatedIcon = $derived(getSortIcon("created"));
               </div>
             </div>
             <div class="flex flex-col items-end gap-1 shrink-0">
-              <div class="badge {getStatusBadgeClass(item.status)} capitalize">{item.status}</div>
+              {#if !(item.status === "complete" && item.verificationStatus === "pending_verification")}
+                <div class="badge {getStatusBadgeClass(item.status)} capitalize">{item.status}</div>
+              {/if}
               {@render verificationBadge(item)}
             </div>
           </div>
@@ -660,16 +687,18 @@ let CreatedIcon = $derived(getSortIcon("created"));
                   </td>
                   <td>
                     <div class="flex items-center gap-2 flex-wrap">
-                      {#if item.status === "complete"}
-                        <CheckCircle class="w-4 h-4 {getStatusIconClass(item.status)}" />
-                      {:else if item.status === "error"}
-                        <AlertCircle class="w-4 h-4 {getStatusIconClass(item.status)}" />
-                      {:else}
-                        <Clock class="w-4 h-4 {getStatusIconClass(item.status)}" />
+                      {#if !(item.status === "complete" && item.verificationStatus === "pending_verification")}
+                        {#if item.status === "complete"}
+                          <CheckCircle class="w-4 h-4 {getStatusIconClass(item.status)}" />
+                        {:else if item.status === "error"}
+                          <AlertCircle class="w-4 h-4 {getStatusIconClass(item.status)}" />
+                        {:else}
+                          <Clock class="w-4 h-4 {getStatusIconClass(item.status)}" />
+                        {/if}
+                        <div class="badge {getStatusBadgeClass(item.status)} capitalize">
+                          {item.status}
+                        </div>
                       {/if}
-                      <div class="badge {getStatusBadgeClass(item.status)} capitalize">
-                        {item.status}
-                      </div>
                       {@render verificationBadge(item)}
                     </div>
                     {#if item.errorMessage}

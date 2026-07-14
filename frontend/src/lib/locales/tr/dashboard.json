@@ -69,7 +69,8 @@
             },
             "verification": {
                 "pending": "Doğrulanıyor",
-                "failed": "Doğrulama başarısız"
+                "failed": "Doğrulama başarısız",
+                "progress": "{total} makaleden {verified} doğrulandı"
             },
             "duration": "Süre",
             "processing_time": "İşlem süresi"

@@ -29,6 +29,9 @@ type QueueItem struct {
 	CompletedAt        *time.Time `json:"completedAt"`
 	NzbPath            *string    `json:"nzbPath"`
 	VerificationStatus *string    `json:"verificationStatus"`
+	// Deferred verification progress (only set while pending_verification)
+	VerifiedArticles *int `json:"verifiedArticles,omitempty"`
+	TotalArticles    *int `json:"totalArticles,omitempty"`
 }
 
 // QueueStats represents queue statistics
@@ -155,7 +158,7 @@ func (a *App) AddFilesToQueue() error {
 		}
 
 		// Add file directly to queue
-		if err := a.queue.AddFile(context.Background(), filePath, info.Size()); err != nil {
+		if err := a.queue.AddManualFile(context.Background(), filePath, info.Size()); err != nil {
 			slog.Warn("Could not add file to queue, skipping", "file", filePath, "error", err)
 			continue
 		}
@@ -223,6 +226,8 @@ func (a *App) GetQueueItems(params PaginationParams) (*PaginatedQueueResult, err
 			CompletedAt:        queueItem.CompletedAt,
 			NzbPath:            queueItem.NzbPath,
 			VerificationStatus: queueItem.VerificationStatus,
+			VerifiedArticles:   queueItem.VerifiedArticles,
+			TotalArticles:      queueItem.TotalArticles,
 		}
 		items = append(items, item)
 	}

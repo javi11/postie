@@ -6,14 +6,6 @@ export function AddFilesToQueue() {
   return window['go']['backend']['App']['AddFilesToQueue']();
 }
 
-export function GetAPIKey() {
-  return window['go']['backend']['App']['GetAPIKey']();
-}
-
-export function RegenerateAPIKey() {
-  return window['go']['backend']['App']['RegenerateAPIKey']();
-}
-
 export function ApplyPendingConfig() {
   return window['go']['backend']['App']['ApplyPendingConfig']();
 }
@@ -46,12 +38,24 @@ export function DownloadNZB(arg1) {
   return window['go']['backend']['App']['DownloadNZB'](arg1);
 }
 
+export function EnqueueAPIUpload(arg1, arg2) {
+  return window['go']['backend']['App']['EnqueueAPIUpload'](arg1, arg2);
+}
+
+export function GetAPIKey() {
+  return window['go']['backend']['App']['GetAPIKey']();
+}
+
 export function GetAppStatus() {
   return window['go']['backend']['App']['GetAppStatus']();
 }
 
 export function GetAppliedConfig() {
   return window['go']['backend']['App']['GetAppliedConfig']();
+}
+
+export function GetArrInstances() {
+  return window['go']['backend']['App']['GetArrInstances']();
 }
 
 export function GetAutoPauseReason() {
@@ -90,10 +94,6 @@ export function GetNntpPoolMetrics() {
   return window['go']['backend']['App']['GetNntpPoolMetrics']();
 }
 
-export function GetTransferRuntimeMetrics() {
-  return window['go']['backend']['App']['GetTransferRuntimeMetrics']();
-}
-
 export function GetOutputDirectory() {
   return window['go']['backend']['App']['GetOutputDirectory']();
 }
@@ -122,6 +122,10 @@ export function GetRunningJobsDetails() {
   return window['go']['backend']['App']['GetRunningJobsDetails']();
 }
 
+export function GetTransferRuntimeMetrics() {
+  return window['go']['backend']['App']['GetTransferRuntimeMetrics']();
+}
+
 export function GetWatchDirectory() {
   return window['go']['backend']['App']['GetWatchDirectory']();
 }
@@ -136,6 +140,10 @@ export function HandleDroppedFiles(arg1) {
 
 export function HasPendingConfigChanges() {
   return window['go']['backend']['App']['HasPendingConfigChanges']();
+}
+
+export function IsAPIEnabled() {
+  return window['go']['backend']['App']['IsAPIEnabled']();
 }
 
 export function IsLegacyDatabase() {
@@ -172,6 +180,14 @@ export function PauseProcessing() {
 
 export function RecreateDatabase() {
   return window['go']['backend']['App']['RecreateDatabase']();
+}
+
+export function RegenerateAPIKey() {
+  return window['go']['backend']['App']['RegenerateAPIKey']();
+}
+
+export function RemoveArrInstance(arg1, arg2) {
+  return window['go']['backend']['App']['RemoveArrInstance'](arg1, arg2);
 }
 
 export function RemoveFromQueue(arg1) {
@@ -242,6 +258,10 @@ export function SetWebMode(arg1) {
   return window['go']['backend']['App']['SetWebMode'](arg1);
 }
 
+export function SetupArrWebhook(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['SetupArrWebhook'](arg1, arg2, arg3);
+}
+
 export function SetupWizardComplete(arg1) {
   return window['go']['backend']['App']['SetupWizardComplete'](arg1);
 }
@@ -252,6 +272,10 @@ export function Shutdown() {
 
 export function Startup(arg1) {
   return window['go']['backend']['App']['Startup'](arg1);
+}
+
+export function TestArrConnection(arg1, arg2) {
+  return window['go']['backend']['App']['TestArrConnection'](arg1, arg2);
 }
 
 export function TestProviderConnectivity(arg1) {
