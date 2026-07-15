@@ -2,7 +2,9 @@ package poster
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
+	"time"
 
 	"golang.org/x/sync/semaphore"
 )
@@ -105,6 +107,31 @@ type Engine struct {
 	activeWk atomic.Int64
 	queuedWk atomic.Int64
 	reserved atomic.Int64
+
+	// Engine-wide upload throttle, lazily created by SharedThrottle so every
+	// posting path sharing this engine shares one token bucket.
+	throttleOnce sync.Once
+	throttle     *Throttle
+}
+
+// SharedThrottle lazily creates (first caller's rate wins) and returns the
+// engine-wide upload throttle for rate bytes/sec. Per-job posters and the
+// durable re-poster all post through the same engine; sharing one token bucket
+// makes the configured rate bound AGGREGATE egress instead of applying once
+// per instance (which allowed ~N× the configured rate when re-posts ran
+// alongside uploads). Returns nil when rate <= 0 (no throttling). A nil engine
+// falls back to a private throttle, preserving standalone behaviour.
+func (e *Engine) SharedThrottle(rate int64) *Throttle {
+	if rate <= 0 {
+		return nil
+	}
+	if e == nil {
+		return NewThrottle(rate, time.Second)
+	}
+	e.throttleOnce.Do(func() {
+		e.throttle = NewThrottle(rate, time.Second)
+	})
+	return e.throttle
 }
 
 // NewEngine builds an Engine sized for the given article size, explicit buffer

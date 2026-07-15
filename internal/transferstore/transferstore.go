@@ -37,10 +37,11 @@ const (
 // manifest, so they are STAT-only (article_index = -1, never re-posted).
 const LegacyFileID = "legacy"
 
-// Verification-failure states.
+// Verification-failure states. A re-posted article goes back to
+// FailurePending with a propagation-delay recheck; there is no separate
+// "reposted" state.
 const (
 	FailurePending  = "pending"
-	FailureReposted = "reposted"
 	FailureResolved = "resolved"
 	FailureFailed   = "failed"
 )

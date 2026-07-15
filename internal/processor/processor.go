@@ -957,6 +957,14 @@ func (p *Processor) durableMode() bool {
 	return p.transferRuntime.DurableVerificationEnabled()
 }
 
+// DurableMode reports whether the durable verification path is active. Exposed
+// so callers (e.g. the backend) can skip starting the legacy post-check retry
+// worker, which in durable mode would poll a permanently empty
+// pending_article_checks table forever.
+func (p *Processor) DurableMode() bool {
+	return p != nil && p.durableMode()
+}
+
 // setAutoBlock enables or disables blocking of new jobs due to provider unavailability.
 // Unlike PauseProcessing(), this does NOT pause jobs that are already running.
 func (p *Processor) setAutoBlock(blocking bool) {

@@ -18,10 +18,12 @@ import (
 	"github.com/javi11/postie/internal/transferstore"
 )
 
-// fakeStater returns "missing" for any message id in the missing set.
+// fakeStater returns "missing" for any message id in the missing set, and a
+// transient check error for any id in the errored set.
 type fakeStater struct {
 	mu      sync.Mutex
 	missing map[string]bool
+	errored map[string]bool
 	calls   map[string]int
 }
 
@@ -30,23 +32,38 @@ func newFakeStater(missing ...string) *fakeStater {
 	for _, id := range missing {
 		m[id] = true
 	}
-	return &fakeStater{missing: m, calls: make(map[string]int)}
+	return &fakeStater{missing: m, errored: make(map[string]bool), calls: make(map[string]int)}
 }
 
-func (f *fakeStater) Stat(_ context.Context, messageID string) error {
+func (f *fakeStater) Stat(_ context.Context, messageID string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls[messageID]++
-	if f.missing[messageID] {
-		return errors.New("not found")
+	if f.errored[messageID] {
+		return false, errors.New("stat timeout")
 	}
-	return nil
+	if f.missing[messageID] {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (f *fakeStater) markErrored(id string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.errored[id] = true
+}
+
+func (f *fakeStater) clearErrored(id string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.errored, id)
 }
 
 func (f *fakeStater) StatBatch(ctx context.Context, messageIDs []string) (map[string]struct{}, error) {
 	missing := make(map[string]struct{})
 	for _, id := range messageIDs {
-		if err := f.Stat(ctx, id); err != nil {
+		if isMissing, err := f.Stat(ctx, id); err != nil || isMissing {
 			missing[id] = struct{}{}
 		}
 	}
@@ -452,9 +469,10 @@ func (c *fakeCleaner) CleanupTransfer(_ context.Context, transferID string) (boo
 }
 
 func TestVerifyFile_TriggersCleanupWhenVerified(t *testing.T) {
-	store := newTestStore(t)
+	store, db := newTestStoreWithDB(t)
 	ctx := context.Background()
 	writeManifest(t, store, "t", "f", 3)
+	insertCompletedItem(t, store, db, "t", "ci-cleanup")
 
 	cleaner := &fakeCleaner{}
 	svc := New(store, newFakeStater(), &fakeReposter{}, Config{}, "w")

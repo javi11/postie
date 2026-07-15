@@ -27,8 +27,8 @@ func (m *mockPoster) PostWithRelativePaths(_ context.Context, files []string, _ 
 	return nil
 }
 
-func (m *mockPoster) Stats() poster.Stats { return poster.Stats{} }
-func (m *mockPoster) Close()              {}
+func (m *mockPoster) Stats() poster.StatsSnapshot { return poster.StatsSnapshot{} }
+func (m *mockPoster) Close()                      {}
 
 // addFakeArticles injects one minimal article per file so nzbGen.Generate succeeds.
 func addFakeArticles(nzbGen nzb.NZBGenerator, files []string) {
@@ -93,7 +93,7 @@ func boolPtr(b bool) *bool { return &b }
 func newTestPostie(par2exec *mockPar2Executor, waitForPar2 bool, maintainPar2 bool) *Postie {
 	return &Postie{
 		par2Cfg: &config.Par2Config{
-			Enabled:          boolPtr(true),
+			Enabled:           boolPtr(true),
 			MaintainPar2Files: boolPtr(maintainPar2),
 		},
 		postingCfg: config.PostingConfig{
@@ -275,7 +275,7 @@ func TestPostFolderCrossVolumePathSeparation(t *testing.T) {
 	// Simulate cross-volume by using two completely independent temp dirs
 	// (on the same real host FS, but with no shared path prefix after the
 	// OS temp root, mimicking the cross-volume case at the path-string level).
-	vol3Watch := t.TempDir() // simulates /volume3/Watch
+	vol3Watch := t.TempDir()  // simulates /volume3/Watch
 	vol2Output := t.TempDir() // simulates /volume2/output
 
 	const folderName = "Movie_A"

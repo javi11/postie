@@ -26,12 +26,16 @@ import (
 	"github.com/javi11/postie/internal/transferstore"
 )
 
-// Stater reports whether articles exist on the server. For Stat, a nil error
-// means the article was found; any error means it is (still) missing. For
-// StatBatch, the returned set contains the message-IDs NOT confirmed present
-// (any per-ID error counts as missing).
+// Stater reports whether articles exist on the server. Stat returns
+// missing=true only when the server positively confirmed the article does not
+// exist (e.g. NNTP 430); a non-nil error means the check itself failed
+// (timeout, dropped connection) and the article's presence is UNKNOWN — such
+// errors must not consume repost/recheck budget. For StatBatch, the returned
+// set contains the message-IDs NOT confirmed present (any per-ID error counts
+// as missing; the per-failure Stat in handleFailure re-validates before any
+// budget is spent).
 type Stater interface {
-	Stat(ctx context.Context, messageID string) error
+	Stat(ctx context.Context, messageID string) (missing bool, err error)
 	StatBatch(ctx context.Context, messageIDs []string) (missing map[string]struct{}, err error)
 }
 
@@ -52,8 +56,6 @@ type Cleaner interface {
 // Config controls verification timing and concurrency. Zero values fall back to
 // conservative defaults via withDefaults.
 type Config struct {
-	// MaxConcurrentChecks bounds simultaneous STAT requests. 0 = auto (16).
-	MaxConcurrentChecks int
 	// StatBatchSize is the number of message-IDs checked per StatBatch call
 	// during file verification. 0 = 100.
 	StatBatchSize int
@@ -79,9 +81,6 @@ type Config struct {
 }
 
 func (c Config) withDefaults() Config {
-	if c.MaxConcurrentChecks <= 0 {
-		c.MaxConcurrentChecks = 16
-	}
 	if c.StatBatchSize <= 0 {
 		c.StatBatchSize = 100
 	}
@@ -122,6 +121,9 @@ type Service struct {
 	now      func() time.Time
 	cleaner  Cleaner
 	busy     func() bool
+	// busySkips counts consecutive cycles deferred by the busy-gate; only
+	// touched from the Run goroutine.
+	busySkips int
 }
 
 // SetCleaner installs the post-verification cleaner invoked when a transfer
@@ -140,6 +142,16 @@ const (
 	statusVerified = "verified"
 	statusFailed   = "verification_failed"
 )
+
+// reconcileEveryTicks is how many poll ticks pass between periodic
+// ReconcileStuck repair passes (~5 minutes at the default 15s PollInterval).
+const reconcileEveryTicks = 20
+
+// maxBusySkips is the maximum number of consecutive verification cycles the
+// busy-gate may defer before a full cycle is forced anyway (~5 minutes at the
+// default 15s PollInterval). Without it, a continuously saturated upload pool
+// starves verification — and repost recovery of missing articles — forever.
+const maxBusySkips = 20
 
 // finalizeTransfer reflects a transfer's terminal verification outcome onto its
 // completed item and, on full success, runs cleanup. It is a no-op until every
@@ -169,6 +181,17 @@ func (s *Service) finalizeTransfer(ctx context.Context, transferID string) {
 		default:
 			return // not terminal yet
 		}
+	}
+
+	// The files can go terminal before the processor has linked the completed
+	// item (MarkUploaded makes them verification-due while Post() is still
+	// returning). Finalizing now would no-op the status update AND run
+	// destructive cleanup for an item the queue still shows as
+	// pending_verification. Defer: the periodic ReconcileStuck pass finalizes
+	// this transfer once the link exists.
+	if completedItemID == "" {
+		slog.InfoContext(ctx, "verification: transfer terminal but completed item not linked yet; deferring finalize", "transfer", transferID)
+		return
 	}
 
 	status := statusVerified
@@ -206,10 +229,12 @@ func New(store *transferstore.Store, stater Stater, reposter Reposter, cfg Confi
 // processes due verification failures (re-posts/rechecks). It is intended to be
 // started once as a background goroutine, owned by the processor.
 func (s *Service) Run(ctx context.Context) {
-	// One-time repair pass: finalize completed items stuck in
-	// pending_verification that the normal flow can no longer reach (crash
-	// orphans, items whose files went terminal before the finalize fix, and
-	// pre-durable legacy upgrades). See issue #168.
+	// Repair pass: finalize completed items stuck in pending_verification that
+	// the normal flow can no longer reach (crash orphans, items whose files
+	// went terminal before the finalize fix, transfers whose files went
+	// terminal before the completed item was linked, and pre-durable legacy
+	// upgrades). See issue #168. Runs at startup and then periodically so
+	// deferred finalizes are picked up without a restart.
 	if err := s.ReconcileStuck(ctx); err != nil {
 		slog.WarnContext(ctx, "verification: startup reconciliation failed", "error", err)
 	}
@@ -217,8 +242,15 @@ func (s *Service) Run(ctx context.Context) {
 	ticker := time.NewTicker(s.cfg.PollInterval)
 	defer ticker.Stop()
 
+	ticks := 0
 	for {
 		s.runOnce(ctx)
+		ticks++
+		if ticks%reconcileEveryTicks == 0 {
+			if err := s.ReconcileStuck(ctx); err != nil {
+				slog.WarnContext(ctx, "verification: periodic reconciliation failed", "error", err)
+			}
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -235,9 +267,18 @@ func (s *Service) runOnce(ctx context.Context) {
 	}
 	if s.busy != nil && s.busy() {
 		// Live uploads are saturating the shared NNTP pool; let them keep the
-		// connections and verify on a later tick.
-		return
+		// connections and verify on a later tick — but not indefinitely. On a
+		// continuously busy server the gate would otherwise starve
+		// verification (and repost recovery) forever, so force a full cycle
+		// after maxBusySkips consecutive deferrals.
+		if s.busySkips < maxBusySkips {
+			s.busySkips++
+			return
+		}
+		slog.InfoContext(ctx, "verification: upload pool busy but verification deferred too long; running cycle anyway",
+			"consecutive_skips", s.busySkips)
 	}
+	s.busySkips = 0
 	if _, err := s.VerifyDueFiles(ctx, now, s.cfg.BatchSize); err != nil {
 		slog.WarnContext(ctx, "verification: verify due files failed", "error", err)
 	}
@@ -423,17 +464,38 @@ func (s *Service) ProcessDueFailures(ctx context.Context, now time.Time) (int, e
 		return 0, nil
 	}
 
-	// Resolve manifest records for failures that still need a re-post, grouped
-	// by file so each manifest is streamed at most once per batch.
-	records := s.resolveRecords(ctx, claimed)
+	// Pre-resolve with batched STAT sweeps: most claimed failures are
+	// propagation lag and are present by now, and one-by-one STATs made a
+	// large batch (up to BatchSize=10000) take one serial round-trip per
+	// article. Articles the sweep does NOT confirm present (including per-ID
+	// errors) fall through to handleFailure, whose per-article confirming Stat
+	// still distinguishes "missing" from "check errored" before any
+	// repost/recheck budget is spent. On sweep error everything falls through.
+	stillUnresolved := s.batchPreResolve(ctx, claimed)
 
 	touchedFiles := make(map[[2]string]bool)
+	var unresolved []transferstore.VerificationFailure
 	for _, f := range claimed {
+		touchedFiles[[2]string{f.TransferID, f.FileID}] = true
+		if _, miss := stillUnresolved[f.MessageID]; !miss {
+			f.State = transferstore.FailureResolved
+			f.LastError = ""
+			f.NextAttemptAt = now
+			_ = s.store.UpdateFailureAfterCheck(ctx, f)
+			continue
+		}
+		unresolved = append(unresolved, f)
+	}
+
+	// Resolve manifest records for failures that still need a re-post, grouped
+	// by file so each manifest is streamed at most once per batch.
+	records := s.resolveRecords(ctx, unresolved)
+
+	for _, f := range unresolved {
 		if err := ctx.Err(); err != nil {
 			return 0, err
 		}
 		s.handleFailure(ctx, f, records, now)
-		touchedFiles[[2]string{f.TransferID, f.FileID}] = true
 	}
 
 	// Reconcile each touched file's verification state.
@@ -444,6 +506,39 @@ func (s *Service) ProcessDueFailures(ctx context.Context, now time.Time) (int, e
 	return len(claimed), nil
 }
 
+// batchPreResolve sweeps the claimed failures' message-IDs with StatBatch
+// (chunked to StatBatchSize) and returns the set NOT confirmed present. On a
+// sweep error the remaining ids are treated as unresolved so the per-failure
+// path decides — never resolved, which could silently drop a real miss.
+func (s *Service) batchPreResolve(ctx context.Context, claimed []transferstore.VerificationFailure) map[string]struct{} {
+	unresolved := make(map[string]struct{}, len(claimed))
+	ids := make([]string, 0, len(claimed))
+	seen := make(map[string]struct{}, len(claimed))
+	for _, f := range claimed {
+		if _, dup := seen[f.MessageID]; dup {
+			continue
+		}
+		seen[f.MessageID] = struct{}{}
+		ids = append(ids, f.MessageID)
+	}
+
+	batch := s.cfg.StatBatchSize
+	for start := 0; start < len(ids); start += batch {
+		chunk := ids[start:min(start+batch, len(ids))]
+		missing, err := s.stater.StatBatch(ctx, chunk)
+		if err != nil {
+			for _, id := range ids[start:] {
+				unresolved[id] = struct{}{}
+			}
+			return unresolved
+		}
+		for id := range missing {
+			unresolved[id] = struct{}{}
+		}
+	}
+	return unresolved
+}
+
 // handleFailure processes a single claimed failure, updating its row. It
 // always STATs the article first: a miss recorded during the initial sweep is
 // usually propagation lag, not data loss, and a re-post re-uploads the article
@@ -451,7 +546,20 @@ func (s *Service) ProcessDueFailures(ctx context.Context, now time.Time) (int, e
 // cheap STAT round. Only articles confirmed missing since the last (re)post
 // spend a repost attempt; the rest defer with backoff until terminal.
 func (s *Service) handleFailure(ctx context.Context, f transferstore.VerificationFailure, records map[recordKey]manifest.ArticleRecord, now time.Time) {
-	if statErr := s.stater.Stat(ctx, f.MessageID); statErr == nil {
+	missing, statErr := s.stater.Stat(ctx, f.MessageID)
+	if statErr != nil {
+		// The check itself failed (timeout, dropped connection, provider
+		// hiccup): the article may well exist. Reschedule WITHOUT consuming
+		// repost/recheck budget, otherwise a flaky provider re-uploads data
+		// that is already there and eventually marks the file
+		// verification_failed for no reason.
+		f.State = transferstore.FailurePending
+		f.NextAttemptAt = now.Add(s.cfg.DeferredBackoff)
+		f.LastError = "stat check failed: " + statErr.Error()
+		_ = s.store.UpdateFailureAfterCheck(ctx, f)
+		return
+	}
+	if !missing {
 		f.State = transferstore.FailureResolved
 		f.LastError = ""
 		f.NextAttemptAt = now
@@ -562,14 +670,10 @@ func (s *Service) ReconcileStuck(ctx context.Context) error {
 // untouched; otherwise it becomes verified, or verification_failed when any
 // legacy failure exhausted its retries. Reports whether the item was updated.
 func (s *Service) reconcileLegacyItem(ctx context.Context, completedItemID string) bool {
-	outstanding := 0
-	for _, state := range []string{transferstore.FailurePending, transferstore.FailureReposted} {
-		n, err := s.store.CountFailures(ctx, completedItemID, transferstore.LegacyFileID, state)
-		if err != nil {
-			slog.WarnContext(ctx, "verification: reconcile count failed", "item", completedItemID, "error", err)
-			return false
-		}
-		outstanding += n
+	outstanding, err := s.store.CountFailures(ctx, completedItemID, transferstore.LegacyFileID, transferstore.FailurePending)
+	if err != nil {
+		slog.WarnContext(ctx, "verification: reconcile count failed", "item", completedItemID, "error", err)
+		return false
 	}
 	if outstanding > 0 {
 		return false // legacy checks still being worked

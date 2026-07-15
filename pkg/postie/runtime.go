@@ -2,7 +2,9 @@ package postie
 
 import (
 	"context"
+	"errors"
 
+	nntppool "github.com/javi11/nntppool/v4"
 	"github.com/javi11/postie/internal/config"
 	"github.com/javi11/postie/internal/manifest"
 	"github.com/javi11/postie/internal/par2"
@@ -14,21 +16,58 @@ import (
 	"github.com/javi11/postie/internal/verification"
 )
 
-// poolStater adapts an NNTP client to the verification.Stater interface (a STAT
-// that returns only an error: nil = article exists).
+// poolStater adapts an NNTP client to the verification.Stater interface.
+// concurrency bounds in-flight STATs per batched sweep (<=0 = pool default);
+// see statConcurrency for how it is derived from max_concurrent_checks.
 type poolStater struct {
-	pool pool.NNTPClient
+	pool        pool.NNTPClient
+	concurrency int
 }
 
-func (s poolStater) Stat(ctx context.Context, messageID string) error {
+// Stat reports missing=true only for a positive "no such article" (430/423)
+// response. Any other error (timeout, dropped connection) is returned as-is so
+// the verification service treats the article's presence as unknown instead of
+// burning repost budget on it.
+func (s poolStater) Stat(ctx context.Context, messageID string) (bool, error) {
 	_, err := s.pool.Stat(ctx, messageID)
-	return err
+	if err == nil {
+		return false, nil
+	}
+	if errors.Is(err, nntppool.ErrArticleNotFound) {
+		return true, nil
+	}
+	return false, err
 }
 
 // StatBatch checks the ids in one batched sweep; the verification service
 // pre-chunks to its configured StatBatchSize, so the whole slice is one chunk.
 func (s poolStater) StatBatch(ctx context.Context, messageIDs []string) (map[string]struct{}, error) {
-	return pool.StatMissing(ctx, s.pool, messageIDs, len(messageIDs))
+	return pool.StatMissingOpts(ctx, s.pool, messageIDs, len(messageIDs),
+		nntppool.StatManyOptions{Concurrency: s.concurrency})
+}
+
+// statConcurrency resolves the max_concurrent_checks setting for the
+// verification stater. 0 (auto) uses 16 on a dedicated verification pool but
+// only 2 when the verify pool is the upload pool, so background sweeps leave
+// connections for live uploads. The result never exceeds the verify pool's
+// connection capacity.
+func statConcurrency(configured int, verifyPool, uploadPool pool.NNTPClient) int {
+	c := configured
+	if c <= 0 {
+		if verifyPool == uploadPool {
+			c = 2
+		} else {
+			c = 16
+		}
+	}
+	capacity := 0
+	for _, pr := range verifyPool.Stats().Providers {
+		capacity += pr.MaxConnections
+	}
+	if capacity > 0 && c > capacity {
+		c = capacity
+	}
+	return c
 }
 
 // newPostVerifyScriptRunner returns a transfercleaner.ScriptRunner that runs
@@ -64,14 +103,13 @@ func newPostVerifyScriptRunner(store *transferstore.Store, cfg config.PostUpload
 // config; zero/auto values are normalised inside the service.
 func verificationConfig(pc config.PostCheck) verification.Config {
 	return verification.Config{
-		MaxConcurrentChecks: pc.MaxConcurrentChecks,
-		StatBatchSize:       pc.StatBatchSize,
-		PropagationDelay:    pc.RetryDelay.ToDuration(),
-		MaxReposts:          int(pc.MaxRePost),
-		DeferredBackoff:     pc.DeferredCheckDelay.ToDuration(),
-		MaxBackoff:          pc.DeferredMaxBackoff.ToDuration(),
-		MaxDeferredChecks:   pc.DeferredMaxRetries,
-		BatchSize:           pc.DeferredBatchSize,
+		StatBatchSize:     pc.StatBatchSize,
+		PropagationDelay:  pc.RetryDelay.ToDuration(),
+		MaxReposts:        int(pc.MaxRePost),
+		DeferredBackoff:   pc.DeferredCheckDelay.ToDuration(),
+		MaxBackoff:        pc.DeferredMaxBackoff.ToDuration(),
+		MaxDeferredChecks: pc.DeferredMaxRetries,
+		BatchSize:         pc.DeferredBatchSize,
 	}
 }
 
@@ -137,7 +175,10 @@ func NewRuntime(ctx context.Context, cfg config.Config, poolManager *pool.Manage
 				reposter := poster.NewReposter(uploadPool, uploadEngine, postingCfg.ThrottleRate)
 				verifyService = verification.New(
 					store,
-					poolStater{pool: verifyPool},
+					poolStater{
+						pool:        verifyPool,
+						concurrency: statConcurrency(cfg.GetPostCheckConfig().MaxConcurrentChecks, verifyPool, uploadPool),
+					},
 					reposter,
 					verificationConfig(cfg.GetPostCheckConfig()),
 					"postie",

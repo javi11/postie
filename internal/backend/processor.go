@@ -137,6 +137,14 @@ func (a *App) initializePostCheckWorker() {
 		return
 	}
 
+	// In durable mode verification runs in the background durable service and
+	// pending_article_checks is never written (legacy rows are migrated at
+	// startup), so the legacy retry worker would only poll an empty table.
+	if a.processor.DurableMode() {
+		slog.Info("Durable verification active, skipping legacy post check retry worker")
+		return
+	}
+
 	checkPool := a.poolManager.GetVerifyPool()
 	if checkPool == nil {
 		slog.Warn("No verify pool available, skipping deferred check worker initialization")

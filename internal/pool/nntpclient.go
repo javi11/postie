@@ -29,6 +29,13 @@ const DefaultStatBatchSize = 100
 // as missing (preserves the "error => repost" semantics of the previous
 // one-by-one checks). Returns ctx.Err() if the sweep was cancelled.
 func StatMissing(ctx context.Context, c NNTPClient, ids []string, batchSize int) (map[string]struct{}, error) {
+	return StatMissingOpts(ctx, c, ids, batchSize, nntppool.StatManyOptions{})
+}
+
+// StatMissingOpts is StatMissing with explicit StatMany options, e.g. a
+// Concurrency bound so verification sweeps don't monopolise a pool shared with
+// live uploads.
+func StatMissingOpts(ctx context.Context, c NNTPClient, ids []string, batchSize int, opts nntppool.StatManyOptions) (map[string]struct{}, error) {
 	missing := make(map[string]struct{})
 	if len(ids) == 0 {
 		return missing, nil
@@ -41,7 +48,7 @@ func StatMissing(ctx context.Context, c NNTPClient, ids []string, batchSize int)
 		chunk := ids[start:min(start+batchSize, len(ids))]
 
 		reported := make(map[string]struct{}, len(chunk))
-		for res := range c.StatMany(ctx, chunk, nntppool.StatManyOptions{}) {
+		for res := range c.StatMany(ctx, chunk, opts) {
 			reported[res.MessageID] = struct{}{}
 			if res.Err != nil {
 				missing[res.MessageID] = struct{}{}
