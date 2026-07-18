@@ -419,11 +419,13 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 	// Link the transfer's files to this completed item so the verification
 	// service can reflect the final verified/failed status back onto it.
 	if p.durableMode() {
-		if statusErr := p.queue.UpdateCompletedItemVerificationStatus(ctx, string(msg.ID), "pending_verification"); statusErr != nil {
-			slog.ErrorContext(ctx, "Failed to set pending_verification status", "error", statusErr, "path", job.Path)
-		}
+		// Link BEFORE flipping the status to pending_verification: a crash
+		// between the two would otherwise strand an item the verification
+		// service can never find (it discovers work through transfer_files).
 		if linkErr := p.transferRuntime.TransferStore().SetCompletedItemForTransfer(ctx, job.TransferID, string(msg.ID)); linkErr != nil {
 			slog.ErrorContext(ctx, "Failed to link completed item to transfer", "error", linkErr, "transfer", job.TransferID)
+		} else if statusErr := p.queue.UpdateCompletedItemVerificationStatus(ctx, string(msg.ID), "pending_verification"); statusErr != nil {
+			slog.ErrorContext(ctx, "Failed to set pending_verification status", "error", statusErr, "path", job.Path)
 		}
 	}
 
@@ -953,6 +955,14 @@ func (p *Processor) TransferRuntimeMetrics() postie.RuntimeMetrics {
 // the background service rather than inline at upload completion.
 func (p *Processor) durableMode() bool {
 	return p.transferRuntime.DurableVerificationEnabled()
+}
+
+// DurableMode reports whether the durable verification path is active. Exposed
+// so callers (e.g. the backend) can skip starting the legacy post-check retry
+// worker, which in durable mode would poll a permanently empty
+// pending_article_checks table forever.
+func (p *Processor) DurableMode() bool {
+	return p != nil && p.durableMode()
 }
 
 // setAutoBlock enables or disables blocking of new jobs due to provider unavailability.

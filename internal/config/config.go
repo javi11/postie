@@ -260,16 +260,17 @@ type PostCheck struct {
 	RetryDelay Duration `yaml:"delay" json:"delay"`
 	// The maximum number of re-posts if article check fails. Default value is `1`.
 	MaxRePost uint `yaml:"max_reposts" json:"max_reposts"`
-	// Initial delay before first deferred recheck. Default value is `5m`.
+	// Initial delay before first deferred recheck. Default value is `30s`.
 	// Auto-enabled when PostCheck.Enabled is true.
 	DeferredCheckDelay Duration `yaml:"deferred_check_delay" json:"deferred_check_delay"`
 	// Maximum number of deferred check retry attempts. Default value is `5`.
 	DeferredMaxRetries int `yaml:"deferred_max_retries" json:"deferred_max_retries"`
-	// Maximum backoff cap for deferred checks. Default value is `1h`.
+	// Maximum backoff cap for deferred checks. Default value is `5m`.
 	DeferredMaxBackoff Duration `yaml:"deferred_max_backoff" json:"deferred_max_backoff"`
 	// Worker poll interval for deferred checks. Default value is `2m`.
 	DeferredCheckInterval Duration `yaml:"deferred_check_interval" json:"deferred_check_interval"`
-	// Number of articles processed per deferred check cycle. Default value is 500.
+	// Number of articles processed per deferred check cycle. Default value is
+	// 10000, sized so a typical complete NZB is swept in a single cycle.
 	DeferredBatchSize int `yaml:"deferred_batch_size" json:"deferred_batch_size"`
 	// Number of segments checked per batched STAT sweep. Default value is 100.
 	StatBatchSize int `yaml:"stat_batch_size" json:"stat_batch_size"`
@@ -570,19 +571,19 @@ func Load(path string) (*ConfigData, error) {
 
 	// Set defaults for deferred post check fields
 	if cfg.PostCheck.DeferredCheckDelay == "" {
-		cfg.PostCheck.DeferredCheckDelay = Duration("5m")
+		cfg.PostCheck.DeferredCheckDelay = Duration("30s")
 	}
 	if cfg.PostCheck.DeferredMaxRetries == 0 {
 		cfg.PostCheck.DeferredMaxRetries = 5
 	}
 	if cfg.PostCheck.DeferredMaxBackoff == "" {
-		cfg.PostCheck.DeferredMaxBackoff = Duration("1h")
+		cfg.PostCheck.DeferredMaxBackoff = Duration("5m")
 	}
 	if cfg.PostCheck.DeferredCheckInterval == "" {
 		cfg.PostCheck.DeferredCheckInterval = Duration("2m")
 	}
 	if cfg.PostCheck.DeferredBatchSize <= 0 {
-		cfg.PostCheck.DeferredBatchSize = 500
+		cfg.PostCheck.DeferredBatchSize = 10000
 	}
 	if cfg.PostCheck.StatBatchSize <= 0 {
 		cfg.PostCheck.StatBatchSize = 100
@@ -1066,11 +1067,11 @@ func GetDefaultConfig() ConfigData {
 			Enabled:               &enabled,
 			RetryDelay:            Duration("10s"),
 			MaxRePost:             1,
-			DeferredCheckDelay:    Duration("5m"),
+			DeferredCheckDelay:    Duration("30s"),
 			DeferredMaxRetries:    5,
-			DeferredMaxBackoff:    Duration("1h"),
+			DeferredMaxBackoff:    Duration("5m"),
 			DeferredCheckInterval: Duration("2m"),
-			DeferredBatchSize:     500,
+			DeferredBatchSize:     10000,
 			StatBatchSize:         100,
 		},
 		Par2: Par2Config{

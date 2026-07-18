@@ -115,8 +115,16 @@ export class WebClient {
 		this.wsListeners.delete(event);
 	}
 
+	// Requests that hang (e.g. the backend blocked on the database during a
+	// heavy upload batch) must not pile up and exhaust the browser's per-host
+	// connection pool — that is what froze the dashboard until a manual
+	// refresh. Abort instead, so the next poll gets a fresh attempt.
+	private static readonly REQUEST_TIMEOUT_MS = 15000;
+
 	async get<T>(endpoint: string): Promise<T> {
-		const response = await fetch(`${API_BASE}${endpoint}`);
+		const response = await fetch(`${API_BASE}${endpoint}`, {
+			signal: AbortSignal.timeout(WebClient.REQUEST_TIMEOUT_MS),
+		});
 		if (!response.ok) {
 			throw new Error(`HTTP error! status: ${response.status}`);
 		}
@@ -130,6 +138,7 @@ export class WebClient {
 				"Content-Type": "application/json",
 			},
 			body: data ? JSON.stringify(data) : undefined,
+			signal: AbortSignal.timeout(WebClient.REQUEST_TIMEOUT_MS),
 		});
 
 		if (!response.ok) {
@@ -145,6 +154,7 @@ export class WebClient {
 	async delete<T>(endpoint: string): Promise<T> {
 		const response = await fetch(`${API_BASE}${endpoint}`, {
 			method: "DELETE",
+			signal: AbortSignal.timeout(WebClient.REQUEST_TIMEOUT_MS),
 		});
 
 		if (!response.ok) {

@@ -37,10 +37,11 @@ const (
 // manifest, so they are STAT-only (article_index = -1, never re-posted).
 const LegacyFileID = "legacy"
 
-// Verification-failure states.
+// Verification-failure states. A re-posted article goes back to
+// FailurePending with a propagation-delay recheck; there is no separate
+// "reposted" state.
 const (
 	FailurePending  = "pending"
-	FailureReposted = "reposted"
 	FailureResolved = "resolved"
 	FailureFailed   = "failed"
 )
@@ -61,6 +62,10 @@ type TransferFile struct {
 	NextCheckAt       *time.Time
 	CleanupPolicy     string
 	LastError         string
+	// CheckAttempts counts failed attempts to start this file's first
+	// verification check (e.g. unreadable manifest), so the service can back
+	// off and eventually terminalize instead of retrying forever.
+	CheckAttempts int
 }
 
 // VerificationFailure is one row of the verification_failures table.
@@ -186,7 +191,7 @@ func nullStr(s string) sql.NullString {
 
 const transferFileCols = `transfer_id, file_id, completed_item_id, manifest_path, manifest_version,
 	source_path, file_role, article_count, upload_state, verification_state,
-	posted_at, next_check_at, cleanup_policy, last_error`
+	posted_at, next_check_at, cleanup_policy, last_error, check_attempts`
 
 func scanTransferFile(sc interface{ Scan(...any) error }) (TransferFile, error) {
 	var (
@@ -198,7 +203,7 @@ func scanTransferFile(sc interface{ Scan(...any) error }) (TransferFile, error) 
 	if err := sc.Scan(
 		&f.TransferID, &f.FileID, &completed, &f.ManifestPath, &f.ManifestVersion,
 		&f.SourcePath, &f.FileRole, &f.ArticleCount, &f.UploadState, &f.VerificationState,
-		&postedAt, &nextCheck, &f.CleanupPolicy, &f.LastError,
+		&postedAt, &nextCheck, &f.CleanupPolicy, &f.LastError, &f.CheckAttempts,
 	); err != nil {
 		return f, err
 	}
@@ -250,6 +255,19 @@ func (s *Store) SetVerificationState(ctx context.Context, transferID, fileID, st
 		    updated_at = ?
 		WHERE transfer_id = ? AND file_id = ?`,
 		state, fmtTimePtr(nextCheckAt), lastErr, fmtTime(time.Now()), transferID, fileID)
+	return err
+}
+
+// DeferFileCheck reschedules a file's first verification check after a failed
+// attempt (e.g. the manifest could not be read): it bumps check_attempts,
+// pushes next_check_at out and records the error, leaving the file in the
+// uploaded state so it is retried later instead of every poll cycle.
+func (s *Store) DeferFileCheck(ctx context.Context, transferID, fileID string, nextCheckAt time.Time, lastErr string) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE transfer_files
+		SET check_attempts = check_attempts + 1, next_check_at = ?, last_error = ?, updated_at = ?
+		WHERE transfer_id = ? AND file_id = ?`,
+		fmtTime(nextCheckAt), lastErr, fmtTime(time.Now()), transferID, fileID)
 	return err
 }
 
@@ -559,6 +577,51 @@ func (s *Store) ReclaimExpiredLeases(ctx context.Context, now time.Time) (int64,
 		return 0, err
 	}
 	return res.RowsAffected()
+}
+
+// ListPendingVerificationItemIDs returns the ids of completed items whose
+// verification_status is still pending_verification, used by startup
+// reconciliation to repair items that can no longer be finalized by the
+// normal verification flow (orphans, legacy upgrades).
+func (s *Store) ListPendingVerificationItemIDs(ctx context.Context) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT id FROM completed_items WHERE verification_status = 'pending_verification'")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// ListFilesByCompletedItem returns all transfer files linked to a completed
+// item.
+func (s *Store) ListFilesByCompletedItem(ctx context.Context, completedItemID string) ([]TransferFile, error) {
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT "+transferFileCols+" FROM transfer_files WHERE completed_item_id = ? ORDER BY file_id",
+		completedItemID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []TransferFile
+	for rows.Next() {
+		f, err := scanTransferFile(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
 }
 
 // CountFailures returns the number of failure rows for a transfer file in the

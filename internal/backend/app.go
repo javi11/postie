@@ -134,6 +134,14 @@ type App struct {
 	isApplyingConfig     atomic.Bool
 	postCheckWorker      *processor.PostCheckRetryWorker
 	broadcaster          *eventBroadcaster
+
+	// queueStatsCache short-circuits GetQueueStats polling: under a heavy
+	// upload batch the stats COUNT queries contend with upload writes on the
+	// single SQLite connection, and a hanging stats endpoint froze the web
+	// dashboard.
+	queueStatsMux      sync.Mutex
+	queueStatsCached   QueueStats
+	queueStatsCachedAt time.Time
 }
 
 // getCrashLogPath returns the path for crash logs
@@ -842,7 +850,7 @@ func (a *App) HandleDroppedFiles(filePaths []string) error {
 
 				// Add the root folder to the queue with FOLDER: prefix (processor will collect all nested files)
 				folderQueuePath := "FOLDER:" + filePath
-				if err := a.queue.AddFile(context.Background(), folderQueuePath, totalSize); err != nil {
+				if err := a.queue.AddManualFile(context.Background(), folderQueuePath, totalSize); err != nil {
 					slog.Warn("Could not add folder to queue, skipping", "folder", filePath, "error", err)
 					continue
 				}
@@ -854,7 +862,7 @@ func (a *App) HandleDroppedFiles(filePaths []string) error {
 			}
 
 			// Handle individual files (existing logic)
-			if err := a.queue.AddFile(context.Background(), filePath, info.Size()); err != nil {
+			if err := a.queue.AddManualFile(context.Background(), filePath, info.Size()); err != nil {
 				slog.Warn("Could not add dropped file to queue, skipping", "file", filePath, "error", err)
 				continue
 			}

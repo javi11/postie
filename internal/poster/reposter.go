@@ -50,6 +50,14 @@ func postYenc(ctx context.Context, uploadPool pool.NNTPClient, throttle *Throttl
 		PartSize:   int64(art.Size),
 	}
 
+	// Pace BEFORE sending so the token bucket bounds egress rather than
+	// lagging one article behind it. art.Size is the raw body size; yEnc and
+	// header overhead (~3-5%) is intentionally not modelled — the bucket is a
+	// coarse rate cap, not an exact byte meter.
+	if throttle != nil {
+		throttle.Wait(int64(art.Size))
+	}
+
 	// Post article with timeout to prevent indefinite TLS hangs.
 	postCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
@@ -68,7 +76,15 @@ func postYenc(ctx context.Context, uploadPool pool.NNTPClient, throttle *Throttl
 			break
 		}
 		if errors.Is(lastErr, context.Canceled) || errors.Is(lastErr, context.DeadlineExceeded) {
-			return context.Canceled
+			if ctx.Err() != nil {
+				// The caller's context ended: report a genuine cancellation.
+				return context.Canceled
+			}
+			// The internal 2-minute post budget expired while the parent
+			// context is still alive. Surface a real error — mapping it to
+			// context.Canceled made callers treat it as a user cancellation,
+			// skip error reporting, and hang Post() forever.
+			return fmt.Errorf("posting article timed out: %w", lastErr)
 		}
 		if !isStaleConnError(lastErr) {
 			break
@@ -77,10 +93,6 @@ func postYenc(ctx context.Context, uploadPool pool.NNTPClient, throttle *Throttl
 
 	if lastErr != nil {
 		return fmt.Errorf("error posting article: %w", lastErr)
-	}
-
-	if throttle != nil {
-		throttle.Wait(int64(art.Size))
 	}
 
 	if stats != nil {
@@ -126,16 +138,13 @@ type Reposter struct {
 }
 
 // NewReposter creates a Reposter using the shared upload pool and engine. If
-// throttleRate > 0 the same byte/sec throttle as normal uploads is applied.
+// throttleRate > 0 the engine-wide throttle (shared with normal uploads) is
+// applied, so re-posts and uploads together stay within the configured rate.
 func NewReposter(uploadPool pool.NNTPClient, engine *Engine, throttleRate int64) *Reposter {
-	var throttle *Throttle
-	if throttleRate > 0 {
-		throttle = NewThrottle(throttleRate, time.Second)
-	}
 	return &Reposter{
 		uploadPool: uploadPool,
 		engine:     engine,
-		throttle:   throttle,
+		throttle:   engine.SharedThrottle(throttleRate),
 		stats:      &Stats{StartTime: time.Now()},
 	}
 }
@@ -161,8 +170,11 @@ func (r *Reposter) Repost(ctx context.Context, rec manifest.ArticleRecord) error
 	}
 	defer r.engine.ReleaseBuffer(reserve)
 
+	// Stall-guarded read: an unresponsive mount (NFS, sleeping drive, FUSE)
+	// would otherwise hang this goroutine forever while it holds an engine
+	// buffer reservation, throttling the whole verification pipeline.
 	body := make([]byte, rec.BodySize)
-	if _, err := f.ReadAt(body, rec.Offset); err != nil {
+	if _, err := readAtWithStallGuard(ctx, f, body, rec.Offset); err != nil {
 		return fmt.Errorf("repost: read body at offset %d: %w", rec.Offset, err)
 	}
 
@@ -175,13 +187,6 @@ func (r *Reposter) Repost(ctx context.Context, rec manifest.ArticleRecord) error
 }
 
 // Stats returns a snapshot of re-post statistics.
-func (r *Reposter) Stats() Stats {
-	r.stats.mu.Lock()
-	defer r.stats.mu.Unlock()
-	return Stats{
-		ArticlesPosted: r.stats.ArticlesPosted,
-		BytesPosted:    r.stats.BytesPosted,
-		ArticleErrors:  r.stats.ArticleErrors,
-		StartTime:      r.stats.StartTime,
-	}
+func (r *Reposter) Stats() StatsSnapshot {
+	return r.stats.snapshot()
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -99,6 +100,9 @@ type QueueItem struct {
 	ScriptNextRetryAt *time.Time `json:"scriptNextRetryAt"`
 	// Verification status for completed items (null for non-completed)
 	VerificationStatus *string `json:"verificationStatus"` // verified, pending_verification, verification_failed
+	// Deferred verification progress (only set while pending_verification)
+	VerifiedArticles *int `json:"verifiedArticles,omitempty"`
+	TotalArticles    *int `json:"totalArticles,omitempty"`
 }
 
 type FileJob struct {
@@ -268,6 +272,16 @@ func (q *Queue) AddFile(ctx context.Context, path string, size int64) error {
 		Body:     jobData,
 		Priority: job.Priority,
 	})
+}
+
+// AddManualFile adds a user-initiated (manual) upload to the queue. Manual
+// uploads always preserve the original file regardless of the watcher's
+// delete_original_file policy, so the per-job override is pinned to false.
+// Automatic (watcher) uploads must not use this and instead leave the override
+// unset so they continue to honour delete_original_file.
+func (q *Queue) AddManualFile(ctx context.Context, path string, size int64) error {
+	keepOriginal := false
+	return q.AddFileWithOptions(ctx, path, size, AddOptions{DeleteOriginal: &keepOriginal})
 }
 
 // AddFileWithoutDuplicateCheck adds a file to the queue without checking for duplicates
@@ -618,6 +632,9 @@ func (q *Queue) GetQueueItems(params PaginationParams) (*PaginatedResult, error)
 		}, nil
 	}
 
+	// Attach deferred verification progress to items awaiting verification
+	q.attachVerificationProgress(allItems)
+
 	// Calculate pagination metadata
 	totalPages := (totalCount + params.Limit - 1) / params.Limit // Ceiling division
 
@@ -632,6 +649,102 @@ func (q *Queue) GetQueueItems(params PaginationParams) (*PaginatedResult, error)
 	}
 
 	return result, nil
+}
+
+// attachVerificationProgress populates VerifiedArticles/TotalArticles for items
+// currently awaiting verification. It aggregates transfer_files (durable upload
+// path, article-count weighted per file) first, then falls back to
+// pending_article_checks (legacy deferred path) for items without transfer rows.
+func (q *Queue) attachVerificationProgress(items []QueueItem) {
+	indexByID := make(map[string]int)
+	for i := range items {
+		if items[i].VerificationStatus != nil && *items[i].VerificationStatus == "pending_verification" {
+			indexByID[items[i].ID] = i
+		}
+	}
+	if len(indexByID) == 0 {
+		return
+	}
+
+	// Durable upload path: per-file verification states weighted by article
+	// count. Files mid-verification credit the articles that are not (or no
+	// longer) recorded as open failures, so the bar advances as the
+	// verification service resolves misses.
+	covered := q.applyVerificationCounts(items, indexByID, `
+		SELECT tf.completed_item_id,
+		       SUM(tf.article_count) AS total,
+		       SUM(CASE
+		             WHEN tf.verification_state = 'verified' THEN tf.article_count
+		             WHEN tf.verification_state IN ('verifying', 'verification_failed')
+		               THEN MAX(tf.article_count - COALESCE(vf.open_count, 0), 0)
+		             ELSE 0
+		           END) AS verified
+		FROM transfer_files tf
+		LEFT JOIN (
+			SELECT transfer_id, file_id, COUNT(*) AS open_count
+			FROM verification_failures
+			WHERE state IN ('pending', 'failed')
+			GROUP BY transfer_id, file_id
+		) vf ON vf.transfer_id = tf.transfer_id AND vf.file_id = tf.file_id
+		WHERE tf.completed_item_id IN (%s)
+		GROUP BY tf.completed_item_id
+	`)
+	for _, id := range covered {
+		delete(indexByID, id)
+	}
+	if len(indexByID) == 0 {
+		return
+	}
+
+	// Legacy deferred path: one row per article awaiting recheck.
+	q.applyVerificationCounts(items, indexByID, `
+		SELECT completed_item_id,
+		       COUNT(*) AS total,
+		       SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) AS verified
+		FROM pending_article_checks
+		WHERE completed_item_id IN (%s)
+		GROUP BY completed_item_id
+	`)
+}
+
+// applyVerificationCounts runs a grouped (id, total, verified) query template
+// against the given item IDs and fills in progress on matching items.
+// It returns the IDs that received counts.
+func (q *Queue) applyVerificationCounts(items []QueueItem, indexByID map[string]int, queryTemplate string) []string {
+	placeholders := make([]string, 0, len(indexByID))
+	args := make([]any, 0, len(indexByID))
+	for id := range indexByID {
+		placeholders = append(placeholders, "?")
+		args = append(args, id)
+	}
+
+	query := fmt.Sprintf(queryTemplate, strings.Join(placeholders, ","))
+
+	rows, err := q.db.Query(query, args...)
+	if err != nil {
+		slog.Error("Failed to query verification progress", "error", err)
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+
+	var covered []string
+	for rows.Next() {
+		var id string
+		var total, verified int
+		if err := rows.Scan(&id, &total, &verified); err != nil {
+			slog.Error("Failed to scan verification progress row", "error", err)
+			return covered
+		}
+		if i, ok := indexByID[id]; ok && total > 0 {
+			items[i].TotalArticles = &total
+			items[i].VerifiedArticles = &verified
+			covered = append(covered, id)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		slog.Error("Failed to iterate verification progress rows", "error", err)
+	}
+	return covered
 }
 
 // buildOrderByClause constructs SQL ORDER BY clause

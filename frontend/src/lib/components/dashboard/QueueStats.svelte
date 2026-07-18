@@ -71,11 +71,19 @@ onDestroy(async () => {
 	document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
 
+let loadInFlight = false;
+
 async function loadQueueStats() {
+	// Skip the tick instead of stacking requests while a previous (slow)
+	// request is still pending.
+	if (loadInFlight) return;
+	loadInFlight = true;
 	try {
 		queueStats = await apiClient.getQueueStats();
 	} catch (error) {
 		console.error("Failed to load queue stats:", error);
+	} finally {
+		loadInFlight = false;
 	}
 }
 </script>

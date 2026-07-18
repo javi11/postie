@@ -84,11 +84,11 @@ export namespace backend {
 	    quotaUsed: number;
 	    quotaResetAt: string;
 	    quotaExceeded: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new NntpProviderMetrics(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -172,6 +172,8 @@ export namespace backend {
 	    completedAt?: any;
 	    nzbPath?: string;
 	    verificationStatus?: string;
+	    verifiedArticles?: number;
+	    totalArticles?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new QueueItem(source);
@@ -192,6 +194,8 @@ export namespace backend {
 	        this.completedAt = this.convertValues(source["completedAt"], null);
 	        this.nzbPath = source["nzbPath"];
 	        this.verificationStatus = source["verificationStatus"];
+	        this.verifiedArticles = source["verifiedArticles"];
+	        this.totalArticles = source["totalArticles"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -299,11 +303,11 @@ export namespace backend {
 	    error: number;
 	    pendingVerification: number;
 	    verificationFailed: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new QueueStats(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.total = source["total"];
@@ -315,32 +319,6 @@ export namespace backend {
 	        this.verificationFailed = source["verificationFailed"];
 	    }
 	}
-	export class TransferRuntimeMetrics {
-	    uploadActiveWorkers: number;
-	    uploadQueuedWorkers: number;
-	    uploadWorkerCount: number;
-	    uploadReservedBytes: number;
-	    uploadBudgetBytes: number;
-	    par2ActiveJobs: number;
-	    par2QueuedJobs: number;
-	    par2Capacity: number;
-
-	    static createFrom(source: any = {}) {
-	        return new TransferRuntimeMetrics(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.uploadActiveWorkers = source["uploadActiveWorkers"];
-	        this.uploadQueuedWorkers = source["uploadQueuedWorkers"];
-	        this.uploadWorkerCount = source["uploadWorkerCount"];
-	        this.uploadReservedBytes = source["uploadReservedBytes"];
-	        this.uploadBudgetBytes = source["uploadBudgetBytes"];
-	        this.par2ActiveJobs = source["par2ActiveJobs"];
-	        this.par2QueuedJobs = source["par2QueuedJobs"];
-	        this.par2Capacity = source["par2Capacity"];
-	    }
-	}
 	export class ServerData {
 	    name: string;
 	    host: string;
@@ -350,11 +328,11 @@ export namespace backend {
 	    ssl: boolean;
 	    maxConnections: number;
 	    role: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ServerData(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -400,6 +378,32 @@ export namespace backend {
 		    }
 		    return a;
 		}
+	}
+	export class TransferRuntimeMetrics {
+	    uploadActiveWorkers: number;
+	    uploadQueuedWorkers: number;
+	    uploadWorkerCount: number;
+	    uploadReservedBytes: number;
+	    uploadBudgetBytes: number;
+	    par2ActiveJobs: number;
+	    par2QueuedJobs: number;
+	    par2Capacity: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TransferRuntimeMetrics(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.uploadActiveWorkers = source["uploadActiveWorkers"];
+	        this.uploadQueuedWorkers = source["uploadQueuedWorkers"];
+	        this.uploadWorkerCount = source["uploadWorkerCount"];
+	        this.uploadReservedBytes = source["uploadReservedBytes"];
+	        this.uploadBudgetBytes = source["uploadBudgetBytes"];
+	        this.par2ActiveJobs = source["par2ActiveJobs"];
+	        this.par2QueuedJobs = source["par2QueuedJobs"];
+	        this.par2Capacity = source["par2Capacity"];
+	    }
 	}
 	export class ValidationResult {
 	    valid: boolean;
@@ -639,7 +643,7 @@ export namespace config {
 	    memory_limit: number;
 	    slice_size: number;
 	    max_concurrent_jobs: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Par2Config(source);
 	    }
@@ -670,7 +674,7 @@ export namespace config {
 	    deferred_batch_size: number;
 	    stat_batch_size: number;
 	    max_concurrent_checks: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PostCheck(source);
 	    }
@@ -764,7 +768,7 @@ export namespace config {
 	    par2_obfuscation_policy: string;
 	    group_policy: string;
 	    upload_buffer_memory_limit: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PostingConfig(source);
 	    }

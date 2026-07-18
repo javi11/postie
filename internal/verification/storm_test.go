@@ -31,7 +31,7 @@ func TestVerifyFile_LargeManifestStormStaysCorrect(t *testing.T) {
 	}
 
 	// A small concurrency cap forces heavy contention on the semaphore.
-	svc := New(store, newFakeStater(missing...), &fakeReposter{}, Config{MaxConcurrentChecks: 8}, "w")
+	svc := New(store, newFakeStater(missing...), &fakeReposter{}, Config{}, "w")
 
 	tf, _ := store.GetFile(ctx, "t", "f")
 	if err := svc.VerifyFile(ctx, tf); err != nil {
@@ -57,7 +57,7 @@ func TestVerifyFile_AllPresentStormVerifies(t *testing.T) {
 	const n = 400
 	writeManifest(t, store, "t", "f", n)
 
-	svc := New(store, newFakeStater(), &fakeReposter{}, Config{MaxConcurrentChecks: 8}, "w")
+	svc := New(store, newFakeStater(), &fakeReposter{}, Config{}, "w")
 	tf, _ := store.GetFile(ctx, "t", "f")
 	if err := svc.VerifyFile(ctx, tf); err != nil {
 		t.Fatalf("VerifyFile: %v", err)

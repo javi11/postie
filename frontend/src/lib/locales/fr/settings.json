@@ -230,7 +230,7 @@
 			"deferred_title": "Vérification Différée",
 			"deferred_info": "Lorsque la vérification immédiate échoue après toutes les tentatives, les articles sont mis en file d'attente pour une revérification différée. Cela tient compte des délais de propagation Usenet.",
 			"deferred_check_delay": "Délai Initial de Revérification",
-			"deferred_check_delay_description": "Temps d'attente avant la première revérification différée (ex., 5m, 10m)",
+			"deferred_check_delay_description": "Temps d'attente avant la première revérification différée (ex., 30s, 5m)",
 			"deferred_max_retries": "Maximum de Tentatives Différées",
 			"deferred_max_retries_description": "Nombre maximum de tentatives de revérification différée avant de marquer comme échoué",
 			"deferred_max_backoff": "Délai Maximum",

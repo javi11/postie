@@ -2,7 +2,9 @@ package poster
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
+	"time"
 
 	"golang.org/x/sync/semaphore"
 )
@@ -16,10 +18,6 @@ const (
 	// upload-buffer budget.
 	minAutoBudgetBytes int64 = 64 * 1024 * 1024
 	maxAutoBudgetBytes int64 = 512 * 1024 * 1024
-	// autoBudgetConnCap bounds how many connections the automatic budget sizes
-	// for, so a provider advertising hundreds of connections does not blow past
-	// the clamp before it is applied.
-	autoBudgetConnCap int64 = 32
 )
 
 // EngineBudget is the resolved set of process-wide upload limits.
@@ -44,9 +42,16 @@ func estimatedYencBytes(articleSize int64) int64 {
 // and the total connection capacity (sum of max_connections * effective
 // inflight across upload providers).
 //
-//	per_article          = article_size + estimated_yenc_size + 256 KiB
-//	auto_budget          = clamp(per_article * min(conn_capacity, 32), 64MiB, 512MiB)
-//	worker_count         = min(conn_capacity, floor(budget / per_article))
+//	per_article  = article_size + estimated_yenc_size + 256 KiB
+//	auto_budget  = clamp(per_article * conn_capacity, 64MiB, 512MiB)
+//	worker_count = conn_capacity
+//
+// WorkerCount always equals the connection capacity so posting concurrency
+// matches what the NNTP pool can actually drive; the byte budget bounds only
+// the in-flight buffer memory. When an explicit (or clamped) budget covers
+// fewer than WorkerCount articles, the memory semaphore throttles effective
+// concurrency on its own — deriving WorkerCount from the budget as well used to
+// cap throughput at ~37 articles regardless of connections (issue #168).
 //
 // The result guarantees BudgetBytes >= PerArticleBytes and WorkerCount >= 1 so
 // callers can always make forward progress.
@@ -63,12 +68,9 @@ func ComputeEngineBudget(articleSize uint64, bufferLimit int64, connCapacity int
 
 	budget := bufferLimit
 	if budget <= 0 {
-		// Automatic sizing.
-		sizingConns := int64(connCapacity)
-		if sizingConns > autoBudgetConnCap {
-			sizingConns = autoBudgetConnCap
-		}
-		budget = perArticle * sizingConns
+		// Automatic sizing: enough for one in-flight article per connection,
+		// within the clamp.
+		budget = perArticle * int64(connCapacity)
 		if budget < minAutoBudgetBytes {
 			budget = minAutoBudgetBytes
 		}
@@ -83,18 +85,10 @@ func ComputeEngineBudget(articleSize uint64, bufferLimit int64, connCapacity int
 		budget = perArticle
 	}
 
-	workers := budget / perArticle
-	if workers > int64(connCapacity) {
-		workers = int64(connCapacity)
-	}
-	if workers < 1 {
-		workers = 1
-	}
-
 	return EngineBudget{
 		PerArticleBytes: perArticle,
 		BudgetBytes:     budget,
-		WorkerCount:     workers,
+		WorkerCount:     int64(connCapacity),
 	}
 }
 
@@ -113,6 +107,31 @@ type Engine struct {
 	activeWk atomic.Int64
 	queuedWk atomic.Int64
 	reserved atomic.Int64
+
+	// Engine-wide upload throttle, lazily created by SharedThrottle so every
+	// posting path sharing this engine shares one token bucket.
+	throttleOnce sync.Once
+	throttle     *Throttle
+}
+
+// SharedThrottle lazily creates (first caller's rate wins) and returns the
+// engine-wide upload throttle for rate bytes/sec. Per-job posters and the
+// durable re-poster all post through the same engine; sharing one token bucket
+// makes the configured rate bound AGGREGATE egress instead of applying once
+// per instance (which allowed ~N× the configured rate when re-posts ran
+// alongside uploads). Returns nil when rate <= 0 (no throttling). A nil engine
+// falls back to a private throttle, preserving standalone behaviour.
+func (e *Engine) SharedThrottle(rate int64) *Throttle {
+	if rate <= 0 {
+		return nil
+	}
+	if e == nil {
+		return NewThrottle(rate, time.Second)
+	}
+	e.throttleOnce.Do(func() {
+		e.throttle = NewThrottle(rate, time.Second)
+	})
+	return e.throttle
 }
 
 // NewEngine builds an Engine sized for the given article size, explicit buffer

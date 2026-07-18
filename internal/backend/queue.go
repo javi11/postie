@@ -29,6 +29,9 @@ type QueueItem struct {
 	CompletedAt        *time.Time `json:"completedAt"`
 	NzbPath            *string    `json:"nzbPath"`
 	VerificationStatus *string    `json:"verificationStatus"`
+	// Deferred verification progress (only set while pending_verification)
+	VerifiedArticles *int `json:"verifiedArticles,omitempty"`
+	TotalArticles    *int `json:"totalArticles,omitempty"`
 }
 
 // QueueStats represents queue statistics
@@ -155,7 +158,7 @@ func (a *App) AddFilesToQueue() error {
 		}
 
 		// Add file directly to queue
-		if err := a.queue.AddFile(context.Background(), filePath, info.Size()); err != nil {
+		if err := a.queue.AddManualFile(context.Background(), filePath, info.Size()); err != nil {
 			slog.Warn("Could not add file to queue, skipping", "file", filePath, "error", err)
 			continue
 		}
@@ -223,6 +226,8 @@ func (a *App) GetQueueItems(params PaginationParams) (*PaginatedQueueResult, err
 			CompletedAt:        queueItem.CompletedAt,
 			NzbPath:            queueItem.NzbPath,
 			VerificationStatus: queueItem.VerificationStatus,
+			VerifiedArticles:   queueItem.VerifiedArticles,
+			TotalArticles:      queueItem.TotalArticles,
 		}
 		items = append(items, item)
 	}
@@ -287,6 +292,11 @@ func (a *App) ClearQueue() error {
 	return nil
 }
 
+// queueStatsCacheTTL bounds how often GetQueueStats hits the database. Stats
+// are polled by every open dashboard; without a cache the COUNT queries pile
+// up behind upload writes on the single SQLite connection under load.
+const queueStatsCacheTTL = 2 * time.Second
+
 // GetQueueStats returns statistics about the queue via queue
 func (a *App) GetQueueStats() (QueueStats, error) {
 	if a.queue == nil {
@@ -297,6 +307,12 @@ func (a *App) GetQueueStats() (QueueStats, error) {
 			Complete: 0,
 			Error:    0,
 		}, nil
+	}
+
+	a.queueStatsMux.Lock()
+	defer a.queueStatsMux.Unlock()
+	if time.Since(a.queueStatsCachedAt) < queueStatsCacheTTL {
+		return a.queueStatsCached, nil
 	}
 
 	stats, err := a.queue.GetQueueStats()
@@ -329,6 +345,8 @@ func (a *App) GetQueueStats() (QueueStats, error) {
 		queueStats.VerificationFailed = vf
 	}
 
+	a.queueStatsCached = queueStats
+	a.queueStatsCachedAt = time.Now()
 	return queueStats, nil
 }
 

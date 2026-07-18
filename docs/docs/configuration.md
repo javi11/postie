@@ -82,11 +82,11 @@ post_check:
   enabled: true
   delay: 10s
   max_reposts: 1
-  deferred_check_delay: 5m # Delay before first deferred re-check (default: 5m)
+  deferred_check_delay: 30s # Delay before first deferred re-check (default: 30s)
   deferred_max_retries: 5 # Max deferred retry attempts (default: 5)
-  deferred_max_backoff: 1h # Max backoff cap for deferred checks (default: 1h)
+  deferred_max_backoff: 5m # Max backoff cap for deferred checks (default: 5m)
   deferred_check_interval: 2m # Worker poll interval for deferred checks (default: 2m)
-  deferred_batch_size: 500 # Articles processed per deferred check cycle (default: 500)
+  deferred_batch_size: 10000 # Articles processed per deferred check cycle (default: 10000, sized to sweep a full NZB)
 
 par2:
   enabled: true
@@ -242,11 +242,11 @@ post_check:
   delay: 10s # Delay between check attempts (default: 10s)
   max_reposts: 1 # Maximum number of reposts if check fails
   # Deferred check settings — used when an article is not yet available at check time
-  deferred_check_delay: 5m # Initial delay before first deferred re-check (default: 5m)
+  deferred_check_delay: 30s # Initial delay before first deferred re-check (default: 30s)
   deferred_max_retries: 5 # Maximum deferred retry attempts (default: 5)
-  deferred_max_backoff: 1h # Maximum backoff cap for deferred checks (default: 1h)
+  deferred_max_backoff: 5m # Maximum backoff cap for deferred checks (default: 5m)
   deferred_check_interval: 2m # Worker poll interval for deferred checks (default: 2m)
-  deferred_batch_size: 500 # Articles processed per deferred check cycle (default: 500)
+  deferred_batch_size: 10000 # Articles processed per deferred check cycle (default: 10000, sized to sweep a full NZB)
 ```
 
 ### PAR2 Recovery Files

@@ -77,7 +77,7 @@ func (a *App) UploadFiles() error {
 
 			// Add the root folder to the queue with FOLDER: prefix (processor will collect all nested files)
 			folderQueuePath := "FOLDER:" + filePath
-			if err := a.queue.AddFile(context.Background(), folderQueuePath, totalSize); err != nil {
+			if err := a.queue.AddManualFile(context.Background(), folderQueuePath, totalSize); err != nil {
 				slog.Warn("Could not add folder to queue, skipping", "folder", filePath, "error", err)
 				continue
 			}
@@ -89,7 +89,7 @@ func (a *App) UploadFiles() error {
 		}
 
 		// Handle individual files (existing logic)
-		if err := a.queue.AddFile(context.Background(), filePath, info.Size()); err != nil {
+		if err := a.queue.AddManualFile(context.Background(), filePath, info.Size()); err != nil {
 			slog.Warn("Could not add selected file to queue, skipping", "file", filePath, "error", err)
 			continue
 		}
@@ -230,7 +230,7 @@ func (a *App) UploadFolder(folderPath string) error {
 
 	// Add the root folder to the queue with FOLDER: prefix (processor will collect all nested files)
 	folderQueuePath := "FOLDER:" + folderPath
-	if err := a.queue.AddFile(context.Background(), folderQueuePath, totalSize); err != nil {
+	if err := a.queue.AddManualFile(context.Background(), folderQueuePath, totalSize); err != nil {
 		return fmt.Errorf("could not add folder to queue: %w", err)
 	}
 
@@ -298,7 +298,7 @@ func (a *App) UploadFolders(folderPaths []string) error {
 
 		folderName := filepath.Base(folderPath)
 		folderQueuePath := "FOLDER:" + folderPath
-		if err := a.queue.AddFile(context.Background(), folderQueuePath, totalSize); err != nil {
+		if err := a.queue.AddManualFile(context.Background(), folderQueuePath, totalSize); err != nil {
 			slog.Warn("Could not add folder to queue, skipping", "folder", folderName, "error", err)
 			continue
 		}

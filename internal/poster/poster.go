@@ -117,8 +117,8 @@ type Poster interface {
 	// PostWithRelativePaths posts files with custom display names (relative paths) for subjects
 	// relativePaths maps absolute file path to the display name to use in the subject
 	PostWithRelativePaths(ctx context.Context, files []string, rootDir string, nzbGen nzb.NZBGenerator, relativePaths map[string]string) error
-	// Stats returns posting statistics
-	Stats() Stats
+	// Stats returns a point-in-time snapshot of posting statistics
+	Stats() StatsSnapshot
 	// Close closes the poster
 	Close()
 }
@@ -189,7 +189,9 @@ type uploadJob struct {
 	done     func(err error)
 }
 
-// Stats tracks posting statistics
+// Stats is the mutable, mutex-guarded holder for posting statistics. Consumers
+// read point-in-time copies via Stats()/Reposter.Stats(), which return a
+// StatsSnapshot (no lock) so the mutex is never copied.
 type Stats struct {
 	ArticlesPosted  int64
 	ArticlesChecked int64
@@ -197,6 +199,29 @@ type Stats struct {
 	ArticleErrors   int64
 	StartTime       time.Time
 	mu              sync.Mutex
+}
+
+// StatsSnapshot is a point-in-time copy of posting statistics, safe to copy
+// and pass by value.
+type StatsSnapshot struct {
+	ArticlesPosted  int64
+	ArticlesChecked int64
+	BytesPosted     int64
+	ArticleErrors   int64
+	StartTime       time.Time
+}
+
+// snapshot returns a lock-free copy of the current counters.
+func (s *Stats) snapshot() StatsSnapshot {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return StatsSnapshot{
+		ArticlesPosted:  s.ArticlesPosted,
+		ArticlesChecked: s.ArticlesChecked,
+		BytesPosted:     s.BytesPosted,
+		ArticleErrors:   s.ArticleErrors,
+		StartTime:       s.StartTime,
+	}
 }
 
 // Poster handles posting articles to Usenet
@@ -324,10 +349,10 @@ func NewWithEngine(ctx context.Context, cfg config.Config, poolManager pool.Pool
 		slog.WarnContext(ctx, "PostCheck.Enabled is nil, will default to true")
 	}
 
-	throttleRate := p.cfg.ThrottleRate
-	if throttleRate > 0 {
-		p.throttle = NewThrottle(throttleRate, time.Second)
-	}
+	// Use the engine-wide throttle so the configured rate bounds aggregate
+	// egress across all jobs and the durable re-poster (nil engine falls back
+	// to a private bucket for standalone mode).
+	p.throttle = p.engine.SharedThrottle(p.cfg.ThrottleRate)
 
 	return p, nil
 }
@@ -546,230 +571,337 @@ func (p *poster) PostWithRelativePaths(
 	return nil
 }
 
+// abandonPost releases everything held by a post that will never be processed
+// because its loop exited early: finishes its progress entry, closes the file,
+// and balances the in-flight queue counter and the per-file WaitGroup so
+// Post()'s completion goroutines can terminate instead of leaking.
+func (p *poster) abandonPost(ctx context.Context, post *Post, postsInFlight *sync.WaitGroup) {
+	post.mu.Lock()
+	if post.Status != PostStatusFailed {
+		post.Status = PostStatusCancelled
+	}
+	post.mu.Unlock()
+
+	if post.progress != nil {
+		p.jobProgress.FinishProgress(post.progress.GetID())
+	}
+	if post.file != nil {
+		if err := post.file.Close(); err != nil {
+			slog.WarnContext(ctx, "Error closing file for abandoned post", "error", err, "file", post.FilePath)
+		}
+	}
+	postsInFlight.Done()
+	post.wg.Done()
+}
+
+// drainAbandoned consumes every post left on q after its consumer loop exits
+// early and abandons each one, so queued posts don't leak file descriptors and
+// WaitGroup counts. It runs in its own goroutine because q is only closed once
+// postsInFlight reaches zero — which the draining itself brings about. On a
+// normal loop exit q is already closed and empty, so the goroutine ends
+// immediately.
+func (p *poster) drainAbandoned(ctx context.Context, q <-chan *Post, postsInFlight *sync.WaitGroup) {
+	go func() {
+		for post := range q {
+			p.abandonPost(ctx, post, postsInFlight)
+		}
+	}()
+}
+
 // postLoop processes posts from the queue
+// postPipelineDepth is how many posts (files) a single Post() call processes
+// concurrently. Overlapping the tail of one file's upload with the next file's
+// read-ahead keeps the shared worker pool busy across file boundaries (with
+// depth 1 the pool drained toward idle at every boundary on many-small-file
+// jobs). Total article concurrency is still bounded by the worker pool and the
+// engine's buffer budget, so this does not increase peak memory.
+const postPipelineDepth = 2
+
 func (p *poster) postLoop(ctx context.Context, postQueue chan *Post, checkQueue chan *Post, errChan chan<- error, nzbGen nzb.NZBGenerator, postsInFlight *sync.WaitGroup) {
-	// Only close channels that this goroutine writes to
-	defer close(checkQueue)
+	sem := make(chan struct{}, postPipelineDepth)
+	var inFlight sync.WaitGroup
+
+	// checkQueue is written to by the processPost goroutines, so it can only be
+	// closed after every one of them has finished.
+	defer func() {
+		inFlight.Wait()
+		close(checkQueue)
+	}()
+	// On any exit, abandon posts still queued so their files/WaitGroup counts
+	// don't leak when this loop stops early on a fatal error.
+	defer p.drainAbandoned(ctx, postQueue, postsInFlight)
+
+	// The first fatal error stops intake (remaining posts are abandoned by the
+	// drain) and is reported to errChan at most once, matching the previous
+	// serial return-on-first-error semantics.
+	var stopped atomic.Bool
+	var reportOnce sync.Once
+	reportFatal := func(err error) {
+		stopped.Store(true)
+		if err != nil {
+			reportOnce.Do(func() { errChan <- err })
+		}
+	}
 
 	for post := range postQueue {
-		select {
-		case <-ctx.Done():
-			errChan <- ctx.Err()
-			return
-		default:
-			// Check if we should pause before processing the post
-			if err := pausable.CheckPause(ctx); err != nil {
-				errChan <- err
-				return
-			}
+		if err := ctx.Err(); err != nil {
+			reportFatal(err)
+		}
+		if stopped.Load() {
+			p.abandonPost(ctx, post, postsInFlight)
+			continue
+		}
+		// Check if we should pause before processing the post
+		if err := pausable.CheckPause(ctx); err != nil {
+			reportFatal(err)
+			p.abandonPost(ctx, post, postsInFlight)
+			continue
+		}
 
-			// Set post status to Posting
-			post.mu.Lock()
-			post.Status = PostStatusPosting
-			post.mu.Unlock()
-
-			// Per-post context so the read-ahead goroutine always terminates
-			// when this post's block exits, even if the parent ctx is still
-			// alive (e.g. on the deferred-check non-fatal-error path).
-			postCtx, postCancel := context.WithCancel(ctx)
-
-			// Create read-ahead channel (buffer 50 articles ahead to overlap I/O with network)
-			readAheadChan := make(chan articleWithBody, 50)
-
-			// Per-article reservation against the process-wide buffer budget; 0
-			// when no engine is configured (reservation is then a no-op).
-			reserveBytes := p.engine.PerArticleBytes()
-
-			// Start read-ahead goroutine to pre-read article bodies
-			go func() {
-				defer close(readAheadChan)
-				for _, art := range post.Articles {
-					select {
-					case <-postCtx.Done():
-						return
-					default:
-						// Reserve global buffer budget before allocating/reading.
-						// This blocks (and so bounds total in-flight memory across
-						// all jobs) when the budget is exhausted.
-						if err := p.engine.ReserveBuffer(postCtx, reserveBytes); err != nil {
-							return
-						}
-
-						// Get buffer from pool, resize if needed. Outliers are dropped
-						// on Put (see putBodyBuffer) so they cannot inflate the pool.
-						poolBuf := bodyBufferPool.Get().([]byte)
-						if cap(poolBuf) < int(art.Size) {
-							poolBuf = make([]byte, art.Size)
-						}
-						body := poolBuf[:art.Size]
-
-						if _, err := readAtWithStallGuard(postCtx, post.file, body, art.Offset); err != nil {
-							putBodyBuffer(poolBuf)
-							p.engine.ReleaseBuffer(reserveBytes)
-							slog.ErrorContext(ctx, "Error pre-reading article", "error", err, "offset", art.Offset)
-							return
-						}
-
-						select {
-						case readAheadChan <- articleWithBody{article: art, body: body, poolBuf: poolBuf, reserved: reserveBytes}:
-						case <-postCtx.Done():
-							putBodyBuffer(poolBuf)
-							p.engine.ReleaseBuffer(reserveBytes)
-							return
-						}
-					}
-				}
+		sem <- struct{}{}
+		inFlight.Add(1)
+		go func(post *Post) {
+			defer func() {
+				<-sem
+				inFlight.Done()
 			}()
+			p.processPost(ctx, post, checkQueue, nzbGen, postsInFlight, reportFatal)
+		}(post)
+	}
+}
 
-			// Submit articles to the shared upload worker pool. Total posting
-			// concurrency across all in-flight Post() calls is capped at
-			// p.numOfConnections; this prevents the goroutine + buffer explosion
-			// that caused OOM under MaxConcurrentUploads > 1 with PAR2 enabled.
-			//
-			// We intentionally do NOT cancel sibling articles when one fails
-			// (e.g. TLS timeout) — they should continue.
-			var articleWG sync.WaitGroup
-			var firstErr atomic.Pointer[error]
-			recordErr := func(err error) {
-				if err == nil {
-					return
-				}
-				e := err
-				firstErr.CompareAndSwap(nil, &e)
-			}
+// processPost posts one file's articles through the shared upload worker pool,
+// then hands the post to the check queue (immediate-check mode) or completes
+// it. It always balances the post's accounting (postsInFlight, per-file wg,
+// file handle) and reports fatal errors through reportFatal.
+func (p *poster) processPost(ctx context.Context, post *Post, checkQueue chan<- *Post, nzbGen nzb.NZBGenerator, postsInFlight *sync.WaitGroup, reportFatal func(error)) {
+	// Set post status to Posting
+	post.mu.Lock()
+	post.Status = PostStatusPosting
+	post.mu.Unlock()
+	{
 
-			// Collect completed articles for batch NZB addition (reduces lock contention)
-			var completedArticles []*article.Article
-			var completedMu sync.Mutex
+		// Per-post context so the read-ahead goroutine always terminates
+		// when this post's block exits, even if the parent ctx is still
+		// alive (e.g. on the deferred-check non-fatal-error path).
+		postCtx, postCancel := context.WithCancel(ctx)
 
-			for artWithBody := range readAheadChan {
-				art := artWithBody.article
-				body := artWithBody.body
-				poolBuf := artWithBody.poolBuf
-				reserved := artWithBody.reserved
+		// Create read-ahead channel (buffer 50 articles ahead to overlap I/O with network)
+		readAheadChan := make(chan articleWithBody, 50)
 
-				articleWG.Add(1)
-				job := uploadJob{
-					ctx:      postCtx,
-					art:      art,
-					body:     body,
-					poolBuf:  poolBuf,
-					reserved: reserved,
-					done: func(err error) {
-						defer articleWG.Done()
-						if err != nil {
-							recordErr(err)
-							return
-						}
-						post.progress.UpdateProgress(int64(art.Size))
-						completedMu.Lock()
-						completedArticles = append(completedArticles, art)
-						completedMu.Unlock()
-					},
-				}
+		// Per-article reservation against the process-wide buffer budget; 0
+		// when no engine is configured (reservation is then a no-op).
+		reserveBytes := p.engine.PerArticleBytes()
 
-				select {
-				case p.uploadJobs <- job:
-				case <-p.shutdown:
-					putBodyBuffer(poolBuf)
-					p.engine.ReleaseBuffer(reserved)
-					recordErr(ErrPosterClosed)
-					articleWG.Done()
-				case <-postCtx.Done():
-					putBodyBuffer(poolBuf)
-					p.engine.ReleaseBuffer(reserved)
-					recordErr(postCtx.Err())
-					articleWG.Done()
-				}
-			}
-
-			// Wait for all submitted articles to finish.
-			articleWG.Wait()
-
-			// Collect first error (if any). Matches the previous WithFirstError
-			// semantic from conc/pool: other workers continued; we surface the
-			// first failure to the caller.
-			var errs error
-			if ePtr := firstErr.Load(); ePtr != nil {
-				errs = *ePtr
-			}
-
-			// Read-ahead goroutine has finished (readAheadChan was drained above)
-			// but cancel the per-post ctx so any straggler observes Done.
-			postCancel()
-
-			// Batch add completed articles to NZB generator (reduces lock contention)
-			for _, art := range completedArticles {
-				nzbGen.AddArticle(art)
-			}
-
-			p.jobProgress.FinishProgress(post.progress.GetID())
-
-			if errs != nil {
-				post.mu.Lock()
-				if errors.Is(errs, context.Canceled) {
-					post.Status = PostStatusCancelled
-					post.Error = fmt.Errorf("posting cancelled: %v", errs)
-				} else {
-					post.Status = PostStatusFailed
-					post.Error = fmt.Errorf("failed to post articles: %v", errs)
-				}
-				post.mu.Unlock()
-
-				// Mark this post as done in the queue tracking
-				postsInFlight.Done()
-
-				// Close the underlying file so the descriptor isn't leaked on
-				// failure. Long-running daemons that hit intermittent NNTP
-				// errors otherwise exhaust the process fd ulimit and stall.
-				if post.file != nil {
-					if cerr := post.file.Close(); cerr != nil {
-						slog.WarnContext(ctx, "Error closing file handle on post failure", "error", cerr, "file", post.FilePath)
-					}
-				}
-
-				if !errors.Is(errs, context.Canceled) {
-					errChan <- fmt.Errorf("failed to post file %s after %d retries: %v", post.FilePath, p.cfg.MaxRetries, errs)
-				}
-
+		var articleWG sync.WaitGroup
+		var firstErr atomic.Pointer[error]
+		recordErr := func(err error) {
+			if err == nil {
 				return
 			}
+			e := err
+			firstErr.CompareAndSwap(nil, &e)
+		}
 
-			post.mu.Lock()
-			post.Status = PostStatusPosted
-			post.mu.Unlock()
-
-			if p.immediateCheckEnabled() {
-				// Guard the send: if checkLoop has already exited (e.g. on a
-				// verify error) the buffered checkQueue can fill and this send
-				// would block forever, leaking postLoop and every queued post.
+		// Start read-ahead goroutine to pre-read article bodies
+		go func() {
+			defer close(readAheadChan)
+			for _, art := range post.Articles {
 				select {
-				case checkQueue <- post:
-				case <-ctx.Done():
-					if post.file != nil {
-						if cerr := post.file.Close(); cerr != nil {
-							slog.WarnContext(ctx, "Error closing file after ctx canceled during check enqueue", "error", cerr, "file", post.FilePath)
-						}
+				case <-postCtx.Done():
+					return
+				default:
+					// Reserve global buffer budget before allocating/reading.
+					// This blocks (and so bounds total in-flight memory across
+					// all jobs) when the budget is exhausted.
+					if err := p.engine.ReserveBuffer(postCtx, reserveBytes); err != nil {
+						// Usually postCtx cancellation, but record it so a
+						// non-cancel failure can't silently truncate the post.
+						recordErr(fmt.Errorf("error reserving buffer for %s: %w", post.FilePath, err))
+						return
 					}
-					postsInFlight.Done()
-					post.wg.Done()
-				}
 
-				continue
+					// Get buffer from pool, resize if needed. Outliers are dropped
+					// on Put (see putBodyBuffer) so they cannot inflate the pool.
+					poolBuf := bodyBufferPool.Get().([]byte)
+					if cap(poolBuf) < int(art.Size) {
+						poolBuf = make([]byte, art.Size)
+					}
+					body := poolBuf[:art.Size]
+
+					if _, err := readAtWithStallGuard(postCtx, post.file, body, art.Offset); err != nil {
+						putBodyBuffer(poolBuf)
+						p.engine.ReleaseBuffer(reserveBytes)
+						slog.ErrorContext(ctx, "Error pre-reading article", "error", err, "offset", art.Offset)
+						// Propagate the read failure: without this the
+						// remaining segments are silently dropped and the
+						// post is reported as fully posted with a
+						// truncated article set / NZB.
+						recordErr(fmt.Errorf("error pre-reading article at offset %d of %s: %w", art.Offset, post.FilePath, err))
+						return
+					}
+
+					select {
+					case readAheadChan <- articleWithBody{article: art, body: body, poolBuf: poolBuf, reserved: reserveBytes}:
+					case <-postCtx.Done():
+						putBodyBuffer(poolBuf)
+						p.engine.ReleaseBuffer(reserveBytes)
+						return
+					}
+				}
+			}
+		}()
+
+		// Submit articles to the shared upload worker pool. Total posting
+		// concurrency across all in-flight Post() calls is capped at
+		// p.numOfConnections; this prevents the goroutine + buffer explosion
+		// that caused OOM under MaxConcurrentUploads > 1 with PAR2 enabled.
+		//
+		// We intentionally do NOT cancel sibling articles when one fails
+		// (e.g. TLS timeout) — they should continue.
+
+		// Collect completed articles for batch NZB addition (reduces lock contention)
+		var completedArticles []*article.Article
+		var completedMu sync.Mutex
+
+		for artWithBody := range readAheadChan {
+			art := artWithBody.article
+			body := artWithBody.body
+			poolBuf := artWithBody.poolBuf
+			reserved := artWithBody.reserved
+
+			articleWG.Add(1)
+			job := uploadJob{
+				ctx:      postCtx,
+				art:      art,
+				body:     body,
+				poolBuf:  poolBuf,
+				reserved: reserved,
+				done: func(err error) {
+					defer articleWG.Done()
+					if err != nil {
+						recordErr(err)
+						return
+					}
+					post.progress.UpdateProgress(int64(art.Size))
+					completedMu.Lock()
+					completedArticles = append(completedArticles, art)
+					completedMu.Unlock()
+				},
 			}
 
-			// Post complete without check - mark as done in queue tracking
+			select {
+			case p.uploadJobs <- job:
+			case <-p.shutdown:
+				putBodyBuffer(poolBuf)
+				p.engine.ReleaseBuffer(reserved)
+				recordErr(ErrPosterClosed)
+				articleWG.Done()
+			case <-postCtx.Done():
+				putBodyBuffer(poolBuf)
+				p.engine.ReleaseBuffer(reserved)
+				recordErr(postCtx.Err())
+				articleWG.Done()
+			}
+		}
+
+		// Wait for all submitted articles to finish.
+		articleWG.Wait()
+
+		// Collect first error (if any). Matches the previous WithFirstError
+		// semantic from conc/pool: other workers continued; we surface the
+		// first failure to the caller.
+		var errs error
+		if ePtr := firstErr.Load(); ePtr != nil {
+			errs = *ePtr
+		}
+
+		// Read-ahead goroutine has finished (readAheadChan was drained above)
+		// but cancel the per-post ctx so any straggler observes Done.
+		postCancel()
+
+		// Batch add completed articles to NZB generator (reduces lock contention)
+		for _, art := range completedArticles {
+			nzbGen.AddArticle(art)
+		}
+
+		p.jobProgress.FinishProgress(post.progress.GetID())
+
+		if errs != nil {
+			post.mu.Lock()
+			if errors.Is(errs, context.Canceled) {
+				post.Status = PostStatusCancelled
+				post.Error = fmt.Errorf("posting cancelled: %v", errs)
+			} else {
+				post.Status = PostStatusFailed
+				post.Error = fmt.Errorf("failed to post articles: %v", errs)
+			}
+			post.mu.Unlock()
+
+			// Mark this post as done in the queue tracking
 			postsInFlight.Done()
 
-			// Close file
+			// Close the underlying file so the descriptor isn't leaked on
+			// failure. Long-running daemons that hit intermittent NNTP
+			// errors otherwise exhaust the process fd ulimit and stall.
 			if post.file != nil {
-				if err := post.file.Close(); err != nil {
-					slog.WarnContext(ctx, "Error closing file handle", "error", err, "file", post.FilePath)
+				if cerr := post.file.Close(); cerr != nil {
+					slog.WarnContext(ctx, "Error closing file handle on post failure", "error", cerr, "file", post.FilePath)
 				}
 			}
 
+			// Stop intake of further posts. A cancellation is not reported
+			// (Post() observes ctx.Done itself); a real failure is sent to
+			// errChan (at most once) BEFORE wg.Done so Post() cannot wake
+			// on `done` before the error is observable.
+			if errors.Is(errs, context.Canceled) {
+				reportFatal(nil)
+			} else {
+				reportFatal(fmt.Errorf("failed to post file %s after %d retries: %v", post.FilePath, p.cfg.MaxRetries, errs))
+			}
+
+			// Balance the per-file WaitGroup so Post()'s wg.Wait() can
+			// complete even when the parent ctx is still alive (e.g. an
+			// internal post timeout); otherwise Post() blocks forever.
 			post.wg.Done()
+
+			return
 		}
+
+		post.mu.Lock()
+		post.Status = PostStatusPosted
+		post.mu.Unlock()
+
+		if p.immediateCheckEnabled() {
+			// Guard the send: if checkLoop has already exited (e.g. on a
+			// verify error) the buffered checkQueue can fill and this send
+			// would block forever, leaking postLoop and every queued post.
+			select {
+			case checkQueue <- post:
+			case <-ctx.Done():
+				if post.file != nil {
+					if cerr := post.file.Close(); cerr != nil {
+						slog.WarnContext(ctx, "Error closing file after ctx canceled during check enqueue", "error", cerr, "file", post.FilePath)
+					}
+				}
+				postsInFlight.Done()
+				post.wg.Done()
+			}
+
+			return
+		}
+
+		// Post complete without check - mark as done in queue tracking
+		postsInFlight.Done()
+
+		// Close file
+		if post.file != nil {
+			if err := post.file.Close(); err != nil {
+				slog.WarnContext(ctx, "Error closing file handle", "error", err, "file", post.FilePath)
+			}
+		}
+
+		post.wg.Done()
 	}
 }
 
@@ -791,14 +923,20 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 
 	firstPost := true
 
+	// On any exit, abandon posts still queued so their files/WaitGroup counts
+	// don't leak when this loop returns early on a fatal error.
+	defer p.drainAbandoned(ctx, checkQueue, postsInFlight)
+
 	for post := range checkQueue {
 		select {
 		case <-ctx.Done():
+			p.abandonPost(ctx, post, postsInFlight)
 			errChan <- ctx.Err()
 			return
 		default:
 			// Check if we should pause before processing the check
 			if err := pausable.CheckPause(ctx); err != nil {
+				p.abandonPost(ctx, post, postsInFlight)
 				errChan <- err
 				return
 			}
@@ -817,6 +955,7 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 					select {
 					case <-ctx.Done():
 						post.progress.SetWaitDeadline(time.Time{})
+						p.abandonPost(ctx, post, postsInFlight)
 						errChan <- ctx.Err()
 						return
 					case <-time.After(delay):
@@ -943,10 +1082,12 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 						postsInFlight.Done()
 						continue
 					case <-ctx.Done():
-						// Decrement both: the retry that won't be sent and the
-						// original post we are abandoning.
+						// Decrement the retry that won't be sent, finish its
+						// progress entry, then abandon the original post
+						// (closes the file and balances its counters).
 						postsInFlight.Done()
-						postsInFlight.Done()
+						p.jobProgress.FinishProgress(failedPost.progress.GetID())
+						p.abandonPost(ctx, post, postsInFlight)
 						slog.WarnContext(ctx, "Context canceled while trying to send retry", "file", post.FilePath)
 						return
 					}
@@ -1009,6 +1150,12 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 				}
 
 				errChan <- fmt.Errorf("failed to verify file %s after %d retries", post.FilePath, p.checkCfg.MaxRePost)
+
+				// Balance the per-file WaitGroup so Post()'s wg.Wait()
+				// goroutine can terminate. Done AFTER the (buffered) error
+				// send so Post() cannot wake on `done` before the error is
+				// observable.
+				post.wg.Done()
 				return
 			} else if errors != nil {
 				// This is a safety check - if we have errors but no failed articles, something went wrong
@@ -1031,6 +1178,12 @@ func (p *poster) checkLoop(ctx context.Context, checkQueue chan *Post, postQueue
 				}
 
 				errChan <- fmt.Errorf("unexpected error verifying file %s: %v", post.FilePath, errors)
+
+				// Balance the per-file WaitGroup so Post()'s wg.Wait()
+				// goroutine can terminate. Done AFTER the (buffered) error
+				// send so Post() cannot wake on `done` before the error is
+				// observable.
+				post.wg.Done()
 				return
 			}
 
@@ -1147,16 +1300,27 @@ func (p *poster) addPost(ctx context.Context, filePath string, displayName strin
 		return fmt.Errorf("error opening file: %w", err)
 	}
 
+	// Close the file on every path that does not transfer ownership (to the
+	// enqueued Post or to addRecoveredPost). Header/Message-ID generation
+	// errors otherwise leak one descriptor per affected file.
+	owned := true
+	defer func() {
+		if owned {
+			_ = file.Close()
+		}
+	}()
+
 	fileInfo, err := file.Stat()
 	if err != nil {
-		_ = file.Close()
 		return fmt.Errorf("error getting file info: %w", err)
 	}
 
-	// Skip empty files - they have no segments to post
+	// Skip empty files - they have no segments to post. Balance the per-file
+	// WaitGroup (Post() did wg.Add(len(files)) up front); without this
+	// wg.Wait() never completes and Post() hangs forever.
 	if fileInfo.Size() == 0 {
-		_ = file.Close()
 		slog.WarnContext(ctx, "Skipping empty file", "path", filePath)
+		wg.Done()
 		return nil
 	}
 
@@ -1168,6 +1332,7 @@ func (p *poster) addPost(ctx context.Context, filePath string, displayName strin
 		if recs, ok, err := p.manifestSink.ExistingArticles(ctx, filePath); err != nil {
 			slog.WarnContext(ctx, "Failed to read existing manifest; regenerating", "file", filePath, "error", err)
 		} else if ok {
+			owned = false // addRecoveredPost enqueues or closes the file itself
 			return p.addRecoveredPost(ctx, filePath, file, fileInfo, recs, wg, failedPosts, postQueue, postsInFlight)
 		}
 	}
@@ -1182,7 +1347,6 @@ func (p *poster) addPost(ctx context.Context, filePath string, displayName strin
 	switch p.cfg.GroupPolicy {
 	case config.GroupPolicyEachFile:
 		if len(p.cfg.Groups) == 0 {
-			_ = file.Close()
 			return fmt.Errorf("group policy is %q but no newsgroups are configured", config.GroupPolicyEachFile)
 		}
 		randomGroup := p.cfg.Groups[rand.Intn(len(p.cfg.Groups))]
@@ -1345,7 +1509,6 @@ func (p *poster) addPost(ctx context.Context, filePath string, displayName strin
 	// the file rather than posting without durable recovery data.
 	if p.manifestSink != nil {
 		if err := p.manifestSink.RecordFile(ctx, filePath, articles); err != nil {
-			_ = file.Close()
 			return fmt.Errorf("recording manifest for %s: %w", filePath, err)
 		}
 	}
@@ -1367,15 +1530,13 @@ func (p *poster) addPost(ctx context.Context, filePath string, displayName strin
 	// Use select to safely send to channel and handle context cancellation
 	select {
 	case postQueue <- post:
-		// Successfully sent to queue
+		// Successfully sent to queue; the Post now owns the file handle.
+		owned = false
 		return nil
 	case <-ctx.Done():
-		// Context canceled, decrement counter since we didn't send
+		// Context canceled, decrement counter since we didn't send. The
+		// deferred close releases the file.
 		postsInFlight.Done()
-		// Close the file and return error
-		if err := file.Close(); err != nil {
-			slog.WarnContext(ctx, "Error closing file after context cancellation", "error", err, "file", filePath)
-		}
 		return ctx.Err()
 	}
 }
@@ -1459,15 +1620,6 @@ func (p *poster) checkArticle(ctx context.Context, art *article.Article) error {
 }
 
 // Stats returns posting statistics
-func (p *poster) Stats() Stats {
-	p.stats.mu.Lock()
-	defer p.stats.mu.Unlock()
-
-	return Stats{
-		ArticlesPosted:  p.stats.ArticlesPosted,
-		ArticlesChecked: p.stats.ArticlesChecked,
-		BytesPosted:     p.stats.BytesPosted,
-		ArticleErrors:   p.stats.ArticleErrors,
-		StartTime:       p.stats.StartTime,
-	}
+func (p *poster) Stats() StatsSnapshot {
+	return p.stats.snapshot()
 }
