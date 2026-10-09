@@ -404,6 +404,7 @@ In addition to the configuration file, Postie accepts several command line param
 - `-o`: Output directory for processed files
 - `-v`: Enable verbose logging
 - `-i`: Path to a single file to post. If provided the dir is ignored.
+- `--ignore-pattern`: Ignore files matching a basename glob during directory uploads. Repeat the flag for multiple patterns. This option is ignored with `-i`.
 - `-version`: Display version information
 
 Example:
@@ -411,6 +412,15 @@ Example:
 ```bash
 ./postie -config config.yaml -d ./upload -o ./output
 ```
+
+To exclude temporary downloads from a classic CLI directory upload:
+
+```bash
+./postie -c config.yaml -d ./upload -o ./output \
+  --ignore-pattern '*.tmp' --ignore-pattern '*.part' --ignore-pattern '*.!ut'
+```
+
+Quote patterns to prevent your shell from expanding them. Like watcher `ignore_patterns`, these globs match file basenames at every level of the directory tree; directory names are not filtered. Patterns support `*`, `?`, and character classes such as `[0-9]`. Invalid patterns cause an error before uploading. If no files remain, Postie reports `no files to post` without connecting to a server. Watcher configuration applies only to watch mode; classic CLI uploads use these flags and upload all files by default.
 
 ```bash
 ./postie watch -config config.yaml -d ./upload -o ./output

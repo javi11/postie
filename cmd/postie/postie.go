@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/kipsilabs/postie/internal/config"
 	"github.com/kipsilabs/postie/internal/pool"
@@ -14,11 +16,12 @@ import (
 )
 
 var (
-	configPath string
-	dirPath    string
-	inputFile  string
-	verbose    bool
-	outputDir  string
+	configPath     string
+	dirPath        string
+	inputFile      string
+	verbose        bool
+	outputDir      string
+	ignorePatterns []string
 )
 
 var rootCmd = &cobra.Command{
@@ -28,6 +31,24 @@ var rootCmd = &cobra.Command{
 It supports configuration via a YAML file and can process multiple files in a directory.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
+		files := make([]fileinfo.FileInfo, 0)
+		if inputFile != "" {
+			info, err := os.Stat(inputFile)
+			if err != nil {
+				return err
+			}
+			files = append(files, fileinfo.FileInfo{Path: inputFile, Size: uint64(info.Size())})
+			dirPath = filepath.Dir(inputFile)
+		} else {
+			var err error
+			files, err = collectDirectoryFiles(dirPath, ignorePatterns)
+			if err != nil {
+				return err
+			}
+		}
+		if len(files) == 0 {
+			return fmt.Errorf("no files to post")
+		}
 
 		// Load configuration
 		cfg, err := config.Load(configPath)
@@ -62,38 +83,6 @@ It supports configuration via a YAML file and can process multiple files in a di
 		// Start posting
 		slog.InfoContext(ctx, "Starting upload from directory", "dir", dirPath)
 
-		// Walk directory
-		files := make([]fileinfo.FileInfo, 0)
-
-		if inputFile != "" {
-			info, err := os.Stat(inputFile)
-			if err != nil {
-				slog.ErrorContext(ctx, "Error getting file info", "error", err)
-				return err
-			}
-
-			files = append(files, fileinfo.FileInfo{Path: inputFile, Size: uint64(info.Size())})
-			dirPath = filepath.Dir(inputFile)
-		} else {
-			err = filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
-				if err != nil {
-					return err
-				}
-
-				// Skip directories
-				if info.IsDir() {
-					return nil
-				}
-
-				files = append(files, fileinfo.FileInfo{Path: path, Size: uint64(info.Size())})
-				return nil
-			})
-			if err != nil {
-				slog.ErrorContext(ctx, "Error during directory walk", "error", err)
-				return err
-			}
-		}
-
 		// CLI mode: use config-based folder mode decision (not forced)
 		_, err = poster.Post(ctx, files, dirPath, outputDir, inputFile == "")
 		return err
@@ -107,6 +96,38 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&outputDir, "output-dir", "o", ".", "Directory to output files to")
 
 	rootCmd.PersistentFlags().StringVarP(&inputFile, "input-file", "i", "", "File to upload. If provided, the directory will be ignored.")
+	rootCmd.Flags().StringArrayVar(&ignorePatterns, "ignore-pattern", nil, "Ignore files matching a basename glob during directory uploads (repeatable; ignored with --input-file)")
+}
+
+func collectDirectoryFiles(dir string, patterns []string) ([]fileinfo.FileInfo, error) {
+	for _, pattern := range patterns {
+		if err := validateIgnorePattern(pattern); err != nil {
+			return nil, fmt.Errorf("invalid ignore pattern %q: %w", pattern, err)
+		}
+	}
+	files := make([]fileinfo.FileInfo, 0)
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		for _, pattern := range patterns {
+			if matched, _ := filepath.Match(pattern, info.Name()); matched {
+				return nil
+			}
+		}
+		files = append(files, fileinfo.FileInfo{Path: path, Size: uint64(info.Size())})
+		return nil
+	})
+	return files, err
+}
+
+func validateIgnorePattern(pattern string) error {
+	// Removing star chunk boundaries makes Match validate the entire pattern even when a prefix doesn't match.
+	_, err := filepath.Match(strings.ReplaceAll(pattern, "*", "?"), "")
+	return err
 }
 
 func setupLogging(verbose bool) {

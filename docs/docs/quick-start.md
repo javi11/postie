@@ -115,6 +115,15 @@ To post all files in a directory:
 ./postie -config config.yaml -d /path/to/directory -o ./output
 ```
 
+To skip temporary files, repeat `--ignore-pattern` for each quoted glob:
+
+```bash
+./postie -c config.yaml -d /path/to/directory -o ./output \
+  --ignore-pattern '*.tmp' --ignore-pattern '*.part' --ignore-pattern '*.!ut'
+```
+
+Patterns match file basenames, including files in subdirectories. Directory names are not filtered. Without these flags, all files are included. An explicit `-i` file takes precedence and ignores these patterns. See [command line parameters](./configuration#command-line-parameters) for details.
+
 ### Watch Mode
 
 To continuously watch a directory for new files to post:
