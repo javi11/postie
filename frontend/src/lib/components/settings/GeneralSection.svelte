@@ -1,5 +1,5 @@
 <script lang="ts">
-import { page } from "$app/stores";
+import { onMount } from "svelte";
 import apiClient from "$lib/api/client";
 import LanguageSwitcher from "$lib/components/LanguageSwitcher.svelte";
 import ThemeSwitcher from "$lib/components/ThemeSwitcher.svelte";
@@ -13,6 +13,39 @@ interface Props {
 }
 
 let { config = $bindable() }: Props = $props();
+
+let isDesktop = $state(false);
+let configPath = $state("");
+let relocatingConfig = $state(false);
+
+onMount(async () => {
+ try {
+  await apiClient.initialize();
+  isDesktop = apiClient.environment === "wails";
+  if (isDesktop) {
+   const { GetConfigPath } = await import("$lib/wailsjs/go/backend/App");
+   configPath = await GetConfigPath();
+  }
+ } catch (error) {
+  toastStore.error($t("settings.general.config_location_error"), String(error));
+ }
+});
+
+async function selectConfigDirectory() {
+ relocatingConfig = true;
+ try {
+  const { SelectConfigDirectory } = await import("$lib/wailsjs/go/backend/App");
+  const path = await SelectConfigDirectory();
+  if (path && path !== configPath) {
+   configPath = path;
+   toastStore.success($t("settings.general.config_location_success"));
+  }
+ } catch (error) {
+  toastStore.error($t("settings.general.config_location_error"), String(error));
+ } finally {
+  relocatingConfig = false;
+ }
+}
 
 // Reactive local state
 let outputDir = $state(config.output_dir || "./output");
@@ -79,6 +112,22 @@ async function selectOutputDirectory() {
 						{/if}
 					</div>
 				</div>
+
+                {#if isDesktop}
+                    <div class="form-control">
+                        <label class="label" for="config-path">
+                            <span class="label-text">{$t('settings.general.config_file')}</span>
+                        </label>
+                        <div class="flex items-center gap-2">
+                            <input id="config-path" class="input input-bordered flex-1 min-w-0" value={configPath} readonly />
+                            <button type="button" class="btn btn-outline btn-sm" onclick={selectConfigDirectory} disabled={relocatingConfig || !configPath}>
+                                {#if relocatingConfig}<span class="loading loading-spinner loading-xs"></span>{:else}<FolderOpen class="w-4 h-4" />{/if}
+                                {$t('settings.general.change_config_location')}
+                            </button>
+                        </div>
+                        <p class="text-sm text-base-content/70 mt-2">{$t('settings.general.config_location_description')}</p>
+                    </div>
+                {/if}
 
 				<div class="alert alert-info">
 					<span class="text-sm">

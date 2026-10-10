@@ -57,6 +57,11 @@
 			"connection_pool": "Pool de Connexions"
 		},
 		"general": {
+			"config_file": "Fichier de configuration",
+			"change_config_location": "Changer d’emplacement",
+			"config_location_description": "Copie le config.yaml enregistré vers un dossier sans config.yaml et l’utilise immédiatement et après redémarrage. Enregistrez d’abord les modifications en cours. Le fichier précédent est conservé comme sauvegarde ; les emplacements de la base de données et des journaux restent identiques.",
+			"config_location_success": "Emplacement de configuration modifié",
+			"config_location_error": "Impossible de changer l’emplacement de configuration",
 			"title": "Paramètres Généraux",
 			"output_directory": "Répertoire de Sortie",
 			"output_directory_description": "Répertoire où les fichiers traités et les fichiers NZB seront stockés pour les téléchargements manuels et le surveillant",
