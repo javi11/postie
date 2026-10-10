@@ -586,6 +586,24 @@ func hasPar2Files(files []fileinfo.FileInfo) bool {
 	return false
 }
 
+// additionalPar2Paths excludes files already posted through the source list.
+// Reused source PAR2 files must keep their relative paths and be uploaded once.
+func additionalPar2Paths(paths []string, sourcePaths []string) []string {
+	seen := make(map[string]bool, len(sourcePaths)+len(paths))
+	for _, path := range sourcePaths {
+		seen[filepath.Clean(path)] = true
+	}
+	var additional []string
+	for _, path := range paths {
+		key := filepath.Clean(path)
+		if !seen[key] {
+			seen[key] = true
+			additional = append(additional, path)
+		}
+	}
+	return additional
+}
+
 // postFolder posts all files from a folder as a single NZB
 func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, rootDir string, outputDir string) (string, error) {
 	if len(files) == 0 {
@@ -666,7 +684,7 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 					// Continue without PAR2 files
 				} else {
 					p.trackGenerated(par2Res)
-					allFilePaths = append(allFilePaths, par2Res.All()...)
+					allFilePaths = append(allFilePaths, additionalPar2Paths(par2Res.All(), allFilePaths)...)
 					// par2 set files live at the folder root — basenames in NZB subjects.
 				}
 			}
@@ -738,7 +756,10 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 			p.trackGenerated(par2Res)
 
 			// par2 set files live at the folder root — basenames in NZB subjects.
-			par2Paths := par2Res.All()
+			par2Paths := additionalPar2Paths(par2Res.All(), allFilePaths)
+			if len(par2Paths) == 0 {
+				return nil
+			}
 			par2RelPaths := map[string]string{}
 			if err := p.poster.PostWithRelativePaths(ctx, par2Paths, rootDir, nzbGen, par2RelPaths); err != nil {
 				if !errors.Is(err, context.Canceled) {
