@@ -289,6 +289,11 @@ func setupLogging(logPath string) (string, error) {
 
 // NewApp creates a new App application struct
 func NewApp() *App {
+	return newApp(setupLogging)
+}
+
+// newApp keeps startup path resolution independent of the logging sink.
+func newApp(initializeLogging func(string) (string, error)) *App {
 	var loggingError string
 	var actualLogPath string
 
@@ -312,7 +317,7 @@ func NewApp() *App {
 	}
 
 	// Setup logging with Windows-specific optimizations
-	actualLogPath, err = setupLogging(appPaths.Log)
+	actualLogPath, err = initializeLogging(appPaths.Log)
 	if err != nil {
 		// Fallback to basic stdout logging if file logging fails
 		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{

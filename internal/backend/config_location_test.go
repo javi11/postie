@@ -172,6 +172,30 @@ func isolatedAppPaths(t *testing.T) *AppPaths {
 	return paths
 }
 
+// Use the real constructor and Startup without opening a process-wide log
+// sink. Every app created here owns cleanup before its TempDir is removed.
+func newConfigLocationTestApp(t *testing.T) *App {
+	t.Helper()
+	app := newApp(func(path string) (string, error) { return path, nil })
+	t.Cleanup(func() {
+		app.Shutdown()
+		if app.procCancel != nil {
+			app.procCancel()
+		}
+		if app.queue != nil {
+			if err := app.queue.Close(); err != nil {
+				t.Errorf("close test queue: %v", err)
+			}
+		}
+		if app.database != nil {
+			if err := app.database.Close(); err != nil {
+				t.Errorf("close test database: %v", err)
+			}
+		}
+	})
+	return app
+}
+
 func TestNewAppReportsUnreadableLocationPreference(t *testing.T) {
 	paths := isolatedAppPaths(t)
 	if err := os.WriteFile(paths.Config, []byte("version: 99999\n"), 0600); err != nil {
@@ -180,10 +204,9 @@ func TestNewAppReportsUnreadableLocationPreference(t *testing.T) {
 	if err := os.WriteFile(configLocationFile(paths.Config), []byte("relative/path.yaml"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	app := NewApp()
+	app := newConfigLocationTestApp(t)
 	app.isWebMode = true
 	app.Startup(context.Background())
-	defer app.Shutdown()
 	status := app.GetAppStatus()
 	if !status.CriticalConfigError || status.Error == "" {
 		t.Fatalf("invalid location was silently ignored: %+v", status)
@@ -205,7 +228,7 @@ func TestNewAppLoadsRelocatedConfiguration(t *testing.T) {
 	if err := config.SaveConfig(&cfg, paths.Config); err != nil {
 		t.Fatal(err)
 	}
-	app := NewApp()
+	app := newConfigLocationTestApp(t)
 	path, err := app.relocateConfig(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -215,10 +238,9 @@ func TestNewAppLoadsRelocatedConfiguration(t *testing.T) {
 	if err := config.SaveConfig(&cfg, path); err != nil {
 		t.Fatal(err)
 	}
-	restarted := NewApp()
+	restarted := newConfigLocationTestApp(t)
 	restarted.isWebMode = true // The backend startup is identical; avoid emitting Wails events in a test.
 	restarted.Startup(context.Background())
-	defer restarted.Shutdown()
 	loaded, err := restarted.GetConfig()
 	if err != nil || loaded.OutputDir != "relocated-output" {
 		t.Fatalf("restart did not load relocated YAML: config=%+v, err=%v", loaded, err)
@@ -227,7 +249,7 @@ func TestNewAppLoadsRelocatedConfiguration(t *testing.T) {
 		t.Fatalf("restart path = %q", restarted.GetConfigPath())
 	}
 	// Web startup retains its previous default path behavior.
-	web := NewApp()
+	web := newConfigLocationTestApp(t)
 	web.SetWebMode(true)
 	if web.GetConfigPath() != paths.Config {
 		t.Fatal("desktop preference changed web configuration path")
