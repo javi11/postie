@@ -40,6 +40,21 @@ docker-compose up -d
 # Access web interface at http://localhost:8080
 ```
 
+### Homebrew (CLI)
+
+Install the command-line poster on macOS or Linux (Apple Silicon/ARM64 or Intel/AMD64).
+Linux requires glibc 2.34+ and the system C++/GCC runtimes:
+
+```bash
+brew tap kipsilabs/postie https://github.com/kipsilabs/postie
+brew install kipsilabs/postie/postie
+postie --help
+```
+
+The explicit tap URL uses this repository directly. The formula installs the CLI
+as `postie`; configure it with a YAML file ([configuration guide](https://postie.kipsilabs.top/docs/configuration)).
+To upgrade after a formula update, run `brew update && brew upgrade kipsilabs/postie/postie`.
+
 ### Binary Download
 
 [![Download for Windows](https://img.shields.io/badge/Windows-Download-0078d4?style=for-the-badge&logo=windows)](https://github.com/kipsilabs/postie/releases/latest/download/postie_windows_amd64.zip)
