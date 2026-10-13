@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/klauspost/compress/zstd"
@@ -101,6 +102,27 @@ func RecordFromArticle(idx int, sourcePath string, role FileRole, a *article.Art
 // laid out as <baseDir>/<transferID>/<fileID>.jsonl.zst.
 func FilePath(baseDir, transferID, fileID string) string {
 	return filepath.Join(baseDir, transferID, fileID+".jsonl.zst")
+}
+
+// Remove deletes a manifest and its per-transfer directory when it is empty.
+// Nonstandard paths are still removed, but their parent directories are kept.
+// Never remove recursively: sibling manifests or a writer's temporary file may
+// still belong to a live upload.
+func Remove(path, transferID string) error {
+	if path == "" {
+		return nil
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	dir := filepath.Dir(path)
+	if transferID == "" || transferID == "." || transferID == ".." || filepath.Base(dir) != transferID || !strings.HasSuffix(filepath.Base(path), ".jsonl.zst") {
+		return nil
+	}
+	if err := os.Remove(dir); err != nil && !os.IsNotExist(err) && !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	return nil
 }
 
 // Writer streams ArticleRecords to a temporary file and atomically commits them

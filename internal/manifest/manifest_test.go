@@ -236,3 +236,87 @@ func TestLargeManifestStreams(t *testing.T) {
 		t.Errorf("streamed %d records, want %d", count, n)
 	}
 }
+
+func TestRemovePreservesLiveFilesAndUnrelatedDirectories(t *testing.T) {
+	for _, tc := range []struct {
+		name, transferID, parent, filename string
+		sibling                            bool
+		wantDir                            bool
+	}{
+		{name: "empty transfer", transferID: "transfer", parent: "transfer", filename: "f.jsonl.zst"},
+		{name: "live sibling", transferID: "transfer", parent: "transfer", filename: "f.jsonl.zst", sibling: true, wantDir: true},
+		{name: "unrelated parent", transferID: "transfer", parent: "other", filename: "f.jsonl.zst", wantDir: true},
+		{name: "empty ID", parent: "transfer", filename: "f.jsonl.zst", wantDir: true},
+		{name: "nonstandard file", transferID: "transfer", parent: "transfer", filename: "manifest", wantDir: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			base := t.TempDir()
+			dir := filepath.Join(base, tc.parent)
+			if err := os.Mkdir(dir, 0755); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(dir, tc.filename)
+			if err := os.WriteFile(path, []byte("manifest"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			sibling := filepath.Join(dir, "live.jsonl.zst.tmp")
+			if tc.sibling {
+				if err := os.WriteFile(sibling, []byte("in progress"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for i := 0; i < 2; i++ {
+				if err := Remove(path, tc.transferID); err != nil {
+					t.Fatalf("Remove attempt %d: %v", i, err)
+				}
+			}
+			if _, err := os.Stat(path); !os.IsNotExist(err) {
+				t.Errorf("manifest still exists: %v", err)
+			}
+			_, err := os.Stat(dir)
+			if tc.wantDir && err != nil {
+				t.Errorf("directory should remain: %v", err)
+			}
+			if !tc.wantDir && !os.IsNotExist(err) {
+				t.Errorf("empty transfer directory should be removed: %v", err)
+			}
+			if _, err := os.Stat(base); err != nil {
+				t.Errorf("manifest root should remain: %v", err)
+			}
+			if tc.sibling {
+				data, err := os.ReadFile(sibling)
+				if err != nil || string(data) != "in progress" {
+					t.Errorf("live manifest changed: %q, %v", data, err)
+				}
+			}
+		})
+	}
+}
+
+func TestRemoveFailedManifestDeletionRetainsDirectoryContents(t *testing.T) {
+	base := t.TempDir()
+	path := FilePath(base, "transfer", "f")
+	if err := os.MkdirAll(path, 0755); err != nil {
+		t.Fatal(err)
+	}
+	child := filepath.Join(path, "recovery-data")
+	if err := os.WriteFile(child, []byte("retain me"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := Remove(path, "transfer"); err == nil {
+		t.Fatal("Remove must report failure for a nonempty directory supplied as a manifest")
+	}
+	data, err := os.ReadFile(child)
+	if err != nil || string(data) != "retain me" {
+		t.Errorf("recovery data changed: %q, %v", data, err)
+	}
+	if _, err := os.Stat(filepath.Join(base, "transfer")); err != nil {
+		t.Errorf("parent must remain after failed removal: %v", err)
+	}
+}
+
+func TestRemoveEmptyPathDoesNothing(t *testing.T) {
+	if err := Remove("", "transfer"); err != nil {
+		t.Errorf("empty manifest path should be a no-op: %v", err)
+	}
+}
