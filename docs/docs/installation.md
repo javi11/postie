@@ -6,7 +6,7 @@ sidebar_position: 2
 
 There are several ways to install and run Postie. Choose the method that best suits your environment and needs.
 
-**💡 All installation methods include access to the modern web interface for easy configuration and monitoring.**
+The desktop, web, and Docker distributions include a web interface. The Homebrew package installs the command-line poster.
 
 ## Quick Download
 
@@ -20,6 +20,28 @@ Download the latest release for your platform:
 </a>
 
 [![View All Releases](https://img.shields.io/badge/All%20Releases-View-6c757d?style=for-the-badge&logo=github)](https://github.com/kipsilabs/postie/releases/latest)
+
+## Homebrew (CLI)
+
+On macOS or Linux, with ARM64 or Intel/AMD64 hardware. The prebuilt Linux CLI
+requires glibc 2.34 or newer and the system C++/GCC runtimes (`libstdc++` and `libgcc_s`):
+
+```bash
+brew tap kipsilabs/postie https://github.com/kipsilabs/postie
+brew install kipsilabs/postie/postie
+postie --help
+```
+
+The explicit repository URL is required because the formula lives in the Postie
+repository. The installed command is `postie`. Create a YAML configuration using
+the [configuration guide](./configuration.md), then run `postie -c config.yaml`.
+
+Upgrade with:
+
+```bash
+brew update
+brew upgrade kipsilabs/postie/postie
+```
 
 ## Binary Installation
 

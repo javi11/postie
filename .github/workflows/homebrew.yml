@@ -1,0 +1,33 @@
+name: Homebrew
+
+on:
+  pull_request:
+    paths:
+      - 'Formula/**'
+      - 'scripts/update_homebrew.py'
+      - 'scripts/test_update_homebrew.py'
+      - '.github/workflows/homebrew.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test release metadata validation
+        run: python3 -m unittest discover -s scripts -p 'test_update_homebrew.py'
+      - name: Install Homebrew
+        uses: Homebrew/actions/setup-homebrew@main
+      - name: Install and test the formula
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+        run: |
+          brew tap kipsilabs/postie "$GITHUB_WORKSPACE"
+          brew install kipsilabs/postie/postie
+          brew test kipsilabs/postie/postie
