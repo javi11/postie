@@ -61,6 +61,11 @@
 			"connection_pool": "Connection Pool"
 		},
 		"general": {
+			"config_file": "Configuration file",
+			"change_config_location": "Change location",
+			"config_location_description": "Copies the saved config.yaml to a directory without config.yaml and uses it immediately and after restart. Save any pending edits first. The previous file is kept as a backup; database and log locations stay the same.",
+			"config_location_success": "Configuration location changed",
+			"config_location_error": "Could not change configuration location",
 			"title": "General Settings",
 			"output_directory": "Output Directory",
 			"output_directory_description": "Directory where processed files and NZB files will be stored for both manual uploads and watcher",

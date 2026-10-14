@@ -116,6 +116,9 @@ type App struct {
 	ctx                  context.Context
 	config               *config.ConfigData
 	configPath           string
+	configFileMux        sync.RWMutex
+	configLocationErr    error
+	configLoadError      string
 	appPaths             *AppPaths
 	database             *database.Database
 	poolManager          *pool.Manager
@@ -286,6 +289,11 @@ func setupLogging(logPath string) (string, error) {
 
 // NewApp creates a new App application struct
 func NewApp() *App {
+	return newApp(setupLogging)
+}
+
+// newApp keeps startup path resolution independent of the logging sink.
+func newApp(initializeLogging func(string) (string, error)) *App {
 	var loggingError string
 	var actualLogPath string
 
@@ -302,8 +310,14 @@ func NewApp() *App {
 		}
 	}
 
+	configPath, locationErr := resolveConfigPath(appPaths.Config)
+	if locationErr != nil {
+		configPath = appPaths.Config
+		slog.Error("Could not resolve saved configuration location", "error", locationErr)
+	}
+
 	// Setup logging with Windows-specific optimizations
-	actualLogPath, err = setupLogging(appPaths.Log)
+	actualLogPath, err = initializeLogging(appPaths.Log)
 	if err != nil {
 		// Fallback to basic stdout logging if file logging fails
 		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -322,11 +336,12 @@ func NewApp() *App {
 		"actualLogPath", actualLogPath)
 
 	return &App{
-		configPath:    appPaths.Config,
-		appPaths:      appPaths,
-		loggingError:  loggingError,
-		actualLogPath: actualLogPath,
-		isWebMode:     false,
+		configPath:        configPath,
+		configLocationErr: locationErr,
+		appPaths:          appPaths,
+		loggingError:      loggingError,
+		actualLogPath:     actualLogPath,
+		isWebMode:         false,
 	}
 }
 
@@ -334,6 +349,13 @@ func NewApp() *App {
 func (a *App) SetWebMode(isWeb bool) {
 	slog.Info("Setting web mode", "isWeb", isWeb)
 	a.isWebMode = isWeb
+	if isWeb {
+		// The web server continues to use its existing default location.
+		a.configFileMux.Lock()
+		a.configPath = a.appPaths.Config
+		a.configLocationErr = nil
+		a.configFileMux.Unlock()
+	}
 }
 
 // SetWebEventEmitter sets the event emitter function for web mode
@@ -358,24 +380,31 @@ func (a *App) Startup(ctx context.Context) {
 	slog.Info("First start determination", "isFirstStart", a.firstStart)
 
 	// Load initial configuration
-	if err := a.loadConfig(); err != nil {
-		slog.Info("Config file not found or invalid, creating default config", "path", a.configPath, "error", err)
-		// Continue with empty config - create default
-		if err := a.createDefaultConfig(); err != nil {
-			slog.Error("Failed to create default config", "error", err)
+	if a.configLocationErr != nil {
+		slog.Error("Cannot load saved configuration location", "error", a.configLocationErr)
+	} else if err := a.loadConfig(); err != nil {
+		if a.GetConfigPath() != a.appPaths.Config {
+			a.configLoadError = fmt.Sprintf("Cannot load configuration at %s: %v", a.GetConfigPath(), err)
+			slog.Error(a.configLoadError)
 		} else {
-			slog.Info("Default config created successfully", "path", a.configPath)
-			// Try to load the default config after creating it.
-			// On first start this is expected to fail validation (no servers yet),
-			// so log at Debug rather than Error.
-			if err := a.loadConfig(); err != nil {
-				slog.Debug("Default config validation pending (expected on first start)", "error", err)
+			slog.Info("Config file not found or invalid, creating default config", "path", a.GetConfigPath(), "error", err)
+			// Continue with empty config - create default
+			if err := a.createDefaultConfig(); err != nil {
+				slog.Error("Failed to create default config", "error", err)
 			} else {
-				slog.Info("Default config loaded successfully")
+				slog.Info("Default config created successfully", "path", a.GetConfigPath())
+				// Try to load the default config after creating it.
+				// On first start this is expected to fail validation (no servers yet),
+				// so log at Debug rather than Error.
+				if err := a.loadConfig(); err != nil {
+					slog.Debug("Default config validation pending (expected on first start)", "error", err)
+				} else {
+					slog.Info("Default config loaded successfully")
+				}
 			}
 		}
 	} else {
-		slog.Info("Config loaded successfully", "path", a.configPath)
+		slog.Info("Config loaded successfully", "path", a.GetConfigPath())
 	}
 
 	// Initialize connection pool manager if we have a valid configuration
@@ -390,8 +419,8 @@ func (a *App) Startup(ctx context.Context) {
 		}
 	}
 
-	if a.firstStart {
-		slog.Info("Skipping component initialization: setup wizard required")
+	if a.firstStart || a.config == nil {
+		slog.Info("Skipping component initialization: configuration required")
 	} else {
 		// Initialize queue (always available)
 		if err := a.initializeQueue(); err != nil {
@@ -477,12 +506,16 @@ func (a *App) GetAppStatus() AppStatus {
 		}
 	}
 
+	configError := a.configurationError()
+	if a.criticalErrorMessage != "" {
+		configError = a.criticalErrorMessage
+	}
 	status := AppStatus{
 		HasConfig:           a.config != nil,
-		ConfigPath:          a.configPath,
+		ConfigPath:          a.GetConfigPath(),
 		Uploading:           a.IsUploading(),
-		CriticalConfigError: false, // Default to false
-		Error:               "",
+		CriticalConfigError: configError != "",
+		Error:               configError,
 		IsFirstStart:        a.isFirstStart(),
 		Version:             version,
 	}
@@ -984,16 +1017,16 @@ func (a *App) SetupWizardComplete(wizardData SetupWizardData) error {
 	cfg.Database.DatabasePath = a.appPaths.Database
 
 	// Save configuration with enhanced error context
-	slog.Info("Saving setup wizard configuration", "configPath", a.configPath)
+	slog.Info("Saving setup wizard configuration", "configPath", a.GetConfigPath())
 	if err := a.SaveConfig(&cfg); err != nil {
-		slog.Error("Failed to save setup wizard configuration", "error", err, "configPath", a.configPath)
+		slog.Error("Failed to save setup wizard configuration", "error", err, "configPath", a.GetConfigPath())
 		return a.wrapSaveConfigError(err)
 	}
 
 	// Mark as no longer first start since setup is complete
 	a.firstStart = false
 
-	slog.Info("Setup wizard completed successfully", "configPath", a.configPath)
+	slog.Info("Setup wizard completed successfully", "configPath", a.GetConfigPath())
 	return nil
 }
 
@@ -1266,14 +1299,20 @@ func (a *App) GetNntpPoolMetrics() (NntpPoolMetrics, error) {
 // determineFirstStart checks if this is the first time the application is being run
 // This must be called BEFORE any config creation
 func (a *App) determineFirstStart() bool {
+	// A saved custom location must not send the user through first-run setup
+	// when unavailable, since setup would replace their saved configuration.
+	if a.configLocationErr != nil || a.GetConfigPath() != a.appPaths.Config {
+		return false
+	}
+
 	// Check if config file exists
-	if _, err := os.Stat(a.configPath); os.IsNotExist(err) {
-		slog.Info("Config file does not exist, treating as first start", "configPath", a.configPath)
+	if _, err := os.Stat(a.GetConfigPath()); os.IsNotExist(err) {
+		slog.Info("Config file does not exist, treating as first start", "configPath", a.GetConfigPath())
 		return true
 	}
 
 	// If config file exists, try to load it to check if it has meaningful content
-	_, err := config.Load(a.configPath)
+	_, err := config.Load(a.GetConfigPath())
 	if err != nil {
 		slog.Info("Config file exists but cannot be loaded, treating as first start", "error", err)
 		return true

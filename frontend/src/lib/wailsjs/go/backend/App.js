@@ -222,6 +222,10 @@ export function SaveConfig(arg1) {
   return window['go']['backend']['App']['SaveConfig'](arg1);
 }
 
+export function SelectConfigDirectory() {
+  return window['go']['backend']['App']['SelectConfigDirectory']();
+}
+
 export function SelectConfigFile() {
   return window['go']['backend']['App']['SelectConfigFile']();
 }

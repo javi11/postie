@@ -16,19 +16,31 @@ import (
 
 // GetConfigPath returns the path to the configuration file
 func (a *App) GetConfigPath() string {
+	a.configFileMux.RLock()
+	defer a.configFileMux.RUnlock()
 	return a.configPath
 }
 
 // GetConfig returns the current configuration (pending config if available, otherwise applied config)
-func (a *App) GetConfig() (*config.ConfigData, error) {
+func (a *App) GetConfig() (result *config.ConfigData, resultErr error) {
+	defer func() {
+		if result != nil && resultErr == nil {
+			a.configFileMux.Lock()
+			a.configLoadError = ""
+			a.configFileMux.Unlock()
+		}
+	}()
 	defer a.recoverPanic("GetConfig")
+	if a.configLocationErr != nil {
+		return nil, a.configLocationErr
+	}
 
-	if a.configPath == "" {
+	if a.GetConfigPath() == "" {
 		return nil, fmt.Errorf("no config file specified")
 	}
 
 	// Check if file exists
-	if _, err := os.Stat(a.configPath); os.IsNotExist(err) {
+	if _, err := os.Stat(a.GetConfigPath()); os.IsNotExist(err) {
 		return nil, fmt.Errorf("config file not found")
 	}
 
@@ -48,7 +60,7 @@ func (a *App) GetConfig() (*config.ConfigData, error) {
 	}
 
 	// Otherwise load it fresh
-	cfg, err := config.Load(a.configPath)
+	cfg, err := config.Load(a.GetConfigPath())
 	if err != nil {
 		return nil, fmt.Errorf("error loading config file: %w", err)
 	}
@@ -60,12 +72,12 @@ func (a *App) GetConfig() (*config.ConfigData, error) {
 func (a *App) GetAppliedConfig() (*config.ConfigData, error) {
 	defer a.recoverPanic("GetAppliedConfig")
 
-	if a.configPath == "" {
+	if a.GetConfigPath() == "" {
 		return nil, fmt.Errorf("no config file specified")
 	}
 
 	// Check if file exists
-	if _, err := os.Stat(a.configPath); os.IsNotExist(err) {
+	if _, err := os.Stat(a.GetConfigPath()); os.IsNotExist(err) {
 		return nil, fmt.Errorf("config file not found")
 	}
 
@@ -75,7 +87,7 @@ func (a *App) GetAppliedConfig() (*config.ConfigData, error) {
 	}
 
 	// Otherwise load it fresh
-	cfg, err := config.Load(a.configPath)
+	cfg, err := config.Load(a.GetConfigPath())
 	if err != nil {
 		return nil, fmt.Errorf("error loading config file: %w", err)
 	}
@@ -87,7 +99,7 @@ func (a *App) GetAppliedConfig() (*config.ConfigData, error) {
 func (a *App) SaveConfig(configData *config.ConfigData) error {
 	defer a.recoverPanic("SaveConfig")
 
-	slog.Info("Saving config", "path", a.configPath, "configData", configData)
+	slog.Info("Saving config", "path", a.GetConfigPath(), "configData", configData)
 
 	// Validate structure before anything else (prevents writing bad config to disk)
 	if err := configData.Validate(); err != nil {
@@ -116,7 +128,7 @@ func (a *App) SaveConfig(configData *config.ConfigData) error {
 		a.pendingConfigMux.Unlock()
 
 		// Save to file but don't apply yet
-		if err := config.SaveConfig(configData, a.configPath); err != nil {
+		if err := a.saveConfigFile(configData); err != nil {
 			return err
 		}
 
@@ -295,7 +307,7 @@ func (a *App) watcherConfigChanged(newConfig *config.ConfigData) bool {
 
 // applyConfigChanges applies the configuration changes immediately
 func (a *App) applyConfigChanges(configData *config.ConfigData) error {
-	if err := config.SaveConfig(configData, a.configPath); err != nil {
+	if err := a.saveConfigFile(configData); err != nil {
 		return err
 	}
 
@@ -523,7 +535,9 @@ func (a *App) SelectConfigFile() (string, error) {
 	}
 
 	if file != "" {
+		a.configFileMux.Lock()
 		a.configPath = file
+		a.configFileMux.Unlock()
 		if err := a.loadConfig(); err != nil {
 			return "", err
 		}
@@ -533,11 +547,11 @@ func (a *App) SelectConfigFile() (string, error) {
 }
 
 func (a *App) loadConfig() error {
-	if a.configPath == "" {
+	if a.GetConfigPath() == "" {
 		return fmt.Errorf("no config file specified")
 	}
 
-	cfg, err := config.Load(a.configPath)
+	cfg, err := config.Load(a.GetConfigPath())
 	if err != nil {
 		return err
 	}
@@ -569,11 +583,11 @@ func (a *App) createDefaultConfig() error {
 	// Set the database path to the OS-specific location
 	defaultConfig.Database.DatabasePath = a.appPaths.Database
 
-	if err := config.SaveConfig(&defaultConfig, a.configPath); err != nil {
+	if err := a.saveConfigFile(&defaultConfig); err != nil {
 		return fmt.Errorf("failed to save default config: %w", err)
 	}
 
-	slog.Info("Default config file created", "path", a.configPath)
+	slog.Info("Default config file created", "path", a.GetConfigPath())
 	return nil
 }
 

@@ -57,6 +57,11 @@
 			"connection_pool": "Pool de Conexiones"
 		},
 		"general": {
+			"config_file": "Archivo de configuración",
+			"change_config_location": "Cambiar ubicación",
+			"config_location_description": "Copia el config.yaml guardado a una carpeta sin config.yaml y lo utiliza de inmediato y después de reiniciar. Guarda primero los cambios pendientes. El archivo anterior se conserva como copia de seguridad; las ubicaciones de la base de datos y los registros no cambian.",
+			"config_location_success": "Ubicación de configuración cambiada",
+			"config_location_error": "No se pudo cambiar la ubicación de configuración",
 			"title": "Configuración General",
 			"output_directory": "Directorio de Salida",
 			"output_directory_description": "Directorio donde se almacenarán los archivos procesados y archivos NZB tanto para cargas manuales como del monitor de archivos. Todos los archivos procesados y archivos NZB generados se guardarán en esta ubicación.",

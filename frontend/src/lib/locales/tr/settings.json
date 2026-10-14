@@ -61,6 +61,11 @@
 			"connection_pool": "Bağlantı Havuzu"
 		},
 		"general": {
+			"config_file": "Yapılandırma dosyası",
+			"change_config_location": "Konumu değiştir",
+			"config_location_description": "Kaydedilmiş config.yaml dosyasını config.yaml içermeyen bir klasöre kopyalar ve hemen ve yeniden başlatmadan sonra kullanır. Önce bekleyen değişiklikleri kaydedin. Önceki dosya yedek olarak tutulur; veritabanı ve günlük konumları değişmez.",
+			"config_location_success": "Yapılandırma konumu değiştirildi",
+			"config_location_error": "Yapılandırma konumu değiştirilemedi",
 			"title": "Genel Ayarlar",
 			"output_directory": "Çıktı Dizini",
 			"output_directory_description": "Hem manuel yüklemeler hem de izleyici için işlenen dosyaların ve NZB dosyalarının saklanacağı dizin",

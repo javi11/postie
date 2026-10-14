@@ -116,6 +116,8 @@ export function RunMigrations():Promise<void>;
 
 export function SaveConfig(arg1:config.ConfigData):Promise<void>;
 
+export function SelectConfigDirectory():Promise<string>;
+
 export function SelectConfigFile():Promise<string>;
 
 export function SelectFolder():Promise<string>;
