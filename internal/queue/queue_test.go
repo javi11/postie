@@ -10,6 +10,7 @@ import (
 
 	"github.com/kipsilabs/postie/internal/config"
 	"github.com/kipsilabs/postie/internal/database"
+	"github.com/kipsilabs/postie/internal/manifest"
 )
 
 // newTestQueue creates an isolated Queue backed by a temp sqlite DB with all
@@ -524,4 +525,56 @@ func TestClearCompletedItemsDetachesTransfers(t *testing.T) {
 		t.Fatalf("ClearCompletedItems: %v", err)
 	}
 	assertTransferDetached(t, q, itemID, manifestPath)
+}
+
+func TestCompletedRemovalRemovesEmptyTransferDirectory(t *testing.T) {
+	for _, operation := range []string{"remove", "clear_completed", "clear_queue"} {
+		t.Run(operation, func(t *testing.T) {
+			q := newTestQueue(t)
+			base := t.TempDir()
+			source := filepath.Join(base, "source.rar")
+			if err := os.WriteFile(source, []byte("source"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			itemID, oldPath := completeItemWithTransfer(t, q, source)
+			var transferID string
+			if err := q.db.QueryRow("SELECT transfer_id FROM transfer_files WHERE completed_item_id = ?", itemID).Scan(&transferID); err != nil {
+				t.Fatal(err)
+			}
+			path := manifest.FilePath(base, transferID, "f1")
+			writer, err := manifest.NewWriter(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := writer.Commit(); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := q.db.Exec("UPDATE transfer_files SET manifest_path = ? WHERE transfer_id = ?", path, transferID); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Remove(oldPath); err != nil {
+				t.Fatal(err)
+			}
+			switch operation {
+			case "remove":
+				err = q.RemoveFromQueue(itemID)
+			case "clear_completed":
+				err = q.ClearCompletedItems()
+			case "clear_queue":
+				err = q.ClearQueue()
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertTransferDetached(t, q, itemID, path)
+			if _, err := os.Stat(filepath.Join(base, transferID)); !os.IsNotExist(err) {
+				t.Errorf("detached transfer directory still exists: %v", err)
+			}
+			for _, p := range []string{base, source} {
+				if _, err := os.Stat(p); err != nil {
+					t.Errorf("must retain %s: %v", p, err)
+				}
+			}
+		})
+	}
 }

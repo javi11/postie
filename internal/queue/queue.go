@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kipsilabs/postie/internal/database"
+	"github.com/kipsilabs/postie/internal/manifest"
 	_ "github.com/mattn/go-sqlite3"
 	"maragu.dev/goqite"
 )
@@ -1517,7 +1518,7 @@ func (q *Queue) detachTransfers(where string, arg any) error {
 		return fmt.Errorf("failed to list transfer files: %w", err)
 	}
 	transferIDs := make(map[string]struct{})
-	var manifests []string
+	manifests := make(map[string]string)
 	for rows.Next() {
 		var transferID, manifestPath string
 		if err := rows.Scan(&transferID, &manifestPath); err != nil {
@@ -1525,7 +1526,7 @@ func (q *Queue) detachTransfers(where string, arg any) error {
 			return fmt.Errorf("failed to scan transfer file: %w", err)
 		}
 		transferIDs[transferID] = struct{}{}
-		manifests = append(manifests, manifestPath)
+		manifests[manifestPath] = transferID
 	}
 	// Close before writing: with a single SQLite connection an open cursor
 	// would block the deletes below.
@@ -1542,11 +1543,11 @@ func (q *Queue) detachTransfers(where string, arg any) error {
 		}
 	}
 
-	for _, path := range manifests {
+	for path, transferID := range manifests {
 		if path == "" {
 			continue
 		}
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		if err := manifest.Remove(path, transferID); err != nil {
 			slog.Warn("Failed to remove manifest of detached transfer", "path", path, "error", err)
 		}
 	}

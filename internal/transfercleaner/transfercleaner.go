@@ -91,7 +91,9 @@ func (c *Cleaner) CleanupTransfer(ctx context.Context, transferID string) (bool,
 			}
 		}
 		// Manifests are postie's own recovery files; always removed once verified.
-		c.remove(ctx, f.ManifestPath, "manifest")
+		if err := manifest.Remove(f.ManifestPath, transferID); err != nil {
+			slog.WarnContext(ctx, "Failed to remove manifest during cleanup", "path", f.ManifestPath, "error", err)
+		}
 	}
 
 	// Drop the now-cleaned rows so the table stays bounded and cleanup is not

@@ -8,6 +8,7 @@ import (
 
 	"github.com/kipsilabs/postie/internal/config"
 	"github.com/kipsilabs/postie/internal/database"
+	"github.com/kipsilabs/postie/internal/manifest"
 	"github.com/kipsilabs/postie/internal/transferstore"
 )
 
@@ -213,5 +214,55 @@ func TestCleanup_DoesNotRunScriptOnFailure(t *testing.T) {
 	}
 	if called {
 		t.Error("post-upload script must not run when verification failed")
+	}
+}
+
+func TestCleanupRemovesEmptyTransferDirectory(t *testing.T) {
+	store := newTestStore(t)
+	base := t.TempDir()
+	src := makeFile(t, base, "original.rar")
+	path := manifest.FilePath(base, "completed", "f1")
+	writer, err := manifest.NewWriter(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpsertFile(context.Background(), transferstore.TransferFile{
+		TransferID: "completed", FileID: "f1", ManifestPath: path, SourcePath: src,
+		FileRole: "original", VerificationState: transferstore.StateVerified,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	livePath := manifest.FilePath(base, "live", "f2")
+	liveWriter, err := manifest.NewWriter(livePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := liveWriter.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpsertFile(context.Background(), transferstore.TransferFile{
+		TransferID: "live", FileID: "f2", ManifestPath: livePath, SourcePath: src,
+		VerificationState: transferstore.StateVerifying,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	done, err := New(store, false, nil).CleanupTransfer(context.Background(), "completed")
+	if err != nil || !done {
+		t.Fatalf("CleanupTransfer: done=%v err=%v", done, err)
+	}
+	if _, err := os.Stat(filepath.Join(base, "completed")); !os.IsNotExist(err) {
+		t.Errorf("completed transfer directory still exists: %v", err)
+	}
+	for _, p := range []string{base, src, livePath} {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("must retain %s: %v", p, err)
+		}
+	}
+	live, err := store.ListFilesByTransfer(context.Background(), "live")
+	if err != nil || len(live) != 1 {
+		t.Errorf("live rows: %v, err=%v", live, err)
 	}
 }
