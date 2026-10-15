@@ -14,6 +14,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/kipsilabs/postie/internal/article"
+	"github.com/kipsilabs/postie/internal/config"
 	"github.com/kipsilabs/postie/internal/manifest"
 	"github.com/kipsilabs/postie/internal/mocks"
 )
@@ -142,4 +143,76 @@ func TestPost_SinkErrorAbortsBeforePosting(t *testing.T) {
 		t.Fatal("Post should fail when the manifest sink errors")
 	}
 	p.Close()
+}
+
+// Durable uploads must return the upload slot without waiting for propagation,
+// even when post checking is enabled.
+func TestPost_DurableChecksDoNotDelayConsecutiveUploads(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	const articlesPerFile = 3
+	files := []string{
+		createTestFile(t, strings.Repeat("a", articlesPerFile*1000)),
+		createTestFile(t, strings.Repeat("b", articlesPerFile*1000)),
+	}
+	for _, file := range files {
+		t.Cleanup(func() { _ = os.Remove(file) })
+	}
+
+	ctrl := gomock.NewController(t)
+	uploadPool := mocks.NewMockNNTPClient(ctrl)
+	uploadPool.EXPECT().Stats().Return(nntppool.ClientStats{
+		Providers: []nntppool.ProviderStats{{MaxConnections: 1}},
+	}).AnyTimes()
+	uploadPool.EXPECT().PostYenc(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(&nntppool.PostResult{}, nil).Times(len(files) * articlesPerFile)
+
+	// Verification belongs to the background service, never this poster.
+	verifyPool := mocks.NewMockNNTPClient(ctrl)
+	verifyPool.EXPECT().Stats().Return(nntppool.ClientStats{
+		Providers: []nntppool.ProviderStats{{MaxConnections: 1}},
+	}).AnyTimes()
+	verifyPool.EXPECT().Stat(gomock.Any(), gomock.Any()).Times(0)
+	verifyPool.EXPECT().StatMany(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	nzbGen := mocks.NewMockNZBGenerator(ctrl)
+	nzbGen.EXPECT().AddArticle(gomock.Any()).Times(len(files) * articlesPerFile)
+	jobProgress := mocks.NewMockJobProgress(ctrl)
+	mockProgress := mocks.NewMockProgress(ctrl)
+	jobProgress.EXPECT().AddProgress(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(mockProgress).AnyTimes()
+	jobProgress.EXPECT().FinishProgress(gomock.Any()).AnyTimes()
+	mockProgress.EXPECT().UpdateProgress(gomock.Any()).AnyTimes()
+	mockProgress.EXPECT().GetID().Return(uuid.New()).AnyTimes()
+	// If the legacy checking path is accidentally restored, allow it to reach
+	// the context deadline so the failure identifies the propagation wait.
+	mockProgress.EXPECT().SetWaitDeadline(gomock.Any()).AnyTimes()
+
+	checkCfg := createTestPostCheckConfig() // Enabled remains true.
+	checkCfg.RetryDelay = config.Duration("1h")
+	sink := &recordingSink{}
+	p := &poster{
+		cfg: createTestConfig(), checkCfg: checkCfg,
+		uploadPool: uploadPool, verifyPool: verifyPool,
+		stats: &Stats{StartTime: time.Now()}, jobProgress: jobProgress,
+		manifestSink: sink,
+	}
+	defer p.Close()
+
+	// Sequential calls model the next job taking the same upload slot.
+	for _, file := range files {
+		if err := p.Post(ctx, []string{file}, "", nzbGen); err != nil {
+			t.Fatalf("durable upload should finish before propagation delay: %v", err)
+		}
+	}
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	if len(sink.calls) != len(files) {
+		t.Fatalf("recorded %d manifests, want %d", len(sink.calls), len(files))
+	}
+	for i, call := range sink.calls {
+		if call.path != files[i] || call.articles != articlesPerFile {
+			t.Errorf("manifest %d = %+v, want path %q with %d articles", i, call, files[i], articlesPerFile)
+		}
+	}
 }
