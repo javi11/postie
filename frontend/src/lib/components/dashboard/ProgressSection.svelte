@@ -49,6 +49,9 @@ async function fetchInitialState() {
 
 onMount(async () => {
   await fetchInitialState();
+  // Navigation may destroy this panel while its initial HTTP requests run.
+  // A late subscription would replace the current dashboard's listeners.
+  if (destroyed) return;
 
   await apiClient.on(EVENT_RUNNING_JOBS_UPDATED, applyRunningJobs);
   await apiClient.on(EVENT_PROCESSING_PAUSED, applyPauseEvent);

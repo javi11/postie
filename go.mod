@@ -4,6 +4,7 @@ go 1.26
 
 require (
 	github.com/andybalholm/brotli v1.2.0
+	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc
 	github.com/chromedp/chromedp v0.15.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
@@ -52,7 +53,6 @@ require (
 	github.com/bep/debounce v1.2.1 // indirect
 	github.com/bombsimon/wsl/v5 v5.6.0 // indirect
 	github.com/charmbracelet/glamour v0.8.0 // indirect
-	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/containerd/console v1.0.3 // indirect
