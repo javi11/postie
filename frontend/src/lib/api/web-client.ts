@@ -101,16 +101,9 @@ export class WebClient {
 
 	// Add event listener for real-time updates
 	async on(event: string, callback: (data: unknown) => void): Promise<void> {
-		// Wait for WebSocket connection before registering listener
-		try {
-			await this.waitForConnection();
-		} catch (error) {
-			console.error(
-				"Failed to connect WebSocket before registering listener:",
-				error,
-			);
-		}
-
+		// Listeners survive reconnects and can be registered before OPEN.
+		// Deferring registration can miss early events or restore a listener
+		// that off() already removed while the handshake was pending.
 		this.wsListeners.set(event, callback);
 	}
 

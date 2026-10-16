@@ -37,6 +37,13 @@ runs:
       shell: bash
       run: npm install -g bun
 
+    - name: Frontend tests
+      shell: bash
+      working-directory: frontend
+      run: |
+        bun install --frozen-lockfile
+        bun test
+
     - name: Tests
       shell: bash
       run: |
