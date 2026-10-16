@@ -456,6 +456,11 @@ func (p *Postie) postInParallel(
 	if err := errg.Wait(); err != nil {
 		return "", err
 	}
+	// The optional PAR2 branch tolerates errors; cancellation must still stop
+	// NZB publication and preserve recovery files for a later attempt.
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 
 	// Generate single NZB file for all files
 	relativePath := relativePathFrom(rootDir, f.Path)
@@ -789,6 +794,10 @@ func (p *Postie) postFolder(ctx context.Context, files []fileinfo.FileInfo, root
 		})
 
 		if err := errg.Wait(); err != nil {
+			return "", err
+		}
+		// PAR2 errors are optional, but a cancelled job must not complete.
+		if err := ctx.Err(); err != nil {
 			return "", err
 		}
 	}
