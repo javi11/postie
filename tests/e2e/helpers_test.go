@@ -6,7 +6,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/chromedp/cdproto/network"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"runtime"
 	"testing"
@@ -124,6 +126,13 @@ func newChromedpCtx(t *testing.T) (context.Context, context.CancelFunc) {
 
 	ctx, timeoutCancel := context.WithTimeout(ctx, 90*time.Second)
 
+	// Every existing UI journey starts with the same authenticated administrator.
+	parsed, _ := url.Parse(baseURL)
+	for _, cookie := range http.DefaultClient.Jar.Cookies(parsed) {
+		if err := chromedp.Run(ctx, network.SetCookie(cookie.Name, cookie.Value).WithURL(baseURL).WithHTTPOnly(true)); err != nil {
+			t.Fatalf("set browser session: %v", err)
+		}
+	}
 	return ctx, func() {
 		timeoutCancel()
 		cancel()

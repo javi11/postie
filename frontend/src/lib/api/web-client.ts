@@ -90,7 +90,13 @@ export class WebClient {
 		this.ws.onclose = (event) => {
 			console.log("WebSocket disconnected:", event.code, event.reason);
 			console.log("Attempting to reconnect in 3 seconds...");
-			setTimeout(() => this.initWebSocket(), 3000);
+			setTimeout(async () => {
+				try {
+					const response = await fetch("/api/auth/user", { signal: AbortSignal.timeout(15000) });
+					if (response.status === 401) { window.location.replace("/login"); return; }
+					this.initWebSocket();
+				} catch { this.initWebSocket(); }
+			}, 3000);
 		};
 
 		this.ws.onerror = (error) => {
@@ -134,6 +140,7 @@ export class WebClient {
 		const response = await fetch(`${API_BASE}${endpoint}`, {
 			signal: AbortSignal.timeout(WebClient.REQUEST_TIMEOUT_MS),
 		});
+		if (response.status === 401) window.location.replace("/login");
 		if (!response.ok) {
 			throw new Error(`HTTP error! status: ${response.status}`);
 		}
@@ -150,6 +157,7 @@ export class WebClient {
 			signal: AbortSignal.timeout(WebClient.REQUEST_TIMEOUT_MS),
 		});
 
+		if (response.status === 401) window.location.replace("/login");
 		if (!response.ok) {
 			const errText = await response.text();
 			throw new Error(errText.trim() || `HTTP error! status: ${response.status}`);
@@ -166,6 +174,7 @@ export class WebClient {
 			signal: AbortSignal.timeout(WebClient.REQUEST_TIMEOUT_MS),
 		});
 
+		if (response.status === 401) window.location.replace("/login");
 		if (!response.ok) {
 			throw new Error(`HTTP error! status: ${response.status}`);
 		}
@@ -275,6 +284,7 @@ export class WebClient {
 		const endpoint = `/logs${params.toString() ? `?${params.toString()}` : ""}`;
 		const response = await fetch(`${API_BASE}${endpoint}`);
 
+		if (response.status === 401) window.location.replace("/login");
 		if (!response.ok) {
 			throw new Error(`HTTP error! status: ${response.status}`);
 		}
@@ -419,6 +429,7 @@ export class WebClient {
 	async downloadNZB(id: string): Promise<void> {
 		const response = await fetch(`${API_BASE}/nzb/${id}/download`);
 
+		if (response.status === 401) window.location.replace("/login");
 		if (!response.ok) {
 			throw new Error(`HTTP error! status: ${response.status}`);
 		}
@@ -512,6 +523,7 @@ export class WebClient {
 	async downloadLogs(): Promise<void> {
 		const response = await fetch(`${API_BASE}/logs/download`);
 
+		if (response.status === 401) window.location.replace("/login");
 		if (!response.ok) {
 			throw new Error(`HTTP error! status: ${response.status}`);
 		}

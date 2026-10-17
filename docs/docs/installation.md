@@ -69,6 +69,14 @@ If you prefer to use a configuration file:
 ./postie -config config.yaml -d ./upload -o ./output
 ```
 
+## Web administrator login
+
+Web authentication is optional and disabled by default. Start the web binary
+with `postie-web --auth`, or set `POSTIE_AUTH_ENABLED=true` in your Docker
+Compose environment, to require an administrator login. Create the first
+administrator before exposing the server. See [Web authentication](./web-authentication.md)
+for session behavior and HTTPS reverse-proxy configuration.
+
 ## Docker Installation
 
 ### Multi-Architecture Support

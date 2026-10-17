@@ -4,7 +4,10 @@ go 1.26
 
 require (
 	github.com/andybalholm/brotli v1.2.0
+	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc
 	github.com/chromedp/chromedp v0.15.1
+	github.com/go-pkgz/auth/v2 v2.0.0
+	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.3
@@ -21,6 +24,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
+	golang.org/x/crypto v0.51.0
 	golang.org/x/sync v0.20.0
 	golift.io/starr v1.3.1
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
@@ -52,7 +56,6 @@ require (
 	github.com/bep/debounce v1.2.1 // indirect
 	github.com/bombsimon/wsl/v5 v5.6.0 // indirect
 	github.com/charmbracelet/glamour v0.8.0 // indirect
-	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/containerd/console v1.0.3 // indirect
@@ -125,7 +128,6 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.augendre.info/arangolint v0.4.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.51.0 // indirect
 	golang.org/x/image v0.40.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	howett.net/plist v1.0.2-0.20250314012144-ee69052608d9 // indirect

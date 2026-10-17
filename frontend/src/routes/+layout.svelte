@@ -19,6 +19,9 @@ interface Props {
 let { children }: Props = $props();
 import "../style.css";
 
+let authReady = $state(false);
+let authError = $state("");
+let webAuthenticated = $state(false);
 let needsConfiguration = $state(false);
 let criticalConfigError = $state(false);
 let connectionStatus: "connected" | "reconnecting" | "disconnected" = $state("connected");
@@ -33,6 +36,17 @@ onMount(async () => {
 		).matches;
 		const defaultTheme = savedTheme || (systemPrefersDark ? "dark" : "light");
 		document.documentElement.setAttribute("data-theme", defaultTheme);
+
+		// Gate child pages before their onMount hooks can call privileged APIs.
+		const desktop = !!(window as unknown as {go?: {backend?: {App?: unknown}}}).go?.backend?.App;
+		if (page.route.id === "/login") { authReady = true; return; }
+		if (!desktop) {
+			const response = await fetch("/api/auth/user", { signal: AbortSignal.timeout(15000) });
+			if (response.status === 401) { window.location.replace("/login"); return; }
+			if (!response.ok) throw new Error($t("common.auth.connectionError"));
+			webAuthenticated = (await response.json()).enabled;
+		}
+		authReady = true;
 
 		// Initialize API client (detects environment and sets up appropriate client)
 		await apiClient.initialize();
@@ -92,6 +106,7 @@ onMount(async () => {
 		}, 10000);
 	} catch (error) {
 		console.error("Failed to initialize app:", error);
+		authError = $t("common.auth.connectionError");
 		toastStore.error($t("common.common.error"), (error as Error).message);
 	}
 });
@@ -131,6 +146,14 @@ onDestroy(() => {
 	if (connectionCheckInterval) clearInterval(connectionCheckInterval);
 });
 
+async function logout() {
+	try {
+		const response = await fetch("/api/auth/logout", { method: "POST", headers: { "Content-Type": "application/json" } });
+		if (!response.ok) throw new Error($t("common.auth.logoutError"));
+		window.location.replace("/login");
+	} catch (error) { toastStore.error($t("common.auth.logoutError"), (error as Error).message); }
+}
+
 function handleKeydown(event: KeyboardEvent) {
 	// Skip if user is typing in an input
 	const target = event.target as HTMLElement;
@@ -162,10 +185,14 @@ function handler(error: unknown, _reset: () => void) {
 
 <svelte:window onkeydown={handleKeydown} />
 
+{#if authReady}
 <div class="min-h-screen bg-base-200">
+	{#if webAuthenticated && page.route.id === "/setup"}
+		<div class="flex justify-end p-3"><button class="btn btn-sm btn-ghost" data-testid="sign-out" onclick={logout}>{$t("common.auth.signOut")}</button></div>
+	{/if}
 	<svelte:boundary onerror={handler}>
 		<!-- Show navbar only if not on setup page -->
-		{#if page.route.id !== "/setup"}
+		{#if page.route.id !== "/setup" && page.route.id !== "/login"}
 			<!-- Header/Navigation -->
 			<div class="navbar bg-base-100/95 backdrop-blur-md shadow-lg border-b border-base-300/50 sticky top-0 z-50">
 				<div class="navbar-start">
@@ -234,6 +261,7 @@ function handler(error: unknown, _reset: () => void) {
 				</div>
 
 				<div class="navbar-end gap-1.5">
+	{#if webAuthenticated}<button class="btn btn-sm btn-ghost" data-testid="sign-out" onclick={logout}>{$t("common.auth.signOut")}</button>{/if}
 					<div class="tooltip tooltip-bottom" data-tip={connectionStatus === "connected" ? $t("common.common.status") + ": OK" : connectionStatus === "reconnecting" ? $t("common.common.loading") : $t("common.common.error")}>
 						<div class="w-2.5 h-2.5 rounded-full {connectionStatus === 'connected' ? 'bg-success' : connectionStatus === 'reconnecting' ? 'bg-warning animate-pulse' : 'bg-error animate-pulse'}"></div>
 					</div>
@@ -293,3 +321,11 @@ function handler(error: unknown, _reset: () => void) {
 	<!-- Toast notifications -->
 	<ToastContainer />
 </div>
+{:else}
+	<div class="flex min-h-screen flex-col items-center justify-center gap-4 p-6">
+		{#if authError}
+			<p class="alert alert-error max-w-md" role="alert">{authError}</p>
+			<button class="btn btn-primary" onclick={() => window.location.reload()}>{$t("common.auth.retry")}</button>
+		{:else}<span class="loading loading-spinner"></span>{/if}
+	</div>
+{/if}
