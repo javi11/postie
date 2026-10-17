@@ -23,7 +23,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Configuration',
-      items: ['configuration', 'watcher'],
+      items: ['configuration', 'watcher', 'web-authentication'],
     },
     {
       type: 'category',

@@ -15,10 +15,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-pkgz/auth/v2/token"
 	"github.com/gorilla/mux"
 	"github.com/kipsilabs/postie/frontend"
 	"github.com/kipsilabs/postie/internal/backend"
 	"github.com/kipsilabs/postie/internal/config"
+	"github.com/kipsilabs/postie/internal/database"
+	"github.com/kipsilabs/postie/internal/webauth"
 	"github.com/kipsilabs/postie/internal/wshub"
 	"github.com/spf13/cobra"
 )
@@ -48,8 +51,9 @@ const (
 )
 
 var (
-	port string
-	host string
+	port        string
+	host        string
+	authEnabled bool
 )
 
 // WebEventEmitter is a function that emits events for web mode
@@ -60,6 +64,9 @@ type WebServer struct {
 	router       *mux.Router
 	wsHub        *wshub.Hub
 	eventEmitter WebEventEmitter
+	authRequired bool
+	auth         *webauth.Service
+	authLimiter  authLimiter
 }
 
 func NewWebServer() *WebServer {
@@ -91,30 +98,28 @@ func NewWebServer() *WebServer {
 }
 
 func (ws *WebServer) setupRoutes() {
-	// Request logging middleware
-	ws.router.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// CORS headers
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-
-			if r.Method == "OPTIONS" {
-				w.WriteHeader(http.StatusOK)
-				return
-			}
-
-			next.ServeHTTP(w, r)
-		})
-	})
+	ws.router.Use(ws.authMiddleware)
 
 	ws.router.HandleFunc("/live", ws.LiveHandler).Methods("GET")
 
 	// API routes - register WebSocket first with explicit path
 	ws.router.HandleFunc("/api/ws", ws.handleWebSocket)
 
+	// Gated external API: only mount when api.enabled = true and protected by
+	// the X-API-Key / Bearer token middleware.
+	v1 := ws.router.PathPrefix("/api/v1").Subrouter()
+	v1.Use(ws.apiKeyMiddleware)
+	v1.HandleFunc("/queue/upload", ws.handleAPIQueueUpload).Methods("POST")
+
 	// API routes
 	api := ws.router.PathPrefix("/api").Subrouter()
+
+	// Public bootstrap/login and authenticated session routes.
+	api.HandleFunc("/auth/registration-status", ws.handleRegistrationStatus).Methods("GET")
+	api.HandleFunc("/auth/login", ws.handleLogin).Methods("POST")
+	api.HandleFunc("/auth/register", ws.handleRegister).Methods("POST")
+	api.HandleFunc("/auth/user", ws.handleUser).Methods("GET")
+	api.HandleFunc("/auth/logout", ws.handleLogout).Methods("POST")
 
 	// REST API endpoints
 	api.HandleFunc("/status", ws.handleGetStatus).Methods("GET")
@@ -163,15 +168,9 @@ func (ws *WebServer) setupRoutes() {
 	// Webhook receiver — API key validated from ?apiKey query param (arr can't send custom headers)
 	api.HandleFunc("/arr/webhook/{instanceId}", ws.handleArrWebhook).Methods("POST")
 
-	// API key management for the settings UI (open routes, same as other UI APIs)
+	// API key management for the authenticated settings UI
 	api.HandleFunc("/api-key", ws.handleGetAPIKey).Methods("GET")
 	api.HandleFunc("/api-key/regenerate", ws.handleRegenerateAPIKey).Methods("POST")
-
-	// Gated external API: only mount when api.enabled = true and protected by
-	// the X-API-Key / Bearer token middleware.
-	v1 := ws.router.PathPrefix("/api/v1").Subrouter()
-	v1.Use(ws.apiKeyMiddleware)
-	v1.HandleFunc("/queue/upload", ws.handleAPIQueueUpload).Methods("POST")
 
 	// Serve static files (catch-all)
 	ws.router.PathPrefix("/").Handler(ws.getStaticFileHandler())
@@ -257,7 +256,21 @@ func (ws *WebServer) handleTriggerScan(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ws *WebServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	ws.wsHub.ServeHTTP(w, r)
+	claims, authenticated := r.Context().Value(sessionContextKey{}).(*token.Claims)
+	if !authenticated {
+		ws.wsHub.ServeHTTP(w, r)
+		return
+	}
+	ws.wsHub.ServeSessionHTTP(w, r, claims.ID, claims.ExpiresAt.Time)
+	// A logout may race the upgrade/registration. Re-check after the hub has
+	// registered this connection so that a revoked session cannot remain open.
+	cookie, err := r.Cookie(sessionCookie)
+	if err == nil {
+		_, err = ws.auth.Validate(context.Background(), cookie.Value)
+	}
+	if err != nil {
+		ws.wsHub.DisconnectSession(claims.ID)
+	}
 }
 
 func (ws *WebServer) handleGetStatus(w http.ResponseWriter, r *http.Request) {
@@ -1109,11 +1122,42 @@ var rootCmd = &cobra.Command{
 	Long: `Postie Web Server provides a web interface for uploading files.
 It serves the frontend application and provides REST API endpoints for managing uploads and configuration.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Invalid environment values must fail startup rather than disable protection.
+		if value, exists := os.LookupEnv("POSTIE_AUTH_ENABLED"); exists && !cmd.Flags().Changed("auth") {
+			var err error
+			authEnabled, err = strconv.ParseBool(value)
+			if err != nil {
+				return fmt.Errorf("POSTIE_AUTH_ENABLED: %w", err)
+			}
+		}
 		server := NewWebServer()
+		server.authRequired = authEnabled
 
 		// Initialize the app
 		ctx := context.Background()
 		server.app.Startup(ctx)
+		// Authentication must work before NNTP setup and outlive posting queue
+		// restarts. Own a separate connection to the same application database.
+		defer server.app.Shutdown()
+		if server.authRequired {
+			paths, err := backend.GetAppPaths()
+			if err != nil {
+				return fmt.Errorf("authentication paths: %w", err)
+			}
+			authDB, err := database.New(ctx, config.DatabaseConfig{DatabaseType: "sqlite", DatabasePath: paths.Database})
+			if err != nil {
+				return fmt.Errorf("authentication database: %w", err)
+			}
+			defer func() { _ = authDB.Close() }()
+			if err = authDB.EnsureMigrationCompatibility(); err != nil {
+				return fmt.Errorf("authentication migrations: %w", err)
+			}
+			authService, err := webauth.New(authDB.DB)
+			if err != nil {
+				return fmt.Errorf("initialize web authentication: %w", err)
+			}
+			server.auth = authService
+		}
 
 		addr := fmt.Sprintf("%s:%s", host, port)
 		slog.Info("Web server started", "addr", addr)
@@ -1143,8 +1187,7 @@ It serves the frontend application and provides REST API endpoints for managing 
 		case <-sigChan:
 			slog.Info("Received interrupt signal, shutting down gracefully")
 
-			// Shutdown the app first
-			server.app.Shutdown()
+			// App and authentication database are closed by deferred cleanup.
 
 			// Create a timeout context for server shutdown
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -1163,6 +1206,7 @@ It serves the frontend application and provides REST API endpoints for managing 
 }
 
 func init() {
+	rootCmd.PersistentFlags().BoolVar(&authEnabled, "auth", false, "Require web administrator login (or set POSTIE_AUTH_ENABLED=true)")
 	rootCmd.PersistentFlags().StringVarP(&port, "port", "p", "8080", "Port to run the web server on")
 	rootCmd.PersistentFlags().StringVar(&host, "host", "0.0.0.0", "Host address to bind the web server to")
 

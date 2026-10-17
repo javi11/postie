@@ -29,10 +29,12 @@ var upgrader = websocket.Upgrader{
 }
 
 type client struct {
-	conn *websocket.Conn
-	send chan []byte
-	hub  *Hub
-	id   string
+	conn       *websocket.Conn
+	send       chan []byte
+	hub        *Hub
+	id         string
+	session    string
+	registered chan struct{}
 }
 
 // Hub manages WebSocket connections and broadcasts events to all of them.
@@ -73,6 +75,7 @@ func (h *Hub) Run() {
 		case c := <-h.register:
 			h.mu.Lock()
 			h.clients[c] = true
+			close(c.registered)
 			h.mu.Unlock()
 			slog.Info("WebSocket client connected", "id", c.id)
 
@@ -120,6 +123,22 @@ func (h *Hub) EmitEvent(eventType string, data any) {
 
 // ServeHTTP upgrades the request and attaches the connection to the hub.
 func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.ServeSessionHTTP(w, r, "", time.Time{})
+}
+
+// DisconnectSession immediately stops every connection belonging to a logout.
+func (h *Hub) DisconnectSession(session string) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for c := range h.clients {
+		if c.session == session {
+			_ = c.conn.Close()
+		}
+	}
+}
+
+// ServeSessionHTTP attaches a connection until logout or session expiration.
+func (h *Hub) ServeSessionHTTP(w http.ResponseWriter, r *http.Request, session string, expires time.Time) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		slog.Error("WebSocket upgrade error", "error", err)
@@ -127,14 +146,22 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	c := &client{
-		conn: conn,
-		send: make(chan []byte, defaultSendBufferSize),
-		hub:  h,
-		id:   fmt.Sprintf("client-%s", conn.RemoteAddr().String()),
+		conn:       conn,
+		session:    session,
+		registered: make(chan struct{}),
+		send:       make(chan []byte, defaultSendBufferSize),
+		hub:        h,
+		id:         fmt.Sprintf("client-%s", conn.RemoteAddr().String()),
 	}
 	h.register <- c
+	<-c.registered
 
-	go c.writePump()
+	if !expires.IsZero() {
+		timer := time.AfterFunc(time.Until(expires), func() { _ = conn.Close() })
+		go func() { c.writePump(); timer.Stop() }()
+	} else {
+		go c.writePump()
+	}
 	go c.readPump()
 }
 

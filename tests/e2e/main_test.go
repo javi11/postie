@@ -16,10 +16,13 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/http/cookiejar"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -73,6 +76,16 @@ func run(m *testing.M) int {
 		return 1
 	}
 
+	// Authenticate the shared HTTP client before exercising app APIs. Individual
+	// authentication tests use their own clients so anonymous checks stay real.
+	jar, _ := cookiejar.New(nil)
+	http.DefaultClient.Jar = jar
+	http.DefaultClient.Transport = browserOriginTransport{base: http.DefaultTransport}
+	if err := authenticateTestClient(); err != nil {
+		log.Printf("authenticate web server: %v", err)
+		return 1
+	}
+
 	// 5. Complete setup wizard (skips if already configured)
 	if err := completeSetupWizard(fakeNntp.port); err != nil {
 		log.Printf("complete setup wizard: %v", err)
@@ -84,6 +97,14 @@ func run(m *testing.M) int {
 
 // startWebServer launches bin/postie-web with an isolated HOME directory.
 func startWebServer(testHome string) (*exec.Cmd, error) {
+	return startWebServerAt(testHome, "8080")
+}
+
+func startWebServerAt(testHome, serverPort string) (*exec.Cmd, error) {
+	return startWebServerMode(testHome, serverPort, true)
+}
+
+func startWebServerMode(testHome, serverPort string, enabled bool) (*exec.Cmd, error) {
 	// Find the binary relative to the project root (two dirs up from tests/e2e/)
 	_, thisFile, _, _ := runtime.Caller(0)
 	projectRoot := filepath.Join(filepath.Dir(thisFile), "..", "..")
@@ -97,10 +118,11 @@ func startWebServer(testHome string) (*exec.Cmd, error) {
 		"HOME="+testHome,
 		"XDG_CONFIG_HOME="+filepath.Join(testHome, ".config"),
 		"XDG_DATA_HOME="+filepath.Join(testHome, ".local", "share"),
-		"PORT=8080",
+		"PORT="+serverPort,
+		"POSTIE_AUTH_ENABLED="+strconv.FormatBool(enabled),
 	)
 
-	cmd := exec.Command(binaryPath, "--port", "8080")
+	cmd := exec.Command(binaryPath, "--port", serverPort)
 	cmd.Env = env
 	cmd.Stdout = os.Stderr // pipe server logs to stderr, not stdout
 	cmd.Stderr = os.Stderr
@@ -197,4 +219,32 @@ func mustGetRawConfig(t *testing.T) map[string]any {
 		t.Fatalf("decode /api/config: %v", err)
 	}
 	return cfg
+}
+
+// authenticateTestClient creates the suite's first administrator. Cookie storage
+// is shared only by test HTTP helpers, not unauthenticated security requests.
+func authenticateTestClient() error {
+	body := strings.NewReader(`{"username":"e2e-admin","password":"e2e-long-secret-password"}`)
+	resp, err := http.Post(baseURL+"/api/auth/register", "application/json", body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("register: HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// UI API requests in this fixture simulate browser requests, including Origin
+// on multipart uploads and DELETE. Anonymous API-key clients use their own
+// http.Client and the standard transport, exercising the integration bypass.
+type browserOriginTransport struct{ base http.RoundTripper }
+
+func (b browserOriginTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	cloned := req.Clone(req.Context())
+	if cloned.Method != http.MethodGet && cloned.Method != http.MethodHead {
+		cloned.Header.Set("Origin", baseURL)
+	}
+	return b.base.RoundTrip(cloned)
 }

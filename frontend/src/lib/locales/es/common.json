@@ -1,5 +1,21 @@
 {
 	"common": {
+		"auth": {
+			"retry": "Reintentar",
+			"signIn": "Iniciar sesión en Postie",
+			"createAdmin": "Crear cuenta de administrador",
+			"signOut": "Cerrar sesión",
+			"username": "Usuario o correo electrónico",
+			"email": "Correo electrónico (opcional)",
+			"password": "Contraseña",
+			"bootstrapDescription": "Crea la primera cuenta de administrador. El registro se cierra después de crearla.",
+			"passwordHint": "Usa una contraseña de entre 12 y 72 bytes.",
+			"invalidCredentials": "Usuario o contraseña incorrectos.",
+			"registrationError": "No se pudo registrar. Revisa los datos o inicia sesión si ya existe una cuenta.",
+			"connectionError": "No se puede conectar al servidor. Recarga para reintentar.",
+			"tooManyAttempts": "Demasiados intentos. Espera un minuto e inténtalo de nuevo.",
+			"logoutError": "No se pudo cerrar sesión."
+		},
 		"nav": {
 			"dashboard": "Panel de Control",
 			"settings": "Configuración",
