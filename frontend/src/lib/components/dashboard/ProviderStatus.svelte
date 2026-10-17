@@ -36,6 +36,7 @@ function stateOf(provider: backend.NntpProviderMetrics): ProviderState {
 let initialLoad = $state(true);
 let error = $state("");
 let stopFallback: (() => void) | undefined;
+let destroyed = false;
 
 function applyPoolMetrics(data: unknown) {
 	if (!data) return;
@@ -99,6 +100,8 @@ function formatSpeed(bytesPerSec: number): string {
 
 onMount(async () => {
 	await fetchProviderStatus();
+	// Do not let an abandoned fetch register over a newly mounted panel.
+	if (destroyed) return;
 	await apiClient.on(EVENT_NNTP_POOL_METRICS_UPDATED, applyPoolMetrics);
 	stopFallback = startLiveFallback({
 		intervalMs: 5000,
@@ -109,6 +112,7 @@ onMount(async () => {
 });
 
 onDestroy(() => {
+	destroyed = true;
 	stopFallback?.();
 	apiClient.off(EVENT_NNTP_POOL_METRICS_UPDATED, applyPoolMetrics);
 });
