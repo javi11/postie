@@ -5,6 +5,10 @@ import type { backend, config, processor, watcher } from "$lib/wailsjs/go/models
 
 const API_BASE = "/api";
 
+// Pool metrics are broadcast every five seconds, including while idle. Allow
+// three missed ticks before HTTP fallback takes over from a silent OPEN socket.
+const LIVE_SILENCE_TIMEOUT_MS = 15_000;
+
 export interface ArrInstance {
 	id: string;
 	name: string;
@@ -18,6 +22,7 @@ export interface ArrInstance {
 
 export class WebClient {
 	private ws: WebSocket | null = null;
+	private lastActivityAt = Date.now();
 	private wsListeners: Map<string, (data: unknown) => void> = new Map();
 	private reconnectListeners = new Set<() => void>();
 
@@ -59,6 +64,7 @@ export class WebClient {
 		this.ws = new WebSocket(wsUrl);
 
 		this.ws.onopen = (event) => {
+			this.lastActivityAt = Date.now();
 			console.log("WebSocket connected successfully", event);
 			for (const listener of this.reconnectListeners) {
 				listener();
@@ -68,6 +74,7 @@ export class WebClient {
 		this.ws.onmessage = (event) => {
 			try {
 				const message = JSON.parse(event.data);
+				this.lastActivityAt = Date.now();
 
 				// Check if this is a structured message with type and data
 				if (message.type && message.data !== undefined) {
@@ -119,7 +126,8 @@ export class WebClient {
 	}
 
 	isConnected(): boolean {
-		return this.ws?.readyState === WebSocket.OPEN;
+		return this.ws?.readyState === WebSocket.OPEN &&
+			Date.now() - this.lastActivityAt < LIVE_SILENCE_TIMEOUT_MS;
 	}
 
 	// Fires on every successful (re)connection so event-driven views can re-sync.

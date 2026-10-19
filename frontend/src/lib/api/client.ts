@@ -621,7 +621,7 @@ export class UnifiedClient {
 	}
 
 	// True when push events are flowing. Wails events cannot silently drop;
-	// in web mode this reflects the WebSocket state.
+	// in web mode this requires an OPEN WebSocket with recent event traffic.
 	isLive(): boolean {
 		if (this._environment === "wails") return true;
 		if (this._environment === "web") return webClient?.isConnected() ?? false;
