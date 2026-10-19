@@ -174,7 +174,13 @@ func TestLoginCookieLogoutAndRateLimit(t *testing.T) {
 
 func TestLogoutDisconnectsExistingWebSocket(t *testing.T) {
 	ws, cookie := authenticatedServer(t)
-	server := httptest.NewServer(ws.router)
+	registered := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ws.router.ServeHTTP(w, r)
+		if r.URL.Path == "/api/ws" {
+			close(registered)
+		}
+	}))
 	t.Cleanup(server.Close)
 	header := http.Header{"Cookie": []string{cookie.String()}, "Origin": []string{server.URL}}
 	conn, response, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http")+"/api/ws", header)
@@ -189,6 +195,13 @@ func TestLogoutDisconnectsExistingWebSocket(t *testing.T) {
 		t.Fatalf("NoError check failed: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
+	// The upgrade reaches Dial before the handler finishes registering the
+	// connection with the hub; an earlier broadcast can have no recipients.
+	select {
+	case <-registered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("WebSocket handler did not finish registration")
+	}
 	ws.wsHub.EmitEvent("test", map[string]string{"value": "before logout"})
 	if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
 		t.Fatalf("NoError check failed: %v", err)
