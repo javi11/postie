@@ -53,7 +53,7 @@ async function submit(event: SubmitEvent) {
 			{#if ready}
 				<form onsubmit={submit} class="flex flex-col gap-4">
 					<label class="form-control" for="username"><span class="label-text">{$t("common.auth.username")}</span>
-						<input id="username" name="username" class="input input-bordered w-full" bind:value={username} autocomplete="username" required minlength={registration ? 3 : undefined} maxlength="128" />
+						<input id="username" name="username" class="input input-bordered w-full" bind:value={username} autocomplete="username" required minlength={registration ? 3 : undefined} maxlength={registration ? 128 : 254} />
 					</label>
 					{#if registration}
 						<label class="form-control" for="email"><span class="label-text">{$t("common.auth.email")}</span>
