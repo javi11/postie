@@ -574,7 +574,9 @@ func (s *Service) handleFailure(ctx context.Context, f transferstore.Verificatio
 				// Re-posted: schedule a recheck after propagation delay.
 				f.RepostCount++
 				f.State = transferstore.FailurePending
-				f.NextAttemptAt = now.Add(s.cfg.PropagationDelay)
+				// The batch may have spent a long time checking or uploading;
+				// propagation starts when this repost finishes, not at cycle start.
+				f.NextAttemptAt = s.now().Add(s.cfg.PropagationDelay)
 				f.LastError = ""
 				_ = s.store.UpdateFailureAfterCheck(ctx, f)
 				return

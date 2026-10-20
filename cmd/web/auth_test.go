@@ -195,12 +195,12 @@ func TestLogoutDisconnectsExistingWebSocket(t *testing.T) {
 		t.Fatalf("NoError check failed: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	// Dial can return before the hub registers the upgraded connection. The
-	// WebSocket handler returns only after registration, so wait before emitting.
+	// The upgrade reaches Dial before the handler finishes registering the
+	// connection with the hub; an earlier broadcast can have no recipients.
 	select {
 	case <-registered:
 	case <-time.After(2 * time.Second):
-		t.Fatal("WebSocket handler did not finish registering the connection")
+		t.Fatal("WebSocket handler did not finish registration")
 	}
 	ws.wsHub.EmitEvent("test", map[string]string{"value": "before logout"})
 	if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {

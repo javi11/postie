@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, expect, mock, spyOn, test } from "bun:test";
 import { WebClient } from "./web-client";
 mock.module("$app/environment", () => ({ browser: true }));
 const { UnifiedClient } = await import("./client");
@@ -69,4 +69,30 @@ test("removing a dashboard listener before connection prevents it being restored
 		data: JSON.stringify({ type: "running-jobs-updated", data: [{ id: "late-job" }] }),
 	});
 	expect(received).toEqual([]);
+});
+
+test("a silent OPEN socket stops suppressing dashboard fallback polling", async () => {
+	let now = 1_000_000;
+	const clock = spyOn(Date, "now").mockImplementation(() => now);
+	try {
+		const client = new WebClient();
+		const socket = ConnectingSocket.instance;
+		socket.readyState = ConnectingSocket.OPEN;
+		socket.onopen?.({});
+		expect(client.isConnected()).toBe(true);
+
+		// The server broadcasts pool metrics every five seconds even when idle.
+		// TCP can remain OPEN after a proxy/network silently stops delivery.
+		now += 20_000;
+		expect(client.isConnected()).toBe(false);
+
+		socket.onmessage?.({ data: JSON.stringify({ type: "nntp-pool-metrics-updated", data: {} }) });
+		expect(client.isConnected()).toBe(true);
+		now += 10_000;
+		expect(client.isConnected()).toBe(true);
+		socket.readyState = ConnectingSocket.CLOSED;
+		expect(client.isConnected()).toBe(false);
+	} finally {
+		clock.mockRestore();
+	}
 });

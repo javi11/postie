@@ -43,6 +43,8 @@ func TestBrowserAuthenticationLifecycle(t *testing.T) {
 	ctx, cancel := newChromedpCtx(t)
 	defer cancel()
 	var location string
+	// Registration accepts email addresses longer than the username limit.
+	email := strings.Repeat("a", 64) + "@" + strings.Repeat("b", 63) + ".example.com"
 	if err := chromedp.Run(ctx,
 		chromedp.Navigate(url+"/settings"),
 		chromedp.WaitVisible("#username", chromedp.ByQuery),
@@ -55,6 +57,7 @@ func TestBrowserAuthenticationLifecycle(t *testing.T) {
 	}
 	if err := chromedp.Run(ctx,
 		chromedp.SendKeys("#username", "browser-admin", chromedp.ByQuery),
+		chromedp.SendKeys("#email", email, chromedp.ByQuery),
 		chromedp.SendKeys("#password", "browser-long-secret-password", chromedp.ByQuery),
 		chromedp.Click(`button[type="submit"]`, chromedp.ByQuery),
 		chromedp.WaitVisible(`[data-testid="sign-out"]`, chromedp.ByQuery),
@@ -82,8 +85,17 @@ func TestBrowserAuthenticationLifecycle(t *testing.T) {
 	if status != 401 {
 		t.Fatalf("Equal check failed: %v %v", 401, status)
 	}
+	var enteredEmail string
 	if err := chromedp.Run(ctx,
-		chromedp.SendKeys("#username", "browser-admin", chromedp.ByQuery),
+		chromedp.SendKeys("#username", email, chromedp.ByQuery),
+		chromedp.Value("#username", &enteredEmail, chromedp.ByQuery),
+	); err != nil {
+		t.Fatal(err)
+	}
+	if enteredEmail != email {
+		t.Fatalf("login truncated a registered email: got %d characters, want %d", len(enteredEmail), len(email))
+	}
+	if err := chromedp.Run(ctx,
 		chromedp.SendKeys("#password", "browser-long-secret-password", chromedp.ByQuery),
 		chromedp.Click(`button[type="submit"]`, chromedp.ByQuery),
 		chromedp.WaitVisible(`[data-testid="sign-out"]`, chromedp.ByQuery),

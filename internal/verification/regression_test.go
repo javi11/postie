@@ -5,8 +5,61 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kipsilabs/postie/internal/manifest"
 	"github.com/kipsilabs/postie/internal/transferstore"
 )
+
+// A slow repost must still receive the full propagation delay after it
+// finishes, even when it takes longer than that delay to upload.
+func TestProcessDueFailures_PropagationDelayStartsAfterRepost(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	writeManifest(t, store, "t", "f", 1)
+
+	now := time.Now().UTC().Truncate(time.Second)
+	delay := 10 * time.Second
+	stater := newFakeStater(mid(0))
+	reposter := &fakeReposter{onRepost: func(manifest.ArticleRecord) {
+		now = now.Add(time.Minute) // time spent uploading the missing article
+	}}
+	svc := New(store, stater, reposter, Config{
+		MaxReposts: 1, PropagationDelay: delay, MaxDeferredChecks: 1,
+	}, "w")
+	svc.now = func() time.Time { return now }
+	tf, err := store.GetFile(ctx, "t", "f")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.VerifyFile(ctx, tf); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(delay)
+	if n, err := svc.ProcessDueFailures(ctx, now); err != nil || n != 1 {
+		t.Fatalf("repost cycle: processed=%d, err=%v", n, err)
+	}
+	if reposter.count() != 1 {
+		t.Fatal("missing article was not reposted")
+	}
+
+	// Propagation has not finished yet. Checking now would exhaust the final
+	// deferred attempt and permanently fail an article still propagating.
+	now = now.Add(delay - time.Second)
+	if n, err := svc.ProcessDueFailures(ctx, now); err != nil || n != 0 {
+		t.Fatalf("checked before repost propagation delay elapsed: processed=%d, err=%v", n, err)
+	}
+	stater.markPresent(mid(0))
+	now = now.Add(time.Second)
+	if n, err := svc.ProcessDueFailures(ctx, now); err != nil || n != 1 {
+		t.Fatalf("propagated cycle: processed=%d, err=%v", n, err)
+	}
+	got, err := store.GetFile(ctx, "t", "f")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.VerificationState != transferstore.StateVerified {
+		t.Fatalf("state=%q, want verified", got.VerificationState)
+	}
+}
 
 // Regression: files could go terminal before the processor linked the
 // completed item; finalizeTransfer then ran destructive cleanup with an empty
