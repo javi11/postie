@@ -18,10 +18,13 @@ import { onMount, onDestroy } from "svelte";
 
 let isPaused = $state(false);
 let destroyed = false;
+let jobsRevision = 0;
+let pauseRevision = 0;
 let stopFallback: (() => void) | undefined;
 
 function applyRunningJobs(data: unknown) {
   if (destroyed) return;
+  jobsRevision++;
   const jobs = (data ?? []) as RunningJobsEvent;
   runningJobs.set(jobs);
 }
@@ -29,34 +32,43 @@ function applyRunningJobs(data: unknown) {
 function applyPauseEvent(data: unknown) {
   const event = data as Partial<ProcessingPauseEvent> | undefined;
   if (event && typeof event.paused === "boolean") {
+    pauseRevision++;
     isPaused = event.paused;
   }
 }
 
 async function fetchInitialState() {
+  const initialJobsRevision = jobsRevision;
+  const initialPauseRevision = pauseRevision;
   try {
     const [jobs, paused] = await Promise.all([
       apiClient.getRunningJobDetails(),
       apiClient.isProcessingPaused(),
     ]);
     if (destroyed) return;
-    runningJobs.set(jobs);
-    isPaused = paused;
+    // Events received during this request are newer than its snapshot.
+    if (jobsRevision === initialJobsRevision) runningJobs.set(jobs);
+    if (pauseRevision === initialPauseRevision) isPaused = paused;
   } catch (error) {
     console.error("Failed to fetch initial progress state:", error);
   }
 }
 
 onMount(async () => {
+  await apiClient.initialize();
+  if (destroyed) return;
+  // Subscribe before fetching: completion may be the last event emitted for
+  // a job, so a live socket cannot repair a missed update with a later tick.
+  await Promise.all([
+    apiClient.on(EVENT_RUNNING_JOBS_UPDATED, applyRunningJobs),
+    apiClient.on(EVENT_PROCESSING_PAUSED, applyPauseEvent),
+    apiClient.on(EVENT_PROCESSING_RESUMED, applyPauseEvent),
+    apiClient.on(EVENT_PROCESSING_AUTO_PAUSED, applyPauseEvent),
+  ]);
+  if (destroyed) return;
   await fetchInitialState();
-  // Navigation may destroy this panel while its initial HTTP requests run.
-  // A late subscription would replace the current dashboard's listeners.
   if (destroyed) return;
 
-  await apiClient.on(EVENT_RUNNING_JOBS_UPDATED, applyRunningJobs);
-  await apiClient.on(EVENT_PROCESSING_PAUSED, applyPauseEvent);
-  await apiClient.on(EVENT_PROCESSING_RESUMED, applyPauseEvent);
-  await apiClient.on(EVENT_PROCESSING_AUTO_PAUSED, applyPauseEvent);
   stopFallback = startLiveFallback({
     intervalMs: 5000,
     isLive: () => apiClient.isLive(),

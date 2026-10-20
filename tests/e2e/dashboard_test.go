@@ -115,3 +115,72 @@ func TestDashboard_RemainsLiveAfterLeavingPendingInitialFetch(t *testing.T) {
 		t.Fatalf("dashboard stopped consuming events after abandoned fetches resolved: progress live=%v, provider live=%v (%v)", progressLive, providerLive, err)
 	}
 }
+
+// A completion can be the last running-jobs event: the broadcaster deduplicates
+// subsequent empty snapshots. Hold the pause request so the job finishes after
+// its HTTP snapshot was taken but before the initial fetch settles.
+func TestDashboard_CompletionDuringInitialSnapshot(t *testing.T) {
+	ctx, cancel := newChromedpCtx(t)
+	defer cancel()
+
+	const fixture = `
+window.__progressRace = { releases: [], consumed: 0, jobsRequested: false };
+class ProgressSocket {
+  static OPEN = 1; static CONNECTING = 0; static CLOSING = 2; static CLOSED = 3;
+  readyState = 1;
+  constructor() { window.__progressRace.socket = this; }
+}
+window.WebSocket = ProgressSocket;
+const originalFetch = window.fetch.bind(window);
+window.fetch = async (url, options) => {
+  const path = new URL(url, location.href).pathname;
+  if (path === '/api/running-job-details') {
+    window.__progressRace.jobsRequested = true;
+    return new Response(JSON.stringify([
+      { id: 'completed-job', fileName: 'already-completed.bin', path: '/already-completed.bin', size: 1024, progress: [] }
+    ]), { headers: { 'Content-Type': 'application/json' } });
+  }
+  if (path === '/api/processor/paused') {
+    await new Promise(resolve => window.__progressRace.releases.push(resolve));
+    const response = new Response('false', { headers: { 'Content-Type': 'application/json' } });
+    const json = response.json.bind(response);
+    response.json = async () => {
+      const value = await json();
+      window.__progressRace.consumed++;
+      return value;
+    };
+    return response;
+  }
+  return originalFetch(url, options);
+};`
+	err := chromedp.Run(ctx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			_, err := page.AddScriptToEvaluateOnNewDocument(fixture).Do(ctx)
+			return err
+		}),
+		emulation.SetCPUThrottlingRate(6),
+		chromedp.Navigate(baseURL+"/"),
+		chromedp.Poll(`window.__progressRace.jobsRequested && window.__progressRace.releases.length === 2`, nil),
+		// Deliver exactly one completion on an OPEN socket, then release the
+		// stale HTTP snapshot. There will be no later event to repair the UI.
+		chromedp.Evaluate(`window.__progressRace.socket.onmessage({ data: JSON.stringify({
+          type: 'running-jobs-updated', data: []
+        }) }); window.__progressRace.releases.forEach(release => release());`, nil),
+		chromedp.Poll(`window.__progressRace.consumed === 2`, nil),
+		// Cross a render boundary after both response bodies were consumed, so
+		// absence cannot pass simply because the stale snapshot is still held.
+		chromedp.Evaluate(`new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))`, nil,
+			func(p *runtime.EvaluateParams) *runtime.EvaluateParams { return p.WithAwaitPromise(true) }),
+	)
+	if err != nil {
+		t.Fatalf("exercise completion during initial snapshot: %v", err)
+	}
+	var stale, idle bool
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.body.innerText.includes('already-completed.bin')`, &stale),
+		chromedp.Evaluate(`document.body.innerText.includes('No upload in progress')`, &idle)); err != nil {
+		t.Fatal(err)
+	}
+	if stale || !idle {
+		t.Fatalf("Upload Progress did not settle after completion during the initial snapshot: completed job visible=%v, idle=%v", stale, idle)
+	}
+}
