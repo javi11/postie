@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/kipsilabs/postie/internal/config"
@@ -32,7 +33,9 @@ func TestDuplicateLookupQueueRetainsSourceAndCompletesHooks(t *testing.T) {
 	cfg.Database = config.DatabaseConfig{DatabaseType: "sqlite", DatabasePath: filepath.Join(root, "test.db")}
 	cfg.Servers = []config.ServerConfig{{Host: "127.0.0.1", Port: 1, MaxConnections: 1, Role: config.ServerRoleUpload}}
 	cfg.DuplicateLookup = config.DuplicateLookupConfig{Enabled: true, URL: lookup.URL, Timeout: "1s"}
-	cfg.PostUploadScript = config.PostUploadScriptConfig{Enabled: true, Command: `touch "{source_path}.hook"`, Timeout: "1s"}
+	// Use shell builtins supported by both sh and cmd.exe. The hook runs in
+	// the NZB output directory, so no platform-specific path quoting is needed.
+	cfg.PostUploadScript = config.PostUploadScriptConfig{Enabled: true, Command: "echo complete > post-upload.hook", Timeout: "1s"}
 	db, err := database.New(ctx, cfg.Database)
 	if err != nil {
 		t.Fatal(err)
@@ -65,8 +68,12 @@ func TestDuplicateLookupQueueRetainsSourceAndCompletesHooks(t *testing.T) {
 	if _, err := os.Stat(source); err != nil {
 		t.Fatal("reused source was deleted", err)
 	}
-	if _, err := os.Stat(source + ".hook"); err != nil {
+	marker, err := os.ReadFile(filepath.Join(root, "output", "post-upload.hook"))
+	if err != nil {
 		t.Fatal("post-upload hook did not run", err)
+	}
+	if strings.TrimSpace(string(marker)) != "complete" {
+		t.Fatalf("unexpected hook output: %q", marker)
 	}
 	result, err := q.GetQueueItems(queue.PaginationParams{Page: 1, Limit: 10, Status: "complete"})
 	if err != nil {
