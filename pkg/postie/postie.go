@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/kipsilabs/postie/internal/config"
+	"github.com/kipsilabs/postie/internal/duplicatelookup"
 	"github.com/kipsilabs/postie/internal/nzb"
 	"github.com/kipsilabs/postie/internal/par2"
 	"github.com/kipsilabs/postie/internal/pool"
@@ -25,6 +26,8 @@ import (
 )
 
 type Postie struct {
+	duplicateLookupCfg        config.DuplicateLookupConfig
+	reusedSources             map[string]bool
 	par2Cfg                   *config.Par2Config
 	postingCfg                config.PostingConfig
 	par2runner                par2.Par2Executor
@@ -143,7 +146,14 @@ func NewWithRuntime(
 		return nil, err
 	}
 
+	var duplicateCfg config.DuplicateLookupConfig
+	if source, ok := cfg.(interface {
+		GetDuplicateLookupConfig() config.DuplicateLookupConfig
+	}); ok {
+		duplicateCfg = source.GetDuplicateLookupConfig()
+	}
 	return &Postie{
+		duplicateLookupCfg:        duplicateCfg,
 		par2Cfg:                   par2Cfg,
 		par2runner:                par2runner,
 		poster:                    p,
@@ -303,13 +313,18 @@ func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir st
 		return "", fmt.Errorf("no files to post")
 	}
 
+	p.reusedSources = make(map[string]bool)
+
 	// On a successful upload, mark the transfer's files uploaded so the durable
 	// verification service picks them up and the queue slot can be released.
 	// In durable mode the in-poster checkLoop is skipped, so a nil error here
 	// means posting succeeded with nothing left to verify inline. No-op in
 	// standalone mode (no recorder).
 	defer func() {
-		if retErr == nil {
+		if retErr == nil && len(p.reusedSources) < len(files) {
+			if len(p.reusedSources) > 0 {
+				p.deleteOriginal = false
+			}
 			p.completeTransferUpload(ctx)
 		}
 	}()
@@ -333,6 +348,22 @@ func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir st
 
 		var nzbPath string
 		var err error
+		if p.duplicateLookupCfg.Enabled {
+			data, lookupErr := duplicatelookup.Lookup(ctx, p.duplicateLookupCfg.URL, p.duplicateLookupCfg.APIKey, p.duplicateLookupCfg.Timeout.ToDuration(), f.Path)
+			if lookupErr != nil {
+				return "", fmt.Errorf("duplicate lookup: %w", lookupErr)
+			}
+			if len(data) > 0 {
+				target := filepath.Join(outputDir, relativePathFrom(rootDir, f.Path), filepath.Base(f.Path))
+				saved, saveErr := nzb.SaveExisting(ctx, data, target, p.compressionCfg, p.maintainOriginalExtension)
+				if saveErr != nil {
+					return "", saveErr
+				}
+				p.reusedSources[f.Path] = true
+				lastNzbPath = saved
+				continue
+			}
+		}
 		if *p.postingCfg.WaitForPar2 {
 			nzbPath, err = p.post(ctx, f, rootDir, outputDir)
 		} else {
@@ -352,6 +383,9 @@ func (p *Postie) Post(ctx context.Context, files []fileinfo.FileInfo, rootDir st
 	}
 
 	// Print final statistics
+	if len(p.reusedSources) == len(files) {
+		return lastNzbPath, nil
+	}
 	stats := p.poster.Stats()
 	elapsed := time.Since(startTime)
 
@@ -926,3 +960,6 @@ func relativePathFrom(rootDir, filePath string) string {
 	}
 	return rel
 }
+
+// ReusedSource reports whether this source reused an existing NZB in the last Post.
+func (p *Postie) ReusedSource(path string) bool { return p != nil && p.reusedSources[path] }

@@ -18,6 +18,7 @@
 			"clear_completed": "Limpiar Completados"
 		},
 		"queue": {
+			"reused_nzb": "NZB reutilizado",
 			"title": "Cola de Carga",
 			"search_placeholder": "Buscar archivo…",
 			"search_within_page": "solo página actual",

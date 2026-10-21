@@ -1,5 +1,13 @@
 {
 	"settings": {
+		"duplicate_lookup": {
+			"title": "Búsqueda de duplicados",
+			"description": "Reutiliza un NZB antes de publicar archivos individuales mediante el nombre original exacto, tamaño y muestras del contenido. Las carpetas omiten la búsqueda. Los errores detienen la publicación; los originales reutilizados se conservan.",
+			"enable": "Activar búsqueda de duplicados",
+			"url": "URL del servicio de búsqueda",
+			"api_key": "Clave API (X-API-Key)",
+			"timeout": "Tiempo de espera (máximo 5m)"
+		},
 		"title": "Configuración",
 		"no_configuration_available": "No hay configuración disponible",
 		"retry": "Reintentar",

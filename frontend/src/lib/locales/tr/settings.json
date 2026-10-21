@@ -1,5 +1,13 @@
 {
 	"settings": {
+		"duplicate_lookup": {
+			"title": "Yinelenen dosya arama",
+			"description": "Tek dosyaları göndermeden önce tam özgün ad, boyut ve içerik örnekleriyle mevcut NZB dosyasını yeniden kullanır. Klasör yüklemeleri aramayı atlar. Arama hataları gönderimi durdurur; yeniden kullanılan kaynaklar korunur.",
+			"enable": "Yinelenen dosya aramayı etkinleştir",
+			"url": "Arama hizmeti URL adresi",
+			"api_key": "API anahtarı (X-API-Key)",
+			"timeout": "Zaman aşımı (en fazla 5m)"
+		},
 		"title": "Ayarlar",
 		"no_configuration_available": "Yapılandırma mevcut değil",
 		"retry": "Tekrar Dene",

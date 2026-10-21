@@ -1,5 +1,13 @@
 {
 	"settings": {
+		"duplicate_lookup": {
+			"title": "Recherche de doublons",
+			"description": "Réutilise un NZB avant la publication de fichiers individuels selon le nom original exact, la taille et des échantillons du contenu. Les dossiers ignorent la recherche. Les erreurs arrêtent la publication ; les sources réutilisées sont conservées.",
+			"enable": "Activer la recherche de doublons",
+			"url": "URL du service de recherche",
+			"api_key": "Clé API (X-API-Key)",
+			"timeout": "Délai d’attente (maximum 5m)"
+		},
 		"title": "Paramètres",
 		"no_configuration_available": "Aucune configuration disponible",
 		"retry": "Réessayer",

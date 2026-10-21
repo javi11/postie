@@ -100,7 +100,7 @@ type QueueItem struct {
 	ScriptLastError   *string    `json:"scriptLastError"`
 	ScriptNextRetryAt *time.Time `json:"scriptNextRetryAt"`
 	// Verification status for completed items (null for non-completed)
-	VerificationStatus *string `json:"verificationStatus"` // verified, pending_verification, verification_failed
+	VerificationStatus *string `json:"verificationStatus"` // verified, pending_verification, verification_failed, reused
 	// Deferred verification progress (only set while pending_verification)
 	VerifiedArticles *int `json:"verifiedArticles,omitempty"`
 	TotalArticles    *int `json:"totalArticles,omitempty"`
@@ -478,6 +478,16 @@ func (q *Queue) ReceiveFile(ctx context.Context) (*goqite.Message, *FileJob, err
 
 // CompleteFile marks a file job as completed and adds it to completed_items table
 func (q *Queue) CompleteFile(ctx context.Context, msgID goqite.ID, nzbPath string, job *FileJob) error {
+	return q.completeFile(ctx, msgID, nzbPath, job, "verified")
+}
+
+// CompleteReusedFile records reuse with the completion insert, so a crash cannot
+// leave reused content labelled as locally verified.
+func (q *Queue) CompleteReusedFile(ctx context.Context, msgID goqite.ID, nzbPath string, job *FileJob) error {
+	return q.completeFile(ctx, msgID, nzbPath, job, "reused")
+}
+
+func (q *Queue) completeFile(ctx context.Context, msgID goqite.ID, nzbPath string, job *FileJob, verificationStatus string) error {
 	// Insert into completed_items table
 	created := job.CreatedAt.Format("2006-01-02T15:04:05.000Z")
 
@@ -488,9 +498,9 @@ func (q *Queue) CompleteFile(ctx context.Context, msgID goqite.ID, nzbPath strin
 	}
 
 	_, err = q.db.Exec(`
-		INSERT INTO completed_items (id, path, size, priority, nzb_path, created_at, job_data)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, string(msgID), job.Path, job.Size, job.Priority, nzbPath, created, jobData)
+		INSERT INTO completed_items (id, path, size, priority, nzb_path, created_at, job_data, verification_status)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, string(msgID), job.Path, job.Size, job.Priority, nzbPath, created, jobData, verificationStatus)
 
 	if err != nil {
 		return fmt.Errorf("failed to insert completed item: %w", err)
