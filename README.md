@@ -126,3 +126,7 @@ source as above.
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+### Duplicate lookup
+
+Optionally reuse an existing NZB before uploading individual files using a generic HTTP lookup service. Disabled by default; reused source files are always retained. See [configuration and provider protocol](docs/duplicate-lookup.md).

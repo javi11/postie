@@ -5,6 +5,7 @@ import ApiSection from "$lib/components/settings/ApiSection.svelte";
 import ConnectionPoolSection from "$lib/components/settings/ConnectionPoolSection.svelte";
 import FileNamingSection from "$lib/components/settings/FileNamingSection.svelte";
 import GeneralSection from "$lib/components/settings/GeneralSection.svelte";
+import DuplicateLookupSection from "$lib/components/settings/DuplicateLookupSection.svelte";
 import NzbCompressionSection from "$lib/components/settings/NzbCompressionSection.svelte";
 import Par2Section from "$lib/components/settings/Par2Section.svelte";
 import PendingConfigNotification from "$lib/components/settings/PendingConfigNotification.svelte";
@@ -359,6 +360,7 @@ onDestroy(() => {
             <div class="space-y-6">
               <FileNamingSection bind:config={localConfig} />
               <Par2Section bind:config={localConfig} />
+              <DuplicateLookupSection bind:config={localConfig} />
               <NzbCompressionSection bind:config={localConfig} />
             </div>
           </div>

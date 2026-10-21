@@ -488,7 +488,9 @@ let CreatedIcon = $derived(getSortIcon("created"));
     </div>
   {:else}
     {#snippet verificationBadge(item: backend.QueueItem)}
-      {#if item.status === "complete" && item.verificationStatus === "pending_verification"}
+      {#if item.status === "complete" && item.verificationStatus === "reused"}
+        <div class="badge badge-info">{$t("dashboard.queue.reused_nzb")}</div>
+      {:else if item.status === "complete" && item.verificationStatus === "pending_verification"}
         <div class="flex flex-col items-end gap-1 shrink-0">
           <div class="badge badge-warning badge-sm gap-1">
             <span class="loading loading-spinner loading-xs"></span>

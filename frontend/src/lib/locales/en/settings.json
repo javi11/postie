@@ -1,5 +1,13 @@
 {
 	"settings": {
+		"duplicate_lookup": {
+			"title": "Duplicate lookup",
+			"description": "Reuse an existing NZB before posting individual files. Matches use the exact original name, size and sampled content. Folder uploads bypass lookup. Lookup errors stop posting; reused sources are always retained.",
+			"enable": "Enable duplicate lookup",
+			"url": "Lookup endpoint URL",
+			"api_key": "API key (X-API-Key)",
+			"timeout": "Timeout (up to 5m)"
+		},
 		"title": "Settings",
 		"no_configuration_available": "No configuration available",
 		"retry": "Retry",

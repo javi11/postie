@@ -111,3 +111,12 @@ post_upload_script:
 #   enabled: true
 #   command: 'curl -X POST -H "Content-Type: application/json" -d "{\"nzb_path\": \"{nzb_path}\"}" https://your-webhook-url.com/notify'
 #   timeout: 30s
+
+# Optional pre-upload lookup for individual files. Folder uploads bypass lookup.
+# A match retains the source, including when automatic source deletion is enabled.
+# See docs/duplicate-lookup.md for the generic HTTP protocol.
+duplicate_lookup:
+  enabled: false
+  url: ""
+  api_key: ""
+  timeout: 60s

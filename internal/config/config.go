@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"net/mail"
+	"net/url"
 	"os"
 	"slices"
 	"strings"
@@ -173,7 +174,23 @@ type ConnectionPoolConfig struct {
 	HealthCheckInterval Duration `yaml:"health_check_interval" json:"health_check_interval"`
 }
 
-// config is the internal implementation of the Config interface
+// DuplicateLookupConfig controls optional generic pre-upload NZB lookup.
+type DuplicateLookupConfig struct {
+	Enabled bool     `yaml:"enabled" json:"enabled"`
+	URL     string   `yaml:"url" json:"url"`
+	APIKey  string   `yaml:"api_key" json:"api_key"`
+	Timeout Duration `yaml:"timeout" json:"timeout"`
+}
+
+func (c *ConfigData) GetDuplicateLookupConfig() DuplicateLookupConfig {
+	cfg := c.DuplicateLookup
+	if cfg.Timeout == "" {
+		cfg.Timeout = "60s"
+	}
+	return cfg
+}
+
+// ConfigData is the persisted application configuration.
 type ConfigData struct {
 	Version        int                  `yaml:"version" json:"version"`
 	Servers        []ServerConfig       `yaml:"servers" json:"servers"`
@@ -193,6 +210,7 @@ type ConfigData struct {
 	MaintainOriginalExtension *bool                  `yaml:"maintain_original_extension" json:"maintain_original_extension"`
 	PostUploadScript          PostUploadScriptConfig `yaml:"post_upload_script" json:"post_upload_script"`
 	Arr                       ArrConfig              `yaml:"arr,omitempty" json:"arr,omitempty"`
+	DuplicateLookup           DuplicateLookupConfig  `yaml:"duplicate_lookup" json:"duplicate_lookup"`
 }
 
 type Par2Config struct {
@@ -705,6 +723,17 @@ func Load(path string) (*ConfigData, error) {
 
 // Validate validates the configuration
 func (c *ConfigData) Validate() error {
+	if cfg := c.GetDuplicateLookupConfig(); cfg.Enabled {
+		u, err := url.Parse(cfg.URL)
+		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil {
+			return fmt.Errorf("duplicate lookup URL must be an HTTP or HTTPS endpoint without embedded credentials")
+		}
+		timeout, err := time.ParseDuration(string(cfg.Timeout))
+		if err != nil || timeout <= 0 || timeout > 5*time.Minute {
+			return fmt.Errorf("duplicate lookup timeout must be positive and at most 5m")
+		}
+	}
+
 	for i, s := range c.Servers {
 		if s.Host == "" {
 			return fmt.Errorf("server %d: host is required", i)

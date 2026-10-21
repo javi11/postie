@@ -869,7 +869,26 @@ export namespace config {
 	        this.proxy_url = source["proxy_url"];
 	    }
 	}
+	export class DuplicateLookupConfig {
+	    enabled: boolean;
+	    url: string;
+	    api_key: string;
+	    timeout: string;
+
+	    static createFrom(source: any = {}) {
+	        return new DuplicateLookupConfig(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.url = source["url"];
+	        this.api_key = source["api_key"];
+	        this.timeout = source["timeout"];
+	    }
+	}
 	export class ConfigData {
+	    duplicate_lookup: DuplicateLookupConfig;
 	    version: number;
 	    servers: ServerConfig[];
 	    connection_pool: ConnectionPoolConfig;
@@ -893,6 +912,7 @@ export namespace config {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.duplicate_lookup = this.convertValues(source["duplicate_lookup"], DuplicateLookupConfig);
 	        this.version = source["version"];
 	        this.servers = this.convertValues(source["servers"], ServerConfig);
 	        this.connection_pool = this.convertValues(source["connection_pool"], ConnectionPoolConfig);

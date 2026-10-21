@@ -18,6 +18,7 @@
 			"clear_completed": "Clear Completed"
 		},
 		"queue": {
+			"reused_nzb": "Reused NZB",
 			"title": "Upload Queue",
 			"search_placeholder": "Search filename…",
 			"search_within_page": "current page only",

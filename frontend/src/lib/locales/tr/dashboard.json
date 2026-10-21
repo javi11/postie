@@ -18,6 +18,7 @@
             "clear_completed": "Tamamlananları Temizle"
         },
         "queue": {
+					"reused_nzb": "NZB yeniden kullanıldı",
             "title": "Yükleme Kuyruğu",
             "search_placeholder": "Dosya adı ara…",
             "search_within_page": "yalnızca mevcut sayfa",

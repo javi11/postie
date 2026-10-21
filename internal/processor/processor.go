@@ -419,7 +419,11 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 
 	// Use the actual NZB path returned by the postie.Post method
 	// Mark as completed with the NZB path and job data
-	if err := p.queue.CompleteFile(ctx, msg.ID, actualNzbPath, job); err != nil {
+	complete := p.queue.CompleteFile
+	if jobPostie.ReusedSource(job.Path) {
+		complete = p.queue.CompleteReusedFile
+	}
+	if err := complete(ctx, msg.ID, actualNzbPath, job); err != nil {
 		slog.ErrorContext(ctx, "Error marking file as completed", "error", err, "path", job.Path)
 		return err
 	}
@@ -428,7 +432,7 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 	// background, so the item is pending verification rather than verified.
 	// Link the transfer's files to this completed item so the verification
 	// service can reflect the final verified/failed status back onto it.
-	if p.durableMode() {
+	if p.durableMode() && !jobPostie.ReusedSource(job.Path) {
 		// Link BEFORE flipping the status to pending_verification: a crash
 		// between the two would otherwise strand an item the verification
 		// service can never find (it discovers work through transfer_files).
@@ -439,12 +443,20 @@ func (p *Processor) processNextItem(ctx context.Context) error {
 		}
 	}
 
+	if jobPostie.ReusedSource(job.Path) {
+		// A retried job can have partial upload records from an earlier attempt.
+		// Reuse supersedes them; none should enter verification or source cleanup.
+		if err := p.transferRuntime.DiscardTransfer(ctx, job.TransferID); err != nil {
+			slog.ErrorContext(ctx, "Failed to discard superseded upload records", "error", err)
+		}
+	}
+
 	// Execute post upload script if configured. In durable mode the script is
 	// deferred until verification succeeds (run by the transfer cleaner), so it
 	// only fires here in standalone mode.
 	// Note: We don't return the error here to avoid failing the completion if the script fails;
 	// the failure is tracked in the database for retry.
-	if !p.durableMode() {
+	if !p.durableMode() || jobPostie.ReusedSource(job.Path) {
 		sourcePath := strings.TrimPrefix(job.Path, "FOLDER:")
 		if scriptErr := jobPostie.ExecutePostUploadScript(ctx, actualNzbPath, sourcePath, string(msg.ID)); scriptErr != nil {
 			slog.ErrorContext(ctx, "Post upload script execution failed", "error", scriptErr, "nzbPath", actualNzbPath)
@@ -605,6 +617,10 @@ func (p *Processor) processFile(ctx context.Context, msg *goqite.Message, job *q
 			return actualNzbPath, jobPostie, err
 		}
 		return "", nil, err
+	}
+
+	if jobPostie.ReusedSource(job.Path) {
+		deleteOriginal = false
 	}
 
 	// Delete the original files if configured (deleteOriginal resolved above).

@@ -197,6 +197,9 @@ func (a *App) processorConfigChanged(newConfig *config.ConfigData) bool {
 		return true
 	}
 	old := a.config
+	if old.GetDuplicateLookupConfig() != newConfig.GetDuplicateLookupConfig() {
+		return true
+	}
 
 	if old.GetOutputDir() != newConfig.GetOutputDir() {
 		return true

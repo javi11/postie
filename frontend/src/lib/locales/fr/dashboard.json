@@ -18,6 +18,7 @@
 			"clear_completed": "Vider les Terminés"
 		},
 		"queue": {
+			"reused_nzb": "NZB réutilisé",
 			"title": "File d'Attente de Téléchargement",
 			"search_placeholder": "Rechercher un fichier…",
 			"search_within_page": "page actuelle uniquement",
